@@ -1,0 +1,5 @@
+label,latitude,longitude,elevation,notes
+PIN_NW_01,42.36010000,-71.09420000,12.500,NW corner iron pipe near oak
+PIN_NE_02,42.36045000,-71.09350000,13.100,NE corner rebar by stone wall
+PIN_SE_03,42.35980000,-71.09340000,11.800,SE corner monument
+PIN_SW_04,42.35975000,-71.09415000,12.000,SW corner pin by driveway

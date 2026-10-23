@@ -1,0 +1,20 @@
+{
+  "minutesOffsetToUTC": -240,
+  "timezone_label": "EDT",
+  "use_imperial_units": false,
+  "antenna_height_m": 1.800,
+  "antenna_spacing_m": 0.555,
+  "baseline_mount_offset_deg": 0.0,
+  "apply_lever_arm": true,
+  "pole_tilt_tare_pitch_deg": 0.0,
+  "pole_tilt_tare_roll_deg": 0.0,
+  "survey_avg_seconds": 5,
+  "default_label_prefix": "PIN_",
+  "active_waypoint_file": "/waypoints.csv",
+  "brightness": 85,
+  "volume": 30,
+  "is_muted": false,
+  "wifi_ssid": "Your_SSID",
+  "wifi_password": "Your_PASSWORD",
+  "enable_serial_logging": false
+}

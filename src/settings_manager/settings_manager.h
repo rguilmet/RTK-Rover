@@ -1,0 +1,50 @@
+#ifndef SETTINGS_MANAGER_H
+#define SETTINGS_MANAGER_H
+
+#include <Arduino.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <FS.h>
+
+struct SystemSettings {
+    int16_t  minutesOffsetToUTC;
+    char     timezone_label[16];
+    bool     use_imperial_units;
+    float    antenna_height_m;
+    float    antenna_spacing_m;
+    float    baseline_mount_offset_deg;
+    bool     apply_lever_arm;
+    float    pole_tilt_tare_pitch_deg;
+    float    pole_tilt_tare_roll_deg;
+    uint8_t  survey_avg_seconds;
+    char     default_label_prefix[16];
+    char     active_waypoint_file[48];
+    uint8_t  brightness;
+    uint8_t  volume;
+    bool     is_muted;
+    char     wifi_ssid[33];
+    char     wifi_password[65];
+    bool     enable_serial_logging;
+};
+
+extern struct SystemSettings current_settings;
+extern volatile bool settings_dirty;
+extern volatile uint32_t last_settings_change_ms;
+extern bool sd_card_mounted;
+
+fs::FS& get_active_fs(void);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void init_settings_manager(void);
+void load_settings(void);
+void save_settings(void);
+void mark_settings_dirty(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // SETTINGS_MANAGER_H

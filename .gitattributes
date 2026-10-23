@@ -1,0 +1,7 @@
+# Ignore vendored third-party C libraries from GitHub language statistics
+src/esp_codec_dev/** linguist-vendored
+src/tca9554/** linguist-vendored
+src/axs15231b/** linguist-vendored
+
+# Treat all C headers as C++ by default since this is an Arduino/PlatformIO project
+*.h linguist-language=C++
