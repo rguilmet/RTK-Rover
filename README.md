@@ -28,4 +28,4 @@ All UART pin labels in the hardware table are **device-relative** (`<DEV>_TXD` i
 | **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Short-Press (Tile 2 only):** Log Waypoint \| **Long-Press (All Screens):** Save Screenshot |
 
 ## License
-Licensed under the [MIT License](LICENSE).
+Licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).

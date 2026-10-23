@@ -1,7 +1,7 @@
 # Contributing to RTK Rover
 
 Thank you for your interest in contributing to the RTK Rover project! 
-This project is open-source under the MIT License, and we welcome contributions from the community to help improve high-precision RTK GNSS waypoint guidance and surveying.
+This project is open-source under the GPLv3 License, and we welcome contributions from the community to help improve high-precision RTK GNSS waypoint guidance and surveying.
 
 ## Code of Conduct
 
