@@ -812,7 +812,13 @@ void create_rover_ui(void)
     lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 202);
 
     t4_e220_cfg_lbl = lv_label_create(tile_test);
-    lv_label_set_text(t4_e220_cfg_lbl, "Target: CH55 (905.125M) 115200/19.2k 200B 21dBm");
+    lv_label_set_text_fmt(t4_e220_cfg_lbl,
+                          "Target: CH%u (%.3fM) %.1fk %uB %udBm",
+                          current_settings.e220_channel,
+                          850.125f + (float)current_settings.e220_channel,
+                          current_settings.e220_air_rate_kbps,
+                          current_settings.e220_subpacket_bytes,
+                          current_settings.e220_tx_power_dbm);
     lv_obj_set_style_text_color(t4_e220_cfg_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(t4_e220_cfg_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t4_e220_cfg_lbl, LV_ALIGN_TOP_LEFT, 8, 256);
@@ -831,7 +837,7 @@ void create_rover_ui(void)
     lv_obj_set_style_bg_color(btn_e220_wr, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_add_event_cb(btn_e220_wr, test_e220_write_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_e220_wr = lv_label_create(btn_e220_wr);
-    lv_label_set_text(l_e220_wr, "Write CH55 Cfg");
+    lv_label_set_text(l_e220_wr, "Write E220 Cfg");
     lv_obj_center(l_e220_wr);
 }
 

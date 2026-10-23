@@ -22,6 +22,11 @@ struct SystemSettings current_settings = {
     true,             // apply_lever_arm
     0.0f,             // pole_tilt_tare_pitch_deg
     0.0f,             // pole_tilt_tare_roll_deg
+    55,               // e220_channel (CH 55 = 905.125 MHz)
+    38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
+    21,               // e220_tx_power_dbm (30, 27, 24, 21)
+    200,              // e220_subpacket_bytes (200, 128, 64, 32)
+    false,            // e220_lbt_enable
     5,                // survey_avg_seconds (1, 5, or 10s)
     "PIN_",           // default_label_prefix
     "/waypoints.csv", // active_waypoint_file
@@ -79,6 +84,11 @@ extern "C" void load_settings(void) {
         if (!doc["apply_lever_arm"].isNull()) current_settings.apply_lever_arm = doc["apply_lever_arm"];
         if (!doc["pole_tilt_tare_pitch_deg"].isNull()) current_settings.pole_tilt_tare_pitch_deg = doc["pole_tilt_tare_pitch_deg"];
         if (!doc["pole_tilt_tare_roll_deg"].isNull()) current_settings.pole_tilt_tare_roll_deg = doc["pole_tilt_tare_roll_deg"];
+        if (!doc["e220_channel"].isNull()) current_settings.e220_channel = doc["e220_channel"];
+        if (!doc["e220_air_rate_kbps"].isNull()) current_settings.e220_air_rate_kbps = doc["e220_air_rate_kbps"];
+        if (!doc["e220_tx_power_dbm"].isNull()) current_settings.e220_tx_power_dbm = doc["e220_tx_power_dbm"];
+        if (!doc["e220_subpacket_bytes"].isNull()) current_settings.e220_subpacket_bytes = doc["e220_subpacket_bytes"];
+        if (!doc["e220_lbt_enable"].isNull()) current_settings.e220_lbt_enable = doc["e220_lbt_enable"];
         if (!doc["survey_avg_seconds"].isNull()) current_settings.survey_avg_seconds = doc["survey_avg_seconds"];
         if (!doc["default_label_prefix"].isNull()) strncpy(current_settings.default_label_prefix, doc["default_label_prefix"], sizeof(current_settings.default_label_prefix) - 1);
         if (!doc["active_waypoint_file"].isNull()) strncpy(current_settings.active_waypoint_file, doc["active_waypoint_file"], sizeof(current_settings.active_waypoint_file) - 1);
@@ -102,6 +112,11 @@ extern "C" void save_settings(void) {
     doc["apply_lever_arm"]           = current_settings.apply_lever_arm;
     doc["pole_tilt_tare_pitch_deg"]  = current_settings.pole_tilt_tare_pitch_deg;
     doc["pole_tilt_tare_roll_deg"]   = current_settings.pole_tilt_tare_roll_deg;
+    doc["e220_channel"]              = current_settings.e220_channel;
+    doc["e220_air_rate_kbps"]        = current_settings.e220_air_rate_kbps;
+    doc["e220_tx_power_dbm"]         = current_settings.e220_tx_power_dbm;
+    doc["e220_subpacket_bytes"]      = current_settings.e220_subpacket_bytes;
+    doc["e220_lbt_enable"]           = current_settings.e220_lbt_enable;
     doc["survey_avg_seconds"]        = current_settings.survey_avg_seconds;
     doc["default_label_prefix"]      = current_settings.default_label_prefix;
     doc["active_waypoint_file"]      = current_settings.active_waypoint_file;

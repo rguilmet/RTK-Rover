@@ -1,6 +1,7 @@
 #include "e220_driver.h"
 #include "../../user_config.h"
 #include "../um982_driver/um982_driver.h"
+#include "../settings_manager/settings_manager.h"
 #include <Arduino.h>
 
 static E220LinkStats_t e220_stats = {};
@@ -70,6 +71,47 @@ extern "C" void request_e220_config_write(void)
     pending_cfg_write = true;
 }
 
+static uint8_t e220_build_reg0_from_settings(void)
+{
+    // Bits [7:5] = 111 (115200 bps), Bits [4:3] = 00 (8N1) -> 0xE0
+    uint8_t air_bits = 0x06; // Default 38.4 kbps (0b110)
+    float rate = current_settings.e220_air_rate_kbps;
+    if (rate < 3.0f)       air_bits = 0x02; // 2.4 kbps
+    else if (rate < 7.0f)  air_bits = 0x03; // 4.8 kbps
+    else if (rate < 14.0f) air_bits = 0x04; // 9.6 kbps
+    else if (rate < 28.0f) air_bits = 0x05; // 19.2 kbps
+    else if (rate < 50.0f) air_bits = 0x06; // 38.4 kbps
+    else                   air_bits = 0x07; // 62.5 kbps
+    return (uint8_t)(0xE0 | air_bits);
+}
+
+static uint8_t e220_build_reg1_from_settings(void)
+{
+    // Bits [7:6] = Sub-packet size (00=200B, 01=128B, 10=64B, 11=32B)
+    uint8_t pkt_bits = 0x00;
+    uint16_t pkt = current_settings.e220_subpacket_bytes;
+    if (pkt <= 32)       pkt_bits = 0xC0;
+    else if (pkt <= 64)  pkt_bits = 0x80;
+    else if (pkt <= 128) pkt_bits = 0x40;
+    else                 pkt_bits = 0x00; // 200 bytes
+
+    // Bits [1:0] = TX Power on E220-900T30S (00=30dBm, 01=27dBm, 10=24dBm, 11=21dBm)
+    uint8_t pwr_bits = 0x03; // Default 21 dBm (Level 3)
+    uint8_t pwr = current_settings.e220_tx_power_dbm;
+    if (pwr >= 29)      pwr_bits = 0x00; // 30 dBm (Level 0)
+    else if (pwr >= 26) pwr_bits = 0x01; // 27 dBm (Level 1)
+    else if (pwr >= 23) pwr_bits = 0x02; // 24 dBm (Level 2)
+    else                pwr_bits = 0x03; // 21 dBm (Level 3)
+
+    return (uint8_t)(pkt_bits | pwr_bits);
+}
+
+static uint8_t e220_build_reg3_from_settings(void)
+{
+    // Bit 6 = 0 (Transparent Mode), Bit 4 = LBT Enable
+    return current_settings.e220_lbt_enable ? 0x10 : 0x00;
+}
+
 extern "C" bool e220_write_default_config_registers(void)
 {
     // 1. Switch E220 to Mode 3 (Config/Sleep: M0=1, M1=1) @ 9600 8N1
@@ -78,17 +120,20 @@ extern "C" bool e220_write_default_config_registers(void)
     vTaskDelay(pdMS_TO_TICKS(30));
     while (Serial0.available()) Serial0.read();
 
-    // 2. Write Persistent Registers (0xC0 0x00 0x06):
-    //    ADDH=0x00, ADDL=0x00, REG0=0xE5 (115200 8N1, 19.2k),
-    //    REG1=0x03 (200B, 21dBm), CHAN=0x37 (CH 55 = 905.125MHz), REG3=0x00 (Transparent, No LBT)
+    uint8_t reg0 = e220_build_reg0_from_settings();
+    uint8_t reg1 = e220_build_reg1_from_settings();
+    uint8_t chan = (current_settings.e220_channel <= 83) ? current_settings.e220_channel : ROVER_E220_TARGET_CHAN;
+    uint8_t reg3 = e220_build_reg3_from_settings();
+
+    // 2. Write Persistent Registers (0xC0 0x00 0x06) from settings.json parameters
     uint8_t cmd[9] = {
         0xC0, 0x00, 0x06,
         ROVER_E220_TARGET_ADDH,
         ROVER_E220_TARGET_ADDL,
-        ROVER_E220_TARGET_REG0,
-        ROVER_E220_TARGET_REG1,
-        ROVER_E220_TARGET_CHAN,
-        ROVER_E220_TARGET_REG3
+        reg0,
+        reg1,
+        chan,
+        reg3
     };
     Serial0.write(cmd, sizeof(cmd));
     Serial0.flush();

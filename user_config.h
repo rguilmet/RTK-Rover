@@ -6,7 +6,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.1.4"
+#define ROVER_FIRMWARE_VERSION "v0.1.5"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -100,19 +100,22 @@
 // Target Radio Configuration (850.125 MHz + CH * 1 MHz):
 //   - RF Channel:    55 (0x37) -> 905.125 MHz (avoids EcoWitt Weather Station)
 //   - UART Rate:     115200 bps, 8N1 (REG0[7:5]=111, REG0[4:3]=00)
-//   - Air Data Rate: 19.2 kbps       (REG0[2:0]=101) -> REG0 = 0xE5
+//   - Air Data Rate: 38.4 kbps       (REG0[2:0]=110) -> REG0 = 0xE6 (configurable in settings.json)
 //   - Packet Size:   200 bytes       (REG1[7:6]=00)
 //   - TX Power:      21 dBm (Level 3)(REG1[1:0]=11)  -> REG1 = 0x03
 //   - Mode / LBT:    Transparent (REG3[6]=0), LBT Disabled (REG3[4]=0) -> REG3 = 0x00
 // =========================================================================
-#define ROVER_E220_TRANSPARENT_BAUD 115200
-#define ROVER_E220_CONFIG_BAUD      9600
-#define ROVER_E220_TARGET_ADDH      0x00
-#define ROVER_E220_TARGET_ADDL      0x00
-#define ROVER_E220_TARGET_REG0      0xE5  // 115200 8N1, 19.2k Air Rate
-#define ROVER_E220_TARGET_REG1      0x03  // 200-byte packet, 21 dBm TX Power
-#define ROVER_E220_TARGET_CHAN      55    // CH 55 (0x37) = 905.125 MHz
-#define ROVER_E220_TARGET_REG3      0x00  // Transparent Mode, LBT Disabled
+#define ROVER_E220_TRANSPARENT_BAUD        115200
+#define ROVER_E220_CONFIG_BAUD             9600
+#define ROVER_E220_TARGET_ADDH             0x00
+#define ROVER_E220_TARGET_ADDL             0x00
+#define ROVER_E220_TARGET_REG0             0xE6  // 115200 8N1, 38.4k Air Rate (0xE5=19.2k, 0xE6=38.4k, 0xE7=62.5k)
+#define ROVER_E220_TARGET_REG1             0x03  // 200-byte packet, 21 dBm TX Power
+#define ROVER_E220_TARGET_CHAN             55    // CH 55 (0x37) = 905.125 MHz
+#define ROVER_E220_TARGET_REG3             0x00  // Transparent Mode, LBT Disabled
+#define ROVER_E220_DEFAULT_AIR_RATE_KBPS   38.4f // Configurable via settings.json (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
+#define ROVER_E220_DEFAULT_TX_POWER_DBM    21    // Configurable via settings.json (30, 27, 24, 21)
+#define ROVER_E220_DEFAULT_SUBPACKET_BYTES 200   // Configurable via settings.json (200, 128, 64, 32)
 #define ROVER_PIN_E220_AUX          21    // Input: HIGH = Ready/Idle, LOW = Busy
 #define ROVER_PIN_E220_RST          38    // Output: Hardware Reset
 #define ROVER_PIN_E220_M0           39    // Output: Mode 0 (0=Transparent, 1=Config)
