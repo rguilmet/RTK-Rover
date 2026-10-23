@@ -25,7 +25,7 @@ struct SystemSettings current_settings = {
     55,               // e220_channel (CH 55 = 905.125 MHz)
     38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
-    200,              // e220_subpacket_bytes (200, 128, 64, 32)
+    128,              // e220_subpacket_bytes (200, 128, 64, 32)
     false,            // e220_lbt_enable
     5,                // survey_avg_seconds (1, 5, or 10s)
     "PIN_",           // default_label_prefix

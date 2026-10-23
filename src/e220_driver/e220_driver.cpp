@@ -88,7 +88,7 @@ static uint8_t e220_build_reg0_from_settings(void)
 static uint8_t e220_build_reg1_from_settings(void)
 {
     // Bits [7:6] = Sub-packet size (00=200B, 01=128B, 10=64B, 11=32B)
-    uint8_t pkt_bits = 0x00;
+    uint8_t pkt_bits = 0x40; // Default 128 bytes
     uint16_t pkt = current_settings.e220_subpacket_bytes;
     if (pkt <= 32)       pkt_bits = 0xC0;
     else if (pkt <= 64)  pkt_bits = 0x80;
