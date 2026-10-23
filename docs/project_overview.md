@@ -2,7 +2,7 @@
 
 **Document Version:** `v1.0.0`
 **Last Updated:** October 23, 2026
-**Firmware Target:** `v0.1.3`
+**Firmware Target:** `v0.1.4`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 
@@ -27,6 +27,13 @@ This document serves as the master source of truth for the **RTK Rover** project
    * The survey pole centerline sits at the **exact midpoint** (`27.75 cm`) between the Master and Slave antennas, at height `antenna_height_m` (default `1.800 m`) above the ground tip.
 3. **RTCM Correction Radio:** **Ebyte E220-900T30S** (900MHz LoRa UART Transceiver)
    * Receives RTCM3 differential corrections streamed from the RTK Base Station in transparent mode at `115200` baud.
+   * **Radio Configuration (`v0.1.4`):**
+     * **RF Channel:** `55` (`0x37` $\rightarrow$ $850.125 + 55 = 905.125\text{ MHz}$, selected to avoid conflict with the EcoWitt Weather Station).
+     * **UART Rate:** `115200` bps, `8N1`.
+     * **Air Data Rate:** `19.2k` (`REG0 = 0xE5`).
+     * **Packet Size:** `200 bytes`.
+     * **Transmit Power:** Level 3 (`21 dBm`, `REG1 = 0x03`).
+     * **Transmission Mode & LBT:** Transparent Mode, LBT Disabled (`REG3 = 0x00`).
 
 ---
 

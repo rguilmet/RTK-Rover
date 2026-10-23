@@ -167,7 +167,7 @@ Modeled directly after the `Magnetic_Field_Scanner` [`settings_manager`](../../M
 5. **Tile 5: Hardware Test Modes & Settings:**
    - **Test Mode 1 (UM982 COM1 - `IO17/18`):** Live NMEA/Unicore terminal, TX/RX byte counters, quick command buttons (`VERSIONA`, `CONFIG`, `GPGGA`, `UNIHEADINGA`, `CONFIG HEADING LENGTH`).
    - **Test Mode 2 (UM982 COM2 - `IO47/48`):** RTCM forwarding counter, COM2 test packet injection, verification via COM1 status query.
-   - **Test Mode 3 (E220 LoRa - `IO41/42`, `M0/M1/AUX/RST`):** Live `AUX`/`M0`/`M1` pin badges, "Read E220 Config" (switches to Mode 3 @ 9600, reads registers, returns to Mode 0 @ 115200), and live RTCM3 frame sniffer (`1005`, `1074`, `1084`, `1094`, `1124`).
+   - **Test Mode 3 (E220 LoRa - `IO41/42`, `M0/M1/AUX/RST`):** Live `AUX`/`M0`/`M1` pin badges, "Read E220 Regs" and "Write CH55 Cfg" (switches to Mode 3 @ 9600, reads/writes Channel 55 / `905.125 MHz`, `115200` UART, `19.2k` Air Rate, `200B` packet, `21 dBm` Power, Transparent, LBT disabled, then returns to Mode 0 @ 115200), and live RTCM3 frame sniffer (`1005`, `1074`, `1084`, `1094`, `1124`).
    - **System & Mechanical Settings UI:** Adjust SI/Imperial units, UTC offset, `antenna_height_m`, `antenna_spacing_m`, brightness, and audio volume directly on-screen.
 
 ---

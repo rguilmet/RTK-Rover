@@ -6,7 +6,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.1.3"
+#define ROVER_FIRMWARE_VERSION "v0.1.4"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -92,19 +92,33 @@
 #define ROVER_PIN_UM982_RXD1      48  // Connected to ESP32 TX (Serial2 TX)
 
 // =========================================================================
-// Ebyte E220-900T30S LoRa Module Mapping
+// Ebyte E220-900T30S LoRa Module Mapping & Radio Configuration
 // NOTE: Device-relative labels:
 //   E220_TXD = E220 Transmit Output -> ESP32 UART RX Input
 //   E220_RXD = E220 Receive Input   <- ESP32 UART TX Output
+//
+// Target Radio Configuration (850.125 MHz + CH * 1 MHz):
+//   - RF Channel:    55 (0x37) -> 905.125 MHz (avoids EcoWitt Weather Station)
+//   - UART Rate:     115200 bps, 8N1 (REG0[7:5]=111, REG0[4:3]=00)
+//   - Air Data Rate: 19.2 kbps       (REG0[2:0]=101) -> REG0 = 0xE5
+//   - Packet Size:   200 bytes       (REG1[7:6]=00)
+//   - TX Power:      21 dBm (Level 3)(REG1[1:0]=11)  -> REG1 = 0x03
+//   - Mode / LBT:    Transparent (REG3[6]=0), LBT Disabled (REG3[4]=0) -> REG3 = 0x00
 // =========================================================================
 #define ROVER_E220_TRANSPARENT_BAUD 115200
 #define ROVER_E220_CONFIG_BAUD      9600
-#define ROVER_PIN_E220_AUX          21  // Input: HIGH = Ready/Idle, LOW = Busy
-#define ROVER_PIN_E220_RST          38  // Output: Hardware Reset
-#define ROVER_PIN_E220_M0           39  // Output: Mode 0 (0=Transparent, 1=Config)
-#define ROVER_PIN_E220_M1           40  // Output: Mode 1 (0=Transparent, 1=Config)
-#define ROVER_PIN_E220_TXD          41  // Connected to ESP32 RX (Serial0 RX)
-#define ROVER_PIN_E220_RXD          42  // Connected to ESP32 TX (Serial0 TX)
+#define ROVER_E220_TARGET_ADDH      0x00
+#define ROVER_E220_TARGET_ADDL      0x00
+#define ROVER_E220_TARGET_REG0      0xE5  // 115200 8N1, 19.2k Air Rate
+#define ROVER_E220_TARGET_REG1      0x03  // 200-byte packet, 21 dBm TX Power
+#define ROVER_E220_TARGET_CHAN      55    // CH 55 (0x37) = 905.125 MHz
+#define ROVER_E220_TARGET_REG3      0x00  // Transparent Mode, LBT Disabled
+#define ROVER_PIN_E220_AUX          21    // Input: HIGH = Ready/Idle, LOW = Busy
+#define ROVER_PIN_E220_RST          38    // Output: Hardware Reset
+#define ROVER_PIN_E220_M0           39    // Output: Mode 0 (0=Transparent, 1=Config)
+#define ROVER_PIN_E220_M1           40    // Output: Mode 1 (0=Transparent, 1=Config)
+#define ROVER_PIN_E220_TXD          41    // Connected to ESP32 RX (Serial0 RX)
+#define ROVER_PIN_E220_RXD          42    // Connected to ESP32 TX (Serial0 TX)
 
 // =========================================================================
 // LVGL Task Timing & Priorities

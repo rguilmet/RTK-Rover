@@ -10,6 +10,7 @@ extern "C" {
 void e220_driver_init(void);
 void e220_set_mode(uint8_t m0, uint8_t m1);
 bool e220_read_config_registers(void);
+bool e220_write_default_config_registers(void);
 
 // Polls incoming E220 bytes, forwards immediately to UM982 COM2 (Serial2),
 // and parses RTCM3 (0xD3) frames for live diagnostic counts.

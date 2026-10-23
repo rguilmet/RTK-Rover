@@ -152,6 +152,7 @@ typedef struct {
 void trigger_survey_waypoint_log(void);
 void trigger_tare_pole_level(void);
 void request_e220_config_read(void);
+void request_e220_config_write(void);
 void send_um982_com1_command(const char *cmd);
 void send_um982_com2_test_pulse(void);
 void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms);
