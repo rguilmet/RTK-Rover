@@ -16,6 +16,7 @@ struct SystemSettings {
     bool     apply_lever_arm;
     float    pole_tilt_tare_pitch_deg;
     float    pole_tilt_tare_roll_deg;
+    uint32_t e220_uart_baud;
     uint8_t  e220_channel;
     float    e220_air_rate_kbps;
     uint8_t  e220_tx_power_dbm;

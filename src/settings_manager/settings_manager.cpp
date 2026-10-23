@@ -22,6 +22,7 @@ struct SystemSettings current_settings = {
     true,             // apply_lever_arm
     0.0f,             // pole_tilt_tare_pitch_deg
     0.0f,             // pole_tilt_tare_roll_deg
+    57600,            // e220_uart_baud (57600 paces UART input so 1400B bursts don't overrun E220 1000B FIFO)
     55,               // e220_channel (CH 55 = 905.125 MHz)
     38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
@@ -84,6 +85,7 @@ extern "C" void load_settings(void) {
         if (!doc["apply_lever_arm"].isNull()) current_settings.apply_lever_arm = doc["apply_lever_arm"];
         if (!doc["pole_tilt_tare_pitch_deg"].isNull()) current_settings.pole_tilt_tare_pitch_deg = doc["pole_tilt_tare_pitch_deg"];
         if (!doc["pole_tilt_tare_roll_deg"].isNull()) current_settings.pole_tilt_tare_roll_deg = doc["pole_tilt_tare_roll_deg"];
+        if (!doc["e220_uart_baud"].isNull()) current_settings.e220_uart_baud = doc["e220_uart_baud"];
         if (!doc["e220_channel"].isNull()) current_settings.e220_channel = doc["e220_channel"];
         if (!doc["e220_air_rate_kbps"].isNull()) current_settings.e220_air_rate_kbps = doc["e220_air_rate_kbps"];
         if (!doc["e220_tx_power_dbm"].isNull()) current_settings.e220_tx_power_dbm = doc["e220_tx_power_dbm"];
@@ -112,6 +114,7 @@ extern "C" void save_settings(void) {
     doc["apply_lever_arm"]           = current_settings.apply_lever_arm;
     doc["pole_tilt_tare_pitch_deg"]  = current_settings.pole_tilt_tare_pitch_deg;
     doc["pole_tilt_tare_roll_deg"]   = current_settings.pole_tilt_tare_roll_deg;
+    doc["e220_uart_baud"]            = current_settings.e220_uart_baud;
     doc["e220_channel"]              = current_settings.e220_channel;
     doc["e220_air_rate_kbps"]        = current_settings.e220_air_rate_kbps;
     doc["e220_tx_power_dbm"]         = current_settings.e220_tx_power_dbm;

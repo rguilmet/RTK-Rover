@@ -53,11 +53,12 @@ extern "C" void e220_driver_init(void)
 
     digitalWrite(ROVER_PIN_E220_RST, HIGH);
 
-    // Boot directly into Mode 0 (Transparent Mode: M0=0, M1=0) at 115200 8N1
+    // Boot directly into Mode 0 (Transparent Mode: M0=0, M1=0) at configured UART baud (default 57600 8N1)
     // Note: E220_TXD (IO41) is ESP32 RX; E220_RXD (IO42) is ESP32 TX
     e220_set_mode(0, 0);
     Serial0.setRxBufferSize(4096);
-    Serial0.begin(ROVER_E220_TRANSPARENT_BAUD, SERIAL_8N1, ROVER_PIN_E220_TXD, ROVER_PIN_E220_RXD);
+    uint32_t baud = (current_settings.e220_uart_baud > 0) ? current_settings.e220_uart_baud : ROVER_E220_TRANSPARENT_BAUD;
+    Serial0.begin(baud, SERIAL_8N1, ROVER_PIN_E220_TXD, ROVER_PIN_E220_RXD);
     e220_stats.aux_pin_high = (digitalRead(ROVER_PIN_E220_AUX) == HIGH);
 }
 
@@ -73,7 +74,19 @@ extern "C" void request_e220_config_write(void)
 
 static uint8_t e220_build_reg0_from_settings(void)
 {
-    // Bits [7:5] = 111 (115200 bps), Bits [4:3] = 00 (8N1) -> 0xE0
+    // Bits [7:5] = UART baud (000=1200, 001=2400, 010=4800, 011=9600, 100=19200, 101=38400, 110=57600, 111=115200)
+    // Bits [4:3] = 00 (8N1)
+    uint8_t uart_bits = 0xC0; // Default 57600 bps (0b110 << 5)
+    uint32_t baud = current_settings.e220_uart_baud;
+    if (baud >= 115200)     uart_bits = 0xE0; // 115200
+    else if (baud >= 57600) uart_bits = 0xC0; // 57600
+    else if (baud >= 38400) uart_bits = 0xA0; // 38400
+    else if (baud >= 19200) uart_bits = 0x80; // 19200
+    else if (baud >= 9600)  uart_bits = 0x60; // 9600
+    else if (baud >= 4800)  uart_bits = 0x40; // 4800
+    else if (baud >= 2400)  uart_bits = 0x20; // 2400
+    else                    uart_bits = 0x00; // 1200
+
     uint8_t air_bits = 0x06; // Default 38.4 kbps (0b110)
     float rate = current_settings.e220_air_rate_kbps;
     if (rate < 3.0f)       air_bits = 0x02; // 2.4 kbps
@@ -82,7 +95,7 @@ static uint8_t e220_build_reg0_from_settings(void)
     else if (rate < 28.0f) air_bits = 0x05; // 19.2 kbps
     else if (rate < 50.0f) air_bits = 0x06; // 38.4 kbps
     else                   air_bits = 0x07; // 62.5 kbps
-    return (uint8_t)(0xE0 | air_bits);
+    return (uint8_t)(uart_bits | air_bits);
 }
 
 static uint8_t e220_build_reg1_from_settings(void)
@@ -161,8 +174,9 @@ extern "C" bool e220_write_default_config_registers(void)
         ok = true;
     }
 
-    // 3. Return to Mode 0 (Transparent: M0=0, M1=0) @ 115200 8N1
-    Serial0.updateBaudRate(ROVER_E220_TRANSPARENT_BAUD);
+    // 3. Return to Mode 0 (Transparent: M0=0, M1=0) at configured UART baud (default 57600 8N1)
+    uint32_t baud = (current_settings.e220_uart_baud > 0) ? current_settings.e220_uart_baud : ROVER_E220_TRANSPARENT_BAUD;
+    Serial0.updateBaudRate(baud);
     e220_set_mode(0, 0);
     return ok;
 }
@@ -203,8 +217,9 @@ extern "C" bool e220_read_config_registers(void)
         ok = true;
     }
 
-    // 3. Return immediately to Mode 0 (Transparent: M0=0, M1=0) at 115200 baud
-    Serial0.updateBaudRate(ROVER_E220_TRANSPARENT_BAUD);
+    // 3. Return immediately to Mode 0 (Transparent: M0=0, M1=0) at configured UART baud
+    uint32_t baud = (current_settings.e220_uart_baud > 0) ? current_settings.e220_uart_baud : ROVER_E220_TRANSPARENT_BAUD;
+    Serial0.updateBaudRate(baud);
     e220_set_mode(0, 0);
     return ok;
 }

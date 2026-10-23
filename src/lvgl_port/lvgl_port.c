@@ -806,16 +806,18 @@ void create_rover_ui(void)
 
     // Section 3: E220 LoRa (IO41/42, AUX:21, M0:39, M1:40, RST:38)
     t4_e220_lbl = lv_label_create(tile_test);
-    lv_label_set_text(t4_e220_lbl, "[E220 LoRa IO41/42 @ 115200]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0");
+    lv_label_set_text_fmt(t4_e220_lbl,
+                          "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
+                          (unsigned long)current_settings.e220_uart_baud);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_e220_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 202);
 
     t4_e220_cfg_lbl = lv_label_create(tile_test);
     lv_label_set_text_fmt(t4_e220_cfg_lbl,
-                          "Target: CH%u (%.3fM) %.1fk %uB %udBm",
+                          "Target: CH%u %lu/%.1fk %uB %udBm",
                           current_settings.e220_channel,
-                          850.125f + (float)current_settings.e220_channel,
+                          (unsigned long)current_settings.e220_uart_baud,
                           current_settings.e220_air_rate_kbps,
                           current_settings.e220_subpacket_bytes,
                           current_settings.e220_tx_power_dbm);
@@ -985,7 +987,8 @@ void update_rover_ui(const RoverUIData_t *d)
                           d->diff_age_s);
 
     lv_label_set_text_fmt(t4_e220_lbl,
-                          "[E220 LoRa IO41/42 @ 115200]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+                          "[E220 LoRa IO41/42 @ %lu]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+                          (unsigned long)current_settings.e220_uart_baud,
                           d->e220_stats.aux_pin_high ? 1 : 0,
                           d->e220_stats.mode_m0,
                           d->e220_stats.mode_m1,

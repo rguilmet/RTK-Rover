@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.0.2`
+**Document Version:** `v1.0.3`
 **Last Updated:** October 23, 2026
-**Firmware Target:** `v0.1.6`
+**Firmware Target:** `v0.1.7`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 
@@ -26,11 +26,11 @@ This document serves as the master source of truth for the **RTK Rover** project
    * Mounted on the survey pole T-bar with Master (Position) and Slave (Heading) antennas separated by `0.555 m` (`55.5 cm`, configurable in `settings.json`).
    * The survey pole centerline sits at the **exact midpoint** (`27.75 cm`) between the Master and Slave antennas, at height `antenna_height_m` (default `1.800 m`) above the ground tip.
 3. **RTCM Correction Radio:** **Ebyte E220-900T30S** (900MHz LoRa UART Transceiver)
-   * Receives RTCM3 differential corrections streamed from the RTK Base Station in transparent mode at `115200` baud.
-   * **Radio Configuration (`v0.1.6`, configurable in `settings.json`):**
+   * Receives RTCM3 differential corrections streamed from the RTK Base Station in transparent mode at `57600` baud (forwarded by the ESP32 to UM982 COM2 at `115200` baud).
+   * **Radio Configuration (`v0.1.7`, configurable in `settings.json`):**
      * **RF Channel (`e220_channel`):** `55` (`0x37` $\rightarrow$ $850.125 + 55 = 905.125\text{ MHz}$, selected to avoid conflict with the EcoWitt Weather Station).
-     * **UART Rate:** `115200` bps, `8N1`.
-     * **Air Data Rate (`e220_air_rate_kbps`):** `38.4` kbps (`REG0 = 0xE6`; supports `2.4, 4.8, 9.6, 19.2, 38.4, 62.5` in `settings.json`).
+     * **UART Rate (`e220_uart_baud`):** `57600` bps, `8N1` (`REG0[7:5] = 110`; paces UART input so 1,400-byte bursts do not overrun the E220's 1,000-byte FIFO).
+     * **Air Data Rate (`e220_air_rate_kbps`):** `38.4` kbps (`REG0 = 0xC6`; supports `2.4, 4.8, 9.6, 19.2, 38.4, 62.5` in `settings.json`).
      * **Packet Size (`e220_subpacket_bytes`):** `128 bytes` (`REG1[7:6] = 01`; supports `200, 128, 64, 32`).
      * **Transmit Power (`e220_tx_power_dbm`):** Level 3 (`21 dBm`, `REG1 = 0x43`; supports `30, 27, 24, 21`).
      * **Transmission Mode & LBT (`e220_lbt_enable`):** Transparent Mode, LBT Disabled (`REG3 = 0x00`).
@@ -65,7 +65,7 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
 | **UM982 COM2** | `UM982_TXD1` | `GPIO 47` | **ESP32 RX** (`Serial2`) | UM982 COM2 TX $\rightarrow$ ESP32 RX (`115200 8N1`) |
 | **UM982 COM2** | `UM982_RXD1` | `GPIO 48` | **ESP32 TX** (`Serial2`) | ESP32 TX $\rightarrow$ UM982 COM2 RX (`115200 8N1`, RTCM3 Stream Forward) |
 | **UM982 COM3** | `USB-C` | N/A | Direct PC Link | Reserved for direct PC connection with Unicore **Uprecise** software |
-| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`115200` Transparent / `9600` Config Mode) |
+| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`57600` Transparent / `9600` Config Mode) |
 | **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX $\rightarrow$ E220 RXD |
 | **E220 Control** | `E220_AUX` | `GPIO 21` | **ESP32 Input** | Busy (`LOW`) / Idle & Ready (`HIGH`) status |
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |

@@ -10,7 +10,7 @@
   - **Device-Relative UART Pin Labels:** All pin labels (`UM982_TXD0`, `UM982_RXD0`, `UM982_TXD1`, `UM982_RXD1`, `E220_TXD`, `E220_RXD`) are named relative to the external module (`<DEV>_TXD` = module output $\rightarrow$ ESP32 RX input; `<DEV>_RXD` = module input $\leftarrow$ ESP32 TX output).
   - **Dual-Antenna Lever-Arm & Pole Height Projection:** The UM982 reports the WGS84 position of the **Master Antenna**, while the survey pole centerline sits at the midpoint ($\frac{B}{2} = 0.2775\text{ m}$ for `0.555 m` spacing) between Master and Slave antennas at height `antenna_height_m` above the ground tip. `nav_engine` projects the Master position along the 3D `UNIHEADINGA` baseline vector (`heading`, `pitch`) to eliminate orbital offset when rotating the pole.
   - **Display Orientation Independence:** True heading comes from the pole-mounted UM982 dual antennas, while the handheld Waveshare's `QMI8658` IMU tracks the enclosure gravity vector (`Held Flat`, `Viewing Angle`, `Clipped Vertically to Pole`) and supports bracket tilt taring for the 2D pole bubble level.
-  - **E220-900T30S Radio Spec:** Channel `55` (`0x37` = `905.125 MHz` to avoid EcoWitt Weather Station), `115200` 8N1 UART, `38.4k` Air Data Rate default (`REG0=0xE6`, configurable via `e220_air_rate_kbps` in `settings.json` between `2.4k..62.5k`), `128-byte` packet (`REG1[7:6]=01`), Level 3 `21 dBm` power (`REG1=0x43`), Transparent Mode, LBT Disabled (`REG3=0x00`).
+  - **E220-900T30S Radio Spec:** Channel `55` (`0x37` = `905.125 MHz` to avoid EcoWitt Weather Station), `57600` 8N1 UART (`e220_uart_baud`, paced so 1,400B bursts don't overrun the 1,000B FIFO), `38.4k` Air Data Rate default (`REG0=0xC6`, configurable via `e220_air_rate_kbps` in `settings.json` between `2.4k..62.5k`), `128-byte` packet (`REG1[7:6]=01`), Level 3 `21 dBm` power (`REG1=0x43`), Transparent Mode, LBT Disabled (`REG3=0x00`).
 * **Code Style:** Strict C/C++ for firmware (`src/` modular subdirectories), pure Python for auxiliary scripts (`scripts/`). Maintain existing docstrings. Semantic versioning enforced (`ROVER_FIRMWARE_VERSION` in `user_config.h` for firmware, independent `__version__` strings inside Python files).
 
 ## 2. BEHAVIORAL PROFILE & PROMPTING PERSUASION
@@ -22,7 +22,7 @@
 ## 3. HARD ROADBLOCKS & COMPULSIVE HALTS (WHAT NOT TO DO)
 * **NEVER** use single-precision `float` for WGS84 Latitude or Longitude storage or geodesic math (`float` has only ~24 bits of mantissa $\approx 1.5\text{ m}$ resolution at mid-latitudes, completely destroying centimeter-level RTK precision). Always use 64-bit `double` (`%.8f`).
 * **NEVER** trigger Survey Waypoint Logging on a short-press of the physical `BOOT` button (`GPIO 0`) unless **Tile 2 (`active_tile_col == 1`, Field Survey Logger)** is the active screen. Long-press (`>= 1.5s`) captures a screenshot across **all screens**.
-* **NEVER** swap E220 operating modes (`M0`, `M1`) without waiting for `E220_AUX` (`GPIO 21`) to assert `HIGH`, and always switch `Serial0` baud rate to `9600` when entering Mode 3 (`M0=1, M1=1`) for register queries/writes and back to `115200` when returning to Mode 0 (`M0=0, M1=0`).
+* **NEVER** swap E220 operating modes (`M0`, `M1`) without waiting for `E220_AUX` (`GPIO 21`) to assert `HIGH`, and always switch `Serial0` baud rate to `9600` when entering Mode 3 (`M0=1, M1=1`) for register queries/writes and back to `current_settings.e220_uart_baud` (`57600`) when returning to Mode 0 (`M0=0, M1=0`).
 * **NEVER** touch LVGL widget pointers from outside `lv_timer_handler()` without acquiring `rover_lvgl_lock()` and releasing via `rover_lvgl_unlock()`.
 * **NEVER** set LVGL root container widths greater than `320` pixels (`ROVER_LCD_H_RES = 320`, `ROVER_LCD_V_RES = 480` Portrait).
 * **NEVER** bump `ROVER_FIRMWARE_VERSION` in `user_config.h` for documentation-only changes. Documents maintain their own independent history.
@@ -30,10 +30,10 @@
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
 * **Completed:**
-  - Established full GPLv3 repository baseline (`v0.1.6`) with modular `src/` BSP and application drivers.
+  - Established full GPLv3 repository baseline (`v0.1.7`) with modular `src/` BSP and application drivers.
   - Implemented `i2c_bsp`, `tca9554`, `axp2101_bsp`, `rtc_bsp` (with automatic `$GNRMC` UTC sync), `imu_bsp`, `lvgl_port`, `screenshot`, `settings_manager`, `e220_driver`, `um982_driver`, `nav_engine`, and `waypoint_manager`.
-  - Implemented E220-900T30S Mode 3 register read/write driven by `settings.json` (defaulting to Channel 55 `905.125 MHz`, `115200`/`38.4k` air rate, `128B` packet size, `21 dBm`, Transparent Mode, LBT disabled), plus zero-allocation RTCM3 (`0xD3`) frame sniffer.
+  - Implemented E220-900T30S Mode 3 register read/write driven by `settings.json` (defaulting to Channel 55 `905.125 MHz`, `57600`/`38.4k` air rate `REG0=0xC6`, `128B` packet size `REG1=0x43`, `21 dBm`, Transparent Mode, LBT disabled), plus zero-allocation RTCM3 (`0xD3`) frame sniffer.
   - Built 5-tile `320x480` Portrait LVGL 9 UI and companion Python scripts (`validate_waypoints.py v1.0.1`, `analyze_rtk_log.py v1.0.0`).
-* **Current Step:** Baseline firmware at `v0.1.6` ready for hardware compile & bring-up.
+* **Current Step:** Baseline firmware at `v0.1.7` ready for hardware compile & bring-up.
 * **Next Target Milestone:**
   - Hardware verification of Display, Touch, SD card, AXP2101, E220 (`IO41/42`), and UM982 COM1 (`IO17/18`) & COM2 (`IO47/48`) using Tile 5 Test Modes.
