@@ -2,7 +2,7 @@
 
 **Document Version:** `v1.0.0`
 **Last Updated:** October 23, 2026
-**Firmware Target:** `v0.1.2`
+**Firmware Target:** `v0.1.3`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 
