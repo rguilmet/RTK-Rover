@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.0.7`
+**Document Version:** `v1.0.8`
 **Last Updated:** October 24, 2026
-**Firmware Target:** `v0.1.11`
+**Firmware Target:** `v0.1.12`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 
@@ -71,9 +71,9 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |
 | **E220 Control** | `E220_M0` | `GPIO 39` | **ESP32 Output** | Mode 0 (`LOW` = Transparent Mode 0, `HIGH` = Config Mode 3) |
 | **E220 Control** | `E220_M1` | `GPIO 40` | **ESP32 Output** | Mode 1 (`LOW` = Transparent Mode 0, `HIGH` = Config Mode 3) |
-| **Internal I2C0** | `ESP_SCL/SDA` | `GPIO 7 / 8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`), serialized via FreeRTOS Recursive Mutex |
+| **Internal I2C0** | `ESP_SCL/SDA` | `GPIO 7 / 8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`) at `100 kHz` exclusively on Core 1 |
 | **LCD QSPI** | `CS/CLK/D0..3` | `12, 5, 1..4` | **QSPI Master** | `AXS15231B` `320x480` Portrait Display (`GPIO 6` Backlight PWM) |
-| **SD Card SDMMC** | `D0/CMD/CLK` | `9, 10, 11` | **1-Bit SD_MMC** | Mounted via `SD_MMC.setPins(11, 10, 9)` + `SD_MMC.begin("/sdcard", true)` with TCA9554 `EXIO3` LOW |
+| **SD Card SDMMC** | `D0/CMD/CLK` | `9, 10, 11` | **1-Bit SD_MMC** | Mounted via `SD_MMC.setPins(11, 10, 9)` + `SD_MMC.begin("/sdcard", true)` with TCA9554 `EXIO3` HIGH (`1`) |
 | **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Short-Press (Tile 2 ONLY):** Log Pin \| **Long-Press (All Screens):** Screenshot |
 
 ---
@@ -81,12 +81,12 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
 ## 5. FreeRTOS & LVGL 9 Firmware Architecture
 
 ### Core Separation
-* **Core 0 (`task_rover_core0`, Priority 4):**
+* **Core 0 (`task_rover_core0`, Priority 4 — Zero I2C Access):**
   * Polls `E220` (`Serial0`) and immediately writes incoming RTCM3 bytes to `UM982 COM2` (`Serial2`) while running a zero-allocation RTCM3 (`0xD3`) frame sniffer (`1005`, `MSM` message counters).
-  * Polls `UM982 COM1` (`Serial1`) to parse `$GNGGA`, `$GNRMC`, `$GNGST`, `$GNHDT`, and `#UNIHEADINGA`.
-  * Automatically synchronizes the hardware `PCF85063` RTC to GNSS UTC time on first valid `$GNRMC` fix.
-  * Runs 30Hz lever-arm kinematic projection, geodesic target guidance (`nav_engine`), `QMI8658` IMU pose/bubble filter, `AXP2101` battery telemetry, and multi-epoch survey averaging.
-* **Core 1 (`rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2):**
+  * Polls `UM982 COM1` (`Serial1`) to parse `$GNGGA`, `$GNRMC`, `$GNGST`, `$xxGSV` (multi-constellation Satellites in View), `$GNHDT`, and `#UNIHEADINGA` (`NARROW_INT` vs `NARROW_FLOAT`).
+  * Runs 30Hz lever-arm kinematic projection, geodesic target guidance (`nav_engine`), and multi-epoch survey averaging.
+* **Core 1 (`rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2 — Exclusive I2C0 Owner):**
+  * Exclusively owns `I2C_NUM_0` (`100 kHz`): polls `AXS15231B` touch (`30 Hz`), `QMI8658` IMU pose/bubble filter (`10 Hz`), `PCF85063` RTC (`1 Hz` cached + one-shot GNSS UTC sync), and `AXP2101` battery telemetry (`0.5 Hz`).
   * Renders the `320x480` Portrait LVGL 9 interface protected by `rover_lvgl_lock()` / `rover_lvgl_unlock()`.
   * Drives `ES8311` audio confirmation beeps and handles debounced `settings.json` persistence.
 

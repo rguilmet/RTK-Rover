@@ -90,14 +90,14 @@ extern "C" void trigger_tare_pole_level(void)
 }
 
 // =========================================================================
-// Core 0 Task: Real-Time UART Bridge (E220 <-> UM982 COM2) & GNSS/IMU Fusion
+// Core 0 Task: Real-Time UART Bridge (E220 <-> UM982 COM2) & Geodesic Math
+// NOTE: Core 0 performs ZERO I2C bus transactions. All I2C0 peripherals live
+// exclusively on Core 1 to eliminate cross-core I2C bus contention.
 // =========================================================================
 void task_rover_core0(void *pvParameters)
 {
     (void)pvParameters;
     RoverUIData_t state = {};
-    Axp2101Status_t pwr = {};
-    uint32_t last_pwr_poll_ms  = 0;
     uint32_t last_ui_push_ms   = 0;
     uint32_t last_telem_log_ms = 0;
 
@@ -105,13 +105,13 @@ void task_rover_core0(void *pvParameters)
         // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM2 (IO47/48)
         e220_poll_and_forward_rtcm();
 
-        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST & Heading, and COM2 (IO47/48) for responses
+        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST/GSV & Heading, and COM2 (IO47/48) for responses
         um982_poll_com1();
         um982_poll_com2();
 
         uint32_t now = millis();
 
-        // 3. At ~30Hz, fuse GNSS lever-arm kinematics, IMU pose, and active target guidance
+        // 3. At ~30Hz, fuse GNSS lever-arm kinematics and active target guidance
         if (now - last_ui_push_ms >= 33) {
             last_ui_push_ms = now;
 
@@ -152,35 +152,6 @@ void task_rover_core0(void *pvParameters)
                 state.has_active_target = false;
             }
 
-            // Read QMI8658 IMU for Display Orientation Pose & Pole Bubble Level
-            float acc[3] = {0}, gyr[3] = {0};
-            int16_t imu_temp = 0;
-            imu_read(acc, gyr, &imu_temp);
-            imu_compute_pose_and_bubble(acc,
-                                        &state.imu_pitch_deg,
-                                        &state.imu_roll_deg,
-                                        &state.pole_bubble_x_deg,
-                                        &state.pole_bubble_y_deg,
-                                        &state.display_pose);
-
-            if (pending_tare_level) {
-                pending_tare_level = false;
-                current_settings.pole_tilt_tare_pitch_deg = state.imu_pitch_deg;
-                current_settings.pole_tilt_tare_roll_deg  = state.imu_roll_deg;
-                mark_settings_dirty();
-                play_rover_beep(1800, 80);
-            }
-
-            // Poll AXP2101 PMIC Battery Status every 2 seconds
-            if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
-                last_pwr_poll_ms = now;
-                axp2101_bsp_read(&pwr);
-                state.battery_voltage = pwr.battery_voltage_v;
-                state.battery_percent = pwr.battery_percent;
-                state.is_charging     = pwr.is_charging;
-                state.vbus_present    = pwr.vbus_good;
-            }
-
             // Update Multi-Epoch Survey Logger State
             waypoint_update_survey_averaging(&state,
                                              &state.survey_in_progress,
@@ -195,10 +166,12 @@ void task_rover_core0(void *pvParameters)
             // Periodic 5-second diagnostic telemetry log to Serial Monitor
             if (current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
-                Serial.printf("[TELEM] Fix:%d SVs:%u Hdg:%s(%.1f) | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
+                const char *hdg_mode = state.heading_valid ? (state.heading_is_fixed ? "FIX" : "FLT") : "--";
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
                               (int)state.fix_type,
                               state.num_sats,
-                              state.heading_valid ? "OK" : "--",
+                              state.sats_in_view,
+                              hdg_mode,
                               state.true_heading_deg,
                               (unsigned long)state.um982_stats.com1_rx_bytes,
                               (unsigned long)state.um982_stats.com1_tx_bytes,
@@ -218,19 +191,66 @@ void task_rover_core0(void *pvParameters)
 }
 
 // =========================================================================
-// Core 1 Task: UI Display Update & Audio Alerts
+// Core 1 Task: UI Display Update, Onboard I2C Peripherals & Audio Alerts
 // =========================================================================
 void task_display_and_audio(void *pvParameters)
 {
     (void)pvParameters;
-    RoverUIData_t ui_state = {};
+    RoverUIData_t   ui_state          = {};
+    Axp2101Status_t pwr               = {};
+    uint32_t        last_imu_poll_ms  = 0;
+    uint32_t        last_pwr_poll_ms  = 0;
+    float           cached_imu_pitch  = 0.0f;
+    float           cached_imu_roll   = 0.0f;
+    float           cached_bubble_x   = 0.0f;
+    float           cached_bubble_y   = 0.0f;
+    DisplayPose_t   cached_pose       = DISPLAY_POSE_FLAT;
 
     for (;;) {
-        if (settings_dirty && (millis() - last_settings_change_ms > 4000)) {
+        uint32_t now = millis();
+
+        // 1. One-shot GNSS UTC -> Hardware RTC I2C Sync on Core 1
+        uint16_t yy; uint8_t mo, dd, hh, mm, ss;
+        if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
+            i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
+            Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
+        }
+
+        // 2. Poll QMI8658 IMU at 10 Hz (every 100 ms) on Core 1
+        if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
+            last_imu_poll_ms = (now == 0) ? 1 : now;
+            float acc[3] = {0}, gyr[3] = {0};
+            int16_t imu_temp = 0;
+            imu_read(acc, gyr, &imu_temp);
+            imu_compute_pose_and_bubble(acc,
+                                        &cached_imu_pitch,
+                                        &cached_imu_roll,
+                                        &cached_bubble_x,
+                                        &cached_bubble_y,
+                                        &cached_pose);
+
+            if (pending_tare_level) {
+                pending_tare_level = false;
+                current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
+                current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
+                mark_settings_dirty();
+                play_rover_beep(1800, 80);
+            }
+        }
+
+        // 3. Poll AXP2101 PMIC Battery Status at 0.5 Hz (every 2000 ms) on Core 1
+        if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
+            last_pwr_poll_ms = (now == 0) ? 1 : now;
+            axp2101_bsp_read(&pwr);
+        }
+
+        // 4. Persist dirty settings after 4s debounce
+        if (settings_dirty && (now - last_settings_change_ms > 4000)) {
             save_settings();
             settings_dirty = false;
         }
 
+        // 5. Audio Beep Synthesis on Core 1
         if (pending_beep_freq_hz > 0 && pending_beep_dur_ms > 0) {
             uint16_t freq = pending_beep_freq_hz;
             uint16_t dur  = pending_beep_dur_ms;
@@ -257,7 +277,17 @@ void task_display_and_audio(void *pvParameters)
             }
         }
 
+        // 6. Receive latest GNSS/Nav state from Core 0, attach Core 1 IMU/PMIC data, and update UI
         if (xQueueReceive(roverStateQueue, &ui_state, pdMS_TO_TICKS(33)) == pdPASS) {
+            ui_state.imu_pitch_deg     = cached_imu_pitch;
+            ui_state.imu_roll_deg      = cached_imu_roll;
+            ui_state.pole_bubble_x_deg = cached_bubble_x;
+            ui_state.pole_bubble_y_deg = cached_bubble_y;
+            ui_state.display_pose      = cached_pose;
+            ui_state.battery_voltage   = pwr.battery_voltage_v;
+            ui_state.battery_percent   = pwr.battery_percent;
+            ui_state.is_charging       = pwr.is_charging;
+            ui_state.vbus_present      = pwr.vbus_good;
             update_rover_ui(&ui_state);
         }
     }
@@ -308,7 +338,8 @@ void setup()
                       (unsigned long)(FFat.usedBytes() / 1024));
     }
 
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0));
+    // Keep EXIO3 (CD/DAT3) HIGH during SD_MMC initialization so the SD card enters native SDMMC mode (not SPI mode!)
+    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 1));
     vTaskDelay(pdMS_TO_TICKS(20));
     if (!SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO)) {
         Serial.println("[STORAGE] SD_MMC.setPins(CLK=11, CMD=10, D0=9) failed!");
@@ -333,6 +364,7 @@ void setup()
 
     // 4. Load Settings & CSV Waypoints
     init_settings_manager();
+    current_settings.enable_serial_logging = true; // Ensure 5s [TELEM] diagnostic heartbeat is enabled
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)

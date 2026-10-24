@@ -571,7 +571,7 @@ void create_rover_ui(void)
     // TILE 0: Pin Seeker & Guidance (Main Screen)
     // =====================================================================
     t0_pos_lbl = lv_label_create(tile_guidance);
-    lv_label_set_text(t0_pos_lbl, "Lat:  0.00000000\nLon:  0.00000000   Hgt: 0.00 m");
+    lv_label_set_text(t0_pos_lbl, "Lat:  0.00000000   SVs: 0/0\nLon:  0.00000000   Hgt: 0.00 m");
     lv_obj_set_style_text_color(t0_pos_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t0_pos_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t0_pos_lbl, LV_ALIGN_TOP_MID, 0, 4);
@@ -979,7 +979,8 @@ void update_rover_ui(const RoverUIData_t *d)
 
     char acc_str[24];
     nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
-    snprintf(buf, sizeof(buf), "SV:%u ±%s", d->num_sats, acc_str);
+    uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
+    snprintf(buf, sizeof(buf), "SV:%u/%u ±%s", d->num_sats, sv_view, acc_str);
     lv_label_set_text(hdr_sats_acc_lbl, buf);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
@@ -1000,8 +1001,8 @@ void update_rover_ui(const RoverUIData_t *d)
     nav_format_offset(d->d_north_m, dn_str, sizeof(dn_str));
     nav_format_offset(d->d_east_m, de_str, sizeof(de_str));
 
-    snprintf(buf, sizeof(buf), "Lat: %12.8f\nLon: %12.8f   Hgt: %s",
-             d->tip_lat, d->tip_lon, hgt_str);
+    snprintf(buf, sizeof(buf), "Lat: %12.8f   SVs: %u/%u\nLon: %12.8f   Hgt: %s",
+             d->tip_lat, d->num_sats, sv_view, d->tip_lon, hgt_str);
     lv_label_set_text(t0_pos_lbl, buf);
 
     if (d->has_active_target) {
@@ -1012,8 +1013,10 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t0_dist_lbl, dist_str);
 
         if (d->heading_valid) {
-            snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: %.1f deg",
-                     d->bearing_to_target_deg, d->true_heading_deg);
+            snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: %.1f deg (%s)",
+                     d->bearing_to_target_deg,
+                     d->true_heading_deg,
+                     d->heading_is_fixed ? "FIX" : "FLT");
         } else {
             snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: No Lock",
                      d->bearing_to_target_deg);
@@ -1060,7 +1063,9 @@ void update_rover_ui(const RoverUIData_t *d)
 
     // 4. Update Tile 3: Compass & Bubble Level
     if (d->heading_valid) {
-        snprintf(buf, sizeof(buf), "Heading: %05.1f deg", d->true_heading_deg);
+        snprintf(buf, sizeof(buf), "Heading: %05.1f deg (%s)",
+                 d->true_heading_deg,
+                 d->heading_is_fixed ? "FIX" : "FLT");
         lv_label_set_text(t3_hdg_lbl, buf);
     } else {
         lv_label_set_text(t3_hdg_lbl, "Heading: ---.- deg");

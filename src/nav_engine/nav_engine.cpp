@@ -5,8 +5,12 @@
 
 #define WGS84_A  6378137.0
 #define WGS84_E2 0.00669437999014
+#ifndef DEG_TO_RAD
 #define DEG_TO_RAD (M_PI / 180.0)
+#endif
+#ifndef RAD_TO_DEG
 #define RAD_TO_DEG (180.0 / M_PI)
+#endif
 #define METERS_TO_FEET 3.280839895
 
 static void wgs84_radii(double lat_rad, double *r_meridian, double *r_prime_vertical)

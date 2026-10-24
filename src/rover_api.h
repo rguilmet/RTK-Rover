@@ -103,7 +103,8 @@ typedef struct {
 
     // GNSS Solution Quality
     GnssFixType_t    fix_type;
-    uint8_t          num_sats;
+    uint8_t          num_sats;        // Satellites used in position solution (GGA)
+    uint8_t          sats_in_view;    // Total satellites in view across constellations (GSV)
     float            hdop;
     float            h_acc_m;         // Horizontal accuracy estimate (m)
     float            v_acc_m;         // Vertical accuracy estimate (m)
@@ -111,6 +112,7 @@ typedef struct {
 
     // Dual-Antenna Heading & Pitch (from UNIHEADINGA / GPHDT)
     bool             heading_valid;
+    bool             heading_is_fixed;   // True if UNIHEADINGA pos_type == NARROW_INT
     float            true_heading_deg;   // 0..360 deg True North
     float            baseline_pitch_deg; // Baseline tilt angle (deg)
     float            baseline_length_m;  // Measured Master->Slave distance (e.g. 0.555m)

@@ -10,6 +10,8 @@
 
 static SensorPCF85063 rtc;
 static const uint8_t daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static RtcDateTime_t cached_rtc_time = {2026, 1, 1, 0, 0, 0, 0};
+static uint32_t      last_rtc_read_ms = 0;
 
 static bool isLeapYear(int y) {
     return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
@@ -43,22 +45,36 @@ extern "C" void rtc_bsp_init(void)
 extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
 {
     rtc.setDateTime(year, month, day, hour, minute, second);
+    cached_rtc_time.year   = year;
+    cached_rtc_time.month  = month;
+    cached_rtc_time.day    = day;
+    cached_rtc_time.hour   = hour;
+    cached_rtc_time.minute = minute;
+    cached_rtc_time.second = second;
+    last_rtc_read_ms       = millis();
 }
 
 extern "C" RtcDateTime_t i2c_rtc_get(void)
 {
-    RtcDateTime_t time = {2026, 1, 1, 0, 0, 0, 0};
-    RTC_DateTime datetime = rtc.getDateTime();
-    time.year   = datetime.getYear();
-    time.month  = datetime.getMonth();
-    time.day    = datetime.getDay();
-    time.hour   = datetime.getHour();
-    time.minute = datetime.getMinute();
-    time.second = datetime.getSecond();
-    time.week   = datetime.getWeek();
-    if (time.month < 1 || time.month > 12) time.month = 1;
-    if (time.day < 1 || time.day > 31) time.day = 1;
-    return time;
+    uint32_t now = millis();
+    // Rate-limit physical I2C reads of PCF85063 (0x51) to 1 Hz (every 1000 ms)
+    if (last_rtc_read_ms == 0 || (now - last_rtc_read_ms >= 1000)) {
+        last_rtc_read_ms = (now == 0) ? 1 : now;
+        RTC_DateTime datetime = rtc.getDateTime();
+        uint16_t y = datetime.getYear();
+        uint8_t  m = datetime.getMonth();
+        uint8_t  d = datetime.getDay();
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 2020) {
+            cached_rtc_time.year   = y;
+            cached_rtc_time.month  = m;
+            cached_rtc_time.day    = d;
+            cached_rtc_time.hour   = datetime.getHour();
+            cached_rtc_time.minute = datetime.getMinute();
+            cached_rtc_time.second = datetime.getSecond();
+            cached_rtc_time.week   = datetime.getWeek();
+        }
+    }
+    return cached_rtc_time;
 }
 
 extern "C" void get_local_datetime(RtcDateTime_t *local_dt)

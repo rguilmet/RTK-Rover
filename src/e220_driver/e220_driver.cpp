@@ -35,13 +35,14 @@ static bool e220_wait_aux_high(uint32_t timeout_ms)
 
 extern "C" void e220_set_mode(uint8_t m0, uint8_t m1)
 {
-    e220_wait_aux_high(200);
+    e220_wait_aux_high(500);
     digitalWrite(ROVER_PIN_E220_M0, m0 ? HIGH : LOW);
     digitalWrite(ROVER_PIN_E220_M1, m1 ? HIGH : LOW);
     e220_stats.mode_m0 = m0 ? 1 : 0;
     e220_stats.mode_m1 = m1 ? 1 : 0;
-    vTaskDelay(pdMS_TO_TICKS(40));
-    e220_wait_aux_high(200);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    e220_wait_aux_high(500);
+    vTaskDelay(pdMS_TO_TICKS(60));
 }
 
 extern "C" void e220_driver_init(void)
@@ -225,38 +226,48 @@ extern "C" bool e220_read_config_registers(void)
     // 1. Switch E220 to Mode 3 (Config/Sleep: M0=1, M1=1), where E220 speaks 9600 8N1
     e220_set_mode(1, 1);
     Serial0.updateBaudRate(ROVER_E220_CONFIG_BAUD);
-    vTaskDelay(pdMS_TO_TICKS(40));
-    while (Serial0.available()) Serial0.read();
-
-    // 2. Send Read Register Command: 0xC1 0x00 0x06 (Read 6 registers starting at 0x00)
-    uint8_t cmd[3] = {0xC1, 0x00, 0x06};
-    Serial0.write(cmd, 3);
-    Serial0.flush();
+    vTaskDelay(pdMS_TO_TICKS(60));
 
     uint8_t resp[9] = {0};
     int idx = 0;
-    uint32_t start = millis();
-    while (millis() - start < 500 && idx < 9) {
-        if (Serial0.available()) {
-            resp[idx++] = (uint8_t)Serial0.read();
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(5));
+    bool ok = false;
+
+    for (int attempt = 0; attempt < 2 && !ok; attempt++) {
+        while (Serial0.available()) Serial0.read();
+
+        // 2. Send Read Register Command: 0xC1 0x00 0x06 (Read 6 registers starting at 0x00)
+        uint8_t cmd[3] = {0xC1, 0x00, 0x06};
+        Serial0.write(cmd, 3);
+        Serial0.flush();
+
+        idx = 0;
+        uint32_t start = millis();
+        while (millis() - start < 500 && idx < 9) {
+            if (Serial0.available()) {
+                resp[idx++] = (uint8_t)Serial0.read();
+            } else {
+                vTaskDelay(pdMS_TO_TICKS(5));
+            }
+        }
+
+        if (idx >= 9 && resp[0] == 0xC1 && resp[1] == 0x00 && resp[2] == 0x06) {
+            e220_stats.cfg_addr_high = resp[3];
+            e220_stats.cfg_addr_low  = resp[4];
+            e220_stats.cfg_reg0      = resp[5];
+            e220_stats.cfg_reg1      = resp[6];
+            e220_stats.cfg_channel   = resp[7];
+            e220_stats.cfg_reg3      = resp[8];
+            e220_stats.config_valid  = true;
+            ok = true;
+            e220_log_decoded_registers("E220 READ OK");
+        } else if (attempt == 0) {
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 
-    bool ok = false;
-    if (idx >= 9 && resp[0] == 0xC1 && resp[1] == 0x00 && resp[2] == 0x06) {
-        e220_stats.cfg_addr_high = resp[3];
-        e220_stats.cfg_addr_low  = resp[4];
-        e220_stats.cfg_reg0      = resp[5];
-        e220_stats.cfg_reg1      = resp[6];
-        e220_stats.cfg_channel   = resp[7];
-        e220_stats.cfg_reg3      = resp[8];
-        e220_stats.config_valid  = true;
-        ok = true;
-        e220_log_decoded_registers("E220 READ OK");
-    } else {
-        Serial.printf("[E220 READ FAIL] Expected 9-byte 0xC1 response on Serial0 (IO41/42 @ 9600), got %d bytes\n", idx);
+    if (!ok) {
+        Serial.printf("[E220 READ FAIL] Expected 9-byte 0xC1 response on Serial0 (IO41/42 @ 9600), got %d bytes (AUX=%d)\n",
+                      idx, digitalRead(ROVER_PIN_E220_AUX));
     }
 
     // 3. Return immediately to Mode 0 (Transparent: M0=0, M1=0) at configured UART baud
