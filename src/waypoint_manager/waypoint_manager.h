@@ -1,6 +1,7 @@
 #ifndef WAYPOINT_MANAGER_H
 #define WAYPOINT_MANAGER_H
 
+#include <stddef.h>
 #include "../rover_api.h"
 
 #ifdef __cplusplus

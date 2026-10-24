@@ -1,5 +1,7 @@
+#include <Arduino.h>
 #include <stdio.h>
 #include <Wire.h>
+#include "SensorPCF85063.hpp"
 #include "rtc_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
 #include "../settings_manager/settings_manager.h"
@@ -24,7 +26,7 @@ static bool rtc_i2c_custom_cb(uint8_t addr, uint8_t reg, uint8_t *buf, size_t le
     }
 }
 
-extern "C" void rtc_init(void)
+extern "C" void rtc_bsp_init(void)
 {
     if (rtc_dev_handle == NULL) {
         Serial.println("RTC I2C Handle not initialized yet!");

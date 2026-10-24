@@ -264,7 +264,7 @@ void setup()
 
     // 2. Initialize Onboard Peripherals (AXP2101 PMIC, PCF85063 RTC, QMI8658 IMU)
     axp2101_bsp_init();
-    rtc_init();
+    rtc_bsp_init();
     imu_init();
 
     // 3. Mount Internal FFat & MicroSD Card (asserting SD_CS LOW via TCA9554 EXIO3)

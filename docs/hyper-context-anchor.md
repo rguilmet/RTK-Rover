@@ -30,10 +30,10 @@
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
 * **Completed:**
-  - Established full GPLv3 repository baseline (`v0.1.7`) with modular `src/` BSP and application drivers.
-  - Implemented `i2c_bsp`, `tca9554`, `axp2101_bsp`, `rtc_bsp` (with automatic `$GNRMC` UTC sync), `imu_bsp`, `lvgl_port`, `screenshot`, `settings_manager`, `e220_driver`, `um982_driver`, `nav_engine`, and `waypoint_manager`.
+  - Established full GPLv3 repository baseline (`v0.1.8`) with modular `src/` BSP and application drivers; verified clean compilation under `esp32:esp32:esp32s3` (`v3.3.12`, `896,531 B` flash / `28%`, `41,252 B` RAM / `12%`).
+  - Implemented `i2c_bsp`, `tca9554`, `axp2101_bsp`, `rtc_bsp` (`rtc_bsp_init()` with automatic `$GNRMC` UTC sync), `imu_bsp`, `lvgl_port`, `screenshot`, `settings_manager`, `e220_driver`, `um982_driver`, `nav_engine`, and `waypoint_manager`.
   - Implemented E220-900T30S Mode 3 register read/write driven by `settings.json` (defaulting to Channel 55 `905.125 MHz`, `57600`/`38.4k` air rate `REG0=0xC6`, `128B` packet size `REG1=0x43`, `21 dBm`, Transparent Mode, LBT disabled), plus zero-allocation RTCM3 (`0xD3`) frame sniffer.
   - Built 5-tile `320x480` Portrait LVGL 9 UI and companion Python scripts (`validate_waypoints.py v1.0.1`, `analyze_rtk_log.py v1.0.0`).
-* **Current Step:** Baseline firmware at `v0.1.7` ready for hardware compile & bring-up.
+* **Current Step:** Firmware `v0.1.8` compiled cleanly and ready for flashing & hardware bring-up.
 * **Next Target Milestone:**
   - Hardware verification of Display, Touch, SD card, AXP2101, E220 (`IO41/42`), and UM982 COM1 (`IO17/18`) & COM2 (`IO47/48`) using Tile 5 Test Modes.

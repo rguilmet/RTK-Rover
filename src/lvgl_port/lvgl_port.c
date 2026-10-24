@@ -884,7 +884,8 @@ void update_rover_ui(const RoverUIData_t *d)
     nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
     lv_label_set_text_fmt(hdr_sats_acc_lbl, "SV:%u ±%s", d->num_sats, acc_str);
 
-    uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (millis() - d->e220_stats.last_rx_ms) : 99999;
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+    uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
     if (rtcm_age_ms < 15000) {
         lv_label_set_text_fmt(hdr_rtcm_lbl, "RTCM:%u.%us", rtcm_age_ms / 1000, (rtcm_age_ms % 1000) / 100);
         lv_obj_set_style_text_color(hdr_rtcm_lbl, lv_color_hex(0x00FF88), 0);

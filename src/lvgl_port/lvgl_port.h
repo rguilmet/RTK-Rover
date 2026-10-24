@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <lvgl.h>
 #include "../rover_api.h"
+#include "../tca9554/esp_io_expander_tca9554.h"
 
 #ifdef __cplusplus
 extern "C" {

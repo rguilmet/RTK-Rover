@@ -11,7 +11,6 @@
 #pragma once
 
 #include "hal/spi_ll.h"
-#include "../touch/esp_lcd_touch.h"
 #include "esp_lcd_panel_vendor.h"
 
 #ifdef __cplusplus
@@ -154,53 +153,10 @@ esp_err_t esp_lcd_new_panel_axs15231b(const esp_lcd_panel_io_handle_t io, const 
     }
 
 /**
- * @brief Create a new AXS15231B1B touch driver
- *
- * @note  The I2C communication should be initialized before use this function.
- *
- * @param io LCD panel IO handle, it should be created by `esp_lcd_new_panel_io_i2c()`
- * @param config Touch panel configuration
- * @param tp Touch panel handle
- * @return
- *      - ESP_OK: on success
- */
-esp_err_t esp_lcd_touch_new_i2c_axs15231b(const esp_lcd_panel_io_handle_t io, const esp_lcd_touch_config_t *config, esp_lcd_touch_handle_t *tp);
-
-/**
  * @brief I2C address of the AXS15231B controller
  *
  */
 #define ESP_LCD_TOUCH_IO_I2C_AXS15231B_ADDRESS    (0x3B)
-
-/**
- * @brief Touch IO configuration structure
- *
- */
-
-#define ESP_LCD_TOUCH_IO_I2C_AXS15231B_CONFIG()             \
-    {                                                       \
-        .dev_addr = ESP_LCD_TOUCH_IO_I2C_AXS15231B_ADDRESS, \
-        .control_phase_bytes = 1,                           \
-        .dc_bit_offset = 0,                                 \
-        .lcd_cmd_bits = 8,                                  \
-        .flags =                                            \
-        {                                                   \
-            .disable_control_phase = 1,                     \
-        }                                                   \
-    }
-
-#define ESP_LCD_TOUCH_IO_I2C_AXS15231B_CONFIG_EX(scl_speed_hz)     \
-    {                                                           \
-        .dev_addr = ESP_LCD_TOUCH_IO_I2C_AXS15231B_ADDRESS,     \
-        .control_phase_bytes = 1,                               \
-        .dc_bit_offset = 0,                                     \
-        .lcd_cmd_bits = 8,                                      \
-        .flags =                                                \
-        {                                                       \
-            .disable_control_phase = 1,                         \
-        },                                                      \
-        .scl_speed_hz = scl_speed_hz,                         \
-    }
 
 #ifdef __cplusplus
 }

@@ -1,10 +1,13 @@
 #ifndef SETTINGS_MANAGER_H
 #define SETTINGS_MANAGER_H
 
-#include <Arduino.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+#include <Arduino.h>
 #include <FS.h>
+#endif
 
 struct SystemSettings {
     int16_t  minutesOffsetToUTC;
@@ -38,9 +41,8 @@ extern volatile bool settings_dirty;
 extern volatile uint32_t last_settings_change_ms;
 extern bool sd_card_mounted;
 
-fs::FS& get_active_fs(void);
-
 #ifdef __cplusplus
+fs::FS& get_active_fs(void);
 extern "C" {
 #endif
 
