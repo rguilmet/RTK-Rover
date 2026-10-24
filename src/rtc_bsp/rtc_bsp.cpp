@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include <Wire.h>
-#include "SensorPCF85063.hpp"
+#include "RtcDrv.hpp"
 #include "rtc_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
 #include "../settings_manager/settings_manager.h"

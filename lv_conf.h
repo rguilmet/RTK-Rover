@@ -26,8 +26,8 @@
    COLOR SETTINGS
  *====================*/
 
-/** Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888) */
-#define LV_COLOR_DEPTH 16
+/** Default color format for LVGL 9.6+ (replaces deprecated LV_COLOR_DEPTH) */
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_RGB565
 
 /*=========================
    STDLIB WRAPPER SETTINGS
@@ -419,7 +419,7 @@
 #define LV_USE_ASSERT_OBJ           0   /**< Check the object's type and existence (e.g. not deleted). (Slow) */
 
 /** Add a custom handler when assert happens e.g. to restart MCU. */
-#define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
+#define LV_ASSERT_CUSTOM_INCLUDE <stdint.h>
 #define LV_ASSERT_HANDLER while(1);     /**< Halt by default */
 
 /*-------------
@@ -566,7 +566,7 @@
 #define LV_ATTRIBUTE_EXTERN_DATA
 
 /** Use `float` as `lv_value_precise_t` */
-#define LV_USE_FLOAT            0
+#define LV_USE_FLOAT            1
 
 /** Enable matrix support
  *  - Requires `LV_USE_FLOAT = 1` */
@@ -1316,10 +1316,10 @@
 *======================*/
 
 /** Enable examples to be built with the library. */
-#define LV_BUILD_EXAMPLES 1
+#define LV_BUILD_EXAMPLES 0
 
 /** Build the demos */
-#define LV_BUILD_DEMOS 1
+#define LV_BUILD_DEMOS 0
 
 /*===================
  * DEMO USAGE
