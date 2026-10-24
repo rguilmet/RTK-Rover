@@ -24,16 +24,17 @@
 * **NEVER** trigger Survey Waypoint Logging on a short-press of the physical `BOOT` button (`GPIO 0`) unless **Tile 2 (`active_tile_col == 1`, Field Survey Logger)** is the active screen. Long-press (`>= 1.5s`) captures a screenshot across **all screens**.
 * **NEVER** swap E220 operating modes (`M0`, `M1`) without waiting for `E220_AUX` (`GPIO 21`) to assert `HIGH`, and always switch `Serial0` baud rate to `9600` when entering Mode 3 (`M0=1, M1=1`) for register queries/writes and back to `current_settings.e220_uart_baud` (`57600`) when returning to Mode 0 (`M0=0, M1=0`).
 * **NEVER** touch LVGL widget pointers from outside `lv_timer_handler()` without acquiring `rover_lvgl_lock()` and releasing via `rover_lvgl_unlock()`.
+* **NEVER** use `lv_label_set_text_fmt()` with floating-point specifiers (`%f`); because the global Arduino LVGL library compiles with `LV_USE_FLOAT = 0`, `lv_vsnprintf_inner` skips `%f` without advancing `va_arg(va, double)`, causing subsequent `%s` arguments to dereference raw float/double bytes and crash (`LoadProhibited`). Always format floats with standard C `snprintf(buf, sizeof(buf), ...)` followed by `lv_label_set_text()`.
 * **NEVER** set LVGL root container widths greater than `320` pixels (`ROVER_LCD_H_RES = 320`, `ROVER_LCD_V_RES = 480` Portrait).
 * **NEVER** bump `ROVER_FIRMWARE_VERSION` in `user_config.h` for documentation-only changes. Documents maintain their own independent history.
 * **NEVER** hardcode user-tunable mechanical or radio parameters (antenna height, antenna spacing, UTC offset, SI/Imperial units, E220 channel/air rate/power) in `.ino` or `.cpp` logic; they MUST pull dynamically from `current_settings` (`settings.json`).
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
 * **Completed:**
-  - Established full GPLv3 repository baseline (`v0.1.8`) with modular `src/` BSP and application drivers; verified clean compilation under `esp32:esp32:esp32s3` (`v3.3.12`, `896,531 B` flash / `28%`, `41,252 B` RAM / `12%`).
+  - Established full GPLv3 repository baseline (`v0.1.9`) with modular `src/` BSP and application drivers; verified clean compilation and resolved `lv_label_set_text_fmt` float formatting crash.
   - Implemented `i2c_bsp`, `tca9554`, `axp2101_bsp`, `rtc_bsp` (`rtc_bsp_init()` with automatic `$GNRMC` UTC sync), `imu_bsp`, `lvgl_port`, `screenshot`, `settings_manager`, `e220_driver`, `um982_driver`, `nav_engine`, and `waypoint_manager`.
   - Implemented E220-900T30S Mode 3 register read/write driven by `settings.json` (defaulting to Channel 55 `905.125 MHz`, `57600`/`38.4k` air rate `REG0=0xC6`, `128B` packet size `REG1=0x43`, `21 dBm`, Transparent Mode, LBT disabled), plus zero-allocation RTCM3 (`0xD3`) frame sniffer.
   - Built 5-tile `320x480` Portrait LVGL 9 UI and companion Python scripts (`validate_waypoints.py v1.0.1`, `analyze_rtk_log.py v1.0.0`).
-* **Current Step:** Firmware `v0.1.8` compiled cleanly and ready for flashing & hardware bring-up.
+* **Current Step:** Firmware `v0.1.9` ready for live hardware verification.
 * **Next Target Milestone:**
   - Hardware verification of Display, Touch, SD card, AXP2101, E220 (`IO41/42`), and UM982 COM1 (`IO17/18`) & COM2 (`IO47/48`) using Tile 5 Test Modes.

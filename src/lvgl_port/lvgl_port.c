@@ -805,22 +805,25 @@ void create_rover_ui(void)
     lv_obj_center(l_c2_test);
 
     // Section 3: E220 LoRa (IO41/42, AUX:21, M0:39, M1:40, RST:38)
+    char init_buf[128];
     t4_e220_lbl = lv_label_create(tile_test);
-    lv_label_set_text_fmt(t4_e220_lbl,
-                          "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
-                          (unsigned long)current_settings.e220_uart_baud);
+    snprintf(init_buf, sizeof(init_buf),
+             "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
+             (unsigned long)current_settings.e220_uart_baud);
+    lv_label_set_text(t4_e220_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_e220_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 202);
 
     t4_e220_cfg_lbl = lv_label_create(tile_test);
-    lv_label_set_text_fmt(t4_e220_cfg_lbl,
-                          "Target: CH%u %lu/%.1fk %uB %udBm",
-                          current_settings.e220_channel,
-                          (unsigned long)current_settings.e220_uart_baud,
-                          current_settings.e220_air_rate_kbps,
-                          current_settings.e220_subpacket_bytes,
-                          current_settings.e220_tx_power_dbm);
+    snprintf(init_buf, sizeof(init_buf),
+             "Target: CH%u %lu/%.1fk %uB %udBm",
+             current_settings.e220_channel,
+             (unsigned long)current_settings.e220_uart_baud,
+             current_settings.e220_air_rate_kbps,
+             current_settings.e220_subpacket_bytes,
+             current_settings.e220_tx_power_dbm);
+    lv_label_set_text(t4_e220_cfg_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_cfg_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(t4_e220_cfg_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t4_e220_cfg_lbl, LV_ALIGN_TOP_LEFT, 8, 256);
@@ -848,19 +851,23 @@ void update_rover_ui(const RoverUIData_t *d)
     if (!d) return;
     if (!rover_lvgl_lock(50)) return;
 
+    char buf[160];
+
     // 1. Update Persistent Header Bar (Date, Time, Units, Battery, Fix, RTCM)
     RtcDateTime_t lt;
     get_local_datetime(&lt);
-    lv_label_set_text_fmt(hdr_datetime_lbl, "%04u-%02u-%02u %02u:%02u:%02u %s",
-                          lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second,
-                          current_settings.timezone_label);
+    snprintf(buf, sizeof(buf), "%04u-%02u-%02u %02u:%02u:%02u %s",
+             lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second,
+             current_settings.timezone_label);
+    lv_label_set_text(hdr_datetime_lbl, buf);
 
     lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
 
-    lv_label_set_text_fmt(hdr_batt_lbl, "%u%%%s %.2fV",
-                          d->battery_percent,
-                          d->is_charging ? "+" : "",
-                          d->battery_voltage);
+    snprintf(buf, sizeof(buf), "%u%%%s %.2fV",
+             d->battery_percent,
+             d->is_charging ? "+" : "",
+             d->battery_voltage);
+    lv_label_set_text(hdr_batt_lbl, buf);
 
     const char *fix_str = "NO FIX";
     lv_color_t fix_col  = lv_palette_main(LV_PALETTE_RED);
@@ -882,12 +889,14 @@ void update_rover_ui(const RoverUIData_t *d)
 
     char acc_str[24];
     nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
-    lv_label_set_text_fmt(hdr_sats_acc_lbl, "SV:%u ±%s", d->num_sats, acc_str);
+    snprintf(buf, sizeof(buf), "SV:%u ±%s", d->num_sats, acc_str);
+    lv_label_set_text(hdr_sats_acc_lbl, buf);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
     if (rtcm_age_ms < 15000) {
-        lv_label_set_text_fmt(hdr_rtcm_lbl, "RTCM:%u.%us", rtcm_age_ms / 1000, (rtcm_age_ms % 1000) / 100);
+        snprintf(buf, sizeof(buf), "RTCM:%u.%us", (unsigned int)(rtcm_age_ms / 1000), (unsigned int)((rtcm_age_ms % 1000) / 100));
+        lv_label_set_text(hdr_rtcm_lbl, buf);
         lv_obj_set_style_text_color(hdr_rtcm_lbl, lv_color_hex(0x00FF88), 0);
     } else {
         lv_label_set_text(hdr_rtcm_lbl, "RTCM:Wait");
@@ -901,23 +910,28 @@ void update_rover_ui(const RoverUIData_t *d)
     nav_format_offset(d->d_north_m, dn_str, sizeof(dn_str));
     nav_format_offset(d->d_east_m, de_str, sizeof(de_str));
 
-    lv_label_set_text_fmt(t0_pos_lbl, "Lat: %12.8f\nLon: %12.8f   Hgt: %s",
-                          d->tip_lat, d->tip_lon, hgt_str);
+    snprintf(buf, sizeof(buf), "Lat: %12.8f\nLon: %12.8f   Hgt: %s",
+             d->tip_lat, d->tip_lon, hgt_str);
+    lv_label_set_text(t0_pos_lbl, buf);
 
     if (d->has_active_target) {
-        lv_label_set_text_fmt(t0_target_lbl, "%s (%d/%d)",
-                              d->target_label, d->active_target_idx + 1, d->total_targets);
+        snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                 d->target_label, d->active_target_idx + 1, d->total_targets);
+        lv_label_set_text(t0_target_lbl, buf);
         lv_label_set_text(t0_notes_lbl, d->target_notes[0] ? d->target_notes : "---");
         lv_label_set_text(t0_dist_lbl, dist_str);
 
         if (d->heading_valid) {
-            lv_label_set_text_fmt(t0_brg_lbl, "Brg: %.1f deg | Hdg: %.1f deg",
-                                  d->bearing_to_target_deg, d->true_heading_deg);
+            snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: %.1f deg",
+                     d->bearing_to_target_deg, d->true_heading_deg);
         } else {
-            lv_label_set_text_fmt(t0_brg_lbl, "Brg: %.1f deg | Hdg: No Lock",
-                                  d->bearing_to_target_deg);
+            snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: No Lock",
+                     d->bearing_to_target_deg);
         }
-        lv_label_set_text_fmt(t0_offsets_lbl, "dN: %s   dE: %s", dn_str, de_str);
+        lv_label_set_text(t0_brg_lbl, buf);
+
+        snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
+        lv_label_set_text(t0_offsets_lbl, buf);
 
         // Move target dot inside the 180x180 radar circle (max radius 74px)
         float scale_m = (d->distance_to_target_m < 2.0) ? 2.0f : 20.0f;
@@ -930,84 +944,96 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     // 3. Update Tile 1: Field Survey Logger
-    lv_label_set_text_fmt(t1_live_pos_lbl,
-                          "Tip Lat: %.8f\nTip Lon: %.8f\nGround Hgt: %s (%s)",
-                          d->tip_lat, d->tip_lon, hgt_str, fix_str);
+    snprintf(buf, sizeof(buf),
+             "Tip Lat: %.8f\nTip Lon: %.8f\nGround Hgt: %s (%s)",
+             d->tip_lat, d->tip_lon, hgt_str, fix_str);
+    lv_label_set_text(t1_live_pos_lbl, buf);
 
     char next_id[WAYPOINT_LABEL_LEN];
     waypoint_format_next_survey_label(next_id, sizeof(next_id));
-    lv_label_set_text_fmt(t1_next_lbl, "Next ID: %s", next_id);
+    snprintf(buf, sizeof(buf), "Next ID: %s", next_id);
+    lv_label_set_text(t1_next_lbl, buf);
 
     lv_bar_set_value(t1_prog_bar, d->survey_progress_pct, LV_ANIM_OFF);
     if (d->survey_in_progress) {
-        lv_label_set_text_fmt(t1_log_btn_lbl, "AVERAGING RTK... %u%% (%u pts)",
-                              d->survey_progress_pct, d->survey_epochs_collected);
+        snprintf(buf, sizeof(buf), "AVERAGING RTK... %u%% (%u pts)",
+                 d->survey_progress_pct, d->survey_epochs_collected);
+        lv_label_set_text(t1_log_btn_lbl, buf);
         lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
     } else {
         lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW (or Short-Press BOOT)");
         lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     }
-    lv_label_set_text_fmt(t1_status_lbl, "Last Logged: %s\nFile: /survey_logged_pins.csv",
-                          d->last_logged_label);
+    snprintf(buf, sizeof(buf), "Last Logged: %s\nFile: /survey_logged_pins.csv",
+             d->last_logged_label);
+    lv_label_set_text(t1_status_lbl, buf);
 
     // 4. Update Tile 3: Compass & Bubble Level
     if (d->heading_valid) {
-        lv_label_set_text_fmt(t3_hdg_lbl, "Heading: %05.1f deg", d->true_heading_deg);
+        snprintf(buf, sizeof(buf), "Heading: %05.1f deg", d->true_heading_deg);
+        lv_label_set_text(t3_hdg_lbl, buf);
     } else {
         lv_label_set_text(t3_hdg_lbl, "Heading: ---.- deg");
     }
-    lv_label_set_text_fmt(t3_base_lbl, "Baseline: %.3f m | Pitch: %+.1f deg",
-                          d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
-                          d->baseline_pitch_deg);
+    snprintf(buf, sizeof(buf), "Baseline: %.3f m | Pitch: %+.1f deg",
+             d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
+             d->baseline_pitch_deg);
+    lv_label_set_text(t3_base_lbl, buf);
 
     const char *pose_str = "Held Flat";
     if (d->display_pose == DISPLAY_POSE_ANGLED) pose_str = "Handheld Viewing Angle";
     else if (d->display_pose == DISPLAY_POSE_VERTICAL) pose_str = "Clipped Vertically to Pole";
-    lv_label_set_text_fmt(t3_pose_lbl, "Display Pose: %s", pose_str);
+    snprintf(buf, sizeof(buf), "Display Pose: %s", pose_str);
+    lv_label_set_text(t3_pose_lbl, buf);
 
     int16_t bx = (int16_t)(d->pole_bubble_x_deg * 6.0f);
     int16_t by = (int16_t)(d->pole_bubble_y_deg * 6.0f);
     if (bx > 70) bx = 70; if (bx < -70) bx = -70;
     if (by > 70) by = 70; if (by < -70) by = -70;
     lv_obj_align(t3_bubble_dot, LV_ALIGN_CENTER, bx, by);
-    lv_label_set_text_fmt(t3_tilt_lbl, "Pole Tilt: dX: %+.1f deg | dY: %+.1f deg",
-                          d->pole_bubble_x_deg, d->pole_bubble_y_deg);
+    snprintf(buf, sizeof(buf), "Pole Tilt: dX: %+.1f deg | dY: %+.1f deg",
+             d->pole_bubble_x_deg, d->pole_bubble_y_deg);
+    lv_label_set_text(t3_tilt_lbl, buf);
 
     // 5. Update Tile 4: Hardware Test Modes
-    lv_label_set_text_fmt(t4_com1_lbl,
-                          "[UM982 COM1 IO17/18 @ 115200]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
-                          (unsigned long)d->um982_stats.com1_rx_bytes,
-                          (unsigned long)d->um982_stats.com1_tx_bytes,
-                          (unsigned long)d->um982_stats.nmea_sentences_ok,
-                          (unsigned long)d->um982_stats.heading_sentences_ok,
-                          d->um982_stats.last_com1_line);
+    snprintf(buf, sizeof(buf),
+             "[UM982 COM1 IO17/18 @ 115200]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+             (unsigned long)d->um982_stats.com1_rx_bytes,
+             (unsigned long)d->um982_stats.com1_tx_bytes,
+             (unsigned long)d->um982_stats.nmea_sentences_ok,
+             (unsigned long)d->um982_stats.heading_sentences_ok,
+             d->um982_stats.last_com1_line);
+    lv_label_set_text(t4_com1_lbl, buf);
 
-    lv_label_set_text_fmt(t4_com2_lbl,
-                          "[UM982 COM2 IO47/48 @ 115200]\nRTCM Forwarded TX: %lu B | Diff Age: %.1f s",
-                          (unsigned long)d->um982_stats.com2_tx_bytes,
-                          d->diff_age_s);
+    snprintf(buf, sizeof(buf),
+             "[UM982 COM2 IO47/48 @ 115200]\nRTCM Forwarded TX: %lu B | Diff Age: %.1f s",
+             (unsigned long)d->um982_stats.com2_tx_bytes,
+             d->diff_age_s);
+    lv_label_set_text(t4_com2_lbl, buf);
 
-    lv_label_set_text_fmt(t4_e220_lbl,
-                          "[E220 LoRa IO41/42 @ %lu]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
-                          (unsigned long)current_settings.e220_uart_baud,
-                          d->e220_stats.aux_pin_high ? 1 : 0,
-                          d->e220_stats.mode_m0,
-                          d->e220_stats.mode_m1,
-                          (unsigned long)d->e220_stats.rx_bytes_total,
-                          (unsigned long)d->e220_stats.rtcm_frames_ok,
-                          d->e220_stats.last_msg_type,
-                          d->e220_stats.msg_1005_count,
-                          d->e220_stats.msg_msm_count);
+    snprintf(buf, sizeof(buf),
+             "[E220 LoRa IO41/42 @ %lu]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+             (unsigned long)current_settings.e220_uart_baud,
+             d->e220_stats.aux_pin_high ? 1 : 0,
+             d->e220_stats.mode_m0,
+             d->e220_stats.mode_m1,
+             (unsigned long)d->e220_stats.rx_bytes_total,
+             (unsigned long)d->e220_stats.rtcm_frames_ok,
+             d->e220_stats.last_msg_type,
+             d->e220_stats.msg_1005_count,
+             d->e220_stats.msg_msm_count);
+    lv_label_set_text(t4_e220_lbl, buf);
 
     if (d->e220_stats.config_valid) {
-        lv_label_set_text_fmt(t4_e220_cfg_lbl,
-                              "E220 Regs: ADDH:%02X ADDL:%02X REG0:%02X REG1:%02X CH:%02X REG3:%02X",
-                              d->e220_stats.cfg_addr_high,
-                              d->e220_stats.cfg_addr_low,
-                              d->e220_stats.cfg_reg0,
-                              d->e220_stats.cfg_reg1,
-                              d->e220_stats.cfg_channel,
-                              d->e220_stats.cfg_reg3);
+        snprintf(buf, sizeof(buf),
+                 "E220 Regs: ADDH:%02X ADDL:%02X REG0:%02X REG1:%02X CH:%02X REG3:%02X",
+                 d->e220_stats.cfg_addr_high,
+                 d->e220_stats.cfg_addr_low,
+                 d->e220_stats.cfg_reg0,
+                 d->e220_stats.cfg_reg1,
+                 d->e220_stats.cfg_channel,
+                 d->e220_stats.cfg_reg3);
+        lv_label_set_text(t4_e220_cfg_lbl, buf);
     }
 
     rover_lvgl_unlock();
