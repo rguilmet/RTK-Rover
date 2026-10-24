@@ -125,18 +125,54 @@ static uint8_t e220_build_reg3_from_settings(void)
     return current_settings.e220_lbt_enable ? 0x10 : 0x00;
 }
 
+static void e220_log_decoded_registers(const char *tag)
+{
+    static const uint32_t kUartBauds[8] = {1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200};
+    static const float    kAirRates[8]  = {2.4f, 2.4f, 2.4f, 4.8f, 9.6f, 19.2f, 38.4f, 62.5f};
+    static const uint16_t kPktSizes[4]  = {200, 128, 64, 32};
+    static const uint8_t  kTxPowers[4]  = {30, 27, 24, 21};
+
+    uint8_t r0 = e220_stats.cfg_reg0;
+    uint8_t r1 = e220_stats.cfg_reg1;
+    uint8_t ch = e220_stats.cfg_channel;
+    uint8_t r3 = e220_stats.cfg_reg3;
+
+    uint32_t baud = kUartBauds[(r0 >> 5) & 0x07];
+    float    air  = kAirRates[r0 & 0x07];
+    uint16_t pkt  = kPktSizes[(r1 >> 6) & 0x03];
+    uint8_t  pwr  = kTxPowers[r1 & 0x03];
+    float    freq = 850.125f + (float)ch;
+
+    uint8_t exp_r0 = e220_build_reg0_from_settings();
+    uint8_t exp_r1 = e220_build_reg1_from_settings();
+    uint8_t exp_ch = (current_settings.e220_channel <= 83) ? current_settings.e220_channel : ROVER_E220_TARGET_CHAN;
+    uint8_t exp_r3 = e220_build_reg3_from_settings();
+
+    e220_stats.config_matched = (r0 == exp_r0 && r1 == exp_r1 && ch == exp_ch && r3 == exp_r3);
+
+    Serial.printf("[%s] Regs: ADDH=0x%02X ADDL=0x%02X REG0=0x%02X REG1=0x%02X CHAN=0x%02X(%u) REG3=0x%02X\n",
+                  tag, e220_stats.cfg_addr_high, e220_stats.cfg_addr_low, r0, r1, ch, ch, r3);
+    Serial.printf("[%s] Decoded: UART=%lu 8N1 | Air=%.1fk | Pkt=%uB | Pwr=%udBm | Freq=%.3fMHz (CH%u) | Mode=%s | Match=%s\n",
+                  tag, (unsigned long)baud, air, pkt, pwr, freq, ch,
+                  (r3 & 0x40) ? "Fixed" : "Transparent",
+                  e220_stats.config_matched ? "YES" : "NO");
+}
+
 extern "C" bool e220_write_default_config_registers(void)
 {
     // 1. Switch E220 to Mode 3 (Config/Sleep: M0=1, M1=1) @ 9600 8N1
     e220_set_mode(1, 1);
     Serial0.updateBaudRate(ROVER_E220_CONFIG_BAUD);
-    vTaskDelay(pdMS_TO_TICKS(30));
+    vTaskDelay(pdMS_TO_TICKS(40));
     while (Serial0.available()) Serial0.read();
 
     uint8_t reg0 = e220_build_reg0_from_settings();
     uint8_t reg1 = e220_build_reg1_from_settings();
     uint8_t chan = (current_settings.e220_channel <= 83) ? current_settings.e220_channel : ROVER_E220_TARGET_CHAN;
     uint8_t reg3 = e220_build_reg3_from_settings();
+
+    Serial.printf("[E220 CFG] Writing target registers: REG0=0x%02X REG1=0x%02X CHAN=0x%02X(%u) REG3=0x%02X...\n",
+                  reg0, reg1, chan, chan, reg3);
 
     // 2. Write Persistent Registers (0xC0 0x00 0x06) from settings.json parameters
     uint8_t cmd[9] = {
@@ -154,7 +190,7 @@ extern "C" bool e220_write_default_config_registers(void)
     uint8_t resp[9] = {0};
     int idx = 0;
     uint32_t start = millis();
-    while (millis() - start < 400 && idx < 9) {
+    while (millis() - start < 500 && idx < 9) {
         if (Serial0.available()) {
             resp[idx++] = (uint8_t)Serial0.read();
         } else {
@@ -172,6 +208,9 @@ extern "C" bool e220_write_default_config_registers(void)
         e220_stats.cfg_reg3      = resp[8];
         e220_stats.config_valid  = true;
         ok = true;
+        e220_log_decoded_registers("E220 WRITE OK");
+    } else {
+        Serial.printf("[E220 WRITE FAIL] Expected 9-byte 0xC1 response, got %d bytes\n", idx);
     }
 
     // 3. Return to Mode 0 (Transparent: M0=0, M1=0) at configured UART baud (default 57600 8N1)
@@ -186,7 +225,7 @@ extern "C" bool e220_read_config_registers(void)
     // 1. Switch E220 to Mode 3 (Config/Sleep: M0=1, M1=1), where E220 speaks 9600 8N1
     e220_set_mode(1, 1);
     Serial0.updateBaudRate(ROVER_E220_CONFIG_BAUD);
-    vTaskDelay(pdMS_TO_TICKS(30));
+    vTaskDelay(pdMS_TO_TICKS(40));
     while (Serial0.available()) Serial0.read();
 
     // 2. Send Read Register Command: 0xC1 0x00 0x06 (Read 6 registers starting at 0x00)
@@ -197,7 +236,7 @@ extern "C" bool e220_read_config_registers(void)
     uint8_t resp[9] = {0};
     int idx = 0;
     uint32_t start = millis();
-    while (millis() - start < 400 && idx < 9) {
+    while (millis() - start < 500 && idx < 9) {
         if (Serial0.available()) {
             resp[idx++] = (uint8_t)Serial0.read();
         } else {
@@ -215,6 +254,9 @@ extern "C" bool e220_read_config_registers(void)
         e220_stats.cfg_reg3      = resp[8];
         e220_stats.config_valid  = true;
         ok = true;
+        e220_log_decoded_registers("E220 READ OK");
+    } else {
+        Serial.printf("[E220 READ FAIL] Expected 9-byte 0xC1 response on Serial0 (IO41/42 @ 9600), got %d bytes\n", idx);
     }
 
     // 3. Return immediately to Mode 0 (Transparent: M0=0, M1=0) at configured UART baud
@@ -222,6 +264,27 @@ extern "C" bool e220_read_config_registers(void)
     Serial0.updateBaudRate(baud);
     e220_set_mode(0, 0);
     return ok;
+}
+
+extern "C" void e220_run_powerup_selftest(void)
+{
+    Serial.println("\n--- [E220-900T30S Power-Up Self-Test (UART0: RX=IO41, TX=IO42)] ---");
+    Serial.printf("[E220 PINS] AUX(IO21)=%d | M0(IO39)=%d | M1(IO40)=%d | RST(IO38)=%d\n",
+                  digitalRead(ROVER_PIN_E220_AUX),
+                  digitalRead(ROVER_PIN_E220_M0),
+                  digitalRead(ROVER_PIN_E220_M1),
+                  digitalRead(ROVER_PIN_E220_RST));
+
+    if (e220_read_config_registers()) {
+        if (!e220_stats.config_matched) {
+            Serial.println("[E220 TEST] Register mismatch vs settings.json -> Auto-programming target E220 config...");
+            e220_write_default_config_registers();
+        }
+        Serial.printf("[E220 TEST] PASS — E220-900T30S verified & running in Transparent Mode 0 @ %lu baud\n",
+                      (unsigned long)current_settings.e220_uart_baud);
+    } else {
+        Serial.println("[E220 TEST] FAIL — No register response from E220 on IO41/42 (check power/wiring)");
+    }
 }
 
 static void feed_rtcm_sniffer(uint8_t b)

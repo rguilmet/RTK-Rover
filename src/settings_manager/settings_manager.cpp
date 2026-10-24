@@ -1,13 +1,13 @@
 #include "settings_manager.h"
 #include <ArduinoJson.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <FFat.h>
 
 SemaphoreHandle_t fs_mux = NULL;
 
 fs::FS& get_active_fs(void) {
     if (sd_card_mounted) {
-        return SD;
+        return SD_MMC;
     }
     return FFat;
 }
@@ -36,7 +36,7 @@ struct SystemSettings current_settings = {
     false,            // is_muted
     "Your_SSID",      // wifi_ssid
     "Your_PASSWORD",  // wifi_password
-    false             // enable_serial_logging
+    true              // enable_serial_logging (enabled by default for bring-up & link verification)
 };
 
 volatile bool settings_dirty = false;

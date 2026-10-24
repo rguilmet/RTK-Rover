@@ -10,6 +10,8 @@ static RoverUIData_t   gnss_state = {};
 static Um982PortStats_t port_stats = {};
 static char            com1_line_buf[256];
 static uint16_t        com1_line_pos = 0;
+static char            com2_line_buf[256];
+static uint16_t        com2_line_pos = 0;
 static bool            rtc_synced_from_gnss = false;
 
 static double parse_nmea_deg_min(const char *str, const char *hemisphere)
@@ -146,6 +148,7 @@ static void handle_uniheadinga_sentence(char *line)
 
 static void process_com1_line(char *line)
 {
+    port_stats.com1_test_passed = true;
     strncpy(port_stats.last_com1_line, line, sizeof(port_stats.last_com1_line) - 1);
     port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
 
@@ -164,14 +167,32 @@ static void process_com1_line(char *line)
     } else if (strncmp(line, "#UNIHEADINGA", 12) == 0) {
         handle_uniheadinga_sentence(line);
     } else if (strncmp(line, "#VERSIONA", 9) == 0) {
-        strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
+        char *semi = strchr(line, ';');
+        if (semi) {
+            strncpy(port_stats.um982_version, semi + 1, sizeof(port_stats.um982_version) - 1);
+            port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
+        } else {
+            strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
+        }
+        Serial.printf("[UM982 COM1 RX] %s\n", line);
+    } else if (strncmp(line, "$command,", 9) == 0 || strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG", 7) == 0) {
+        Serial.printf("[UM982 COM1 RX] %s\n", line);
     }
+}
+
+static void process_com2_line(char *line)
+{
+    port_stats.com2_test_passed = true;
+    strncpy(port_stats.last_com2_line, line, sizeof(port_stats.last_com2_line) - 1);
+    port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
+    Serial.printf("[UM982 COM2 RX] %s\n", line);
 }
 
 extern "C" void send_um982_com1_command(const char *cmd)
 {
     if (!cmd) return;
     size_t len = strlen(cmd);
+    Serial.printf("[UM982 COM1 TX] %s\n", cmd);
     Serial1.write((const uint8_t *)cmd, len);
     Serial1.write((const uint8_t *)"\r\n", 2);
     port_stats.com1_tx_bytes += (uint32_t)(len + 2);
@@ -179,17 +200,21 @@ extern "C" void send_um982_com1_command(const char *cmd)
 
 extern "C" void send_um982_com2_test_pulse(void)
 {
-    // Send a benign newline/comment pulse to COM2 to test wiring
-    const char *pulse = "\r\n";
-    Serial2.write((const uint8_t *)pulse, 2);
-    port_stats.com2_tx_bytes += 2;
+    // Send VERSIONA command directly on UM982 COM2 (IO48 TX -> UM982_RXD1) to verify COM2 bidirectional link
+    const char *cmd = "VERSIONA\r\n";
+    size_t len = strlen(cmd);
+    Serial.println("[UM982 COM2 TX] VERSIONA (Testing COM2 IO47/48 @ 115200)");
+    Serial2.write((const uint8_t *)cmd, len);
+    port_stats.com2_tx_bytes += (uint32_t)len;
 }
 
 extern "C" void um982_configure_rover_defaults(void)
 {
-    // Configure UM982 COM1 for 5Hz NMEA GGA, 1Hz RMC/GST, and 5Hz Dual-Antenna Heading
-    send_um982_com1_command("VERSIONA");
+    // Ensure UM982 COM2 is set to 115200 baud for RTCM3 corrections & COM2 diagnostics
+    send_um982_com1_command("CONFIG COM2 115200");
     vTaskDelay(pdMS_TO_TICKS(40));
+
+    // Configure UM982 COM1 for 5Hz NMEA GGA, 1Hz RMC/GST, and 5Hz Dual-Antenna Heading
     send_um982_com1_command("GPGGA COM1 0.2");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPRMC COM1 1");
@@ -210,10 +235,57 @@ extern "C" void um982_configure_rover_defaults(void)
     }
 }
 
+extern "C" void um982_run_powerup_selftest(void)
+{
+    Serial.println("\n--- [UM982 Dual-Antenna GNSS Power-Up Self-Test] ---");
+
+    // 1. Test UM982 COM1 (Serial1: RX=IO17 / UM982_TXD0, TX=IO18 / UM982_RXD0 @ 115200)
+    Serial.println("[UM982 COM1] Testing UART1 (RX=IO17, TX=IO18 @ 115200) with VERSIONA...");
+    send_um982_com1_command("VERSIONA");
+    uint32_t t0 = millis();
+    while (millis() - t0 < 600) {
+        um982_poll_com1();
+        if (strncmp(port_stats.um982_version, "Waiting", 7) != 0) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (port_stats.com1_test_passed) {
+        Serial.printf("[UM982 COM1 TEST] PASS — RX=%lu B | Version: %s | Last: %s\n",
+                      (unsigned long)port_stats.com1_rx_bytes,
+                      port_stats.um982_version,
+                      port_stats.last_com1_line);
+    } else {
+        Serial.println("[UM982 COM1 TEST] FAIL — No response on IO17/18 @ 115200");
+    }
+
+    // 2. Test UM982 COM2 (Serial2: RX=IO47 / UM982_TXD1, TX=IO48 / UM982_RXD1 @ 115200)
+    Serial.println("[UM982 COM2] Testing UART2 (RX=IO47, TX=IO48 @ 115200) with VERSIONA...");
+    while (Serial2.available()) Serial2.read();
+    send_um982_com2_test_pulse();
+    t0 = millis();
+    while (millis() - t0 < 600) {
+        um982_poll_com2();
+        if (port_stats.com2_test_passed && strstr(port_stats.last_com2_line, "VERSION") != NULL) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (port_stats.com2_test_passed) {
+        Serial.printf("[UM982 COM2 TEST] PASS — Bidirectional COM2 verified (RX=%lu B, TX=%lu B) | Last: %s\n",
+                      (unsigned long)port_stats.com2_rx_bytes,
+                      (unsigned long)port_stats.com2_tx_bytes,
+                      port_stats.last_com2_line);
+    } else {
+        Serial.println("[UM982 COM2 TEST] WARN — No RX response on IO47 from VERSIONA sent on IO48 (check COM2 wiring)");
+    }
+}
+
 extern "C" void um982_driver_init(void)
 {
     strncpy(port_stats.um982_version, "Waiting COM1...", sizeof(port_stats.um982_version) - 1);
     strncpy(port_stats.last_com1_line, "No COM1 RX yet", sizeof(port_stats.last_com1_line) - 1);
+    strncpy(port_stats.last_com2_line, "No COM2 RX yet", sizeof(port_stats.last_com2_line) - 1);
 
     // UM982 COM1: UM982_TXD0 (IO17) -> ESP32 RX, UM982_RXD0 (IO18) -> ESP32 TX
     Serial1.setRxBufferSize(4096);
@@ -224,6 +296,7 @@ extern "C" void um982_driver_init(void)
     Serial2.begin(ROVER_UM982_COM2_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD1, ROVER_PIN_UM982_RXD1);
 
     um982_configure_rover_defaults();
+    um982_run_powerup_selftest();
 }
 
 extern "C" void um982_forward_rtcm_to_com2(const uint8_t *data, size_t len)
@@ -249,6 +322,26 @@ extern "C" void um982_poll_com1(void)
             com1_line_buf[com1_line_pos++] = c;
         } else {
             com1_line_pos = 0;
+        }
+    }
+}
+
+extern "C" void um982_poll_com2(void)
+{
+    while (Serial2.available() > 0) {
+        char c = (char)Serial2.read();
+        port_stats.com2_rx_bytes++;
+
+        if (c == '\r' || c == '\n') {
+            if (com2_line_pos > 0) {
+                com2_line_buf[com2_line_pos] = '\0';
+                process_com2_line(com2_line_buf);
+                com2_line_pos = 0;
+            }
+        } else if (com2_line_pos < sizeof(com2_line_buf) - 1) {
+            com2_line_buf[com2_line_pos++] = c;
+        } else {
+            com2_line_pos = 0;
         }
     }
 }

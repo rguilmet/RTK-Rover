@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <math.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <FFat.h>
 #include <SPI.h>
 
@@ -97,15 +97,17 @@ void task_rover_core0(void *pvParameters)
     (void)pvParameters;
     RoverUIData_t state = {};
     Axp2101Status_t pwr = {};
-    uint32_t last_pwr_poll_ms = 0;
-    uint32_t last_ui_push_ms  = 0;
+    uint32_t last_pwr_poll_ms  = 0;
+    uint32_t last_ui_push_ms   = 0;
+    uint32_t last_telem_log_ms = 0;
 
     for (;;) {
         // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM2 (IO47/48)
         e220_poll_and_forward_rtcm();
 
-        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST and Dual-Antenna Heading
+        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST & Heading, and COM2 (IO47/48) for responses
         um982_poll_com1();
+        um982_poll_com2();
 
         uint32_t now = millis();
 
@@ -189,6 +191,26 @@ void task_rover_core0(void *pvParameters)
             if (roverStateQueue) {
                 xQueueOverwrite(roverStateQueue, &state);
             }
+
+            // Periodic 5-second diagnostic telemetry log to Serial Monitor
+            if (current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
+                last_telem_log_ms = now;
+                Serial.printf("[TELEM] Fix:%d SVs:%u Hdg:%s(%.1f) | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
+                              (int)state.fix_type,
+                              state.num_sats,
+                              state.heading_valid ? "OK" : "--",
+                              state.true_heading_deg,
+                              (unsigned long)state.um982_stats.com1_rx_bytes,
+                              (unsigned long)state.um982_stats.com1_tx_bytes,
+                              (unsigned long)state.um982_stats.nmea_sentences_ok,
+                              (unsigned long)state.um982_stats.com2_tx_bytes,
+                              (unsigned long)state.um982_stats.com2_rx_bytes,
+                              state.e220_stats.aux_pin_high ? 1 : 0,
+                              (unsigned long)state.e220_stats.rx_bytes_total,
+                              (unsigned long)state.e220_stats.rtcm_frames_ok,
+                              state.e220_stats.msg_1005_count,
+                              state.e220_stats.msg_msm_count);
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(2));
@@ -260,28 +282,53 @@ void setup()
         delay(10);
     }
 
-    Serial.printf("\n=== RTK Rover %s ===\n", ROVER_FIRMWARE_VERSION);
+    Serial.printf("\n====================================================\n");
+    Serial.printf("   RTK Rover %s — Power-Up Diagnostics\n", ROVER_FIRMWARE_VERSION);
+    Serial.printf("====================================================\n");
 
-    // 2. Initialize Onboard Peripherals (AXP2101 PMIC, PCF85063 RTC, QMI8658 IMU)
+    // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard Peripherals
+    Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s\n",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TCA9554) ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_AXP2101) ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TOUCH)   ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_RTC)     ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_IMU)     ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_ES8311)  ? "OK" : "--");
+
     axp2101_bsp_init();
     rtc_bsp_init();
     imu_init();
 
-    // 3. Mount Internal FFat & MicroSD Card (asserting SD_CS LOW via TCA9554 EXIO3)
+    // 3. Mount Internal FFat & MicroSD Card via 1-bit SD_MMC (CLK=11, CMD=10, D0=9)
     if (!FFat.begin(true)) {
-        Serial.println("FFat Mount Failed");
+        Serial.println("[STORAGE] FFat Mount Failed");
     } else {
-        Serial.println("FFat Mounted");
+        Serial.printf("[STORAGE] FFat Mounted (Total: %lu KB, Used: %lu KB)\n",
+                      (unsigned long)(FFat.totalBytes() / 1024),
+                      (unsigned long)(FFat.usedBytes() / 1024));
     }
 
     ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0));
-    SPI.begin(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MISO, ROVER_PIN_SD_MOSI, -1);
-    if (!SD.begin(-1, SPI, 4000000)) {
-        Serial.println("SD Card not detected (using FFat storage fallback).");
+    vTaskDelay(pdMS_TO_TICKS(20));
+    if (!SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO)) {
+        Serial.println("[STORAGE] SD_MMC.setPins(CLK=11, CMD=10, D0=9) failed!");
+    } else if (!SD_MMC.begin("/sdcard", true)) {
+        Serial.println("[STORAGE] SD Card not detected on SD_MMC (using FFat storage fallback).");
     } else {
-        sd_card_mounted = true;
-        uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-        Serial.printf("SD Card Mounted: %llu MB\n", cardSize);
+        uint8_t cardType = SD_MMC.cardType();
+        if (cardType == CARD_NONE) {
+            Serial.println("[STORAGE] No SD_MMC card attached (using FFat storage fallback).");
+        } else {
+            sd_card_mounted = true;
+            const char *typeStr = (cardType == CARD_MMC) ? "MMC" :
+                                  (cardType == CARD_SD)  ? "SDSC" :
+                                  (cardType == CARD_SDHC) ? "SDHC" : "UNKNOWN";
+            uint64_t cardSizeMB  = SD_MMC.cardSize() / (1024ULL * 1024ULL);
+            uint64_t totalSizeMB = SD_MMC.totalBytes() / (1024ULL * 1024ULL);
+            uint64_t usedSizeMB  = SD_MMC.usedBytes() / (1024ULL * 1024ULL);
+            Serial.printf("[STORAGE] SD_MMC Mounted (%s): Size=%llu MB (Used=%llu MB / Total=%llu MB)\n",
+                          typeStr, cardSizeMB, usedSizeMB, totalSizeMB);
+        }
     }
 
     // 4. Load Settings & CSV Waypoints
@@ -292,9 +339,14 @@ void setup()
     lvgl_port_init();
     audio_bsp_init();
 
-    // 6. Initialize E220 LoRa & UM982 Dual-Antenna GNSS UARTs
+    // 6. Initialize & Self-Test E220 LoRa (UART0) and UM982 Dual-Antenna GNSS (UART1 & UART2)
     e220_driver_init();
+    e220_run_powerup_selftest();
     um982_driver_init();
+
+    Serial.println("====================================================");
+    Serial.println("   Setup Complete — Launching FreeRTOS Tasks");
+    Serial.println("====================================================\n");
 
     // 7. Launch FreeRTOS Tasks
     roverStateQueue = xQueueCreate(1, sizeof(RoverUIData_t));

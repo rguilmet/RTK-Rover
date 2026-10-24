@@ -1,30 +1,47 @@
+#include <stdio.h>
 #include "imu_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
 #include "../settings_manager/settings_manager.h"
 #include <stdint.h>
 #include <math.h>
 #include <esp_err.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 extern i2c_master_dev_handle_t imu_dev_handle;
 
 void imu_init(void)
 {
+    uint8_t who_am_i = 0;
+    esp_err_t err = i2c_read_buff(imu_dev_handle, 0x00, &who_am_i, 1);
+
     uint8_t ctrl_buf;
-    // Enable Address Auto Increment
-    ctrl_buf = 0x60;
+    // Soft Reset QMI8658 (REG 0x60 = 0xB0 per Waveshare bsp_qmi8658.c)
+    ctrl_buf = 0xB0;
+    i2c_write_buff(imu_dev_handle, 0x60, &ctrl_buf, 1);
+    vTaskDelay(pdMS_TO_TICKS(15));
+
+    // CTRL1 (0x02): Enable Address Auto-Increment, Little-Endian (0x40)
+    ctrl_buf = 0x40;
     i2c_write_buff(imu_dev_handle, 0x02, &ctrl_buf, 1);
 
-    // Accel Config (4g, 250Hz)
-    ctrl_buf = 0x14;
+    // CTRL7 (0x08): Enable Accelerometer & Gyroscope (0x03)
+    ctrl_buf = 0x03;
+    i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
+
+    // CTRL2 (0x03): Accel Config (4g, 250Hz -> 0x95)
+    ctrl_buf = 0x95;
     i2c_write_buff(imu_dev_handle, 0x03, &ctrl_buf, 1);
 
-    // Gyro Config (512dps, 250Hz)
-    ctrl_buf = 0x54;
+    // CTRL3 (0x04): Gyro Config (512dps, 250Hz -> 0xD5)
+    ctrl_buf = 0xD5;
     i2c_write_buff(imu_dev_handle, 0x04, &ctrl_buf, 1);
 
-    // Enable Sensors (SYS_EN=1, ACC_EN=1, GYR_EN=1 -> 0x07)
-    ctrl_buf = 0x07;
-    i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
+    if (err == ESP_OK && who_am_i == 0x05) {
+        printf("[IMU] QMI8658 (0x6B) ONLINE — WHO_AM_I: 0x%02X (4g/512dps @ 250Hz)\n", who_am_i);
+    } else {
+        printf("[IMU] QMI8658 (0x6B) WARN — WHO_AM_I: 0x%02X (err=%d)\n", who_am_i, (int)err);
+    }
 }
 
 void imu_read(float *acc, float *gyr, int16_t *temp)

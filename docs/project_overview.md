@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.0.6`
+**Document Version:** `v1.0.7`
 **Last Updated:** October 24, 2026
-**Firmware Target:** `v0.1.10`
+**Firmware Target:** `v0.1.11`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 
@@ -71,9 +71,9 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |
 | **E220 Control** | `E220_M0` | `GPIO 39` | **ESP32 Output** | Mode 0 (`LOW` = Transparent Mode 0, `HIGH` = Config Mode 3) |
 | **E220 Control** | `E220_M1` | `GPIO 40` | **ESP32 Output** | Mode 1 (`LOW` = Transparent Mode 0, `HIGH` = Config Mode 3) |
-| **Internal I2C0** | `ESP_SCL/SDA` | `GPIO 7 / 8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`) |
+| **Internal I2C0** | `ESP_SCL/SDA` | `GPIO 7 / 8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`), serialized via FreeRTOS Recursive Mutex |
 | **LCD QSPI** | `CS/CLK/D0..3` | `12, 5, 1..4` | **QSPI Master** | `AXS15231B` `320x480` Portrait Display (`GPIO 6` Backlight PWM) |
-| **SD Card SPI** | `MISO/MOSI/CLK`| `9, 10, 11` | **SPI Master** | Chip Select driven active-low via TCA9554 `EXIO3` |
+| **SD Card SDMMC** | `D0/CMD/CLK` | `9, 10, 11` | **1-Bit SD_MMC** | Mounted via `SD_MMC.setPins(11, 10, 9)` + `SD_MMC.begin("/sdcard", true)` with TCA9554 `EXIO3` LOW |
 | **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Short-Press (Tile 2 ONLY):** Log Pin \| **Long-Press (All Screens):** Screenshot |
 
 ---

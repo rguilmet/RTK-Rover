@@ -1,6 +1,6 @@
 #include "screenshot.h"
 #include "../../user_config.h"
-#include <SD.h>
+#include <SD_MMC.h>
 #include <FFat.h>
 #include "../settings_manager/settings_manager.h"
 #include "../rtc_bsp/rtc_bsp.h"

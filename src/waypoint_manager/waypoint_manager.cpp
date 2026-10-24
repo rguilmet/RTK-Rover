@@ -3,7 +3,7 @@
 #include "../rtc_bsp/rtc_bsp.h"
 #include "../nav_engine/nav_engine.h"
 #include <Arduino.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <FFat.h>
 #include <string.h>
 #include <stdlib.h>

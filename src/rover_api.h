@@ -61,6 +61,7 @@ typedef struct {
     uint8_t  mode_m0;
     uint8_t  mode_m1;
     bool     config_valid;
+    bool     config_matched;    // True if read registers match target settings.json
     uint8_t  cfg_addr_high;
     uint8_t  cfg_addr_low;
     uint8_t  cfg_reg0;
@@ -75,10 +76,14 @@ typedef struct {
 typedef struct {
     uint32_t com1_rx_bytes;
     uint32_t com1_tx_bytes;
-    uint32_t com2_tx_bytes;     // RTCM bytes forwarded to COM2
+    uint32_t com2_rx_bytes;     // Bytes received back from UM982 COM2 (IO47)
+    uint32_t com2_tx_bytes;     // RTCM/Command bytes sent to UM982 COM2 (IO48)
     uint32_t nmea_sentences_ok;
     uint32_t heading_sentences_ok;
+    bool     com1_test_passed;
+    bool     com2_test_passed;
     char     last_com1_line[96];
+    char     last_com2_line[64];
     char     um982_version[48];
 } Um982PortStats_t;
 

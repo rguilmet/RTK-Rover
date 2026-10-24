@@ -1,14 +1,20 @@
+#include <stdio.h>
 #include "axp2101_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
 #include <esp_err.h>
 
-// AXP2101 Core Telemetry & ADC Registers (per X-Powers AXP2101 Datasheet V1.0)
+// AXP2101 Core Telemetry & LDO Registers (per X-Powers AXP2101 Datasheet V1.0 & Waveshare 3.5B BSP)
 #define AXP2101_REG_STATUS1       0x00 // Bit 5: VBUS good, Bit 3: BAT present
 #define AXP2101_REG_STATUS2       0x01 // Bits [7:5] Charge status (001=charging)
-#define AXP2101_REG_IC_TYPE       0x03
-#define AXP2101_REG_ADC_EN        0x30 // Bit 0: VBAT ADC Enable, Bit 2: VBUS ADC Enable
+#define AXP2101_REG_IC_TYPE       0x03 // Expected Chip ID = 0x4A
+#define AXP2101_REG_ADC_EN        0x30 // Bit 0: VBAT, Bit 1: TS (Disable=0), Bit 2: VBUS, Bit 3: VSYS
 #define AXP2101_REG_VBAT_H        0x34 // 14-bit VBAT mV: ((H & 0x3F) << 8) | L
 #define AXP2101_REG_VBAT_L        0x35
+#define AXP2101_REG_LDO_ONOFF0    0x90 // Bits [3:0] = ALDO1..4 Enable
+#define AXP2101_REG_ALDO1_VOL     0x92 // 0x1C = 3300 mV ((3300 - 500) / 100)
+#define AXP2101_REG_ALDO2_VOL     0x93
+#define AXP2101_REG_ALDO3_VOL     0x94
+#define AXP2101_REG_ALDO4_VOL     0x95
 #define AXP2101_REG_BAT_PERCENT   0xA4 // Fuel gauge percentage (0..100%)
 
 static bool axp_online = false;
@@ -22,9 +28,30 @@ void axp2101_bsp_init(void)
     uint8_t chip_id = 0;
     if (i2c_read_buff(axp2101_dev_handle, AXP2101_REG_IC_TYPE, &chip_id, 1) == ESP_OK) {
         axp_online = true;
-        // Enable VBAT, TS, VBUS, VSYS ADC channels
-        uint8_t adc_en = 0x0F;
+        // Enable VBAT (bit 0), VBUS (bit 2), VSYS (bit 3) ADCs; disable TS pin (bit 1 = 0) per Waveshare BSP
+        uint8_t adc_en = 0x0D;
         i2c_write_buff(axp2101_dev_handle, AXP2101_REG_ADC_EN, &adc_en, 1);
+
+        // Ensure ALDO1..4 are set to 3.3V (0x1C) and enabled for onboard peripherals
+        uint8_t vol_3v3 = 0x1C;
+        i2c_write_buff(axp2101_dev_handle, AXP2101_REG_ALDO1_VOL, &vol_3v3, 1);
+        i2c_write_buff(axp2101_dev_handle, AXP2101_REG_ALDO2_VOL, &vol_3v3, 1);
+        i2c_write_buff(axp2101_dev_handle, AXP2101_REG_ALDO3_VOL, &vol_3v3, 1);
+        i2c_write_buff(axp2101_dev_handle, AXP2101_REG_ALDO4_VOL, &vol_3v3, 1);
+
+        uint8_t ldo_en = 0;
+        if (i2c_read_buff(axp2101_dev_handle, AXP2101_REG_LDO_ONOFF0, &ldo_en, 1) == ESP_OK) {
+            ldo_en |= 0x0F; // Enable ALDO1..4
+            i2c_write_buff(axp2101_dev_handle, AXP2101_REG_LDO_ONOFF0, &ldo_en, 1);
+        }
+
+        Axp2101Status_t st = {};
+        axp2101_bsp_read(&st);
+        printf("[PMIC] AXP2101 (0x34) ONLINE — ChipID: 0x%02X | VBAT: %.2fV (%u%%) | VBUS: %s | Charging: %s\n",
+               chip_id, st.battery_voltage_v, st.battery_percent,
+               st.vbus_good ? "YES" : "NO", st.is_charging ? "YES" : "NO");
+    } else {
+        printf("[PMIC] AXP2101 (0x34) FAIL — Not responding on I2C0\n");
     }
 }
 
