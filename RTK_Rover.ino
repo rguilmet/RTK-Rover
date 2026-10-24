@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include <math.h>
 #include <SD_MMC.h>
+#include <SD.h>
 #include <FFat.h>
 #include <SPI.h>
+#include <driver/gpio.h>
 
 #include "user_config.h"
 #include "src/rover_api.h"
@@ -23,6 +25,7 @@
 
 extern esp_io_expander_handle_t io_expander;
 bool sd_card_mounted = false;
+bool sd_card_use_spi = false;
 
 static QueueHandle_t roverStateQueue = NULL;
 static esp_codec_dev_handle_t playback_handle = NULL;
@@ -209,39 +212,42 @@ void task_display_and_audio(void *pvParameters)
     for (;;) {
         uint32_t now = millis();
 
-        // 1. One-shot GNSS UTC -> Hardware RTC I2C Sync on Core 1
-        uint16_t yy; uint8_t mo, dd, hh, mm, ss;
-        if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
-            i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
-            Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
-        }
-
-        // 2. Poll QMI8658 IMU at 10 Hz (every 100 ms) on Core 1
-        if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
-            last_imu_poll_ms = (now == 0) ? 1 : now;
-            float acc[3] = {0}, gyr[3] = {0};
-            int16_t imu_temp = 0;
-            imu_read(acc, gyr, &imu_temp);
-            imu_compute_pose_and_bubble(acc,
-                                        &cached_imu_pitch,
-                                        &cached_imu_roll,
-                                        &cached_bubble_x,
-                                        &cached_bubble_y,
-                                        &cached_pose);
-
-            if (pending_tare_level) {
-                pending_tare_level = false;
-                current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
-                current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
-                mark_settings_dirty();
-                play_rover_beep(1800, 80);
+        // 1..3: Execute Core 1 I2C transactions (RTC sync, 10 Hz IMU, 0.5 Hz PMIC) inside
+        // rover_lvgl_lock() so rover_lvgl_port_task (Priority 3, Touch 0x3B) and
+        // task_display_and_audio (Priority 2) never preempt each other mid-I2C-transfer.
+        if (rover_lvgl_lock(50)) {
+            uint16_t yy; uint8_t mo, dd, hh, mm, ss;
+            if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
+                i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
+                Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
             }
-        }
 
-        // 3. Poll AXP2101 PMIC Battery Status at 0.5 Hz (every 2000 ms) on Core 1
-        if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
-            last_pwr_poll_ms = (now == 0) ? 1 : now;
-            axp2101_bsp_read(&pwr);
+            if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
+                last_imu_poll_ms = (now == 0) ? 1 : now;
+                float acc[3] = {0}, gyr[3] = {0};
+                int16_t imu_temp = 0;
+                imu_read(acc, gyr, &imu_temp);
+                imu_compute_pose_and_bubble(acc,
+                                            &cached_imu_pitch,
+                                            &cached_imu_roll,
+                                            &cached_bubble_x,
+                                            &cached_bubble_y,
+                                            &cached_pose);
+
+                if (pending_tare_level) {
+                    pending_tare_level = false;
+                    current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
+                    current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
+                    mark_settings_dirty();
+                    play_rover_beep(1800, 80);
+                }
+            }
+
+            if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
+                last_pwr_poll_ms = (now == 0) ? 1 : now;
+                axp2101_bsp_read(&pwr);
+            }
+            rover_lvgl_unlock();
         }
 
         // 4. Persist dirty settings after 4s debounce
@@ -302,9 +308,10 @@ void setup()
     pinMode(ROVER_PIN_BOOT_BTN, INPUT_PULLUP);
 
     // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA) & TCA9554 IO Expander
+    // Match Waveshare 01_factory: leave EXIO3 (ROVER_EXIO_SD_CS) as Input/High-Z initially
     i2c_master_Init();
     ESP_ERROR_CHECK(esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander));
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_SD_CS | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
+    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
 
     // Brief wait for USB-CDC Serial monitor on boot
     unsigned long start_ms = millis();
@@ -329,7 +336,7 @@ void setup()
     rtc_bsp_init();
     imu_init();
 
-    // 3. Mount Internal FFat & MicroSD Card via 1-bit SD_MMC (CLK=11, CMD=10, D0=9)
+    // 3. Mount Internal FFat & MicroSD Card (CLK=11, CMD=10, D0=9)
     if (!FFat.begin(true)) {
         Serial.println("[STORAGE] FFat Mount Failed");
     } else {
@@ -338,28 +345,59 @@ void setup()
                       (unsigned long)(FFat.usedBytes() / 1024));
     }
 
-    // Keep EXIO3 (CD/DAT3) HIGH during SD_MMC initialization so the SD card enters native SDMMC mode (not SPI mode!)
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 1));
+    // Enable ESP32-S3 internal pull-ups on SD lines (matching SDMMC_SLOT_FLAG_INTERNAL_PULLUP in 01_factory)
+    gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_SCLK);
+    gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MOSI);
+    gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MISO);
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // Stage 1: Native 1-bit SD_MMC with EXIO3 High-Z (Input with 100k internal pull-up, matching Waveshare 01_factory)
+    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_INPUT));
     vTaskDelay(pdMS_TO_TICKS(20));
-    if (!SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO)) {
-        Serial.println("[STORAGE] SD_MMC.setPins(CLK=11, CMD=10, D0=9) failed!");
-    } else if (!SD_MMC.begin("/sdcard", true)) {
-        Serial.println("[STORAGE] SD Card not detected on SD_MMC (using FFat storage fallback).");
+    SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
+    if (SD_MMC.begin("/sdcard", true, false, 20000) && SD_MMC.cardType() != CARD_NONE) {
+        sd_card_mounted = true;
+        sd_card_use_spi = false;
+        Serial.println("[STORAGE] Stage 1 OK: SD_MMC 1-bit mounted (EXIO3=Input/High-Z)");
     } else {
-        uint8_t cardType = SD_MMC.cardType();
-        if (cardType == CARD_NONE) {
-            Serial.println("[STORAGE] No SD_MMC card attached (using FFat storage fallback).");
-        } else {
+        SD_MMC.end();
+        // Stage 2: Native 1-bit SD_MMC with EXIO3 driven LOW (in case EXIO3 drives a P-MOSFET high-side SD power switch)
+        ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_OUTPUT));
+        ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0));
+        vTaskDelay(pdMS_TO_TICKS(60));
+        gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_SCLK);
+        gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MOSI);
+        gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MISO);
+        SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
+        if (SD_MMC.begin("/sdcard", true, false, 20000) && SD_MMC.cardType() != CARD_NONE) {
             sd_card_mounted = true;
-            const char *typeStr = (cardType == CARD_MMC) ? "MMC" :
-                                  (cardType == CARD_SD)  ? "SDSC" :
-                                  (cardType == CARD_SDHC) ? "SDHC" : "UNKNOWN";
-            uint64_t cardSizeMB  = SD_MMC.cardSize() / (1024ULL * 1024ULL);
-            uint64_t totalSizeMB = SD_MMC.totalBytes() / (1024ULL * 1024ULL);
-            uint64_t usedSizeMB  = SD_MMC.usedBytes() / (1024ULL * 1024ULL);
-            Serial.printf("[STORAGE] SD_MMC Mounted (%s): Size=%llu MB (Used=%llu MB / Total=%llu MB)\n",
-                          typeStr, cardSizeMB, usedSizeMB, totalSizeMB);
+            sd_card_use_spi = false;
+            Serial.println("[STORAGE] Stage 2 OK: SD_MMC 1-bit mounted (EXIO3=LOW)");
+        } else {
+            SD_MMC.end();
+            // Stage 3: SPI SD mode with EXIO3 driven LOW (CS asserted via TCA9554 EXIO3)
+            SPI.begin(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MISO, ROVER_PIN_SD_MOSI, -1);
+            if (SD.begin(-1, SPI, 4000000, "/sdcard") && SD.cardType() != CARD_NONE) {
+                sd_card_mounted = true;
+                sd_card_use_spi = true;
+                Serial.println("[STORAGE] Stage 3 OK: SD SPI mounted (EXIO3=LOW)");
+            } else {
+                SD.end();
+                Serial.println("[STORAGE] SD Card not detected across Stage 1..3 (using FFat storage fallback).");
+            }
         }
+    }
+
+    if (sd_card_mounted) {
+        uint8_t cardType = sd_card_use_spi ? SD.cardType() : SD_MMC.cardType();
+        const char *typeStr = (cardType == CARD_MMC) ? "MMC" :
+                              (cardType == CARD_SD)  ? "SDSC" :
+                              (cardType == CARD_SDHC) ? "SDHC" : "UNKNOWN";
+        uint64_t cardSizeMB  = (sd_card_use_spi ? SD.cardSize()   : SD_MMC.cardSize())   / (1024ULL * 1024ULL);
+        uint64_t totalSizeMB = (sd_card_use_spi ? SD.totalBytes() : SD_MMC.totalBytes()) / (1024ULL * 1024ULL);
+        uint64_t usedSizeMB  = (sd_card_use_spi ? SD.usedBytes()  : SD_MMC.usedBytes())  / (1024ULL * 1024ULL);
+        Serial.printf("[STORAGE] MicroSD Ready (%s, %s): Size=%llu MB (Used=%llu MB / Total=%llu MB)\n",
+                      sd_card_use_spi ? "SPI" : "SD_MMC", typeStr, cardSizeMB, usedSizeMB, totalSizeMB);
     }
 
     // 4. Load Settings & CSV Waypoints

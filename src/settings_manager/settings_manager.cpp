@@ -1,12 +1,17 @@
 #include "settings_manager.h"
 #include <ArduinoJson.h>
 #include <SD_MMC.h>
+#include <SD.h>
 #include <FFat.h>
 
+extern bool sd_card_use_spi;
 SemaphoreHandle_t fs_mux = NULL;
 
 fs::FS& get_active_fs(void) {
     if (sd_card_mounted) {
+        if (sd_card_use_spi) {
+            return SD;
+        }
         return SD_MMC;
     }
     return FFat;

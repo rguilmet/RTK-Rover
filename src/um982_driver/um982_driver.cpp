@@ -21,11 +21,16 @@ static uint8_t         pending_rtc_mm       = 0;
 static uint8_t         pending_rtc_ss       = 0;
 
 // Per-constellation satellites-in-view counters from $xxGSV (GP, GL, GA, GB/BD, GQ)
-static uint8_t gsv_sats_gp = 0;
-static uint8_t gsv_sats_gl = 0;
-static uint8_t gsv_sats_ga = 0;
-static uint8_t gsv_sats_gb = 0;
-static uint8_t gsv_sats_gq = 0;
+static uint8_t  gsv_sats_gp = 0;
+static uint8_t  gsv_sats_gl = 0;
+static uint8_t  gsv_sats_ga = 0;
+static uint8_t  gsv_sats_gb = 0;
+static uint8_t  gsv_sats_gq = 0;
+static uint32_t gsv_last_gp_ms = 0;
+static uint32_t gsv_last_gl_ms = 0;
+static uint32_t gsv_last_ga_ms = 0;
+static uint32_t gsv_last_gb_ms = 0;
+static uint32_t gsv_last_gq_ms = 0;
 
 static double parse_nmea_deg_min(const char *str, const char *hemisphere)
 {
@@ -119,6 +124,16 @@ static void handle_rmc_sentence(char *line)
     }
 }
 
+static void update_gsv_max_band(uint8_t *slot, uint32_t *last_ms, uint8_t sv_in_view, uint32_t now)
+{
+    // UM982 outputs separate GSV blocks per signal band (e.g. L1 then L5) in the same 1s epoch.
+    // Keep the highest SV count reported across bands within a 2.2s window.
+    if (sv_in_view >= *slot || (now - *last_ms > 2200)) {
+        *slot = sv_in_view;
+        *last_ms = now;
+    }
+}
+
 static void handle_gsv_sentence(char *line)
 {
     // $xxGSV,numMsg,msgNum,numSV,...*cs
@@ -129,12 +144,13 @@ static void handle_gsv_sentence(char *line)
     int n = split_csv_fields(line, f, 6);
     if (n < 4 || !f[3][0]) return;
 
+    uint32_t now = millis();
     uint8_t sv_in_view = (uint8_t)atoi(f[3]);
-    if (talker1 == 'G' && talker2 == 'P')      gsv_sats_gp = sv_in_view;
-    else if (talker1 == 'G' && talker2 == 'L') gsv_sats_gl = sv_in_view;
-    else if (talker1 == 'G' && talker2 == 'A') gsv_sats_ga = sv_in_view;
-    else if ((talker1 == 'G' && talker2 == 'B') || (talker1 == 'B' && talker2 == 'D')) gsv_sats_gb = sv_in_view;
-    else if (talker1 == 'G' && talker2 == 'Q') gsv_sats_gq = sv_in_view;
+    if (talker1 == 'G' && talker2 == 'P')      update_gsv_max_band(&gsv_sats_gp, &gsv_last_gp_ms, sv_in_view, now);
+    else if (talker1 == 'G' && talker2 == 'L') update_gsv_max_band(&gsv_sats_gl, &gsv_last_gl_ms, sv_in_view, now);
+    else if (talker1 == 'G' && talker2 == 'A') update_gsv_max_band(&gsv_sats_ga, &gsv_last_ga_ms, sv_in_view, now);
+    else if ((talker1 == 'G' && talker2 == 'B') || (talker1 == 'B' && talker2 == 'D')) update_gsv_max_band(&gsv_sats_gb, &gsv_last_gb_ms, sv_in_view, now);
+    else if (talker1 == 'G' && talker2 == 'Q') update_gsv_max_band(&gsv_sats_gq, &gsv_last_gq_ms, sv_in_view, now);
 
     uint16_t total_view = (uint16_t)gsv_sats_gp + gsv_sats_gl + gsv_sats_ga + gsv_sats_gb + gsv_sats_gq;
     if (total_view > 255) total_view = 255;
@@ -350,6 +366,19 @@ extern "C" void um982_driver_init(void)
     strncpy(port_stats.um982_version, "Waiting COM1...", sizeof(port_stats.um982_version) - 1);
     strncpy(port_stats.last_com1_line, "No COM1 RX yet", sizeof(port_stats.last_com1_line) - 1);
     strncpy(port_stats.last_com2_line, "No COM2 RX yet", sizeof(port_stats.last_com2_line) - 1);
+
+    // Probe physical UART pins with weak pull-down before Serial.begin():
+    // An active external 3.3V UART TX output drives the pin HIGH (1) against weak pull-down.
+    pinMode(ROVER_PIN_UM982_TXD0, INPUT_PULLDOWN);
+    pinMode(ROVER_PIN_UM982_RXD0, INPUT_PULLDOWN);
+    pinMode(ROVER_PIN_UM982_TXD1, INPUT_PULLDOWN);
+    pinMode(ROVER_PIN_UM982_RXD1, INPUT_PULLDOWN);
+    delay(2);
+    Serial.printf("[UM982 LINE PROBE] COM1: IO17(ESP_RX)=%d IO18(ESP_TX)=%d | COM2: IO47(ESP_RX)=%d IO48(ESP_TX)=%d\n",
+                  digitalRead(ROVER_PIN_UM982_TXD0),
+                  digitalRead(ROVER_PIN_UM982_RXD0),
+                  digitalRead(ROVER_PIN_UM982_TXD1),
+                  digitalRead(ROVER_PIN_UM982_RXD1));
 
     // UM982 COM1: UM982_TXD0 (IO17) -> ESP32 RX, UM982_RXD0 (IO18) -> ESP32 TX
     Serial1.setRxBufferSize(4096);

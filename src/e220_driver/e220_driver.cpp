@@ -54,6 +54,14 @@ extern "C" void e220_driver_init(void)
 
     digitalWrite(ROVER_PIN_E220_RST, HIGH);
 
+    // Probe IO41/IO42 with weak pull-down before Serial0.begin() to verify physical E220 TX line drive
+    pinMode(ROVER_PIN_E220_TXD, INPUT_PULLDOWN);
+    pinMode(ROVER_PIN_E220_RXD, INPUT_PULLDOWN);
+    delay(2);
+    Serial.printf("[E220 LINE PROBE] IO41(ESP_RX/E220_TXD)=%d | IO42(ESP_TX/E220_RXD)=%d\n",
+                  digitalRead(ROVER_PIN_E220_TXD),
+                  digitalRead(ROVER_PIN_E220_RXD));
+
     // Boot directly into Mode 0 (Transparent Mode: M0=0, M1=0) at configured UART baud (default 57600 8N1)
     // Note: E220_TXD (IO41) is ESP32 RX; E220_RXD (IO42) is ESP32 TX
     e220_set_mode(0, 0);

@@ -255,8 +255,9 @@ static void rover_lcd_exio_init(void)
         ESP_ERROR_CHECK(esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander));
     }
 
+    // Leave EXIO3 (SD_CS / DAT3) untouched here so SD_MMC / SPI setup remains undisturbed
     ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_TP_INT | ROVER_EXIO_RTC_INT | ROVER_EXIO_AXP_IRQ | ROVER_EXIO_SYS_OUT, IO_EXPANDER_INPUT));
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_SD_CS | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
+    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
     ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_CAM_PWDN, 1)); // Power down unused camera
     ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1));
 }
@@ -503,7 +504,7 @@ void create_rover_ui(void)
     lv_obj_center(hdr_fix_lbl);
 
     hdr_sats_acc_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_sats_acc_lbl, "SV:0  Acc:--");
+    lv_label_set_text(hdr_sats_acc_lbl, "SV:0/0 +/- --");
     lv_obj_set_style_text_color(hdr_sats_acc_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(hdr_sats_acc_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(hdr_sats_acc_lbl, LV_ALIGN_BOTTOM_MID, 8, -2);
@@ -571,7 +572,7 @@ void create_rover_ui(void)
     // TILE 0: Pin Seeker & Guidance (Main Screen)
     // =====================================================================
     t0_pos_lbl = lv_label_create(tile_guidance);
-    lv_label_set_text(t0_pos_lbl, "Lat:  0.00000000   SVs: 0/0\nLon:  0.00000000   Hgt: 0.00 m");
+    lv_label_set_text(t0_pos_lbl, "Lat:  0.00000000\nLon:  0.00000000   Hgt: 0.00 m");
     lv_obj_set_style_text_color(t0_pos_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t0_pos_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t0_pos_lbl, LV_ALIGN_TOP_MID, 0, 4);
@@ -941,7 +942,7 @@ void update_rover_ui(const RoverUIData_t *d)
     if (!d) return;
     if (!rover_lvgl_lock(50)) return;
 
-    char buf[160];
+    char buf[256];
 
     // 1. Update Persistent Header Bar (Date, Time, Units, Battery, Fix, RTCM)
     RtcDateTime_t lt;
@@ -980,7 +981,7 @@ void update_rover_ui(const RoverUIData_t *d)
     char acc_str[24];
     nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
     uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
-    snprintf(buf, sizeof(buf), "SV:%u/%u ±%s", d->num_sats, sv_view, acc_str);
+    snprintf(buf, sizeof(buf), "SV:%u/%u +/-%s", d->num_sats, sv_view, acc_str);
     lv_label_set_text(hdr_sats_acc_lbl, buf);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
@@ -1001,8 +1002,8 @@ void update_rover_ui(const RoverUIData_t *d)
     nav_format_offset(d->d_north_m, dn_str, sizeof(dn_str));
     nav_format_offset(d->d_east_m, de_str, sizeof(de_str));
 
-    snprintf(buf, sizeof(buf), "Lat: %12.8f   SVs: %u/%u\nLon: %12.8f   Hgt: %s",
-             d->tip_lat, d->num_sats, sv_view, d->tip_lon, hgt_str);
+    snprintf(buf, sizeof(buf), "Lat: %12.8f\nLon: %12.8f   Hgt: %s",
+             d->tip_lat, d->tip_lon, hgt_str);
     lv_label_set_text(t0_pos_lbl, buf);
 
     if (d->has_active_target) {

@@ -64,11 +64,11 @@ void i2c_master_Init(void)
     };
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &user_i2c_port0_handle));
 
-    // Use 100 kHz standard mode on the shared 6-device I2C0 bus for maximum signal integrity
+    // Match Waveshare 01_factory 400 kHz across all I2C0 devices so i2c_master never reconfigures bus clock mid-stream
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = ROVER_I2C_ADDR_RTC,
-        .scl_speed_hz = 100000,
+        .scl_speed_hz = 400000,
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &rtc_dev_handle));
 
@@ -87,6 +87,9 @@ bool i2c_bsp_probe_addr(uint8_t addr_7bit)
     if (user_i2c_port0_handle == NULL) return false;
     if (!i2c_bsp_lock(200)) return false;
     esp_err_t err = i2c_master_probe(user_i2c_port0_handle, addr_7bit, 50);
+    if (err != ESP_OK) {
+        i2c_master_bus_reset(user_i2c_port0_handle);
+    }
     i2c_bsp_unlock();
     return (err == ESP_OK);
 }
@@ -108,7 +111,8 @@ uint8_t i2c_write_buff(i2c_master_dev_handle_t dev_handle, int reg, uint8_t *buf
         ret = i2c_master_transmit(dev_handle, pbuf, len + 1, i2c_data_pdMS_TICKS);
     }
     if (ret != ESP_OK) {
-        printf("[I2C WARN] Write failed on %s (reg=0x%02X, err=0x%X)\n", i2c_dev_name(dev_handle), reg, (unsigned int)ret);
+        printf("[I2C WARN] Write failed on %s (reg=0x%02X, err=0x%X) -> resetting bus\n", i2c_dev_name(dev_handle), reg, (unsigned int)ret);
+        i2c_master_bus_reset(user_i2c_port0_handle);
     }
     i2c_bsp_unlock();
     return (ret == ESP_OK) ? 0 : 1;
@@ -121,7 +125,8 @@ uint8_t i2c_master_write_read_dev(i2c_master_dev_handle_t dev_handle, uint8_t *w
     }
     esp_err_t ret = i2c_master_transmit_receive(dev_handle, writeBuf, writeLen, readBuf, readLen, i2c_data_pdMS_TICKS);
     if (ret != ESP_OK) {
-        printf("[I2C WARN] WriteRead failed on %s (err=0x%X)\n", i2c_dev_name(dev_handle), (unsigned int)ret);
+        printf("[I2C WARN] WriteRead failed on %s (err=0x%X) -> resetting bus\n", i2c_dev_name(dev_handle), (unsigned int)ret);
+        i2c_master_bus_reset(user_i2c_port0_handle);
     }
     i2c_bsp_unlock();
     return (ret == ESP_OK) ? 0 : 1;
@@ -140,7 +145,8 @@ uint8_t i2c_read_buff(i2c_master_dev_handle_t dev_handle, int reg, uint8_t *buf,
         ret = i2c_master_transmit_receive(dev_handle, &addr, 1, buf, len, i2c_data_pdMS_TICKS);
     }
     if (ret != ESP_OK) {
-        printf("[I2C WARN] Read failed on %s (reg=0x%02X, err=0x%X)\n", i2c_dev_name(dev_handle), reg, (unsigned int)ret);
+        printf("[I2C WARN] Read failed on %s (reg=0x%02X, err=0x%X) -> resetting bus\n", i2c_dev_name(dev_handle), reg, (unsigned int)ret);
+        i2c_master_bus_reset(user_i2c_port0_handle);
     }
     i2c_bsp_unlock();
     return (ret == ESP_OK) ? 0 : 1;
