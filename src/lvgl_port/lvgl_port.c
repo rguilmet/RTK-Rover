@@ -82,6 +82,8 @@ static lv_obj_t *t0_rec_btn_lbl     = NULL;
 // Navigation Canvas (304x210)
 static lv_obj_t *t0_nav_canvas      = NULL;
 static lv_obj_t *t0_mode_badge      = NULL;
+static lv_obj_t *t0_hdg_hud_lbl     = NULL;
+static lv_obj_t *t0_pitch_hud_lbl   = NULL;
 static lv_obj_t *t0_scale_lbl       = NULL;
 static lv_obj_t *t0_cross_h         = NULL;
 static lv_obj_t *t0_cross_v         = NULL;
@@ -776,6 +778,19 @@ void create_rover_ui(void)
     lv_obj_set_style_radius(t0_mode_badge, 4, 0);
     lv_obj_align(t0_mode_badge, LV_ALIGN_TOP_LEFT, 6, 6);
 
+    // Telemetry HUD Readout (Heading & Pitch on top-left under Tactical Grid badge)
+    t0_hdg_hud_lbl = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_hdg_hud_lbl, "Hdg: ---.--");
+    lv_obj_set_style_text_font(t0_hdg_hud_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_hdg_hud_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_align(t0_hdg_hud_lbl, LV_ALIGN_TOP_LEFT, 6, 28);
+
+    t0_pitch_hud_lbl = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_pitch_hud_lbl, "Pitch: --.-");
+    lv_obj_set_style_text_font(t0_pitch_hud_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_pitch_hud_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_align(t0_pitch_hud_lbl, LV_ALIGN_TOP_LEFT, 6, 44);
+
     t0_scale_lbl = lv_label_create(t0_nav_canvas);
     lv_label_set_text(t0_scale_lbl, "Range: 50.0 m");
     lv_obj_set_style_text_font(t0_scale_lbl, &lv_font_montserrat_12, 0);
@@ -1274,6 +1289,28 @@ void update_rover_ui(const RoverUIData_t *d)
     // Update all control buttons (Colors & Labels)
     update_all_control_buttons();
 
+    // Update Canvas Top-Left Telemetry HUD (Heading & Pitch)
+    char hud_buf[32];
+    if (t0_hdg_hud_lbl) {
+        if (d->heading_valid) {
+            snprintf(hud_buf, sizeof(hud_buf), "Hdg: %06.2f", d->true_heading_deg);
+        } else {
+            snprintf(hud_buf, sizeof(hud_buf), "Hdg: ---.--");
+        }
+        lv_label_set_text(t0_hdg_hud_lbl, hud_buf);
+    }
+
+    if (t0_pitch_hud_lbl) {
+        if (d->heading_valid) {
+            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f", d->baseline_pitch_deg);
+        } else if (fabsf(d->imu_pitch_deg) > 0.01f) {
+            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f", d->imu_pitch_deg);
+        } else {
+            snprintf(hud_buf, sizeof(hud_buf), "Pitch: --.-");
+        }
+        lv_label_set_text(t0_pitch_hud_lbl, hud_buf);
+    }
+
     if (d->has_active_target) {
         snprintf(buf, sizeof(buf), "%s (%d/%d)",
                  d->target_label, d->active_target_idx + 1, d->total_targets);
@@ -1423,18 +1460,18 @@ void update_rover_ui(const RoverUIData_t *d)
 
                 // Clean ASCII steering cues
                 if (fabsf(rel_turn) <= 3.0f) {
-                    snprintf(buf, sizeof(buf), "[OK] ON TRACK - Aimed at Pin (Hdg: %.1f deg)", d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), "[OK] ON TRACK - Aimed at Pin");
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
                 } else if (rel_turn > 0) {
-                    snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg (Hdg: %.1f deg)", rel_turn, d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg", rel_turn);
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
                 } else {
-                    snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg (Hdg: %.1f deg)", -rel_turn, d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg", -rel_turn);
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
                 }
             } else {
                 lv_obj_add_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
-                snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: Acquiring Lock...", d->bearing_to_target_deg);
+                snprintf(buf, sizeof(buf), "Brg: %.1f deg | Acquiring Heading...", d->bearing_to_target_deg);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
             }
             lv_label_set_text(t0_steer_lbl, buf);
