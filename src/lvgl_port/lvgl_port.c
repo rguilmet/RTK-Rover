@@ -804,7 +804,7 @@ void create_rover_ui(void)
     lv_obj_set_style_border_color(t0_nav_canvas, lv_color_hex(0x283B47), 0);
     lv_obj_set_style_border_width(t0_nav_canvas, 2, 0);
     lv_obj_set_scrollbar_mode(t0_nav_canvas, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_remove_flag(t0_nav_canvas, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(t0_nav_canvas, false);
     lv_obj_set_style_pad_all(t0_nav_canvas, 0, 0);
 
     // Mode badge & scale
@@ -900,7 +900,7 @@ void create_rover_ui(void)
         lv_obj_set_style_radius(t0_bc_dots[i], LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(t0_bc_dots[i], lv_color_hex(0x00E5FF), 0);
         lv_obj_set_style_border_width(t0_bc_dots[i], 0, 0);
-        lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(t0_bc_dots[i], true);
     }
 
     // Line of sight (track line)
@@ -1383,22 +1383,22 @@ void update_rover_ui(const RoverUIData_t *d)
 
             // Hide coarse grid & track line
             for (int i = 0; i < T0_GRID_H_LINES; i++) {
-                if (t0_grid_h[i]) lv_obj_add_flag(t0_grid_h[i], LV_OBJ_FLAG_HIDDEN);
+                if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
             }
             for (int i = 0; i < T0_GRID_V_LINES; i++) {
-                if (t0_grid_v[i]) lv_obj_add_flag(t0_grid_v[i], LV_OBJ_FLAG_HIDDEN);
+                if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
             }
-            lv_obj_add_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(t0_track_line, true);
 
             // Show bullseye rings
-            lv_obj_remove_flag(t0_bullseye_ring1, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_bullseye_ring2, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_bullseye_center, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_cross_h, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_cross_v, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(t0_bullseye_ring1, false);
+            lv_obj_set_hidden(t0_bullseye_ring2, false);
+            lv_obj_set_hidden(t0_bullseye_center, false);
+            lv_obj_set_hidden(t0_cross_h, false);
+            lv_obj_set_hidden(t0_cross_v, false);
 
             for (int i = 0; i < T0_BREADCRUMB_DOTS; i++) {
-                if (t0_bc_dots[i]) lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                if (t0_bc_dots[i]) lv_obj_set_hidden(t0_bc_dots[i], true);
             }
 
             // Target Pin at Center
@@ -1422,9 +1422,9 @@ void update_rover_ui(const RoverUIData_t *d)
                 arrow_pts[1].x = 152 + r_px + arrow_dx;
                 arrow_pts[1].y = 105 + r_py + arrow_dy;
                 lv_line_set_points(t0_beam_arrow, arrow_pts, 2);
-                lv_obj_remove_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(t0_beam_arrow, false);
             } else {
-                lv_obj_add_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(t0_beam_arrow, true);
             }
 
             // Lock indicator (Clean ASCII)
@@ -1449,19 +1449,19 @@ void update_rover_ui(const RoverUIData_t *d)
 
             // Show tactical background grid & track line
             for (int i = 0; i < T0_GRID_H_LINES; i++) {
-                if (t0_grid_h[i]) lv_obj_remove_flag(t0_grid_h[i], LV_OBJ_FLAG_HIDDEN);
+                if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], false);
             }
             for (int i = 0; i < T0_GRID_V_LINES; i++) {
-                if (t0_grid_v[i]) lv_obj_remove_flag(t0_grid_v[i], LV_OBJ_FLAG_HIDDEN);
+                if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], false);
             }
-            lv_obj_remove_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(t0_track_line, false);
 
             // Hide fine bullseye rings
-            lv_obj_add_flag(t0_bullseye_ring1, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(t0_bullseye_ring2, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(t0_bullseye_center, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_cross_h, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_cross_v, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(t0_bullseye_ring1, true);
+            lv_obj_set_hidden(t0_bullseye_ring2, true);
+            lv_obj_set_hidden(t0_bullseye_center, true);
+            lv_obj_set_hidden(t0_cross_h, false);
+            lv_obj_set_hidden(t0_cross_v, false);
 
             // Dynamic scaling
             float scale_m = 5.0f;
@@ -1511,7 +1511,7 @@ void update_rover_ui(const RoverUIData_t *d)
                 arrow_pts[1].x = rover_x + b_dx;
                 arrow_pts[1].y = rover_y + b_dy;
                 lv_line_set_points(t0_beam_arrow, arrow_pts, 2);
-                lv_obj_remove_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(t0_beam_arrow, false);
 
                 // Clean ASCII steering cues
                 if (fabsf(rel_turn) <= 3.0f) {
@@ -1525,7 +1525,7 @@ void update_rover_ui(const RoverUIData_t *d)
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
                 }
             } else {
-                lv_obj_add_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(t0_beam_arrow, true);
                 snprintf(buf, sizeof(buf), "Brg: %.1f deg | Acquiring Heading...", d->bearing_to_target_deg);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
             }
@@ -1555,18 +1555,18 @@ void update_rover_ui(const RoverUIData_t *d)
                         int16_t dot_y = rover_y - (int16_t)((v / scale_m) * 135.0f);
 
                         if (dot_x >= 220 && dot_y >= 174) {
-                            lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_set_hidden(t0_bc_dots[i], true);
                         } else if (dot_x >= 4 && dot_x <= 300 && dot_y >= 4 && dot_y <= 206) {
                             lv_obj_align(t0_bc_dots[i], LV_ALIGN_TOP_LEFT, dot_x - 2, dot_y - 2);
-                            lv_obj_remove_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_set_hidden(t0_bc_dots[i], false);
                         } else {
-                            lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_set_hidden(t0_bc_dots[i], true);
                         }
                     } else {
-                        lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                        lv_obj_set_hidden(t0_bc_dots[i], true);
                     }
                 } else {
-                    lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_set_hidden(t0_bc_dots[i], true);
                 }
             }
         }

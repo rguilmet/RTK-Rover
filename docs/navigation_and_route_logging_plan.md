@@ -1,8 +1,8 @@
-# RTK Rover v0.2.3 Implementation Plan: Hybrid Navigation, Wi-Fi File Portal & Field Logging
+# RTK Rover v0.2.4 Implementation Plan: Hybrid Navigation, Wi-Fi File Portal & Field Logging
 
 ## 1. Executive Summary & Updated Scope
 
-This plan defines the architecture and implementation for **RTK Rover v0.2.3**. It incorporates:
+This plan defines the architecture and implementation for **RTK Rover v0.2.4**. It incorporates:
 1. **Dual-Mode Hybrid Navigation Engine (Screen 1 / Tile 0):** Dynamic Course-Up Field Grid with Rover beam orientation and line-of-sight tracking for coarse navigation ($> 1.5\text{ m}$), auto-switching into a High-Precision Centimeter Bullseye for fine pin stakeout ($< 1.5\text{ m}$).
 2. **On-Screen Breadcrumb Trail:** RAM ring buffer tracking recent detours around obstacles.
 3. **Route File Logging:** Continuous CSV track logging to storage with Start/Stop toggle.
@@ -158,7 +158,7 @@ Per user requirements, settings that do not need live field toggling (such as `s
 Tile 4 is cleanly organized into:
 * **Prominent Header:**
   * Bold application title & active firmware version banner:
-    `RTK Rover v0.2.3 (FreeRTOS / LVGL 9)`
+    `RTK Rover v0.2.4 (FreeRTOS / LVGL 9)`
   * Instantly confirms the active firmware version without needing serial monitor access.
 * **User Preferences & Controls:**
   * `[Units: SI (m/cm) | IMP (ft/in)]` toggle.
