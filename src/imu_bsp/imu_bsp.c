@@ -47,20 +47,34 @@ void imu_init(void)
 void imu_read(float *acc, float *gyr, int16_t *temp)
 {
     static float last_acc[3] = {0.0f, 0.0f, 1.0f};
-    uint8_t status = 0;
-    // Match Waveshare 01_factory bsp_qmi8658.c: check QMI8658_STATUS0 (0x2E) first, then read 6 bytes from QMI8658_AX_L (0x35)
-    if (i2c_read_buff(imu_dev_handle, 0x2E, &status, 1) == ESP_OK && (status & 0x03)) {
-        uint8_t raw[6] = {0};
-        if (i2c_read_buff(imu_dev_handle, 0x35, raw, 6) == ESP_OK) {
-            int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
-            int16_t ay = (int16_t)(((uint16_t)raw[3] << 8) | raw[2]);
-            int16_t az = (int16_t)(((uint16_t)raw[5] << 8) | raw[4]);
+    static uint8_t fail_count = 0;
 
+    // Direct read 6 bytes from QMI8658_AX_L (0x35) without gating on STATUS0 (0x2E).
+    // QMI8658 internal shadow registers continuously update at 250Hz.
+    uint8_t raw[6] = {0};
+    if (i2c_read_buff(imu_dev_handle, 0x35, raw, 6) == 0) {
+        int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
+        int16_t ay = (int16_t)(((uint16_t)raw[3] << 8) | raw[2]);
+        int16_t az = (int16_t)(((uint16_t)raw[5] << 8) | raw[4]);
+
+        // Validate non-zero reading
+        if (ax != 0 || ay != 0 || az != 0) {
             // 4g range -> 1g = 8192 LSB
             last_acc[0] = (float)ax / 8192.0f;
             last_acc[1] = (float)ay / 8192.0f;
             last_acc[2] = (float)az / 8192.0f;
+            fail_count = 0;
+        } else {
+            fail_count++;
         }
+    } else {
+        fail_count++;
+    }
+
+    // Auto-recovery: if 5 consecutive polls fail or return 0, reinitialize QMI8658
+    if (fail_count >= 5) {
+        fail_count = 0;
+        imu_init();
     }
 
     if (acc) {

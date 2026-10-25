@@ -47,6 +47,8 @@ static lv_obj_t *hdr_units_lbl    = NULL;
 static lv_obj_t *hdr_batt_lbl     = NULL;
 static lv_obj_t *hdr_fix_badge    = NULL;
 static lv_obj_t *hdr_fix_lbl      = NULL;
+static lv_obj_t *hdr_hdg_badge    = NULL;
+static lv_obj_t *hdr_hdg_lbl      = NULL;
 static lv_obj_t *hdr_sats_acc_lbl = NULL;
 static lv_obj_t *hdr_rtcm_lbl     = NULL;
 
@@ -139,6 +141,8 @@ static lv_obj_t *t3_pose_lbl      = NULL;
 static lv_obj_t *t3_level_circle  = NULL;
 static lv_obj_t *t3_bubble_dot    = NULL;
 static lv_obj_t *t3_tilt_lbl      = NULL;
+static lv_obj_t *t3_tare_btn      = NULL;
+static lv_obj_t *t3_tare_lbl      = NULL;
 
 // =========================================================================
 // Tile 4: Settings & System Info / Hardware Diagnostics
@@ -434,6 +438,19 @@ static void update_all_control_buttons(void)
             lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
+
+    // 6. Tare / Reset Tare Button on Tile 3
+    if (t3_tare_btn && t3_tare_lbl) {
+        bool has_tare = (fabsf(current_settings.pole_tilt_tare_pitch_deg) > 0.05f ||
+                         fabsf(current_settings.pole_tilt_tare_roll_deg)  > 0.05f);
+        if (has_tare) {
+            lv_label_set_text(t3_tare_lbl, "Reset Tare (Clear Zero)");
+            lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0xD97706), 0); // Amber/Orange
+        } else {
+            lv_label_set_text(t3_tare_lbl, "Tare Pole Bracket Angle (Zero Level)");
+            lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0x2F3B4C), 0); // Blue/Slate
+        }
+    }
 }
 
 static void unit_toggle_btn_cb(lv_event_t *e)
@@ -543,7 +560,17 @@ static void wp_table_event_cb(lv_event_t *e)
 static void tare_level_btn_cb(lv_event_t *e)
 {
     (void)e;
-    trigger_tare_pole_level();
+    bool has_tare = (fabsf(current_settings.pole_tilt_tare_pitch_deg) > 0.05f ||
+                     fabsf(current_settings.pole_tilt_tare_roll_deg)  > 0.05f);
+    if (has_tare) {
+        current_settings.pole_tilt_tare_pitch_deg = 0.0f;
+        current_settings.pole_tilt_tare_roll_deg  = 0.0f;
+        mark_settings_dirty();
+        play_rover_beep(1200, 80);
+    } else {
+        trigger_tare_pole_level();
+    }
+    update_all_control_buttons();
 }
 
 static void test_com1_ver_btn_cb(lv_event_t *e)
@@ -636,7 +663,7 @@ void create_rover_ui(void)
     lv_obj_align(hdr_batt_lbl, LV_ALIGN_TOP_RIGHT, -2, 0);
 
     hdr_fix_badge = lv_obj_create(hdr);
-    lv_obj_set_size(hdr_fix_badge, 84, 20);
+    lv_obj_set_size(hdr_fix_badge, 76, 20);
     lv_obj_align(hdr_fix_badge, LV_ALIGN_BOTTOM_LEFT, 2, 0);
     lv_obj_set_style_bg_color(hdr_fix_badge, lv_palette_main(LV_PALETTE_RED), 0);
     lv_obj_set_style_border_width(hdr_fix_badge, 0, 0);
@@ -649,11 +676,25 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(hdr_fix_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(hdr_fix_lbl);
 
+    hdr_hdg_badge = lv_obj_create(hdr);
+    lv_obj_set_size(hdr_hdg_badge, 58, 20);
+    lv_obj_align(hdr_hdg_badge, LV_ALIGN_BOTTOM_LEFT, 81, 0);
+    lv_obj_set_style_bg_color(hdr_hdg_badge, lv_color_hex(0x3A3F47), 0);
+    lv_obj_set_style_border_width(hdr_hdg_badge, 0, 0);
+    lv_obj_set_style_radius(hdr_hdg_badge, 4, 0);
+    lv_obj_set_style_pad_all(hdr_hdg_badge, 0, 0);
+
+    hdr_hdg_lbl = lv_label_create(hdr_hdg_badge);
+    lv_label_set_text(hdr_hdg_lbl, "HDG --");
+    lv_obj_set_style_text_color(hdr_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(hdr_hdg_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(hdr_hdg_lbl);
+
     hdr_sats_acc_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_sats_acc_lbl, "SV:0/0 +/- --");
     lv_obj_set_style_text_color(hdr_sats_acc_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(hdr_sats_acc_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_sats_acc_lbl, LV_ALIGN_BOTTOM_MID, 8, -2);
+    lv_obj_align(hdr_sats_acc_lbl, LV_ALIGN_BOTTOM_LEFT, 143, -2);
 
     hdr_rtcm_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_rtcm_lbl, "RTCM:--");
@@ -1069,13 +1110,13 @@ void create_rover_ui(void)
     lv_obj_set_style_text_color(t3_tilt_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(t3_tilt_lbl, LV_ALIGN_TOP_MID, 0, 278);
 
-    lv_obj_t *btn_tare_lvl = lv_button_create(tile_compass);
-    lv_obj_set_size(btn_tare_lvl, 260, 38);
-    lv_obj_align(btn_tare_lvl, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_add_event_cb(btn_tare_lvl, tare_level_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_tare = lv_label_create(btn_tare_lvl);
-    lv_label_set_text(lbl_tare, "Tare Pole Bracket Angle (Zero Level)");
-    lv_obj_center(lbl_tare);
+    t3_tare_btn = lv_button_create(tile_compass);
+    lv_obj_set_size(t3_tare_btn, 260, 38);
+    lv_obj_align(t3_tare_btn, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_add_event_cb(t3_tare_btn, tare_level_btn_cb, LV_EVENT_CLICKED, NULL);
+    t3_tare_lbl = lv_label_create(t3_tare_btn);
+    lv_label_set_text(t3_tare_lbl, "Tare Pole Bracket Angle (Zero Level)");
+    lv_obj_center(t3_tare_lbl);
 
     // =====================================================================
     // TILE 4: Settings & System Info / Hardware Diagnostics
@@ -1254,6 +1295,20 @@ void update_rover_ui(const RoverUIData_t *d)
     }
     lv_label_set_text(hdr_fix_lbl, fix_str);
     lv_obj_set_style_bg_color(hdr_fix_badge, fix_col, 0);
+
+    const char *hdg_badge_str = "HDG --";
+    lv_color_t hdg_badge_col  = lv_color_hex(0x4A5568);
+    if (d->heading_valid) {
+        if (d->heading_is_fixed) {
+            hdg_badge_str = "HDG FIX";
+            hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
+        } else {
+            hdg_badge_str = "HDG FLT";
+            hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
+        }
+    }
+    if (hdr_hdg_lbl) lv_label_set_text(hdr_hdg_lbl, hdg_badge_str);
+    if (hdr_hdg_badge) lv_obj_set_style_bg_color(hdr_hdg_badge, hdg_badge_col, 0);
 
     char acc_str[24];
     nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
