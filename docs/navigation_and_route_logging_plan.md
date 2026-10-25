@@ -218,7 +218,7 @@ Tile 4 is cleanly organized into:
    * Upload an updated `waypoints.csv` via browser form; verify Tile 0 immediately loads the new waypoints without restarting.
 3. **Storage Auto-Routing & NMEA Logging Verification:**
    * Enable NMEA logging on Tile 4. Walk for 30 seconds. Turn NMEA logging OFF.
-   * Check SD card via Wi-Fi portal: verify `/nmea/nmea_YYYYMMDD_HHMMSS.log` exists and contains valid NMEA sentences (`$GNGGA`, `$UNIHEADINGA`, etc.).
+   * Check SD card via Wi-Fi portal: verify `/nmea/nmea_YYYY-MM-DD_HH-MM-SS<+/-offset>.log` (e.g. `/nmea/nmea_2026-10-25_13-43-15-240.log`) exists and contains valid NMEA sentences (`$GNGGA`, `$UNIHEADINGA`, etc.).
 4. **Hybrid Navigation & Detour Verification:**
    * Select a target waypoint $100\text{ m}$ away.
    * Verify screen is in Course-Up Grid mode, rover is at bottom, target is at top, and numbers display comma separators (e.g. `1,250.0 m`).
