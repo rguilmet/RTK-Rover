@@ -38,6 +38,11 @@ extern "C" bool route_logger_start(void)
 
     s_route_file = get_active_fs().open(s_current_filename, FILE_WRITE);
     if (!s_route_file) {
+        // Fallback to flat root filename if /routes directory is not supported
+        snprintf(s_current_filename, sizeof(s_current_filename), "/route_%s.csv", ts);
+        s_route_file = get_active_fs().open(s_current_filename, FILE_WRITE);
+    }
+    if (!s_route_file) {
         Serial.printf("[ROUTE LOG] Failed to open %s for write\n", s_current_filename);
         s_route_active = false;
         if (s_route_mux) xSemaphoreGive(s_route_mux);

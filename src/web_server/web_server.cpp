@@ -223,16 +223,30 @@ static void handleUpload() {
     }
 }
 
+static void setup_web_routes(void) {
+    server.on("/", handleRoot);
+    server.on("/set_time", handleSetTime);
+    server.on("/download", handleDownload);
+    server.on("/view", handleView);
+    server.on("/delete", handleDelete);
+    server.on("/upload", HTTP_POST, []() {
+        server.sendHeader("Location", "/");
+        server.send(303);
+    }, handleUpload);
+}
+
 extern "C" void start_wifi(void) {
     if (wifi_active) return;
     
     update_wifi_ip_label("Connecting...");
+    Serial.printf("[WIFI] Attempting connection to SSID: '%s' (configured in settings.json)...\n", current_settings.wifi_ssid);
     WiFi.mode(WIFI_STA);
     WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
     
     // Non-blocking connection task so UI stays responsive
     xTaskCreatePinnedToCore([](void* arg){
         int attempts = 0;
+        // Wait up to 10 seconds for STA connection
         while(WiFi.status() != WL_CONNECTED && attempts < 20) {
             vTaskDelay(pdMS_TO_TICKS(500));
             attempts++;
@@ -252,23 +266,27 @@ extern "C" void start_wifi(void) {
                 Serial.println("[WIFI] RTC synced via NTP!");
             }
             
-            server.on("/", handleRoot);
-            server.on("/set_time", handleSetTime);
-            server.on("/download", handleDownload);
-            server.on("/view", handleView);
-            server.on("/delete", handleDelete);
-            server.on("/upload", HTTP_POST, []() {
-                server.sendHeader("Location", "/");
-                server.send(303);
-            }, handleUpload);
-            
+            setup_web_routes();
             server.begin();
-            Serial.printf("[WIFI] Web Portal Online at http://%s/\n", s_wifi_ip);
+            Serial.printf("[WIFI] Connected to %s! Web Portal: http://%s/\n", current_settings.wifi_ssid, s_wifi_ip);
         } else {
-            wifi_active = false;
-            s_wifi_ip[0] = '\0';
-            update_wifi_ip_label("Wi-Fi Failed");
+            // STA failed or unconfigured in field: Launch local SoftAP hotspot fallback
+            Serial.printf("[WIFI] STA connection to '%s' failed. Starting SoftAP 'RTK-Rover' fallback...\n", current_settings.wifi_ssid);
+            update_wifi_ip_label("Starting AP...");
             WiFi.disconnect();
+            WiFi.mode(WIFI_AP);
+            WiFi.softAP("RTK-Rover", "12345678");
+            vTaskDelay(pdMS_TO_TICKS(150));
+            
+            IPAddress apIP = WiFi.softAPIP();
+            String ip = apIP.toString();
+            strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
+            wifi_active = true;
+            update_wifi_ip_label(s_wifi_ip);
+            
+            setup_web_routes();
+            server.begin();
+            Serial.printf("[WIFI] SoftAP Active! Connect phone to SSID 'RTK-Rover' (pwd: 12345678) -> http://%s/\n", s_wifi_ip);
         }
         vTaskDelete(NULL);
     }, "wifi_connect", 4096, NULL, 1, NULL, 0);

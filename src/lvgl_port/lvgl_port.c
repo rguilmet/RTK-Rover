@@ -94,6 +94,15 @@ static lv_obj_t *t0_target_icon     = NULL;
 static lv_obj_t *t0_rover_icon      = NULL;
 #define T0_BREADCRUMB_DOTS 16
 static lv_obj_t *t0_bc_dots[T0_BREADCRUMB_DOTS] = {0};
+#define T0_GRID_H_LINES 4
+#define T0_GRID_V_LINES 4
+static lv_obj_t *t0_grid_h[T0_GRID_H_LINES] = {0};
+static lv_obj_t *t0_grid_v[T0_GRID_V_LINES] = {0};
+
+#define COLOR_BTN_ACTIVE_GREEN  lv_color_hex(0x107C41)
+#define COLOR_BTN_INACTIVE_BLUE lv_color_hex(0x1B6CA8)
+#define COLOR_UNIT_SI_TEAL      lv_color_hex(0x0284C7)
+#define COLOR_UNIT_IMP_AMBER    lv_color_hex(0xD97706)
 
 static lv_obj_t *t0_dist_lbl        = NULL;
 static lv_obj_t *t0_steer_lbl       = NULL;
@@ -359,17 +368,78 @@ static void next_wp_btn_cb(lv_event_t *e)
     waypoint_select_next();
 }
 
+static void update_all_control_buttons(void)
+{
+    // 1. Units Button on Tile 4 & Header Badge on Header
+    if (t4_unit_btn && t4_unit_btn_lbl) {
+        if (!current_settings.use_imperial_units) {
+            lv_label_set_text(t4_unit_btn_lbl, "Units: SI (m/cm)");
+            lv_obj_set_style_bg_color(t4_unit_btn, COLOR_UNIT_SI_TEAL, 0);
+            if (hdr_units_lbl) {
+                lv_label_set_text(hdr_units_lbl, "SI");
+                lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
+            }
+        } else {
+            lv_label_set_text(t4_unit_btn_lbl, "Units: IMP (ft/in)");
+            lv_obj_set_style_bg_color(t4_unit_btn, COLOR_UNIT_IMP_AMBER, 0);
+            if (hdr_units_lbl) {
+                lv_label_set_text(hdr_units_lbl, "IMP");
+                lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_IMP_AMBER, 0);
+            }
+        }
+    }
+
+    // 2. Wi-Fi Button on Tile 4
+    if (t4_wifi_btn && t4_wifi_btn_lbl) {
+        if (is_wifi_active()) {
+            lv_label_set_text(t4_wifi_btn_lbl, "Wi-Fi: Stop");
+            lv_obj_set_style_bg_color(t4_wifi_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+        } else {
+            lv_label_set_text(t4_wifi_btn_lbl, "Wi-Fi: Start");
+            lv_obj_set_style_bg_color(t4_wifi_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+
+    // 3. NMEA Logging Button on Tile 4
+    if (t4_nmea_btn && t4_nmea_btn_lbl) {
+        if (nmea_logger_is_active()) {
+            lv_label_set_text(t4_nmea_btn_lbl, "NMEA Log: ON");
+            lv_obj_set_style_bg_color(t4_nmea_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+        } else {
+            lv_label_set_text(t4_nmea_btn_lbl, "NMEA Log: OFF");
+            lv_obj_set_style_bg_color(t4_nmea_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+
+    // 4. Route Logging Button on Tile 4
+    if (t4_route_btn && t4_route_btn_lbl) {
+        if (route_logger_is_active()) {
+            lv_label_set_text(t4_route_btn_lbl, "Route: REC");
+            lv_obj_set_style_bg_color(t4_route_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+        } else {
+            lv_label_set_text(t4_route_btn_lbl, "Route: OFF");
+            lv_obj_set_style_bg_color(t4_route_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+
+    // 5. Route REC Button on Tile 0
+    if (t0_rec_btn && t0_rec_btn_lbl) {
+        if (route_logger_is_active()) {
+            lv_label_set_text(t0_rec_btn_lbl, "REC ON");
+            lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+        } else {
+            lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
+            lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+}
+
 static void unit_toggle_btn_cb(lv_event_t *e)
 {
     (void)e;
     current_settings.use_imperial_units = !current_settings.use_imperial_units;
     mark_settings_dirty();
-    if (t4_unit_btn_lbl) {
-        lv_label_set_text(t4_unit_btn_lbl, current_settings.use_imperial_units ? "Units: IMP (ft/in)" : "Units: SI (m/cm)");
-    }
-    if (hdr_units_lbl) {
-        lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
-    }
+    update_all_control_buttons();
 }
 
 static void route_toggle_btn_cb(lv_event_t *e)
@@ -380,6 +450,7 @@ static void route_toggle_btn_cb(lv_event_t *e)
     } else {
         route_logger_start();
     }
+    update_all_control_buttons();
 }
 
 static void nmea_toggle_btn_cb(lv_event_t *e)
@@ -390,6 +461,7 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
     } else {
         nmea_logger_start();
     }
+    update_all_control_buttons();
 }
 
 static void wifi_toggle_btn_cb(lv_event_t *e)
@@ -400,12 +472,13 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
     } else {
         start_wifi();
     }
+    update_all_control_buttons();
 }
 
 void update_wifi_ip_label(const char* ip)
 {
     if (t4_wifi_status_lbl) {
-        if (ip && ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 && strcmp(ip, "Connecting...") != 0) {
+        if (ip && ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 && strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0) {
             char buf[64];
             snprintf(buf, sizeof(buf), "Portal: http://%s/", ip);
             lv_label_set_text(t4_wifi_status_lbl, buf);
@@ -415,6 +488,7 @@ void update_wifi_ip_label(const char* ip)
             lv_obj_set_style_text_color(t4_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
         }
     }
+    update_all_control_buttons();
 }
 
 static void match_target_sw_cb(lv_event_t *e)
@@ -549,7 +623,7 @@ void create_rover_ui(void)
 
     hdr_units_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_units_lbl, "SI");
-    lv_obj_set_style_text_color(hdr_units_lbl, lv_color_hex(0x00D8FF), 0);
+    lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_MID, 28, 0);
 
@@ -716,16 +790,33 @@ void create_rover_ui(void)
     lv_obj_set_style_text_color(t0_scale_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_align(t0_scale_lbl, LV_ALIGN_TOP_RIGHT, -6, 8);
 
-    // Crosshairs
+    // Tactical Background Grid Lines
+    for (int i = 0; i < T0_GRID_H_LINES; i++) {
+        t0_grid_h[i] = lv_obj_create(t0_nav_canvas);
+        lv_obj_set_size(t0_grid_h[i], 292, 1);
+        lv_obj_set_style_bg_color(t0_grid_h[i], lv_color_hex(0x1A252D), 0);
+        lv_obj_set_style_border_width(t0_grid_h[i], 0, 0);
+        lv_obj_align(t0_grid_h[i], LV_ALIGN_TOP_MID, 0, (i + 1) * 42);
+    }
+    int16_t v_positions[T0_GRID_V_LINES] = {60, 120, 184, 244};
+    for (int i = 0; i < T0_GRID_V_LINES; i++) {
+        t0_grid_v[i] = lv_obj_create(t0_nav_canvas);
+        lv_obj_set_size(t0_grid_v[i], 1, 198);
+        lv_obj_set_style_bg_color(t0_grid_v[i], lv_color_hex(0x1A252D), 0);
+        lv_obj_set_style_border_width(t0_grid_v[i], 0, 0);
+        lv_obj_align(t0_grid_v[i], LV_ALIGN_TOP_LEFT, v_positions[i], 6);
+    }
+
+    // Primary Crosshairs
     t0_cross_h = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_cross_h, 280, 1);
-    lv_obj_set_style_bg_color(t0_cross_h, lv_color_hex(0x223540), 0);
+    lv_obj_set_style_bg_color(t0_cross_h, lv_color_hex(0x283E4C), 0);
     lv_obj_set_style_border_width(t0_cross_h, 0, 0);
     lv_obj_center(t0_cross_h);
 
     t0_cross_v = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_cross_v, 1, 190);
-    lv_obj_set_style_bg_color(t0_cross_v, lv_color_hex(0x223540), 0);
+    lv_obj_set_style_bg_color(t0_cross_v, lv_color_hex(0x283E4C), 0);
     lv_obj_set_style_border_width(t0_cross_v, 0, 0);
     lv_obj_center(t0_cross_v);
 
@@ -982,7 +1073,6 @@ void create_rover_ui(void)
     lv_obj_align(t4_unit_btn, LV_ALIGN_TOP_LEFT, 8, 26);
     lv_obj_add_event_cb(t4_unit_btn, unit_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_unit_btn_lbl = lv_label_create(t4_unit_btn);
-    lv_label_set_text(t4_unit_btn_lbl, current_settings.use_imperial_units ? "Units: IMP (ft/in)" : "Units: SI (m/cm)");
     lv_obj_center(t4_unit_btn_lbl);
 
     t4_wifi_btn = lv_button_create(tile_test);
@@ -990,7 +1080,6 @@ void create_rover_ui(void)
     lv_obj_align(t4_wifi_btn, LV_ALIGN_TOP_RIGHT, -8, 26);
     lv_obj_add_event_cb(t4_wifi_btn, wifi_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_wifi_btn_lbl = lv_label_create(t4_wifi_btn);
-    lv_label_set_text(t4_wifi_btn_lbl, "Wi-Fi: Start");
     lv_obj_center(t4_wifi_btn_lbl);
 
     t4_wifi_status_lbl = lv_label_create(tile_test);
@@ -1005,7 +1094,6 @@ void create_rover_ui(void)
     lv_obj_align(t4_nmea_btn, LV_ALIGN_TOP_LEFT, 8, 80);
     lv_obj_add_event_cb(t4_nmea_btn, nmea_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_nmea_btn_lbl = lv_label_create(t4_nmea_btn);
-    lv_label_set_text(t4_nmea_btn_lbl, "NMEA Log: OFF");
     lv_obj_center(t4_nmea_btn_lbl);
 
     t4_route_btn = lv_button_create(tile_test);
@@ -1013,8 +1101,9 @@ void create_rover_ui(void)
     lv_obj_align(t4_route_btn, LV_ALIGN_TOP_RIGHT, -8, 80);
     lv_obj_add_event_cb(t4_route_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_route_btn_lbl = lv_label_create(t4_route_btn);
-    lv_label_set_text(t4_route_btn_lbl, "Route: OFF");
     lv_obj_center(t4_route_btn_lbl);
+
+    update_all_control_buttons();
 
     t4_storage_status_lbl = lv_label_create(tile_test);
     lv_obj_set_width(t4_storage_status_lbl, 304);
@@ -1122,7 +1211,6 @@ void update_rover_ui(const RoverUIData_t *d)
              current_settings.timezone_label);
     lv_label_set_text(hdr_datetime_lbl, buf);
 
-    lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
 
     snprintf(buf, sizeof(buf), "%u%%%s %.2fV",
              d->battery_percent,
@@ -1179,14 +1267,8 @@ void update_rover_ui(const RoverUIData_t *d)
     // Push position into breadcrumb buffer
     nav_breadcrumb_push(d->tip_lat, d->tip_lon);
 
-    // Route REC button status
-    if (route_logger_is_active()) {
-        lv_label_set_text(t0_rec_btn_lbl, "● REC");
-        lv_obj_set_style_bg_color(t0_rec_btn, lv_palette_main(LV_PALETTE_RED), 0);
-    } else {
-        lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
-        lv_obj_set_style_bg_color(t0_rec_btn, lv_color_hex(0x2A3B45), 0);
-    }
+    // Update all control buttons (Colors & Labels)
+    update_all_control_buttons();
 
     if (d->has_active_target) {
         snprintf(buf, sizeof(buf), "%s (%d/%d)",
@@ -1203,18 +1285,27 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x00AA55), 0);
             lv_label_set_text(t0_scale_lbl, "Bullseye: 1.0 m");
 
+            // Hide coarse grid & track line
+            for (int i = 0; i < T0_GRID_H_LINES; i++) {
+                if (t0_grid_h[i]) lv_obj_add_flag(t0_grid_h[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            for (int i = 0; i < T0_GRID_V_LINES; i++) {
+                if (t0_grid_v[i]) lv_obj_add_flag(t0_grid_v[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            lv_obj_add_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
+
+            // Show bullseye rings
             lv_obj_remove_flag(t0_bullseye_ring1, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_bullseye_ring2, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_bullseye_center, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_cross_h, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_cross_v, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
 
             for (int i = 0; i < T0_BREADCRUMB_DOTS; i++) {
                 if (t0_bc_dots[i]) lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
             }
 
-            // Target Pin is at Canvas Center
+            // Target Pin at Center
             lv_obj_align(t0_target_icon, LV_ALIGN_CENTER, 0, 0);
 
             // Rover Pole Tip moves relative to target center (70 px = 1.0m)
@@ -1224,7 +1315,7 @@ void update_rover_ui(const RoverUIData_t *d)
             if (r_py > 80) r_py = 80; else if (r_py < -80) r_py = -80;
             lv_obj_align(t0_rover_icon, LV_ALIGN_CENTER, r_px, r_py);
 
-            // Antenna beam arrow protruding from rover icon
+            // Antenna beam vector
             if (d->heading_valid) {
                 float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
                 int16_t arrow_dx = (int16_t)(22.0f * sinf(hdg_rad));
@@ -1240,11 +1331,11 @@ void update_rover_ui(const RoverUIData_t *d)
                 lv_obj_add_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
             }
 
-            // Lock ring & status
+            // Lock indicator (Clean ASCII)
             if (d->distance_to_target_m < 0.02) {
                 lv_obj_set_style_bg_color(t0_bullseye_center, lv_color_hex(0x00FF00), 0);
                 lv_obj_set_style_border_color(t0_bullseye_center, lv_color_hex(0xFFFFFF), 0);
-                snprintf(buf, sizeof(buf), "PIN ACQUIRED! (Acc: %.1f cm)", d->h_acc_m * 100.0f);
+                snprintf(buf, sizeof(buf), "[OK] PIN ACQUIRED! (Acc: %.1f cm)", d->h_acc_m * 100.0f);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF00), 0);
             } else {
                 lv_obj_set_style_bg_color(t0_bullseye_center, lv_color_hex(0xFF0055), 0);
@@ -1255,19 +1346,28 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_label_set_text(t0_steer_lbl, buf);
         } else {
             // -------------------------------------------------------------
-            // Coarse Tactical Grid Mode (> 1.5 m): Course-Up Dynamic Canvas
+            // Coarse Tactical Grid Mode (> 1.5 m): Course-Up Tactical Canvas
             // -------------------------------------------------------------
             lv_label_set_text(t0_mode_badge, "TACTICAL GRID");
             lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x0088CC), 0);
 
+            // Show tactical background grid & track line
+            for (int i = 0; i < T0_GRID_H_LINES; i++) {
+                if (t0_grid_h[i]) lv_obj_remove_flag(t0_grid_h[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            for (int i = 0; i < T0_GRID_V_LINES; i++) {
+                if (t0_grid_v[i]) lv_obj_remove_flag(t0_grid_v[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            lv_obj_remove_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
+
+            // Hide fine bullseye rings
             lv_obj_add_flag(t0_bullseye_ring1, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(t0_bullseye_ring2, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(t0_bullseye_center, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_cross_h, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(t0_cross_v, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(t0_track_line, LV_OBJ_FLAG_HIDDEN);
 
-            // Dynamic scaling based on distance
+            // Dynamic scaling
             float scale_m = 5.0f;
             if (d->distance_to_target_m > 250.0) scale_m = 500.0f;
             else if (d->distance_to_target_m > 100.0) scale_m = 250.0f;
@@ -1317,20 +1417,20 @@ void update_rover_ui(const RoverUIData_t *d)
                 lv_line_set_points(t0_beam_arrow, arrow_pts, 2);
                 lv_obj_remove_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
 
-                // Steering cue
+                // Clean ASCII steering cues
                 if (fabsf(rel_turn) <= 3.0f) {
-                    snprintf(buf, sizeof(buf), "✔ ON TRACK — Beam Aimed at Pin (Hdg: %.1f°)", d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), "[OK] ON TRACK - Aimed at Pin (Hdg: %.1f deg)", d->true_heading_deg);
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
                 } else if (rel_turn > 0) {
-                    snprintf(buf, sizeof(buf), "⮞ Turn Right %.0f° (Hdg: %.1f°)", rel_turn, d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg (Hdg: %.1f deg)", rel_turn, d->true_heading_deg);
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
                 } else {
-                    snprintf(buf, sizeof(buf), "⮜ Turn Left %.0f° (Hdg: %.1f°)", -rel_turn, d->true_heading_deg);
+                    snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg (Hdg: %.1f deg)", -rel_turn, d->true_heading_deg);
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
                 }
             } else {
                 lv_obj_add_flag(t0_beam_arrow, LV_OBJ_FLAG_HIDDEN);
-                snprintf(buf, sizeof(buf), "Brg: %.1f° | Hdg: Acquiring Lock...", d->bearing_to_target_deg);
+                snprintf(buf, sizeof(buf), "Brg: %.1f deg | Hdg: Acquiring Lock...", d->bearing_to_target_deg);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
             }
             lv_label_set_text(t0_steer_lbl, buf);
@@ -1431,7 +1531,19 @@ void update_rover_ui(const RoverUIData_t *d)
              d->pole_bubble_x_deg, d->pole_bubble_y_deg);
     lv_label_set_text(t3_tilt_lbl, buf);
 
-    // 5. Update Tile 4: Hardware Test Modes
+    // 5. Update Tile 4: Settings & System Info Status
+    if (t4_storage_status_lbl) {
+        extern bool sd_card_mounted;
+        if (sd_card_mounted) {
+            lv_label_set_text(t4_storage_status_lbl, "Storage: MicroSD Card Ready (Primary)");
+            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x00FF88), 0);
+        } else {
+            lv_label_set_text(t4_storage_status_lbl, "Storage: FFat Internal Flash (Fallback)");
+            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0xFFA500), 0);
+        }
+    }
+
+    // 6. Update Tile 4: Hardware Diagnostics
     snprintf(buf, sizeof(buf),
              "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
              d->um982_stats.com1_test_passed ? "PASS" : "WAIT",

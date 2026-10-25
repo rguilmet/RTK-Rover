@@ -42,6 +42,11 @@ extern "C" bool nmea_logger_start(void)
 
     s_nmea_file = get_active_fs().open(s_nmea_filename, FILE_WRITE);
     if (!s_nmea_file) {
+        // Fallback to flat root filename if /nmea directory is not supported
+        snprintf(s_nmea_filename, sizeof(s_nmea_filename), "/nmea_%s.log", ts);
+        s_nmea_file = get_active_fs().open(s_nmea_filename, FILE_WRITE);
+    }
+    if (!s_nmea_file) {
         Serial.printf("[NMEA LOG] Failed to open %s for write\n", s_nmea_filename);
         s_nmea_active = false;
         if (s_nmea_mux) xSemaphoreGive(s_nmea_mux);
