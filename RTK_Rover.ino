@@ -436,6 +436,14 @@ void setup()
 
 void loop()
 {
+    // Process active Web Portal requests (File manager, downloads, uploads)
+    handle_wifi_server();
+
+    // Flush pending raw NMEA sentences to active storage medium
+    if (nmea_logger_is_active()) {
+        nmea_logger_flush();
+    }
+
     // =====================================================================
     // Physical BOOT Button (GPIO 0) State Machine:
     // - Short-Press (< 1.2s release): Log Waypoint ONLY when on Tile 2 (col == 1)

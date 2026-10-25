@@ -102,9 +102,49 @@ extern "C" void load_settings(void) {
         if (!doc["brightness"].isNull()) current_settings.brightness = doc["brightness"];
         if (!doc["volume"].isNull()) current_settings.volume = doc["volume"];
         if (!doc["is_muted"].isNull()) current_settings.is_muted = doc["is_muted"];
-        if (!doc["wifi_ssid"].isNull()) strncpy(current_settings.wifi_ssid, doc["wifi_ssid"], sizeof(current_settings.wifi_ssid) - 1);
-        if (!doc["wifi_password"].isNull()) strncpy(current_settings.wifi_password, doc["wifi_password"], sizeof(current_settings.wifi_password) - 1);
+        // Robust WiFi SSID loading with trim and key aliases
+        const char *raw_ssid = NULL;
+        if (!doc["wifi_ssid"].isNull()) raw_ssid = doc["wifi_ssid"];
+        else if (!doc["ssid"].isNull()) raw_ssid = doc["ssid"];
+        else if (!doc["WIFI_SSID"].isNull()) raw_ssid = doc["WIFI_SSID"];
+        else if (!doc["SSID"].isNull()) raw_ssid = doc["SSID"];
+
+        if (raw_ssid) {
+            while (*raw_ssid == ' ' || *raw_ssid == '\t' || *raw_ssid == '\r' || *raw_ssid == '\n') raw_ssid++;
+            strncpy(current_settings.wifi_ssid, raw_ssid, sizeof(current_settings.wifi_ssid) - 1);
+            current_settings.wifi_ssid[sizeof(current_settings.wifi_ssid) - 1] = '\0';
+            int len = strlen(current_settings.wifi_ssid);
+            while (len > 0 && (current_settings.wifi_ssid[len - 1] == ' ' || current_settings.wifi_ssid[len - 1] == '\r' || current_settings.wifi_ssid[len - 1] == '\n' || current_settings.wifi_ssid[len - 1] == '\t')) {
+                current_settings.wifi_ssid[--len] = '\0';
+            }
+        }
+
+        // Robust WiFi password loading with trim and key aliases
+        const char *raw_pass = NULL;
+        if (!doc["wifi_password"].isNull()) raw_pass = doc["wifi_password"];
+        else if (!doc["password"].isNull()) raw_pass = doc["password"];
+        else if (!doc["wifi_pass"].isNull()) raw_pass = doc["wifi_pass"];
+        else if (!doc["WIFI_PASSWORD"].isNull()) raw_pass = doc["WIFI_PASSWORD"];
+        else if (!doc["PASSWORD"].isNull()) raw_pass = doc["PASSWORD"];
+
+        if (raw_pass) {
+            while (*raw_pass == ' ' || *raw_pass == '\t' || *raw_pass == '\r' || *raw_pass == '\n') raw_pass++;
+            strncpy(current_settings.wifi_password, raw_pass, sizeof(current_settings.wifi_password) - 1);
+            current_settings.wifi_password[sizeof(current_settings.wifi_password) - 1] = '\0';
+            int len = strlen(current_settings.wifi_password);
+            while (len > 0 && (current_settings.wifi_password[len - 1] == ' ' || current_settings.wifi_password[len - 1] == '\r' || current_settings.wifi_password[len - 1] == '\n' || current_settings.wifi_password[len - 1] == '\t')) {
+                current_settings.wifi_password[--len] = '\0';
+            }
+        }
+
+        Serial.printf("[SETTINGS] WiFi Config: SSID='%s' (len=%d), Pass len=%d\n",
+                      current_settings.wifi_ssid,
+                      (int)strlen(current_settings.wifi_ssid),
+                      (int)strlen(current_settings.wifi_password));
+
         if (!doc["enable_serial_logging"].isNull()) current_settings.enable_serial_logging = doc["enable_serial_logging"];
+    } else {
+        Serial.printf("[SETTINGS] Deserialization error in /settings.json: %s\n", error.c_str());
     }
 }
 

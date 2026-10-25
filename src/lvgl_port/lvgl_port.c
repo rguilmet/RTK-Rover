@@ -1072,19 +1072,19 @@ void create_rover_ui(void)
     lv_obj_align(t4_title, LV_ALIGN_TOP_MID, 0, 4);
 
     // Section 1: User Preferences & Controls
-    t4_unit_btn = lv_button_create(tile_test);
-    lv_obj_set_size(t4_unit_btn, 145, 32);
-    lv_obj_align(t4_unit_btn, LV_ALIGN_TOP_LEFT, 8, 26);
-    lv_obj_add_event_cb(t4_unit_btn, unit_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
-    t4_unit_btn_lbl = lv_label_create(t4_unit_btn);
-    lv_obj_center(t4_unit_btn_lbl);
-
     t4_wifi_btn = lv_button_create(tile_test);
     lv_obj_set_size(t4_wifi_btn, 145, 32);
-    lv_obj_align(t4_wifi_btn, LV_ALIGN_TOP_RIGHT, -8, 26);
+    lv_obj_align(t4_wifi_btn, LV_ALIGN_TOP_LEFT, 8, 26);
     lv_obj_add_event_cb(t4_wifi_btn, wifi_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_wifi_btn_lbl = lv_label_create(t4_wifi_btn);
     lv_obj_center(t4_wifi_btn_lbl);
+
+    t4_unit_btn = lv_button_create(tile_test);
+    lv_obj_set_size(t4_unit_btn, 145, 32);
+    lv_obj_align(t4_unit_btn, LV_ALIGN_TOP_RIGHT, -8, 26);
+    lv_obj_add_event_cb(t4_unit_btn, unit_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    t4_unit_btn_lbl = lv_label_create(t4_unit_btn);
+    lv_obj_center(t4_unit_btn_lbl);
 
     t4_wifi_status_lbl = lv_label_create(tile_test);
     lv_obj_set_width(t4_wifi_status_lbl, 304);

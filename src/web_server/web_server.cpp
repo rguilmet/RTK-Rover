@@ -239,18 +239,45 @@ extern "C" void start_wifi(void) {
     if (wifi_active) return;
     
     update_wifi_ip_label("Connecting...");
-    Serial.printf("[WIFI] Attempting connection to SSID: '%s' (configured in settings.json)...\n", current_settings.wifi_ssid);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+    Serial.printf("[WIFI] Attempting connection to SSID: '%s' (password len=%d)...\n",
+                  current_settings.wifi_ssid, (int)strlen(current_settings.wifi_password));
     
     // Non-blocking connection task so UI stays responsive
     xTaskCreatePinnedToCore([](void* arg){
+        WiFi.persistent(false);
+        WiFi.disconnect(true);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        WiFi.mode(WIFI_STA);
+        WiFi.setSleep(false);
+        WiFi.setAutoReconnect(true);
+        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+
         int attempts = 0;
-        // Wait up to 10 seconds for STA connection
-        while(WiFi.status() != WL_CONNECTED && attempts < 20) {
+        const int max_attempts = 50; // 25 seconds timeout (50 * 500ms)
+        wl_status_t last_status = WL_IDLE_STATUS;
+
+        while (WiFi.status() != WL_CONNECTED && attempts < max_attempts) {
             vTaskDelay(pdMS_TO_TICKS(500));
             attempts++;
+            wl_status_t cur_status = WiFi.status();
+            if (cur_status != last_status || (attempts % 4 == 0)) {
+                last_status = cur_status;
+                const char* st_name = (cur_status == WL_IDLE_STATUS)     ? "IDLE" :
+                                      (cur_status == WL_NO_SSID_AVAIL)   ? "NO_SSID_AVAIL" :
+                                      (cur_status == WL_SCAN_COMPLETED)  ? "SCAN_COMPLETED" :
+                                      (cur_status == WL_CONNECTED)       ? "CONNECTED" :
+                                      (cur_status == WL_CONNECT_FAILED)  ? "CONNECT_FAILED" :
+                                      (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
+                                      (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" : "UNKNOWN";
+                Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
+                              st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
+                char prog[32];
+                snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
+                update_wifi_ip_label(prog);
+            }
         }
+
         if (WiFi.status() == WL_CONNECTED) {
             wifi_active = true;
             String ip = WiFi.localIP().toString();
@@ -268,10 +295,11 @@ extern "C" void start_wifi(void) {
             
             setup_web_routes();
             server.begin();
-            Serial.printf("[WIFI] Connected to %s! Web Portal: http://%s/\n", current_settings.wifi_ssid, s_wifi_ip);
+            Serial.printf("[WIFI] Connected to '%s'! Web Portal: http://%s/\n", current_settings.wifi_ssid, s_wifi_ip);
         } else {
             // STA failed or unconfigured in field: Launch local SoftAP hotspot fallback
-            Serial.printf("[WIFI] STA connection to '%s' failed. Starting SoftAP 'RTK-Rover' fallback...\n", current_settings.wifi_ssid);
+            Serial.printf("[WIFI] STA connection to '%s' failed (Status: %d). Starting SoftAP 'RTK-Rover' fallback...\n",
+                          current_settings.wifi_ssid, (int)WiFi.status());
             update_wifi_ip_label("Starting AP...");
             WiFi.disconnect();
             WiFi.mode(WIFI_AP);

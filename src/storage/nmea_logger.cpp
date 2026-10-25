@@ -63,11 +63,31 @@ extern "C" bool nmea_logger_start(void)
     return true;
 }
 
+static void nmea_logger_flush_locked(void)
+{
+    if (s_nmea_file && s_ring_head != s_ring_tail) {
+        uint8_t write_buf[1024];
+        while (s_ring_tail != s_ring_head) {
+            size_t bytes_to_write = 0;
+            while (s_ring_tail != s_ring_head && bytes_to_write < sizeof(write_buf)) {
+                write_buf[bytes_to_write++] = s_ring_buf[s_ring_tail];
+                s_ring_tail = (s_ring_tail + 1) % NMEA_RING_BUF_SIZE;
+            }
+
+            if (bytes_to_write > 0) {
+                s_nmea_file.write(write_buf, bytes_to_write);
+                s_bytes_logged += bytes_to_write;
+            }
+        }
+        s_nmea_file.flush();
+    }
+}
+
 extern "C" void nmea_logger_stop(void)
 {
     if (s_nmea_mux) xSemaphoreTake(s_nmea_mux, portMAX_DELAY);
     if (s_nmea_active) {
-        nmea_logger_flush();
+        nmea_logger_flush_locked();
         if (s_nmea_file) {
             s_nmea_file.flush();
             s_nmea_file.close();
@@ -97,7 +117,7 @@ extern "C" void nmea_logger_feed(const uint8_t *data, size_t len)
 {
     if (!s_nmea_active || !data || len == 0) return;
 
-    if (s_nmea_mux && xSemaphoreTake(s_nmea_mux, 0) == pdTRUE) {
+    if (s_nmea_mux && xSemaphoreTake(s_nmea_mux, pdMS_TO_TICKS(5)) == pdTRUE) {
         for (size_t i = 0; i < len; i++) {
             size_t next_head = (s_ring_head + 1) % NMEA_RING_BUF_SIZE;
             if (next_head != s_ring_tail) {
@@ -116,21 +136,8 @@ extern "C" void nmea_logger_flush(void)
 {
     if (!s_nmea_active) return;
 
-    if (s_nmea_mux && xSemaphoreTake(s_nmea_mux, 0) == pdTRUE) {
-        if (s_nmea_file && s_ring_head != s_ring_tail) {
-            uint8_t write_buf[512];
-            size_t bytes_to_write = 0;
-
-            while (s_ring_tail != s_ring_head && bytes_to_write < sizeof(write_buf)) {
-                write_buf[bytes_to_write++] = s_ring_buf[s_ring_tail];
-                s_ring_tail = (s_ring_tail + 1) % NMEA_RING_BUF_SIZE;
-            }
-
-            if (bytes_to_write > 0) {
-                s_nmea_file.write(write_buf, bytes_to_write);
-                s_bytes_logged += bytes_to_write;
-            }
-        }
+    if (s_nmea_mux && xSemaphoreTake(s_nmea_mux, pdMS_TO_TICKS(5)) == pdTRUE) {
+        nmea_logger_flush_locked();
         xSemaphoreGive(s_nmea_mux);
     }
 }
