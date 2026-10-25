@@ -104,6 +104,54 @@ extern "C" void nav_compute_target_guidance(double tip_lat,
     if (d_east_m_out)       *d_east_m_out       = (float)d_east;
 }
 
+extern "C" void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return;
+
+    bool negative = (val < 0.0);
+    double abs_val = fabs(val);
+
+    double scale = pow(10.0, decimals);
+    double rounded = round(abs_val * scale) / scale;
+    uint64_t int_part = (uint64_t)rounded;
+    double frac_part = rounded - (double)int_part;
+
+    char int_str[32];
+    snprintf(int_str, sizeof(int_str), "%llu", (unsigned long long)int_part);
+    int int_len = strlen(int_str);
+
+    char formatted_int[48];
+    int f_idx = 0;
+    for (int i = 0; i < int_len; i++) {
+        if (i > 0 && ((int_len - i) % 3) == 0) {
+            formatted_int[f_idx++] = ',';
+        }
+        formatted_int[f_idx++] = int_str[i];
+    }
+    formatted_int[f_idx] = '\0';
+
+    if (decimals > 0) {
+        char fmt[16];
+        snprintf(fmt, sizeof(fmt), "%%.%df", decimals);
+        char tmp_frac[32];
+        snprintf(tmp_frac, sizeof(tmp_frac), fmt, frac_part);
+        const char *dot_frac = strchr(tmp_frac, '.');
+        if (!dot_frac) dot_frac = ".0";
+
+        if (unit && unit[0]) {
+            snprintf(buf, buf_len, "%s%s%s %s", negative ? "-" : "", formatted_int, dot_frac, unit);
+        } else {
+            snprintf(buf, buf_len, "%s%s%s", negative ? "-" : "", formatted_int, dot_frac);
+        }
+    } else {
+        if (unit && unit[0]) {
+            snprintf(buf, buf_len, "%s%s %s", negative ? "-" : "", formatted_int, unit);
+        } else {
+            snprintf(buf, buf_len, "%s%s", negative ? "-" : "", formatted_int);
+        }
+    }
+}
+
 extern "C" void nav_format_distance(double meters, char *buf, int buf_len)
 {
     if (!current_settings.use_imperial_units) {
@@ -111,16 +159,20 @@ extern "C" void nav_format_distance(double meters, char *buf, int buf_len)
             snprintf(buf, buf_len, "%.1f cm", meters * 100.0);
         } else if (fabs(meters) < 100.0) {
             snprintf(buf, buf_len, "%.2f m", meters);
-        } else {
+        } else if (fabs(meters) < 1000.0) {
             snprintf(buf, buf_len, "%.1f m", meters);
+        } else {
+            nav_format_commas(meters, 1, "m", buf, (size_t)buf_len);
         }
     } else {
         double feet = meters * METERS_TO_FEET;
         if (fabs(meters) < 2.0) {
             double inches = feet * 12.0;
             snprintf(buf, buf_len, "%.1f in", inches);
-        } else {
+        } else if (fabs(feet) < 1000.0) {
             snprintf(buf, buf_len, "%.2f ft", feet);
+        } else {
+            nav_format_commas(feet, 2, "ft", buf, (size_t)buf_len);
         }
     }
 }
@@ -128,9 +180,18 @@ extern "C" void nav_format_distance(double meters, char *buf, int buf_len)
 extern "C" void nav_format_height(double meters, char *buf, int buf_len)
 {
     if (!current_settings.use_imperial_units) {
-        snprintf(buf, buf_len, "%.3f m", meters);
+        if (fabs(meters) < 1000.0) {
+            snprintf(buf, buf_len, "%.3f m", meters);
+        } else {
+            nav_format_commas(meters, 3, "m", buf, (size_t)buf_len);
+        }
     } else {
-        snprintf(buf, buf_len, "%.2f ft", meters * METERS_TO_FEET);
+        double feet = meters * METERS_TO_FEET;
+        if (fabs(feet) < 1000.0) {
+            snprintf(buf, buf_len, "%.2f ft", feet);
+        } else {
+            nav_format_commas(feet, 2, "ft", buf, (size_t)buf_len);
+        }
     }
 }
 
@@ -139,15 +200,90 @@ extern "C" void nav_format_offset(float meters, char *buf, int buf_len)
     if (!current_settings.use_imperial_units) {
         if (fabsf(meters) < 2.0f) {
             snprintf(buf, buf_len, "%+.1f cm", meters * 100.0f);
-        } else {
+        } else if (fabsf(meters) < 1000.0f) {
             snprintf(buf, buf_len, "%+.2f m", meters);
+        } else {
+            char tmp[32];
+            nav_format_commas((double)meters, 2, "m", tmp, sizeof(tmp));
+            snprintf(buf, buf_len, "%s%s", (meters >= 0.0f) ? "+" : "", tmp);
         }
     } else {
         float feet = meters * (float)METERS_TO_FEET;
         if (fabsf(meters) < 2.0f) {
             snprintf(buf, buf_len, "%+.1f in", feet * 12.0f);
-        } else {
+        } else if (fabsf(feet) < 1000.0f) {
             snprintf(buf, buf_len, "%+.2f ft", feet);
+        } else {
+            char tmp[32];
+            nav_format_commas((double)feet, 2, "ft", tmp, sizeof(tmp));
+            snprintf(buf, buf_len, "%s%s", (feet >= 0.0f) ? "+" : "", tmp);
         }
     }
+}
+
+// -----------------------------------------------------------------------------
+// Breadcrumb Ring Buffer
+// -----------------------------------------------------------------------------
+static NavBreadcrumb_t s_breadcrumbs[NAV_BREADCRUMB_CAPACITY];
+static int s_bc_head = 0;
+static int s_bc_count = 0;
+static double s_bc_last_lat = 0.0;
+static double s_bc_last_lon = 0.0;
+static bool   s_bc_has_last = false;
+
+extern "C" void nav_breadcrumb_reset(void)
+{
+    s_bc_head = 0;
+    s_bc_count = 0;
+    s_bc_has_last = false;
+}
+
+extern "C" bool nav_breadcrumb_push(double tip_lat, double tip_lon)
+{
+    if (fabs(tip_lat) < 0.0001 && fabs(tip_lon) < 0.0001) return false;
+
+    if (s_bc_has_last) {
+        // Compute displacement from last recorded breadcrumb point
+        double lat1 = s_bc_last_lat * DEG_TO_RAD;
+        double lon1 = s_bc_last_lon * DEG_TO_RAD;
+        double lat2 = tip_lat * DEG_TO_RAD;
+        double lon2 = tip_lon * DEG_TO_RAD;
+        double r_m = WGS84_A, r_n = WGS84_A;
+        wgs84_radii((lat1 + lat2) * 0.5, &r_m, &r_n);
+        double dn = (lat2 - lat1) * r_m;
+        double de = (lon2 - lon1) * r_n * cos((lat1 + lat2) * 0.5);
+        double dist = sqrt(dn * dn + de * de);
+
+        // Distance threshold: require > 0.5 meters of movement
+        if (dist < 0.5) {
+            return false;
+        }
+    }
+
+    s_breadcrumbs[s_bc_head].lat = tip_lat;
+    s_breadcrumbs[s_bc_head].lon = tip_lon;
+    s_bc_head = (s_bc_head + 1) % NAV_BREADCRUMB_CAPACITY;
+    if (s_bc_count < NAV_BREADCRUMB_CAPACITY) {
+        s_bc_count++;
+    }
+
+    s_bc_last_lat = tip_lat;
+    s_bc_last_lon = tip_lon;
+    s_bc_has_last = true;
+    return true;
+}
+
+extern "C" int nav_breadcrumb_get_count(void)
+{
+    return s_bc_count;
+}
+
+extern "C" bool nav_breadcrumb_get_point(int index, NavBreadcrumb_t *pt_out)
+{
+    if (!pt_out || index < 0 || index >= s_bc_count) return false;
+    // index 0 is oldest, index count-1 is newest
+    int start_idx = (s_bc_count < NAV_BREADCRUMB_CAPACITY) ? 0 : s_bc_head;
+    int actual_idx = (start_idx + index) % NAV_BREADCRUMB_CAPACITY;
+    *pt_out = s_breadcrumbs[actual_idx];
+    return true;
 }

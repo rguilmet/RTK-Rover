@@ -1,6 +1,7 @@
 #include "um982_driver.h"
 #include "../../user_config.h"
 #include "../settings_manager/settings_manager.h"
+#include "../storage/nmea_logger.h"
 #include <Arduino.h>
 #include <string.h>
 #include <stdlib.h>
@@ -423,6 +424,8 @@ extern "C" void um982_poll_com1(void)
         if (c == '\r' || c == '\n') {
             if (com1_line_pos > 0) {
                 com1_line_buf[com1_line_pos] = '\0';
+                nmea_logger_feed((const uint8_t*)com1_line_buf, com1_line_pos);
+                nmea_logger_feed((const uint8_t*)"\r\n", 2);
                 process_com1_line(com1_line_buf);
                 com1_line_pos = 0;
             }

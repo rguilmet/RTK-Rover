@@ -2,6 +2,9 @@
 #define NAV_ENGINE_H
 
 #include "../rover_api.h"
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,9 +36,23 @@ void nav_compute_target_guidance(double tip_lat,
                                  float *d_east_m_out);
 
 // Unit Formatting Helpers (SI vs Imperial based on current_settings.use_imperial_units)
+void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len);
 void nav_format_distance(double meters, char *buf, int buf_len);
 void nav_format_height(double meters, char *buf, int buf_len);
 void nav_format_offset(float meters, char *buf, int buf_len);
+
+// 64-point distance-filtered breadcrumb ring buffer for on-screen coarse navigation
+#define NAV_BREADCRUMB_CAPACITY 64
+
+typedef struct {
+    double lat;
+    double lon;
+} NavBreadcrumb_t;
+
+void nav_breadcrumb_reset(void);
+bool nav_breadcrumb_push(double tip_lat, double tip_lon);
+int  nav_breadcrumb_get_count(void);
+bool nav_breadcrumb_get_point(int index, NavBreadcrumb_t *pt_out);
 
 #ifdef __cplusplus
 }

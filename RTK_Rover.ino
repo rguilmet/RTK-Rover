@@ -22,6 +22,9 @@
 #include "src/screenshot/screenshot.h"
 #include "src/codec_board/codec_board.h"
 #include "src/codec_board/codec_init.h"
+#include "src/storage/route_logger.h"
+#include "src/storage/nmea_logger.h"
+#include "src/web_server/web_server.h"
 
 extern esp_io_expander_handle_t io_expander;
 bool sd_card_mounted = false;
@@ -295,6 +298,7 @@ void task_display_and_audio(void *pvParameters)
             ui_state.is_charging       = pwr.is_charging;
             ui_state.vbus_present      = pwr.vbus_good;
             update_rover_ui(&ui_state);
+            route_logger_log_point(&ui_state);
         }
     }
 }
