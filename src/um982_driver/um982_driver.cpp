@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 static RoverUIData_t   gnss_state = {};
 static Um982PortStats_t port_stats = {};
@@ -20,7 +21,6 @@ static uint8_t         pending_rtc_hh       = 0;
 static uint8_t         pending_rtc_mm       = 0;
 static uint8_t         pending_rtc_ss       = 0;
 
-// Per-constellation satellites-in-view counters from $xxGSV (GP, GL, GA, GB/BD, GQ)
 static uint8_t  gsv_sats_gp = 0;
 static uint8_t  gsv_sats_gl = 0;
 static uint8_t  gsv_sats_ga = 0;
@@ -47,6 +47,7 @@ static double parse_nmea_deg_min(const char *str, const char *hemisphere)
 
 static int split_csv_fields(char *line, char **fields, int max_fields)
 {
+    if (!line || max_fields == 0) return 0;
     int count = 0;
     char *p = line;
     fields[count++] = p;
@@ -54,8 +55,8 @@ static int split_csv_fields(char *line, char **fields, int max_fields)
         if (*p == ',' || *p == '*') {
             char sep = *p;
             *p = '\0';
-            if (sep == '*') break;
             fields[count++] = p + 1;
+            if (sep == '*') break;
         }
         p++;
     }
@@ -64,17 +65,16 @@ static int split_csv_fields(char *line, char **fields, int max_fields)
 
 static void handle_gga_sentence(char *line)
 {
-    // $GNGGA,hhmmss.ss,lat,N,lon,E,qual,numSV,HDOP,alt,M,sep,M,diffAge,diffSta*cs
     char *f[16] = {0};
     int n = split_csv_fields(line, f, 16);
     if (n < 14) return;
 
-    int qual = atoi(f[6]);
+    int qual = f[6] ? atoi(f[6]) : 0;
     gnss_state.fix_type = (GnssFixType_t)qual;
-    gnss_state.num_sats = (uint8_t)atoi(f[7]);
-    if (f[8][0]) gnss_state.hdop = (float)atof(f[8]);
+    gnss_state.num_sats = f[7] ? (uint8_t)atoi(f[7]) : 0;
+    if (f[8] && f[8][0]) gnss_state.hdop = (float)atof(f[8]);
 
-    if (qual > 0 && f[2][0] && f[4][0]) {
+    if (qual > 0 && f[2] && f[2][0] && f[4] && f[4][0]) {
         gnss_state.raw_lat   = parse_nmea_deg_min(f[2], f[3]);
         gnss_state.raw_lon   = parse_nmea_deg_min(f[4], f[5]);
         gnss_state.raw_alt_m = strtod(f[9], NULL);
@@ -84,7 +84,6 @@ static void handle_gga_sentence(char *line)
         gnss_state.diff_age_s = (float)atof(f[13]);
     }
 
-    // Estimate horizontal accuracy if GST has not arrived yet
     if (gnss_state.h_acc_m <= 0.0001f || qual != GNSS_FIX_RTK_FIXED) {
         if (qual == GNSS_FIX_RTK_FIXED)      gnss_state.h_acc_m = 0.014f;
         else if (qual == GNSS_FIX_RTK_FLOAT) gnss_state.h_acc_m = 0.180f;
@@ -96,13 +95,11 @@ static void handle_gga_sentence(char *line)
 
 static void handle_rmc_sentence(char *line)
 {
-    // $GNRMC,hhmmss.ss,A,lat,N,lon,E,spd,cog,ddmmyy,...
     char *f[14] = {0};
     int n = split_csv_fields(line, f, 14);
     if (n < 10) return;
 
-    // Auto-sync hardware PCF85063 RTC from valid GNSS UTC Date & Time
-    if (!rtc_synced_from_gnss && f[2][0] == 'A' && strlen(f[1]) >= 6 && strlen(f[9]) == 6) {
+    if (!rtc_synced_from_gnss && f[2] && f[2][0] == 'A' && strlen(f[1]) >= 6 && strlen(f[9]) == 6) {
         int hh = (f[1][0] - '0') * 10 + (f[1][1] - '0');
         int mm = (f[1][2] - '0') * 10 + (f[1][3] - '0');
         int ss = (f[1][4] - '0') * 10 + (f[1][5] - '0');
@@ -126,9 +123,7 @@ static void handle_rmc_sentence(char *line)
 
 static void update_gsv_max_band(uint8_t *slot, uint32_t *last_ms, uint8_t sv_in_view, uint32_t now)
 {
-    // UM982 outputs separate GSV blocks per signal band (e.g. L1 then L5) in the same 1s epoch.
-    // Keep the highest SV count reported across bands within a 2.2s window.
-    if (sv_in_view >= *slot || (now - *last_ms > 2200)) {
+    if (sv_in_view >= *slot || (now - *last_ms > 1200)) {
         *slot = sv_in_view;
         *last_ms = now;
     }
@@ -136,13 +131,12 @@ static void update_gsv_max_band(uint8_t *slot, uint32_t *last_ms, uint8_t sv_in_
 
 static void handle_gsv_sentence(char *line)
 {
-    // $xxGSV,numMsg,msgNum,numSV,...*cs
     if (strlen(line) < 7) return;
     char talker1 = line[1];
     char talker2 = line[2];
     char *f[6] = {0};
     int n = split_csv_fields(line, f, 6);
-    if (n < 4 || !f[3][0]) return;
+    if (n < 4 || !f[3] || !f[3][0]) return;
 
     uint32_t now = millis();
     uint8_t sv_in_view = (uint8_t)atoi(f[3]);
@@ -159,10 +153,9 @@ static void handle_gsv_sentence(char *line)
 
 static void handle_gst_sentence(char *line)
 {
-    // $GNGST,hhmmss.ss,rms,smaj,smin,orient,lat_err,lon_err,alt_err*cs
     char *f[10] = {0};
     int n = split_csv_fields(line, f, 10);
-    if (n >= 9 && f[6][0] && f[7][0]) {
+    if (n >= 9 && f[6] && f[6][0] && f[7] && f[7][0]) {
         float lat_e = (float)atof(f[6]);
         float lon_e = (float)atof(f[7]);
         float alt_e = (float)atof(f[8]);
@@ -174,30 +167,42 @@ static void handle_gst_sentence(char *line)
 
 static void handle_hdt_sentence(char *line)
 {
-    // $GNHDT,heading,T*cs
     char *f[4] = {0};
     int n = split_csv_fields(line, f, 4);
-    if (n >= 2 && f[1][0]) {
+    if (n >= 2 && f[1] && f[1][0]) {
         gnss_state.true_heading_deg = (float)atof(f[1]);
         gnss_state.heading_valid    = true;
         port_stats.heading_sentences_ok++;
     }
 }
 
+static void handle_ths_sentence(char *line)
+{
+    char *f[4] = {0};
+    int n = split_csv_fields(line, f, 4);
+    if (n >= 3 && f[1] && f[1][0] && f[2]) {
+        // Mode indicator: 'A'=Autonomous, 'D'=Differential, 'E'=Estimated, 'M'=Manual
+        if (f[2][0] == 'A' || f[2][0] == 'D' || f[2][0] == 'E' || f[2][0] == 'M') {
+            gnss_state.true_heading_deg = (float)atof(f[1]);
+            gnss_state.heading_valid    = true;
+            port_stats.heading_sentences_ok++;
+        }
+    }
+}
+
 static void handle_uniheadinga_sentence(char *line)
 {
-    // #UNIHEADINGA,header...;sol_stat,pos_type,length,heading,pitch,reserved,hdg_std,ptch_std,...*crc
     char *semi = strchr(line, ';');
     if (!semi) return;
     char *f[12] = {0};
     int n = split_csv_fields(semi + 1, f, 12);
-    if (n >= 5) {
-        if (strstr(f[0], "SOL_COMPUTED") != NULL && strstr(f[1], "NONE") == NULL) {
+    if (n >= 5 && f[0] && f[1] && f[2] && f[3] && f[4]) {
+        if (strstr(f[0], "SOL_COMPUTED") != NULL && strstr(f[1], "NONE") == NULL && strstr(f[1], "INSUFFICIENT") == NULL) {
             gnss_state.baseline_length_m  = (float)atof(f[2]);
             gnss_state.true_heading_deg   = (float)atof(f[3]);
             gnss_state.baseline_pitch_deg = (float)atof(f[4]);
             gnss_state.heading_valid      = true;
-            gnss_state.heading_is_fixed   = (strstr(f[1], "NARROW_INT") != NULL);
+            gnss_state.heading_is_fixed   = (strstr(f[1], "INT") != NULL);
             port_stats.heading_sentences_ok++;
         } else {
             gnss_state.heading_valid    = false;
@@ -208,7 +213,9 @@ static void handle_uniheadinga_sentence(char *line)
 
 static void process_com1_line(char *line)
 {
+    if (!line || line[0] == '\0') return;
     port_stats.com1_test_passed = true;
+    
     strncpy(port_stats.last_com1_line, line, sizeof(port_stats.last_com1_line) - 1);
     port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
 
@@ -224,7 +231,10 @@ static void process_com1_line(char *line)
     } else if (strncmp(line, "$GNHDT", 6) == 0 || strncmp(line, "$GPHDT", 6) == 0) {
         port_stats.nmea_sentences_ok++;
         handle_hdt_sentence(line);
-    } else if (line[0] == '$' && strncmp(line + 3, "GSV", 3) == 0) {
+    } else if (strncmp(line, "$GNTHS", 6) == 0 || strncmp(line, "$GPTHS", 6) == 0) {
+        port_stats.nmea_sentences_ok++;
+        handle_ths_sentence(line);
+    } else if (strncmp(line, "$GNGSV", 6) == 0 || strncmp(line, "$GPGSV", 6) == 0) {
         port_stats.nmea_sentences_ok++;
         handle_gsv_sentence(line);
     } else if (strncmp(line, "#UNIHEADINGA", 12) == 0) {
@@ -245,17 +255,18 @@ static void process_com1_line(char *line)
 
 static void process_com2_line(char *line)
 {
+    if (!line || line[0] == '\0') return;
     port_stats.com2_test_passed = true;
     strncpy(port_stats.last_com2_line, line, sizeof(port_stats.last_com2_line) - 1);
     port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
-    Serial.printf("[UM982 COM2 RX] %s\n", line);
+    if (Serial) Serial.printf("[UM982 COM2 RX] %s\n", line);
 }
 
 extern "C" void send_um982_com1_command(const char *cmd)
 {
     if (!cmd) return;
     size_t len = strlen(cmd);
-    Serial.printf("[UM982 COM1 TX] %s\n", cmd);
+    if (Serial) Serial.printf("[UM982 COM1 TX] %s\n", cmd);
     Serial1.write((const uint8_t *)cmd, len);
     Serial1.write((const uint8_t *)"\r\n", 2);
     port_stats.com1_tx_bytes += (uint32_t)(len + 2);
@@ -263,7 +274,6 @@ extern "C" void send_um982_com1_command(const char *cmd)
 
 extern "C" void send_um982_com2_test_pulse(void)
 {
-    // Send VERSIONA COM2 command directly on UM982 COM2 (IO48 TX -> UM982_RXD1) to verify COM2 bidirectional link
     const char *cmd = "VERSIONA COM2\r\n";
     size_t len = strlen(cmd);
     Serial.println("[UM982 COM2 TX] VERSIONA COM2 (Testing COM2 IO47/48 @ 115200)");
@@ -273,11 +283,26 @@ extern "C" void send_um982_com2_test_pulse(void)
 
 extern "C" void um982_configure_rover_defaults(void)
 {
-    // Ensure UM982 COM2 is set to 115200 baud for RTCM3 corrections & COM2 diagnostics
     send_um982_com1_command("CONFIG COM2 115200");
     vTaskDelay(pdMS_TO_TICKS(40));
+	
+    send_um982_com1_command("UNLOGALL COM1");
+    vTaskDelay(pdMS_TO_TICKS(40));
 
-    // Configure UM982 COM1 for 5Hz NMEA GGA, 1Hz RMC/GST/GSV, and 5Hz Dual-Antenna Heading
+    send_um982_com1_command("CONFIG PVTALG MULTI");
+    vTaskDelay(pdMS_TO_TICKS(40));
+
+    send_um982_com1_command("CONFIG HEADING FIXLENGTH");
+    vTaskDelay(pdMS_TO_TICKS(40));
+
+    char hdg_cmd[64];
+    float len_cm = current_settings.antenna_spacing_m * 100.0f;
+    if (len_cm > 10.0f && len_cm < 1000.0f) {
+        snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.1f 5.0", len_cm);
+        send_um982_com1_command(hdg_cmd);
+        vTaskDelay(pdMS_TO_TICKS(40));
+    }
+  
     send_um982_com1_command("GPGGA COM1 0.2");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPRMC COM1 1");
@@ -286,25 +311,18 @@ extern "C" void um982_configure_rover_defaults(void)
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPGSV COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
-    send_um982_com1_command("GPHDT COM1 0.2");
-    vTaskDelay(pdMS_TO_TICKS(40));
+    // UNIHEADINGA provides heading, pitch, baseline length, and NARROW_INT fix type in one rich sentence.
+    // Omit redundant GPHDT and GPTHS to save ~350 B/s UART bandwidth while keeping their parsers intact.
     send_um982_com1_command("UNIHEADINGA COM1 0.2");
-
-    // Inform UM982 of the fixed Master->Slave antenna spacing (e.g. 55.5cm +/- 5cm tolerance)
-    char hdg_cmd[64];
-    int len_cm = (int)(current_settings.antenna_spacing_m * 100.0f + 0.5f);
-    if (len_cm > 10 && len_cm < 1000) {
-        snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %d 5", len_cm);
-        vTaskDelay(pdMS_TO_TICKS(40));
-        send_um982_com1_command(hdg_cmd);
-    }
+    vTaskDelay(pdMS_TO_TICKS(40));
+    send_um982_com1_command("SAVECONFIG");
+    vTaskDelay(pdMS_TO_TICKS(40));
 }
 
 extern "C" void um982_run_powerup_selftest(void)
 {
     Serial.println("\n--- [UM982 Dual-Antenna GNSS Power-Up Self-Test] ---");
 
-    // 1. Test UM982 COM1 (Serial1: RX=IO17 / UM982_TXD0, TX=IO18 / UM982_RXD0 @ 115200)
     Serial.println("[UM982 COM1] Testing UART1 (RX=IO17, TX=IO18 @ 115200) with VERSIONA...");
     send_um982_com1_command("VERSIONA");
     uint32_t t0 = millis();
@@ -324,7 +342,6 @@ extern "C" void um982_run_powerup_selftest(void)
         Serial.println("[UM982 COM1 TEST] FAIL — No response on IO17/18 @ 115200");
     }
 
-    // 2. Test UM982 COM2 (Serial2: RX=IO47 / UM982_TXD1, TX=IO48 / UM982_RXD1 @ 115200)
     Serial.println("[UM982 COM2] Testing UART2 (RX=IO47, TX=IO48 @ 115200) with VERSIONA COM2...");
     while (Serial2.available()) Serial2.read();
     send_um982_com2_test_pulse();
@@ -342,7 +359,6 @@ extern "C" void um982_run_powerup_selftest(void)
                       (unsigned long)port_stats.com2_tx_bytes,
                       port_stats.last_com2_line);
     } else {
-        // Fallback diagnostic: request COM2 output via COM1 to isolate IO47 (COM2 RX) vs IO48 (COM2 TX)
         Serial.println("[UM982 COM2] No reply to IO48 TX -> Requesting 'VERSIONA COM2' via COM1 to test IO47 RX...");
         send_um982_com1_command("VERSIONA COM2");
         t0 = millis();
@@ -364,11 +380,12 @@ extern "C" void um982_run_powerup_selftest(void)
 extern "C" void um982_driver_init(void)
 {
     strncpy(port_stats.um982_version, "Waiting COM1...", sizeof(port_stats.um982_version) - 1);
+    port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
     strncpy(port_stats.last_com1_line, "No COM1 RX yet", sizeof(port_stats.last_com1_line) - 1);
+    port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
     strncpy(port_stats.last_com2_line, "No COM2 RX yet", sizeof(port_stats.last_com2_line) - 1);
+    port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
 
-    // Probe physical UART pins with weak pull-down before Serial.begin():
-    // An active external 3.3V UART TX output drives the pin HIGH (1) against weak pull-down.
     pinMode(ROVER_PIN_UM982_TXD0, INPUT_PULLDOWN);
     pinMode(ROVER_PIN_UM982_RXD0, INPUT_PULLDOWN);
     pinMode(ROVER_PIN_UM982_TXD1, INPUT_PULLDOWN);
@@ -380,16 +397,14 @@ extern "C" void um982_driver_init(void)
                   digitalRead(ROVER_PIN_UM982_TXD1),
                   digitalRead(ROVER_PIN_UM982_RXD1));
 
-    // UM982 COM1: UM982_TXD0 (IO17) -> ESP32 RX, UM982_RXD0 (IO18) -> ESP32 TX
     Serial1.setRxBufferSize(4096);
     Serial1.begin(ROVER_UM982_COM1_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD0, ROVER_PIN_UM982_RXD0);
 
-    // UM982 COM2: UM982_TXD1 (IO47) -> ESP32 RX, UM982_RXD1 (IO48) -> ESP32 TX
     Serial2.setRxBufferSize(1024);
     Serial2.begin(ROVER_UM982_COM2_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD1, ROVER_PIN_UM982_RXD1);
 
-    um982_configure_rover_defaults();
     um982_run_powerup_selftest();
+    um982_configure_rover_defaults();
 }
 
 extern "C" void um982_forward_rtcm_to_com2(const uint8_t *data, size_t len)
@@ -451,30 +466,30 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
     state_out->hdop               = gnss_state.hdop;
     state_out->h_acc_m            = gnss_state.h_acc_m;
     state_out->v_acc_m            = gnss_state.v_acc_m;
-    state_out->diff_age_s         = gnss_state.diff_age_s;
-    state_out->heading_valid      = gnss_state.heading_valid;
-    state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
-    state_out->true_heading_deg   = gnss_state.true_heading_deg;
-    state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
-    state_out->baseline_length_m  = gnss_state.baseline_length_m;
+	state_out->diff_age_s         = gnss_state.diff_age_s;
+	state_out->heading_valid      = gnss_state.heading_valid;
+	state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
+	state_out->true_heading_deg   = gnss_state.true_heading_deg;
+	state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
+	state_out->baseline_length_m  = gnss_state.baseline_length_m;
 }
 
 extern "C" void um982_get_port_stats(Um982PortStats_t *stats_out)
 {
-    if (stats_out) {
-        *stats_out = port_stats;
-    }
+	if (stats_out) {
+		*stats_out = port_stats;
+	}
 }
 
 extern "C" bool um982_poll_pending_rtc_sync(uint16_t *yy, uint8_t *mo, uint8_t *dd, uint8_t *hh, uint8_t *mm, uint8_t *ss)
 {
-    if (!rtc_sync_pending) return false;
-    rtc_sync_pending = false;
-    if (yy) *yy = pending_rtc_yy;
-    if (mo) *mo = pending_rtc_mo;
-    if (dd) *dd = pending_rtc_dd;
-    if (hh) *hh = pending_rtc_hh;
-    if (mm) *mm = pending_rtc_mm;
-    if (ss) *ss = pending_rtc_ss;
-    return true;
+	if (!rtc_sync_pending) return false;
+	rtc_sync_pending = false;
+	if (yy) *yy = pending_rtc_yy;
+	if (mo) *mo = pending_rtc_mo;
+	if (dd) *dd = pending_rtc_dd;
+	if (hh) *hh = pending_rtc_hh;
+	if (mm) *mm = pending_rtc_mm;
+	if (ss) *ss = pending_rtc_ss;
+	return true;
 }

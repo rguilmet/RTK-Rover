@@ -166,8 +166,8 @@ void task_rover_core0(void *pvParameters)
                 xQueueOverwrite(roverStateQueue, &state);
             }
 
-            // Periodic 5-second diagnostic telemetry log to Serial Monitor
-            if (current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
+            // Periodic 5-second diagnostic telemetry log to Serial Monitor (only if USB terminal connected)
+            if (Serial && current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
                 const char *hdg_mode = state.heading_valid ? (state.heading_is_fixed ? "FIX" : "FLT") : "--";
                 Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
@@ -305,6 +305,7 @@ void task_display_and_audio(void *pvParameters)
 void setup()
 {
     Serial.begin(115200);
+    Serial.setTxTimeoutMs(0); // Critical: non-blocking USB CDC writes so app never stalls when USB disconnected
     pinMode(ROVER_PIN_BOOT_BTN, INPUT_PULLUP);
 
     // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA) & TCA9554 IO Expander
@@ -313,10 +314,15 @@ void setup()
     ESP_ERROR_CHECK(esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander));
     ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
 
-    // Brief wait for USB-CDC Serial monitor on boot
+    // Wait for native USB Serial to connect, with a 3 second timeout 
+    // so the wand still boots instantly on battery power without a PC!
     unsigned long start_ms = millis();
-    while (!Serial && (millis() - start_ms) < 2000) {
+    while (!Serial && (millis() - start_ms) < 3000) {
         delay(10);
+    }
+
+    if (Serial) {
+        delay(500); // Give the Arduino IDE Serial Monitor a half-second to fully render
     }
 
     Serial.printf("\n====================================================\n");

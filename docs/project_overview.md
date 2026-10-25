@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.0.10`
-**Last Updated:** October 24, 2026
-**Firmware Target:** `v0.1.14`
+**Document Version:** `v1.0.11`
+**Last Updated:** October 25, 2026
+**Firmware Target:** `v0.1.15`
 **Python Ecosystem Target:** `v1.0.1`
 **License:** GNU General Public License v3.0 (`GPLv3`)
 

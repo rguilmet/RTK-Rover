@@ -20,7 +20,7 @@
   "brightness": 85,
   "volume": 30,
   "is_muted": false,
-  "wifi_ssid": "Your_SSID",
-  "wifi_password": "Your_PASSWORD",
+  "wifi_ssid": "Your-SSID-Here",
+  "wifi_password": "Your-Password-Here",
   "enable_serial_logging": false
 }
