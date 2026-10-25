@@ -414,7 +414,7 @@ static void update_all_control_buttons(void)
     // 4. Route Logging Button on Tile 4
     if (t4_route_btn && t4_route_btn_lbl) {
         if (route_logger_is_active()) {
-            lv_label_set_text(t4_route_btn_lbl, "Route: REC");
+            lv_label_set_text(t4_route_btn_lbl, "Route: ON");
             lv_obj_set_style_bg_color(t4_route_btn, COLOR_BTN_ACTIVE_GREEN, 0);
         } else {
             lv_label_set_text(t4_route_btn_lbl, "Route: OFF");
@@ -744,22 +744,13 @@ void create_rover_ui(void)
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_next);
 
-    // Notes row + Route REC button
+    // Target notes row (full width available)
     t0_notes_lbl = lv_label_create(tile_guidance);
+    lv_obj_set_width(t0_notes_lbl, 304);
     lv_label_set_text(t0_notes_lbl, "NW corner iron pipe");
     lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t0_notes_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 10, 62);
-
-    t0_rec_btn = lv_button_create(tile_guidance);
-    lv_obj_set_size(t0_rec_btn, 84, 24);
-    lv_obj_align(t0_rec_btn, LV_ALIGN_TOP_RIGHT, -8, 58);
-    lv_obj_set_style_bg_color(t0_rec_btn, lv_color_hex(0x2A3B45), 0);
-    lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
-    t0_rec_btn_lbl = lv_label_create(t0_rec_btn);
-    lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
-    lv_obj_set_style_text_font(t0_rec_btn_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_center(t0_rec_btn_lbl);
+    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 10, 64);
 
     // Navigation Canvas (304x210)
     t0_nav_canvas = lv_obj_create(tile_guidance);
@@ -770,6 +761,7 @@ void create_rover_ui(void)
     lv_obj_set_style_border_color(t0_nav_canvas, lv_color_hex(0x283B47), 0);
     lv_obj_set_style_border_width(t0_nav_canvas, 2, 0);
     lv_obj_set_scrollbar_mode(t0_nav_canvas, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_remove_flag(t0_nav_canvas, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(t0_nav_canvas, 0, 0);
 
     // Mode badge & scale
@@ -880,6 +872,18 @@ void create_rover_ui(void)
     lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_border_color(t0_rover_icon, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_width(t0_rover_icon, 2, 0);
+
+    // Route REC button (Tactical Grid HUD - Bottom Right)
+    t0_rec_btn = lv_button_create(t0_nav_canvas);
+    lv_obj_set_size(t0_rec_btn, 76, 24);
+    lv_obj_align(t0_rec_btn, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
+    lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    lv_obj_set_style_radius(t0_rec_btn, 4, 0);
+    lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    t0_rec_btn_lbl = lv_label_create(t0_rec_btn);
+    lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
+    lv_obj_set_style_text_font(t0_rec_btn_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(t0_rec_btn_lbl);
 
     // Readout section below canvas
     t0_dist_lbl = lv_label_create(tile_guidance);
@@ -1458,7 +1462,9 @@ void update_rover_ui(const RoverUIData_t *d)
                         int16_t dot_x = rover_x + (int16_t)((u / scale_m) * 135.0f);
                         int16_t dot_y = rover_y - (int16_t)((v / scale_m) * 135.0f);
 
-                        if (dot_x >= 4 && dot_x <= 300 && dot_y >= 4 && dot_y <= 206) {
+                        if (dot_x >= 220 && dot_y >= 174) {
+                            lv_obj_add_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
+                        } else if (dot_x >= 4 && dot_x <= 300 && dot_y >= 4 && dot_y <= 206) {
                             lv_obj_align(t0_bc_dots[i], LV_ALIGN_TOP_LEFT, dot_x - 2, dot_y - 2);
                             lv_obj_remove_flag(t0_bc_dots[i], LV_OBJ_FLAG_HIDDEN);
                         } else {
