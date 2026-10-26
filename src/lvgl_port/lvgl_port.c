@@ -42,15 +42,28 @@ extern void set_backlight_pwm(uint8_t brightness);
 // =========================================================================
 // Persistent Top Header Bar Widgets (Visible on ALL Screens)
 // =========================================================================
+// Row 1: System & Radios
 static lv_obj_t *hdr_datetime_lbl = NULL;
 static lv_obj_t *hdr_units_lbl    = NULL;
+static lv_obj_t *hdr_wifi_lbl     = NULL;
 static lv_obj_t *hdr_batt_lbl     = NULL;
-static lv_obj_t *hdr_fix_badge    = NULL;
-static lv_obj_t *hdr_fix_lbl      = NULL;
-static lv_obj_t *hdr_hdg_badge    = NULL;
-static lv_obj_t *hdr_hdg_lbl      = NULL;
-static lv_obj_t *hdr_sats_acc_lbl = NULL;
-static lv_obj_t *hdr_rtcm_lbl     = NULL;
+
+// Row 2: Master Antenna (ANT1)
+static lv_obj_t *hdr_m_fix_badge  = NULL;
+static lv_obj_t *hdr_m_fix_lbl    = NULL;
+static lv_obj_t *hdr_m_sats_lbl   = NULL;
+static lv_obj_t *hdr_m_acc_lbl    = NULL;
+static lv_obj_t *hdr_m_rtcm_lbl   = NULL;
+
+// Row 3: Slave Antenna (ANT2)
+static lv_obj_t *hdr_s_fix_badge  = NULL;
+static lv_obj_t *hdr_s_fix_lbl    = NULL;
+static lv_obj_t *hdr_s_sats_lbl   = NULL;
+static lv_obj_t *hdr_s_bl_lbl     = NULL;
+static lv_obj_t *hdr_s_hdg_lbl    = NULL;
+
+// Row 4: Streamlined Coordinates Bar
+static lv_obj_t *hdr_coords_lbl   = NULL;
 
 // =========================================================================
 // Tileview & Navigation
@@ -633,74 +646,116 @@ void create_rover_ui(void)
     lv_obj_set_scrollbar_mode(scr, LV_SCROLLBAR_MODE_OFF);
 
     // =====================================================================
-    // 1. Persistent Top Status Header Bar (320 x 48, always visible)
+    // 1. Persistent Top Status Header Bar (320 x 74, always visible across all 5 tiles)
     // =====================================================================
     lv_obj_t *hdr = lv_obj_create(scr);
-    lv_obj_set_size(hdr, ROVER_LCD_H_RES, 48);
+    lv_obj_set_size(hdr, ROVER_LCD_H_RES, 74);
     lv_obj_align(hdr, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(hdr, lv_color_hex(0x1E2229), 0);
-    lv_obj_set_style_border_width(hdr, 0, 0);
+    lv_obj_set_style_bg_color(hdr, lv_color_hex(0x181C22), 0);
+    lv_obj_set_style_border_color(hdr, lv_color_hex(0x28323E), 0);
+    lv_obj_set_style_border_width(hdr, 1, 0);
+    lv_obj_set_style_border_side(hdr, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_radius(hdr, 0, 0);
-    lv_obj_set_style_pad_all(hdr, 3, 0);
+    lv_obj_set_style_pad_all(hdr, 0, 0);
     lv_obj_set_scrollbar_mode(hdr, LV_SCROLLBAR_MODE_OFF);
 
+    // Row 1 (y = 2): System & Radios
     hdr_datetime_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_datetime_lbl, "2026-10-23 00:00:00");
+    lv_label_set_text(hdr_datetime_lbl, "2026-10-26 00:00:00");
     lv_obj_set_style_text_color(hdr_datetime_lbl, lv_color_hex(0xE0E6ED), 0);
     lv_obj_set_style_text_font(hdr_datetime_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_datetime_lbl, LV_ALIGN_TOP_LEFT, 2, 0);
+    lv_obj_align(hdr_datetime_lbl, LV_ALIGN_TOP_LEFT, 4, 2);
 
     hdr_units_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_units_lbl, "SI");
     lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_MID, 28, 0);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_LEFT, 138, 2);
+
+    hdr_wifi_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " OFF");
+    lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x64748B), 0);
+    lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_LEFT, 168, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");
     lv_obj_set_style_text_color(hdr_batt_lbl, lv_color_hex(0x55FF55), 0);
     lv_obj_set_style_text_font(hdr_batt_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_batt_lbl, LV_ALIGN_TOP_RIGHT, -2, 0);
+    lv_obj_align(hdr_batt_lbl, LV_ALIGN_TOP_RIGHT, -4, 2);
 
-    hdr_fix_badge = lv_obj_create(hdr);
-    lv_obj_set_size(hdr_fix_badge, 76, 20);
-    lv_obj_align(hdr_fix_badge, LV_ALIGN_BOTTOM_LEFT, 2, 0);
-    lv_obj_set_style_bg_color(hdr_fix_badge, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_set_style_border_width(hdr_fix_badge, 0, 0);
-    lv_obj_set_style_radius(hdr_fix_badge, 4, 0);
-    lv_obj_set_style_pad_all(hdr_fix_badge, 0, 0);
+    // Row 2 (y = 19): Master Antenna (ANT1)
+    hdr_m_fix_badge = lv_obj_create(hdr);
+    lv_obj_set_size(hdr_m_fix_badge, 68, 16);
+    lv_obj_align(hdr_m_fix_badge, LV_ALIGN_TOP_LEFT, 4, 19);
+    lv_obj_set_style_bg_color(hdr_m_fix_badge, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_border_width(hdr_m_fix_badge, 0, 0);
+    lv_obj_set_style_radius(hdr_m_fix_badge, 3, 0);
+    lv_obj_set_style_pad_all(hdr_m_fix_badge, 0, 0);
 
-    hdr_fix_lbl = lv_label_create(hdr_fix_badge);
-    lv_label_set_text(hdr_fix_lbl, "NO FIX");
-    lv_obj_set_style_text_color(hdr_fix_lbl, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(hdr_fix_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_center(hdr_fix_lbl);
+    hdr_m_fix_lbl = lv_label_create(hdr_m_fix_badge);
+    lv_label_set_text(hdr_m_fix_lbl, "NO FIX");
+    lv_obj_set_style_text_color(hdr_m_fix_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(hdr_m_fix_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(hdr_m_fix_lbl);
 
-    hdr_hdg_badge = lv_obj_create(hdr);
-    lv_obj_set_size(hdr_hdg_badge, 58, 20);
-    lv_obj_align(hdr_hdg_badge, LV_ALIGN_BOTTOM_LEFT, 81, 0);
-    lv_obj_set_style_bg_color(hdr_hdg_badge, lv_color_hex(0x3A3F47), 0);
-    lv_obj_set_style_border_width(hdr_hdg_badge, 0, 0);
-    lv_obj_set_style_radius(hdr_hdg_badge, 4, 0);
-    lv_obj_set_style_pad_all(hdr_hdg_badge, 0, 0);
+    hdr_m_sats_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_m_sats_lbl, "SV: 0/0");
+    lv_obj_set_style_text_color(hdr_m_sats_lbl, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_font(hdr_m_sats_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_m_sats_lbl, LV_ALIGN_TOP_LEFT, 76, 19);
 
-    hdr_hdg_lbl = lv_label_create(hdr_hdg_badge);
-    lv_label_set_text(hdr_hdg_lbl, "HDG --");
-    lv_obj_set_style_text_color(hdr_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(hdr_hdg_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_center(hdr_hdg_lbl);
+    hdr_m_acc_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_m_acc_lbl, "+/- --");
+    lv_obj_set_style_text_color(hdr_m_acc_lbl, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_style_text_font(hdr_m_acc_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_m_acc_lbl, LV_ALIGN_TOP_LEFT, 146, 19);
 
-    hdr_sats_acc_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_sats_acc_lbl, "SV:0/0 +/- --");
-    lv_obj_set_style_text_color(hdr_sats_acc_lbl, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_set_style_text_font(hdr_sats_acc_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_sats_acc_lbl, LV_ALIGN_BOTTOM_LEFT, 143, -2);
+    hdr_m_rtcm_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_m_rtcm_lbl, "RTCM: --");
+    lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFAA00), 0);
+    lv_obj_set_style_text_font(hdr_m_rtcm_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_m_rtcm_lbl, LV_ALIGN_TOP_RIGHT, -4, 19);
 
-    hdr_rtcm_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_rtcm_lbl, "RTCM:--");
-    lv_obj_set_style_text_color(hdr_rtcm_lbl, lv_color_hex(0xFFAA00), 0);
-    lv_obj_set_style_text_font(hdr_rtcm_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_rtcm_lbl, LV_ALIGN_BOTTOM_RIGHT, -2, -2);
+    // Row 3 (y = 37): Slave Antenna (ANT2)
+    hdr_s_fix_badge = lv_obj_create(hdr);
+    lv_obj_set_size(hdr_s_fix_badge, 68, 16);
+    lv_obj_align(hdr_s_fix_badge, LV_ALIGN_TOP_LEFT, 4, 37);
+    lv_obj_set_style_bg_color(hdr_s_fix_badge, lv_color_hex(0x3A3F47), 0);
+    lv_obj_set_style_border_width(hdr_s_fix_badge, 0, 0);
+    lv_obj_set_style_radius(hdr_s_fix_badge, 3, 0);
+    lv_obj_set_style_pad_all(hdr_s_fix_badge, 0, 0);
+
+    hdr_s_fix_lbl = lv_label_create(hdr_s_fix_badge);
+    lv_label_set_text(hdr_s_fix_lbl, "HDG --");
+    lv_obj_set_style_text_color(hdr_s_fix_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(hdr_s_fix_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(hdr_s_fix_lbl);
+
+    hdr_s_sats_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_s_sats_lbl, "SV: --");
+    lv_obj_set_style_text_color(hdr_s_sats_lbl, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_font(hdr_s_sats_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_s_sats_lbl, LV_ALIGN_TOP_LEFT, 76, 37);
+
+    hdr_s_bl_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_s_bl_lbl, "BL: --.-cm");
+    lv_obj_set_style_text_color(hdr_s_bl_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(hdr_s_bl_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_s_bl_lbl, LV_ALIGN_TOP_LEFT, 146, 37);
+
+    hdr_s_hdg_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_s_hdg_lbl, "Hdg: ---.-");
+    lv_obj_set_style_text_color(hdr_s_hdg_lbl, lv_color_hex(0xFFCC00), 0);
+    lv_obj_set_style_text_font(hdr_s_hdg_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_s_hdg_lbl, LV_ALIGN_TOP_RIGHT, -4, 37);
+
+    // Row 4 (y = 56): Streamlined Coordinates Bar
+    hdr_coords_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_coords_lbl, "0.00000000, 0.00000000, 0.000 m");
+    lv_obj_set_style_text_color(hdr_coords_lbl, lv_color_hex(0x00FFAA), 0);
+    lv_obj_set_style_text_font(hdr_coords_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_coords_lbl, LV_ALIGN_TOP_MID, 0, 56);
 
     // =====================================================================
     // 2. Persistent Bottom Screen Navigation Bar (320 x 32, always visible)
@@ -744,8 +799,8 @@ void create_rover_ui(void)
     // 3. Main Swipeable Tileview (320 x 400 between Header and Nav Bar)
     // =====================================================================
     main_tv = lv_tileview_create(scr);
-    lv_obj_set_size(main_tv, ROVER_LCD_H_RES, ROVER_LCD_V_RES - 48 - 32);
-    lv_obj_align(main_tv, LV_ALIGN_TOP_MID, 0, 48);
+    lv_obj_set_size(main_tv, ROVER_LCD_H_RES, ROVER_LCD_V_RES - 74 - 32);
+    lv_obj_align(main_tv, LV_ALIGN_TOP_MID, 0, 74);
     lv_obj_set_style_bg_color(main_tv, lv_color_hex(0x121417), 0);
     lv_obj_add_event_cb(main_tv, tv_changed_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
@@ -758,16 +813,10 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 0: Pin Seeker & Guidance (Hybrid Navigation Canvas)
     // =====================================================================
-    t0_pos_lbl = lv_label_create(tile_guidance);
-    lv_label_set_text(t0_pos_lbl, "Tip Lat:  0.00000000 | Lon:  0.00000000\nHgt: 0.000 m");
-    lv_obj_set_style_text_color(t0_pos_lbl, lv_color_hex(0x00FFAA), 0);
-    lv_obj_set_style_text_font(t0_pos_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_pos_lbl, LV_ALIGN_TOP_MID, 0, 2);
-
-    // Target selector row
+    // Target selector row (compacted to y = 4 since coordinates are now in persistent header)
     lv_obj_t *btn_prev = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_prev, 38, 28);
-    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 32);
+    lv_obj_set_size(btn_prev, 38, 26);
+    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 4);
     lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_prev = lv_label_create(btn_prev);
     lv_label_set_text(lbl_prev, LV_SYMBOL_LEFT);
@@ -777,28 +826,28 @@ void create_rover_ui(void)
     lv_label_set_text(t0_target_lbl, "PIN_NW_01 (1/4)");
     lv_obj_set_style_text_color(t0_target_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t0_target_lbl, &lv_font_montserrat_16, 0);
-    lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 32);
+    lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
 
     lv_obj_t *btn_next = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_next, 38, 28);
-    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 32);
+    lv_obj_set_size(btn_next, 38, 26);
+    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 4);
     lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_next = lv_label_create(btn_next);
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_next);
 
-    // Target notes row (full width available)
+    // Target notes row
     t0_notes_lbl = lv_label_create(tile_guidance);
     lv_obj_set_width(t0_notes_lbl, 304);
     lv_label_set_text(t0_notes_lbl, "NW corner iron pipe");
     lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t0_notes_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 10, 64);
+    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 10, 34);
 
     // Navigation Canvas (304x210)
     t0_nav_canvas = lv_obj_create(tile_guidance);
     lv_obj_set_size(t0_nav_canvas, 304, 210);
-    lv_obj_align(t0_nav_canvas, LV_ALIGN_TOP_MID, 0, 86);
+    lv_obj_align(t0_nav_canvas, LV_ALIGN_TOP_MID, 0, 52);
     lv_obj_set_style_radius(t0_nav_canvas, 8, 0);
     lv_obj_set_style_bg_color(t0_nav_canvas, lv_color_hex(0x13191E), 0);
     lv_obj_set_style_border_color(t0_nav_canvas, lv_color_hex(0x283B47), 0);
@@ -941,24 +990,24 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(t0_rec_btn_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(t0_rec_btn_lbl);
 
-    // Readout section below canvas
+    // Readout section below canvas (compacted to fit inside 374px tileview)
     t0_dist_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_dist_lbl, "0.00 m");
     lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 302);
+    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 268);
 
     t0_steer_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_steer_lbl, "Acquiring Position...");
     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t0_steer_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 334);
+    lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 300);
 
     t0_offsets_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_offsets_lbl, "dN: +0.0 cm   dE: +0.0 cm");
     lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_text_font(t0_offsets_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 356);
+    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 324);
 
     // =====================================================================
     // TILE 1: Field Survey / Waypoint Logger (BOOT Short-Press Active Here)
@@ -1278,13 +1327,25 @@ void update_rover_ui(const RoverUIData_t *d)
              d->battery_voltage);
     lv_label_set_text(hdr_batt_lbl, buf);
 
+    // Wi-Fi Status Badge in Row 1
+    if (hdr_wifi_lbl) {
+        if (is_wifi_active()) {
+            lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " ON");
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x00FF88), 0);
+        } else {
+            lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " OFF");
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x64748B), 0);
+        }
+    }
+
+    // Row 2: Master Antenna (ANT1) Fix Badge & Metrics
     const char *fix_str = "NO FIX";
     lv_color_t fix_col  = lv_palette_main(LV_PALETTE_RED);
     if (d->fix_type == GNSS_FIX_RTK_FIXED) {
-        fix_str = "RTK FIXED";
+        fix_str = "RTK FIX";
         fix_col = lv_palette_main(LV_PALETTE_GREEN);
     } else if (d->fix_type == GNSS_FIX_RTK_FLOAT) {
-        fix_str = "RTK FLOAT";
+        fix_str = "RTK FLT";
         fix_col = lv_palette_main(LV_PALETTE_ORANGE);
     } else if (d->fix_type == GNSS_FIX_DGPS) {
         fix_str = "DGPS";
@@ -1293,11 +1354,32 @@ void update_rover_ui(const RoverUIData_t *d)
         fix_str = "SINGLE";
         fix_col = lv_palette_main(LV_PALETTE_AMBER);
     }
-    lv_label_set_text(hdr_fix_lbl, fix_str);
-    lv_obj_set_style_bg_color(hdr_fix_badge, fix_col, 0);
+    lv_label_set_text(hdr_m_fix_lbl, fix_str);
+    lv_obj_set_style_bg_color(hdr_m_fix_badge, fix_col, 0);
 
+    char acc_str[24];
+    nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
+    uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
+    snprintf(buf, sizeof(buf), "SV:%u/%u", d->num_sats, sv_view);
+    lv_label_set_text(hdr_m_sats_lbl, buf);
+
+    snprintf(buf, sizeof(buf), "+/-%s", acc_str);
+    lv_label_set_text(hdr_m_acc_lbl, buf);
+
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+    uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
+    if (rtcm_age_ms < 15000) {
+        snprintf(buf, sizeof(buf), "RTCM:%u.%us", (unsigned int)(rtcm_age_ms / 1000), (unsigned int)((rtcm_age_ms % 1000) / 100));
+        lv_label_set_text(hdr_m_rtcm_lbl, buf);
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x00FF88), 0);
+    } else {
+        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Wait");
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFF8800), 0);
+    }
+
+    // Row 3: Slave Antenna (ANT2) Status & Metrics
     const char *hdg_badge_str = "HDG --";
-    lv_color_t hdg_badge_col  = lv_color_hex(0x4A5568);
+    lv_color_t hdg_badge_col  = lv_color_hex(0x3A3F47);
     if (d->heading_valid) {
         if (d->heading_is_fixed) {
             hdg_badge_str = "HDG FIX";
@@ -1306,37 +1388,46 @@ void update_rover_ui(const RoverUIData_t *d)
             hdg_badge_str = "HDG FLT";
             hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
         }
+    } else if (d->slave_fix_type == GNSS_FIX_RTK_FIXED) {
+        hdg_badge_str = "SLV FIX";
+        hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
+    } else if (d->slave_fix_type == GNSS_FIX_RTK_FLOAT) {
+        hdg_badge_str = "SLV FLT";
+        hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
     }
-    if (hdr_hdg_lbl) lv_label_set_text(hdr_hdg_lbl, hdg_badge_str);
-    if (hdr_hdg_badge) lv_obj_set_style_bg_color(hdr_hdg_badge, hdg_badge_col, 0);
+    if (hdr_s_fix_lbl) lv_label_set_text(hdr_s_fix_lbl, hdg_badge_str);
+    if (hdr_s_fix_badge) lv_obj_set_style_bg_color(hdr_s_fix_badge, hdg_badge_col, 0);
 
-    char acc_str[24];
-    nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
-    uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
-    snprintf(buf, sizeof(buf), "SV:%u/%u +/-%s", d->num_sats, sv_view, acc_str);
-    lv_label_set_text(hdr_sats_acc_lbl, buf);
-
-    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-    uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
-    if (rtcm_age_ms < 15000) {
-        snprintf(buf, sizeof(buf), "RTCM:%u.%us", (unsigned int)(rtcm_age_ms / 1000), (unsigned int)((rtcm_age_ms % 1000) / 100));
-        lv_label_set_text(hdr_rtcm_lbl, buf);
-        lv_obj_set_style_text_color(hdr_rtcm_lbl, lv_color_hex(0x00FF88), 0);
+    if (d->slave_num_sats > 0) {
+        snprintf(buf, sizeof(buf), "SV:%u", d->slave_num_sats);
     } else {
-        lv_label_set_text(hdr_rtcm_lbl, "RTCM:Wait");
-        lv_obj_set_style_text_color(hdr_rtcm_lbl, lv_color_hex(0xFF8800), 0);
+        snprintf(buf, sizeof(buf), "SV:--");
     }
+    lv_label_set_text(hdr_s_sats_lbl, buf);
 
-    // 2. Update Tile 0: Main Guidance Screen (Hybrid Navigation Engine)
+    if (d->baseline_length_m > 0.01f) {
+        snprintf(buf, sizeof(buf), "BL:%.1fcm", d->baseline_length_m * 100.0f);
+    } else {
+        snprintf(buf, sizeof(buf), "BL:--.-cm");
+    }
+    lv_label_set_text(hdr_s_bl_lbl, buf);
+
+    if (d->heading_valid) {
+        snprintf(buf, sizeof(buf), "Hdg:%.1f", d->true_heading_deg);
+    } else {
+        snprintf(buf, sizeof(buf), "Hdg:---.-");
+    }
+    lv_label_set_text(hdr_s_hdg_lbl, buf);
+
+    // Row 4: Streamlined Coordinates Bar
     char hgt_str[24], dist_str[24], dn_str[24], de_str[24];
     nav_format_height(d->tip_height_m, hgt_str, sizeof(hgt_str));
     nav_format_distance(d->distance_to_target_m, dist_str, sizeof(dist_str));
     nav_format_offset(d->d_north_m, dn_str, sizeof(dn_str));
     nav_format_offset(d->d_east_m, de_str, sizeof(de_str));
 
-    snprintf(buf, sizeof(buf), "Tip Lat: %12.8f | Lon: %12.8f\nHgt: %s (%s)",
-             d->tip_lat, d->tip_lon, hgt_str, current_settings.use_imperial_units ? "IMP" : "SI");
-    lv_label_set_text(t0_pos_lbl, buf);
+    snprintf(buf, sizeof(buf), "%.8f, %.8f, %s", d->tip_lat, d->tip_lon, hgt_str);
+    if (hdr_coords_lbl) lv_label_set_text(hdr_coords_lbl, buf);
 
     // Push position into breadcrumb buffer
     nav_breadcrumb_push(d->tip_lat, d->tip_lon);
@@ -1643,7 +1734,10 @@ void update_rover_ui(const RoverUIData_t *d)
 
     // 6. Update Tile 4: Hardware Diagnostics
     snprintf(buf, sizeof(buf),
-             "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+             "[UM982 COM1 IO17/18 @ 115200] [%s] (M_HDOP:%.1f | S_HDOP:%.1f)\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+             d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
+             d->hdop,
+             d->slave_hdop,
              d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
              (unsigned long)d->um982_stats.com1_rx_bytes,
              (unsigned long)d->um982_stats.com1_tx_bytes,

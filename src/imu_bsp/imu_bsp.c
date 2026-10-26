@@ -16,28 +16,42 @@ void imu_init(void)
     esp_err_t err = i2c_read_buff(imu_dev_handle, 0x00, &who_am_i, 1);
 
     uint8_t ctrl_buf;
-    // Soft Reset QMI8658 (REG 0x60 = 0xB0 per Waveshare bsp_qmi8658.c)
+    // 1. Soft Reset QMI8658 (REG 0x60 = 0xB0)
     ctrl_buf = 0xB0;
     i2c_write_buff(imu_dev_handle, 0x60, &ctrl_buf, 1);
-    vTaskDelay(pdMS_TO_TICKS(15));
+    vTaskDelay(pdMS_TO_TICKS(5));
 
-    // CTRL1 (0x02): Enable Address Auto-Increment, Little-Endian (0x40)
+    // 2. Poll RST_RESULT (0x4D) until reset completion bit (0x80) is asserted
+    uint8_t rst_result = 0;
+    for (int retry = 0; retry < 10; retry++) {
+        if (i2c_read_buff(imu_dev_handle, 0x4D, &rst_result, 1) == 0 && (rst_result & 0x80)) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    // 3. CTRL7 (0x08): Disable sensors during configuration (required by silicon errata before writing CTRL2/CTRL3)
+    ctrl_buf = 0x00;
+    i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
+
+    // 4. CTRL1 (0x02): Enable Address Auto-Increment (Bit 6 = 1 -> 0x40)
     ctrl_buf = 0x40;
     i2c_write_buff(imu_dev_handle, 0x02, &ctrl_buf, 1);
 
-    // CTRL7 (0x08): Enable Accelerometer & Gyroscope (0x03)
-    ctrl_buf = 0x03;
-    i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
-
-    // CTRL2 (0x03): Accel Config (4g, 250Hz -> 0x95)
+    // 5. CTRL2 (0x03): Accel Config (4g range, 250Hz ODR -> 0x95)
     ctrl_buf = 0x95;
     i2c_write_buff(imu_dev_handle, 0x03, &ctrl_buf, 1);
 
-    // CTRL3 (0x04): Gyro Config (512dps, 250Hz -> 0xD5)
+    // 6. CTRL3 (0x04): Gyro Config (512dps range, 250Hz ODR -> 0xD5)
     ctrl_buf = 0xD5;
     i2c_write_buff(imu_dev_handle, 0x04, &ctrl_buf, 1);
 
-    if (err == ESP_OK && who_am_i == 0x05) {
+    // 7. CTRL7 (0x08): Now Enable Accelerometer (Bit 0) & Gyroscope (Bit 1) -> 0x03
+    ctrl_buf = 0x03;
+    i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
+    vTaskDelay(pdMS_TO_TICKS(15));
+
+    if (err == 0 && who_am_i == 0x05) {
         printf("[IMU] QMI8658 (0x6B) ONLINE — WHO_AM_I: 0x%02X (4g/512dps @ 250Hz)\n", who_am_i);
     } else {
         printf("[IMU] QMI8658 (0x6B) WARN — WHO_AM_I: 0x%02X (err=%d)\n", who_am_i, (int)err);
@@ -49,8 +63,8 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
     static float last_acc[3] = {0.0f, 0.0f, 1.0f};
     static uint8_t fail_count = 0;
 
-    // Direct read 6 bytes from QMI8658_AX_L (0x35) without gating on STATUS0 (0x2E).
-    // QMI8658 internal shadow registers continuously update at 250Hz.
+    // Direct read 6 bytes from QMI8658_AX_L (0x35).
+    // Address auto-increment reads AX_L, AX_H, AY_L, AY_H, AZ_L, AZ_H in one I2C transaction.
     uint8_t raw[6] = {0};
     if (i2c_read_buff(imu_dev_handle, 0x35, raw, 6) == 0) {
         int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
@@ -71,8 +85,9 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
         fail_count++;
     }
 
-    // Auto-recovery: if 5 consecutive polls fail or return 0, reinitialize QMI8658
-    if (fail_count >= 5) {
+    // Auto-recovery: only reinitialize if 50 consecutive polls fail (5 continuous seconds of silence)
+    if (fail_count >= 50) {
+        printf("[IMU] 50 consecutive failed reads -> attempting auto-recovery\n");
         fail_count = 0;
         imu_init();
     }

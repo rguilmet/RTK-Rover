@@ -117,6 +117,12 @@ typedef struct {
     float            baseline_pitch_deg; // Baseline tilt angle (deg)
     float            baseline_length_m;  // Measured Master->Slave distance (e.g. 0.555m)
 
+    // Slave Antenna (ANT2) Diagnostics (from GNGGAH)
+    GnssFixType_t    slave_fix_type;
+    uint8_t          slave_num_sats;     // Satellites used by Slave Antenna
+    float            slave_hdop;         // HDOP of Slave Antenna
+    float            slave_alt_m;        // Altitude of Slave Antenna (m)
+
     // Active Target Guidance (Computed by nav_engine)
     bool             has_active_target;
     int16_t          active_target_idx;

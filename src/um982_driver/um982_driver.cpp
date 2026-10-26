@@ -94,6 +94,19 @@ static void handle_gga_sentence(char *line)
     }
 }
 
+static void handle_ggah_sentence(char *line)
+{
+    char *f[16] = {0};
+    int n = split_csv_fields(line, f, 16);
+    if (n < 9) return;
+
+    int qual = f[6] ? atoi(f[6]) : 0;
+    gnss_state.slave_fix_type = (GnssFixType_t)qual;
+    gnss_state.slave_num_sats = f[7] ? (uint8_t)atoi(f[7]) : 0;
+    if (f[8] && f[8][0]) gnss_state.slave_hdop  = (float)atof(f[8]);
+    if (f[9] && f[9][0]) gnss_state.slave_alt_m = (float)atof(f[9]);
+}
+
 static void handle_rmc_sentence(char *line)
 {
     char *f[14] = {0};
@@ -220,7 +233,10 @@ static void process_com1_line(char *line)
     strncpy(port_stats.last_com1_line, line, sizeof(port_stats.last_com1_line) - 1);
     port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
 
-    if (strncmp(line, "$GNGGA", 6) == 0 || strncmp(line, "$GPGGA", 6) == 0) {
+    if (strncmp(line, "$GNGGAH", 7) == 0 || strncmp(line, "$GPGGAH", 7) == 0) {
+        port_stats.nmea_sentences_ok++;
+        handle_ggah_sentence(line);
+    } else if (strncmp(line, "$GNGGA", 6) == 0 || strncmp(line, "$GPGGA", 6) == 0) {
         port_stats.nmea_sentences_ok++;
         handle_gga_sentence(line);
     } else if (strncmp(line, "$GNRMC", 6) == 0 || strncmp(line, "$GPRMC", 6) == 0) {
@@ -302,7 +318,7 @@ extern "C" void um982_configure_rover_defaults(void)
     send_um982_com1_command("CONFIG HEADING LENGTH 55.50 12.00");
     vTaskDelay(pdMS_TO_TICKS(40));
   
-    send_um982_com1_command("GPGGA COM1 0.2");
+    send_um982_com1_command("GPGGA COM1 0.5");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPRMC COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
@@ -310,9 +326,11 @@ extern "C" void um982_configure_rover_defaults(void)
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPGSV COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
-    // UNIHEADINGA provides heading, pitch, baseline length, and NARROW_INT fix type in one rich sentence.
-    // Omit redundant GPHDT and GPTHS to save ~350 B/s UART bandwidth while keeping their parsers intact.
-    send_um982_com1_command("UNIHEADINGA COM1 0.2");
+    // UNIHEADINGA provides heading, pitch, baseline length, and NARROW_INT fix type at 2 Hz
+    send_um982_com1_command("UNIHEADINGA COM1 0.5");
+    vTaskDelay(pdMS_TO_TICKS(40));
+    // GNGGAH provides Slave Antenna (ANT2) fix quality, satellites used, HDOP at 1 Hz
+    send_um982_com1_command("GNGGAH COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("SAVECONFIG");
     vTaskDelay(pdMS_TO_TICKS(40));
@@ -473,6 +491,10 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
 	state_out->true_heading_deg   = gnss_state.true_heading_deg;
 	state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
 	state_out->baseline_length_m  = gnss_state.baseline_length_m;
+	state_out->slave_fix_type     = gnss_state.slave_fix_type;
+	state_out->slave_num_sats     = gnss_state.slave_num_sats;
+	state_out->slave_hdop         = gnss_state.slave_hdop;
+	state_out->slave_alt_m        = gnss_state.slave_alt_m;
 }
 
 extern "C" void um982_get_port_stats(Um982PortStats_t *stats_out)
