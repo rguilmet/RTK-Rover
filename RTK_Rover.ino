@@ -216,50 +216,47 @@ void task_display_and_audio(void *pvParameters)
     for (;;) {
         uint32_t now = millis();
 
-        // 1..3: Execute Core 1 I2C transactions (RTC sync, 10 Hz IMU, 0.5 Hz PMIC) inside
-        // rover_lvgl_lock() so rover_lvgl_port_task (Priority 3, Touch 0x3B) and
-        // task_display_and_audio (Priority 2) never preempt each other mid-I2C-transfer.
-        if (rover_lvgl_lock(50)) {
-            uint16_t yy; uint8_t mo, dd, hh, mm, ss;
-            if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
-                i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
-                Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
+        // 1..3: Execute Core 1 I2C transactions (RTC sync, 10 Hz IMU, 0.5 Hz PMIC).
+        // Hardware bus thread-safety across tasks is guaranteed by i2c_bus_mutex in i2c_bsp.
+        // No dependency on the LVGL graphics mutex so sensor polling is never starved.
+        uint16_t yy; uint8_t mo, dd, hh, mm, ss;
+        if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
+            i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
+            Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
+        }
+
+        if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
+            last_imu_poll_ms = (now == 0) ? 1 : now;
+            float acc[3] = {0}, gyr[3] = {0};
+            int16_t imu_temp = 0;
+            imu_read(acc, gyr, &imu_temp);
+            imu_compute_pose_and_bubble(acc,
+                                        &cached_imu_pitch,
+                                        &cached_imu_roll,
+                                        &cached_bubble_x,
+                                        &cached_bubble_y,
+                                        &cached_pose);
+
+            if (Serial && current_settings.enable_serial_logging && (now - last_imu_log_ms >= 1000)) {
+                last_imu_log_ms = now;
+                Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
+                              cached_imu_pitch, cached_imu_roll,
+                              cached_bubble_x, cached_bubble_y,
+                              (int)cached_pose);
             }
 
-            if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
-                last_imu_poll_ms = (now == 0) ? 1 : now;
-                float acc[3] = {0}, gyr[3] = {0};
-                int16_t imu_temp = 0;
-                imu_read(acc, gyr, &imu_temp);
-                imu_compute_pose_and_bubble(acc,
-                                            &cached_imu_pitch,
-                                            &cached_imu_roll,
-                                            &cached_bubble_x,
-                                            &cached_bubble_y,
-                                            &cached_pose);
-
-                if (Serial && current_settings.enable_serial_logging && (now - last_imu_log_ms >= 1000)) {
-                    last_imu_log_ms = now;
-                    Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
-                                  cached_imu_pitch, cached_imu_roll,
-                                  cached_bubble_x, cached_bubble_y,
-                                  (int)cached_pose);
-                }
-
-                if (pending_tare_level) {
-                    pending_tare_level = false;
-                    current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
-                    current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
-                    mark_settings_dirty();
-                    play_rover_beep(1800, 80);
-                }
+            if (pending_tare_level) {
+                pending_tare_level = false;
+                current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
+                current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
+                mark_settings_dirty();
+                play_rover_beep(1800, 80);
             }
+        }
 
-            if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
-                last_pwr_poll_ms = (now == 0) ? 1 : now;
-                axp2101_bsp_read(&pwr);
-            }
-            rover_lvgl_unlock();
+        if (now - last_pwr_poll_ms >= 2000 || last_pwr_poll_ms == 0) {
+            last_pwr_poll_ms = (now == 0) ? 1 : now;
+            axp2101_bsp_read(&pwr);
         }
 
         // 4. Persist dirty settings after 4s debounce
@@ -268,18 +265,14 @@ void task_display_and_audio(void *pvParameters)
             settings_dirty = false;
         }
 
-        // 5. Audio Beep Synthesis on Core 1
-        if (pending_beep_freq_hz > 0 && pending_beep_dur_ms > 0) {
-            uint16_t freq = pending_beep_freq_hz;
-            uint16_t dur  = pending_beep_dur_ms;
-            pending_beep_freq_hz = 0;
-            pending_beep_dur_ms  = 0;
-
-            if (playback_handle && !current_settings.is_muted) {
+        // 5. Audio Beep Synthesis on Core 1 (Queue-driven: reliable, never dropped or overwritten)
+        RoverBeep_t beep_req;
+        while (beepQueue && xQueueReceive(beepQueue, &beep_req, 0) == pdPASS) {
+            if (playback_handle && !current_settings.is_muted && beep_req.freq_hz > 0 && beep_req.duration_ms > 0) {
                 int16_t buf[256 * 2];
-                uint32_t total_samples = (AUDIO_SAMPLE_RATE * dur) / 1000;
+                uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)beep_req.duration_ms) / 1000;
                 float phase = 0.0f;
-                float phase_inc = 2.0f * (float)M_PI * (float)freq / (float)AUDIO_SAMPLE_RATE;
+                float phase_inc = 2.0f * (float)M_PI * (float)beep_req.freq_hz / (float)AUDIO_SAMPLE_RATE;
                 uint32_t written = 0;
                 while (written < total_samples) {
                     for (int i = 0; i < 256; i++) {
@@ -439,6 +432,7 @@ void setup()
 
     // 7. Launch FreeRTOS Tasks
     roverStateQueue = xQueueCreate(1, sizeof(RoverUIData_t));
+    beepQueue       = xQueueCreate(8, sizeof(RoverBeep_t));
     xTaskCreatePinnedToCore(task_rover_core0, "RoverCore0", 8192, NULL, 4, NULL, 0);
     xTaskCreatePinnedToCore(task_display_and_audio, "RoverUI", 8192, NULL, 2, NULL, 1);
 }
@@ -471,7 +465,6 @@ void loop()
             long_press_fired = true;
             Serial.println("BOOT Long-Press: Taking Screenshot...");
             play_rover_beep(2000, 60);
-            vTaskDelay(pdMS_TO_TICKS(80));
             play_rover_beep(2500, 100);
             take_screenshot_to_sd();
         }

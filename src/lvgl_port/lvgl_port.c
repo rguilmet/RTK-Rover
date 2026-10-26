@@ -1310,7 +1310,7 @@ void create_rover_ui(void)
 void update_rover_ui(const RoverUIData_t *d)
 {
     if (!d) return;
-    if (!rover_lvgl_lock(50)) return;
+    if (!rover_lvgl_lock(100)) return;
 
     char buf[256];
 
