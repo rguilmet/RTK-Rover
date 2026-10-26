@@ -196,12 +196,14 @@ void task_rover_core0(void *pvParameters)
             if (Serial && current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
                 const char *hdg_mode = state.heading_valid ? (state.heading_is_fixed ? "FIX" : "FLT") : "--";
-                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
                               (int)state.fix_type,
                               state.num_sats,
                               state.sats_in_view,
                               hdg_mode,
                               state.true_heading_deg,
+                              state.base_station_id,
+                              state.diff_age_s,
                               (unsigned long)state.um982_stats.com1_rx_bytes,
                               (unsigned long)state.um982_stats.com1_tx_bytes,
                               (unsigned long)state.um982_stats.nmea_sentences_ok,

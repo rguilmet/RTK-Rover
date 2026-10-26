@@ -1933,11 +1933,20 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (t4_ant_diff_lbl) {
-        snprintf(buf, sizeof(buf),
-                 "RTCM3 Diff Age:%.1fs | 1005:%u MSM:%u",
-                 d->diff_age_s,
-                 d->e220_stats.msg_1005_count,
-                 d->e220_stats.msg_msm_count);
+        if (d->base_station_id > 0) {
+            snprintf(buf, sizeof(buf),
+                     "Base ID:#%u | Diff:%.1fs | 1005:%u MSM:%u",
+                     d->base_station_id,
+                     d->diff_age_s,
+                     d->e220_stats.msg_1005_count,
+                     d->e220_stats.msg_msm_count);
+        } else {
+            snprintf(buf, sizeof(buf),
+                     "RTCM3 Diff Age:%.1fs | 1005:%u MSM:%u",
+                     d->diff_age_s,
+                     d->e220_stats.msg_1005_count,
+                     d->e220_stats.msg_msm_count);
+        }
         lv_label_set_text(t4_ant_diff_lbl, buf);
     }
 

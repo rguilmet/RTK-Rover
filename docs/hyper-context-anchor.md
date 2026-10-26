@@ -35,6 +35,12 @@
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
+* **Completed (`v0.2.10`):**
+  - **Standardized Timestamp-First CSV Schemas:** Standardized `timestamp` as Column 1 and `firmware_ver` as Column 2 across both `route_*.csv` and `survey_logged_pins.csv` with standard ISO/MFS `%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%03d` format.
+  - **Unicore Extended Base Station Telemetry (`BASEINFOA`):** Initialized UM982 with `BASEINFOA COM1 ONCHANGED` to parse incoming RTCM 1005/1006 reference frames and report Base Station ID and ECEF coordinates. Closed-form Bowring conversion translates to WGS84 coordinates on-the-fly without software RTCM sniffing.
+  - **Base Station ID & Differential Telemetry:** Extracted `base_id` from `$GNGGA` field 14 and `#BASEINFOA` field 4; streamed to `route_*.csv`, `survey_logged_pins.csv`, Tile 4 Antenna card, and `[TELEM]` serial monitor.
+  - **Dual-Antenna Moving-Baseline & Slave Telemetry:** Logged `hdg_fix` (`HDG_FIX`, `HDG_FLT`, `NONE`), Slave satellites (`slave_sats`), Slave HDOP (`slave_hdop`), and survey pole tilt angle (`pole_tilt_deg`).
+  - **Multi-Column Waypoint Ingestion:** Expanded `waypoint_load_csv()` from 10 to 24 columns with dynamic header discovery.
 * **Completed (`v0.2.9`):**
   - **Dual-Mode Hybrid Navigation Engine (Tile 0):** Dynamic Course-Up grid ($> 1.5\text{ m}$) with antenna beam vector, turn cues, dynamic auto-scaling, and 64-point breadcrumbs; centimeter bullseye mode ($\le 1.5\text{ m}$) with green ring lock audio cue.
   - **Persistent 4-Row Status Header:** Row 1 (Date, Time, Units, Wi-Fi, Battery), Row 2 (Master Antenna ANT1 fix, SVs, precision, RTCM age), Row 3 (Slave Antenna ANT2 fix, SVs, baseline, pitch, heading), Row 4 (Streamlined coordinates).
@@ -45,4 +51,4 @@
   - **Dual Logging Subsystems:** Continuous Route track CSV logging (`/routes/`) and raw UM982 NMEA logging (`/nmea/`).
   - **Storage Auto-Routing & FFat Mirroring:** MicroSD primary, FFat fallback, automatic mirror of `settings.json`.
   - **Audio Queue:** FreeRTOS `beepQueue` synthesized on Core 1 for reliable multi-tone chirps.
-* **Current Status:** Firmware `v0.2.9` active, compiled, committed, and ready for field operation.
+* **Current Status:** Firmware `v0.2.10` active, compiled, committed, and ready for field operation.

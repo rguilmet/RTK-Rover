@@ -84,6 +84,9 @@ static void handle_gga_sentence(char *line)
     if (f[13] && f[13][0]) {
         gnss_state.diff_age_s = (float)atof(f[13]);
     }
+    if (n > 14 && f[14] && f[14][0]) {
+        gnss_state.base_station_id = (uint16_t)atoi(f[14]);
+    }
 
     if (gnss_state.h_acc_m <= 0.0001f || qual != GNSS_FIX_RTK_FIXED) {
         if (qual == GNSS_FIX_RTK_FIXED)      gnss_state.h_acc_m = 0.014f;
@@ -225,6 +228,73 @@ static void handle_uniheadinga_sentence(char *line)
     }
 }
 
+static void ecef_to_wgs84(double x, double y, double z, double *lat_deg, double *lon_deg, double *alt_m)
+{
+    const double a = 6378137.0;
+    const double f = 1.0 / 298.257223563;
+    const double b = a * (1.0 - f);
+    const double e2 = (a * a - b * b) / (a * a);
+    const double ep2 = (a * a - b * b) / (b * b);
+
+    double p = sqrt(x * x + y * y);
+    if (p < 1e-6) {
+        *lat_deg = (z > 0) ? 90.0 : -90.0;
+        *lon_deg = 0.0;
+        *alt_m = fabs(z) - b;
+        return;
+    }
+
+    double th = atan2(a * z, b * p);
+    double sin_th = sin(th);
+    double cos_th = cos(th);
+
+    double phi = atan2(z + ep2 * b * sin_th * sin_th * sin_th,
+                       p - e2 * a * cos_th * cos_th * cos_th);
+    double lam = atan2(y, x);
+
+    double sin_phi = sin(phi);
+    double N = a / sqrt(1.0 - e2 * sin_phi * sin_phi);
+
+    *lat_deg = phi * (180.0 / M_PI);
+    *lon_deg = lam * (180.0 / M_PI);
+    *alt_m   = (p / cos(phi)) - N;
+}
+
+static void handle_baseinfoa_sentence(char *line)
+{
+    char *semi = strchr(line, ';');
+    if (!semi) return;
+
+    char *f[8] = {0};
+    int n = split_csv_fields(semi + 1, f, 8);
+    if (n < 5) return;
+
+    long status = strtol(f[0], NULL, 16);
+    if (status == 0 && f[1] && f[2] && f[3]) {
+        double x = strtod(f[1], NULL);
+        double y = strtod(f[2], NULL);
+        double z = strtod(f[3], NULL);
+
+        gnss_state.base_ecef_x = x;
+        gnss_state.base_ecef_y = y;
+        gnss_state.base_ecef_z = z;
+
+        ecef_to_wgs84(x, y, z, &gnss_state.base_lat, &gnss_state.base_lon, &gnss_state.base_alt_m);
+        gnss_state.base_coords_valid = true;
+
+        if (f[4] && f[4][0]) {
+            const char *sid_str = f[4];
+            if (sid_str[0] == '"') sid_str++;
+            gnss_state.base_station_id = (uint16_t)atoi(sid_str);
+        }
+
+        Serial.printf("[UM982 BASE] ID:%u Valid:1 Pos:%.8f, %.8f, %.3fm (ECEF: %.2f, %.2f, %.2f)\n",
+                      gnss_state.base_station_id,
+                      gnss_state.base_lat, gnss_state.base_lon, gnss_state.base_alt_m,
+                      x, y, z);
+    }
+}
+
 static void process_com1_line(char *line)
 {
     if (!line || line[0] == '\0') return;
@@ -256,6 +326,8 @@ static void process_com1_line(char *line)
         handle_gsv_sentence(line);
     } else if (strncmp(line, "#UNIHEADINGA", 12) == 0) {
         handle_uniheadinga_sentence(line);
+    } else if (strncmp(line, "#BASEINFOA", 10) == 0) {
+        handle_baseinfoa_sentence(line);
     } else if (strncmp(line, "#VERSIONA", 9) == 0) {
         char *semi = strchr(line, ';');
         if (semi) {
@@ -331,6 +403,9 @@ extern "C" void um982_configure_rover_defaults(void)
     vTaskDelay(pdMS_TO_TICKS(40));
     // GNGGAH provides Slave Antenna (ANT2) fix quality, satellites used, HDOP at 1 Hz
     send_um982_com1_command("GNGGAH COM1 1");
+    vTaskDelay(pdMS_TO_TICKS(40));
+    // BASEINFOA provides base station ID, health status, and ECEF coordinates ONCHANGED
+    send_um982_com1_command("BASEINFOA COM1 ONCHANGED");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("SAVECONFIG");
     vTaskDelay(pdMS_TO_TICKS(40));

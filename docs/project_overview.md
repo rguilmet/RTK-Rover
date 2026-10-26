@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.2.0`  
+**Document Version:** `v1.3.0`  
 **Last Updated:** October 26, 2026  
-**Firmware Target:** `v0.2.9`  
+**Firmware Target:** `v0.2.10`  
 **Python Ecosystem Target:** `v1.0.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -44,6 +44,12 @@ The UM982 reports the WGS84 coordinates (`GPGGA`) of the **Master Antenna** phas
 Because the pole centerline is located at the midpoint between the two antennas ($L = \frac{\text{antenna\_spacing\_m}}{2} = 0.2775\text{ m}$), `nav_compute_pole_tip_position()` projects the Master coordinates along the 3D baseline vector and subtracts `antenna_height_m`:
 $$\Delta N = \frac{B}{2}\cos(\theta_{\text{baseline}})\cos(\psi_{\text{baseline}}), \quad \Delta E = \frac{B}{2}\cos(\theta_{\text{baseline}})\sin(\psi_{\text{baseline}}), \quad \Delta U = \frac{B}{2}\sin(\theta_{\text{baseline}}) - H_{\text{pole}}$$
 This prevents the displayed or logged ground-tip coordinates from orbiting in a $27.75\text{ cm}$ radius circle when the pole is rotated in place.
+
+### C. Unicore Extended Base Station Telemetry (`BASEINFOA`) & Standardized Logging (`v0.2.10`)
+* **Autonomous RTCM Decoding:** The UM982 receiver autonomously parses incoming RTCM 1005/1006 reference frames from the Base Station received via LoRa on COM2.
+* **`BASEINFOA ONCHANGED` Stream:** On startup, the ESP32 issues `BASEINFOA COM1 ONCHANGED`. When a base broadcast is received or updated, UM982 transmits `#BASEINFOA` reporting Base Station ID, health status, and ECEF coordinates $(X, Y, Z)$.
+* **Closed-Form Geodetic Conversion:** The ESP32 driver converts base ECEF coordinates into WGS84 Latitude, Longitude, and Height via closed-form Bowring equations in $O(1)$ time with sub-millimeter precision.
+* **Standardized CSV Formats:** Both `route_*.csv` and `survey_logged_pins.csv` enforce `timestamp` as Column 1 and `firmware_ver` as Column 2, followed by comprehensive kinematic, differential link, and precision telemetry.
 
 ### B. Display Orientation Independence (`imu_bsp`)
 * **True Heading Source:** Driven strictly by the pole-mounted UM982 dual antennas (`UNIHEADINGA` / `GPHDT`), so rotating or tilting the handheld display never corrupts the heading compass arrow.

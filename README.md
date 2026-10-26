@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.2.9`  
+**Firmware Version:** `v0.2.10`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))
 
 ---
@@ -21,6 +21,8 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 * **2D Pole Plumb Bubble Level (Tile 3):** Onboard QMI8658 6-axis IMU aligned for portrait orientation. Left/Right tilt drives horizontal bubble movement; Up/Down tilt drives vertical bubble movement. Includes a **Tare Pole Bracket Angle** button to zero the level when the display is clipped to an angled pole bracket.
 * **Wi-Fi Web File Portal:** Integrated HTML5 web server (`http://<rover-ip>/`) for wireless field maintenance from any phone, tablet, or laptop. Browse, download, and delete survey logs (`/survey_logged_pins.csv`), route tracks (`/routes/*.csv`), raw NMEA logs (`/nmea/*.log`), and upload updated `waypoints.csv` or `settings.json` without removing the SD card.
 * **Storage Auto-Routing & Settings Mirroring:** Primary storage routes automatically to the MicroSD Card (`/sdcard/`) with internal Flash (`FFat`) as fallback. Changes to `settings.json` are automatically mirrored to FFat on boot and whenever settings are saved.
+* **Standardized Timestamp-First CSV Logging:** Standardized `timestamp` as the primary key in Column 1 and `firmware_ver` in Column 2 across both `route_*.csv` and `survey_logged_pins.csv`. Fully logs moving-baseline heading fix status (`hdg_fix`), Master and Slave antenna satellites and HDOP, differential correction age, base station ID, vertical accuracy, and survey pole tilt angle.
+* **Unicore Extended Base Station Telemetry (`BASEINFOA`):** The UM982 receiver autonomously parses incoming RTCM 1005/1006 reference frames received via LoRa on COM2 and outputs `#BASEINFOA` with base station ID, status, and precise ECEF coordinates. Closed-form Bowring conversion translates these to WGS84 base station latitude, longitude, and elevation in real time without software RTCM bit-sniffing.
 * **On-Screen Brightness & Volume Controls (Tile 4):** Stepped touch buttons on Tile 4 cycle backlight brightness (`25% -> 50% -> 75% -> 100%`) and audio volume (`MUTE -> 25% -> 50% -> 75% -> 100%`), automatically debounced and saved to `settings.json`.
 * **Stable Field UI Navigation:** Tile swipe gestures are disabled to eliminate accidental page turns while scrolling diagnostics. Screens are switched via the persistent `< Prev` and `Next >` navigation bar. Physical BOOT button (GPIO 0) is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
 

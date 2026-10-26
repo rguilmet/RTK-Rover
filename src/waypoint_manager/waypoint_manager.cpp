@@ -1,7 +1,9 @@
 #include "waypoint_manager.h"
+#include "../../user_config.h"
 #include "../settings_manager/settings_manager.h"
 #include "../rtc_bsp/rtc_bsp.h"
 #include "../nav_engine/nav_engine.h"
+#include <math.h>
 #include <Arduino.h>
 #include <SD_MMC.h>
 #include <FFat.h>
@@ -93,12 +95,12 @@ extern "C" bool waypoint_load_csv(const char *filepath)
         line.trim();
         if (line.length() == 0 || line.startsWith("#")) continue;
 
-        // Split CSV columns
-        String cols[10];
+        // Split CSV columns (supporting up to 24 columns for extended logs)
+        String cols[24];
         int col_cnt = 0;
         int start = 0;
         int len = line.length();
-        for (int i = 0; i <= len && col_cnt < 10; i++) {
+        for (int i = 0; i <= len && col_cnt < 24; i++) {
             if (i == len || line.charAt(i) == ',') {
                 cols[col_cnt] = line.substring(start, i);
                 cols[col_cnt].trim();
@@ -109,9 +111,9 @@ extern "C" bool waypoint_load_csv(const char *filepath)
 
         if (first_line) {
             first_line = false;
-            String c0 = cols[0];
-            c0.toLowerCase();
-            if (c0.indexOf("label") >= 0 || c0.indexOf("name") >= 0 || c0.indexOf("id") >= 0) {
+            String line_lower = line;
+            line_lower.toLowerCase();
+            if (line_lower.indexOf("label") >= 0 || line_lower.indexOf("name") >= 0 || line_lower.indexOf("id") >= 0 || line_lower.indexOf("lat") >= 0 || line_lower.indexOf("time") >= 0) {
                 col_elev = -1;
                 col_notes = -1;
                 for (int c = 0; c < col_cnt; c++) {
@@ -208,16 +210,21 @@ extern "C" void trigger_survey_waypoint_log(void)
 static const char* fix_type_to_str(GnssFixType_t fix)
 {
     switch (fix) {
-        case GNSS_FIX_RTK_FIXED: return "RTK_FIXED";
-        case GNSS_FIX_RTK_FLOAT: return "RTK_FLOAT";
+        case GNSS_FIX_RTK_FIXED: return "RTK_FIX";
+        case GNSS_FIX_RTK_FLOAT: return "RTK_FLT";
         case GNSS_FIX_DGPS:      return "DGPS";
         case GNSS_FIX_SINGLE:    return "SINGLE";
-        default:                 return "NO_FIX";
+        default:                 return "NONE";
     }
 }
 
 static void save_survey_record_to_csv(double lat, double lon, double height_m,
-                                      GnssFixType_t fix, float h_acc_m, uint16_t samples)
+                                      GnssFixType_t fix, const char *hdg_fix_str,
+                                      float h_acc_m, float v_acc_m, float hdop,
+                                      uint8_t sats, uint8_t slave_sats,
+                                      float diff_age_s, uint16_t base_id,
+                                      float heading_deg, float pole_tilt_deg,
+                                      uint16_t samples)
 {
     bool exists = get_active_fs().exists("/survey_logged_pins.csv");
     File f = get_active_fs().open("/survey_logged_pins.csv", FILE_APPEND);
@@ -229,15 +236,24 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
         return;
     }
 
+    // Standardized header: timestamp is Column 1, followed by firmware_ver
     if (!exists) {
-        f.println("label,latitude,longitude,elevation,fix_type,h_acc_m,samples,timestamp,notes");
+        f.println("timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes");
     }
 
     char label[WAYPOINT_LABEL_LEN];
     waypoint_format_next_survey_label(label, sizeof(label));
 
-    char ts[32];
-    get_formatted_timestamp(ts, sizeof(ts), false);
+    // Standardized ISO / MFS timestamp format matching route logger
+    RtcDateTime_t lt;
+    get_local_datetime(&lt);
+    uint16_t ms = (uint16_t)(millis() % 1000);
+    char sign = (current_settings.minutesOffsetToUTC >= 0) ? '+' : '-';
+    int abs_offset = abs(current_settings.minutesOffsetToUTC);
+
+    char ts_buf[48];
+    snprintf(ts_buf, sizeof(ts_buf), "%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%03d",
+             lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second, ms, sign, abs_offset);
 
     uint8_t tag_idx = g_survey_note_tag_idx < 8 ? g_survey_note_tag_idx : 0;
     char note_buf[96] = {0};
@@ -257,9 +273,21 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
         snprintf(note_buf, sizeof(note_buf), "%s", kNoteTags[tag_idx]);
     }
 
-    char row[256];
-    snprintf(row, sizeof(row), "%s,%.8f,%.8f,%.3f,%s,%.3f,%u,%s,%s",
-             label, lat, lon, height_m, fix_type_to_str(fix), h_acc_m, samples, ts, note_buf);
+    char row[320];
+    snprintf(row, sizeof(row),
+             "%s,%s,%s,%.9f,%.9f,%.3f,%s,%s,%.3f,%.3f,%.1f,%u,%u,%.1f,%u,%.2f,%.2f,%u,%s",
+             ts_buf,
+             ROVER_FIRMWARE_VERSION,
+             label,
+             lat, lon, height_m,
+             fix_type_to_str(fix),
+             hdg_fix_str ? hdg_fix_str : "NONE",
+             h_acc_m, v_acc_m, hdop,
+             (unsigned int)sats, (unsigned int)slave_sats,
+             diff_age_s, (unsigned int)base_id,
+             heading_deg, pole_tilt_deg,
+             samples,
+             note_buf);
     f.println(row);
     f.close();
 
@@ -270,6 +298,18 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     Serial.printf("SURVEY LOGGED: %s\n", row);
 }
 
+// Survey averaging accumulation variables
+static float          survey_sum_vacc       = 0.0f;
+static float          survey_sum_hdop       = 0.0f;
+static float          survey_sum_tilt       = 0.0f;
+static float          survey_sum_hdg        = 0.0f;
+static uint16_t       survey_hdg_valid_cnt  = 0;
+static uint16_t       survey_hdg_fix_cnt    = 0;
+static uint8_t        survey_max_sats       = 0;
+static uint8_t        survey_max_slave_sats = 0;
+static float          survey_last_diff_age  = 0.0f;
+static uint16_t       survey_base_id        = 0;
+
 extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state,
                                                  bool *in_progress_out,
                                                  uint8_t *progress_pct_out,
@@ -277,15 +317,25 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
                                                  char *last_logged_out)
 {
     if (survey_requested && !survey_active) {
-        survey_requested = false;
-        survey_active    = true;
-        survey_start_ms  = millis();
-        survey_sum_lat   = 0.0;
-        survey_sum_lon   = 0.0;
-        survey_sum_alt   = 0.0;
-        survey_sum_hacc  = 0.0f;
-        survey_epoch_cnt = 0;
-        survey_best_fix  = live_state->fix_type;
+        survey_requested      = false;
+        survey_active         = true;
+        survey_start_ms       = millis();
+        survey_sum_lat        = 0.0;
+        survey_sum_lon        = 0.0;
+        survey_sum_alt        = 0.0;
+        survey_sum_hacc       = 0.0f;
+        survey_sum_vacc       = 0.0f;
+        survey_sum_hdop       = 0.0f;
+        survey_sum_tilt       = 0.0f;
+        survey_sum_hdg        = 0.0f;
+        survey_hdg_valid_cnt  = 0;
+        survey_hdg_fix_cnt    = 0;
+        survey_max_sats       = 0;
+        survey_max_slave_sats = 0;
+        survey_last_diff_age  = 0.0f;
+        survey_base_id        = 0;
+        survey_epoch_cnt      = 0;
+        survey_best_fix       = live_state->fix_type;
         play_rover_beep(1200, 80);
     }
 
@@ -294,6 +344,31 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
         survey_sum_lon  += live_state->tip_lon;
         survey_sum_alt  += live_state->tip_height_m;
         survey_sum_hacc += live_state->h_acc_m;
+        survey_sum_vacc += live_state->v_acc_m;
+        survey_sum_hdop += live_state->hdop;
+
+        float pole_tilt = sqrtf(live_state->pole_bubble_x_deg * live_state->pole_bubble_x_deg +
+                                live_state->pole_bubble_y_deg * live_state->pole_bubble_y_deg);
+        survey_sum_tilt += pole_tilt;
+
+        if (live_state->heading_valid) {
+            survey_sum_hdg += live_state->true_heading_deg;
+            survey_hdg_valid_cnt++;
+            if (live_state->heading_is_fixed) {
+                survey_hdg_fix_cnt++;
+            }
+        }
+        if (live_state->num_sats > survey_max_sats) {
+            survey_max_sats = live_state->num_sats;
+        }
+        if (live_state->slave_num_sats > survey_max_slave_sats) {
+            survey_max_slave_sats = live_state->slave_num_sats;
+        }
+        survey_last_diff_age = live_state->diff_age_s;
+        if (live_state->base_station_id > 0) {
+            survey_base_id = live_state->base_station_id;
+        }
+
         survey_epoch_cnt++;
         if (live_state->fix_type == GNSS_FIX_RTK_FIXED) {
             survey_best_fix = GNSS_FIX_RTK_FIXED;
@@ -309,8 +384,18 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
             double avg_lon  = survey_sum_lon / (double)survey_epoch_cnt;
             double avg_alt  = survey_sum_alt / (double)survey_epoch_cnt;
             float  avg_hacc = survey_sum_hacc / (float)survey_epoch_cnt;
+            float  avg_vacc = survey_sum_vacc / (float)survey_epoch_cnt;
+            float  avg_hdop = survey_sum_hdop / (float)survey_epoch_cnt;
+            float  avg_tilt = survey_sum_tilt / (float)survey_epoch_cnt;
+            float  avg_hdg  = (survey_hdg_valid_cnt > 0) ? (survey_sum_hdg / (float)survey_hdg_valid_cnt) : -1.0f;
+            const char *hdg_fix_str = (survey_hdg_fix_cnt > (survey_epoch_cnt / 2)) ? "HDG_FIX" :
+                                      ((survey_hdg_valid_cnt > 0) ? "HDG_FLT" : "NONE");
 
-            save_survey_record_to_csv(avg_lat, avg_lon, avg_alt, survey_best_fix, avg_hacc, survey_epoch_cnt);
+            save_survey_record_to_csv(avg_lat, avg_lon, avg_alt, survey_best_fix, hdg_fix_str,
+                                      avg_hacc, avg_vacc, avg_hdop,
+                                      survey_max_sats, survey_max_slave_sats,
+                                      survey_last_diff_age, survey_base_id,
+                                      avg_hdg, avg_tilt, survey_epoch_cnt);
             survey_active = false;
             play_rover_beep(2200, 160);
         }

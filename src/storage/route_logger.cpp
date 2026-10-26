@@ -1,6 +1,8 @@
 #include "route_logger.h"
+#include "../../user_config.h"
 #include "../settings_manager/settings_manager.h"
 #include "../rtc_bsp/rtc_bsp.h"
+#include <math.h>
 #include <Arduino.h>
 #include <FS.h>
 
@@ -50,7 +52,7 @@ extern "C" bool route_logger_start(void)
     }
 
     // CSV Header matching MFS & survey standards
-    s_route_file.println("timestamp,tip_lat,tip_lon,tip_alt_m,raw_lat,raw_lon,raw_alt_m,fix_type,sats,hacc_m,true_heading_deg,baseline_pitch_deg,baseline_len_m");
+    s_route_file.println("timestamp,firmware_ver,tip_lat,tip_lon,tip_alt_m,raw_lat,raw_lon,raw_alt_m,pos_fix,hdg_fix,sats,slave_sats,hacc_m,vacc_m,hdop,slave_hdop,diff_age_s,base_id,true_heading_deg,baseline_pitch_deg,baseline_len_m,pole_tilt_deg");
     s_route_file.flush();
 
     s_route_points = 0;
@@ -115,25 +117,39 @@ extern "C" void route_logger_log_point(const RoverUIData_t *state)
     snprintf(ts_buf, sizeof(ts_buf), "%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%d",
              lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second, ms, sign, abs_offset);
 
-    const char *fix_str = "NONE";
+    const char *pos_fix_str = "NONE";
     switch (state->fix_type) {
-        case GNSS_FIX_RTK_FIXED: fix_str = "RTK_FIX"; break;
-        case GNSS_FIX_RTK_FLOAT: fix_str = "RTK_FLT"; break;
-        case GNSS_FIX_DGPS:      fix_str = "DGPS"; break;
-        case GNSS_FIX_SINGLE:    fix_str = "SINGLE"; break;
-        default:                 fix_str = "NONE"; break;
+        case GNSS_FIX_RTK_FIXED: pos_fix_str = "RTK_FIX"; break;
+        case GNSS_FIX_RTK_FLOAT: pos_fix_str = "RTK_FLT"; break;
+        case GNSS_FIX_DGPS:      pos_fix_str = "DGPS"; break;
+        case GNSS_FIX_SINGLE:    pos_fix_str = "SINGLE"; break;
+        default:                 pos_fix_str = "NONE"; break;
     }
 
-    s_route_file.printf("%s,%.9f,%.9f,%.3f,%.9f,%.9f,%.3f,%s,%u,%.3f,%.2f,%.2f,%.3f\n",
+    const char *hdg_fix_str = state->heading_valid ? (state->heading_is_fixed ? "HDG_FIX" : "HDG_FLT") : "NONE";
+
+    float pole_tilt = sqrtf(state->pole_bubble_x_deg * state->pole_bubble_x_deg +
+                            state->pole_bubble_y_deg * state->pole_bubble_y_deg);
+
+    s_route_file.printf("%s,%s,%.9f,%.9f,%.3f,%.9f,%.9f,%.3f,%s,%s,%u,%u,%.3f,%.3f,%.1f,%.1f,%.1f,%u,%.2f,%.2f,%.3f,%.2f\n",
                         ts_buf,
+                        ROVER_FIRMWARE_VERSION,
                         state->tip_lat, state->tip_lon, state->tip_height_m,
                         state->raw_lat, state->raw_lon, state->raw_alt_m,
-                        fix_str,
+                        pos_fix_str,
+                        hdg_fix_str,
                         (unsigned int)state->num_sats,
+                        (unsigned int)state->slave_num_sats,
                         state->h_acc_m,
+                        state->v_acc_m,
+                        state->hdop,
+                        state->slave_hdop,
+                        state->diff_age_s,
+                        (unsigned int)state->base_station_id,
                         state->heading_valid ? state->true_heading_deg : -1.0f,
                         state->heading_valid ? state->baseline_pitch_deg : 0.0f,
-                        state->heading_valid ? state->baseline_length_m : 0.0f);
+                        state->heading_valid ? state->baseline_length_m : 0.0f,
+                        pole_tilt);
     s_route_file.flush();
     s_route_points++;
 

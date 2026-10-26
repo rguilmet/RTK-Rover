@@ -123,6 +123,16 @@ typedef struct {
     float            slave_hdop;         // HDOP of Slave Antenna
     float            slave_alt_m;        // Altitude of Slave Antenna (m)
 
+    // Base Station Telemetry (from GNGGA and BASEINFOA)
+    uint16_t         base_station_id;    // Base station ID (e.g. 1)
+    bool             base_coords_valid;  // True if BASEINFOA received
+    double           base_lat;           // Base Station Latitude (deg)
+    double           base_lon;           // Base Station Longitude (deg)
+    double           base_alt_m;         // Base Station Altitude (m)
+    double           base_ecef_x;        // Base Station ECEF X (m)
+    double           base_ecef_y;        // Base Station ECEF Y (m)
+    double           base_ecef_z;        // Base Station ECEF Z (m)
+
     // Active Target Guidance (Computed by nav_engine)
     bool             has_active_target;
     int16_t          active_target_idx;
