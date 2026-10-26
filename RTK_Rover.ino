@@ -30,10 +30,14 @@ extern esp_io_expander_handle_t io_expander;
 bool sd_card_mounted = false;
 bool sd_card_use_spi = false;
 
+typedef struct {
+    uint16_t freq_hz;
+    uint16_t duration_ms;
+} RoverBeep_t;
+
 static QueueHandle_t roverStateQueue = NULL;
+static QueueHandle_t beepQueue       = NULL;
 static esp_codec_dev_handle_t playback_handle = NULL;
-static volatile uint16_t pending_beep_freq_hz = 0;
-static volatile uint16_t pending_beep_dur_ms  = 0;
 static volatile bool     pending_tare_level   = false;
 
 // =========================================================================
@@ -103,8 +107,10 @@ static void audio_bsp_init(void)
 
 extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 {
-    pending_beep_freq_hz = freq_hz;
-    pending_beep_dur_ms  = duration_ms;
+    if (beepQueue) {
+        RoverBeep_t b = { freq_hz, duration_ms };
+        xQueueSend(beepQueue, &b, 0);
+    }
 }
 
 extern "C" void trigger_tare_pole_level(void)
