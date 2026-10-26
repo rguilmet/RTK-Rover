@@ -52,6 +52,23 @@ extern "C" void init_backlight_pwm(void)
     set_backlight_pwm(current_settings.brightness);
 }
 
+extern "C" void set_rover_brightness(uint8_t brightness_pct)
+{
+    if (brightness_pct > 100) brightness_pct = 100;
+    current_settings.brightness = brightness_pct;
+    set_backlight_pwm(brightness_pct);
+}
+
+extern "C" void set_rover_volume(uint8_t volume_pct)
+{
+    if (volume_pct > 100) volume_pct = 100;
+    current_settings.volume = volume_pct;
+    current_settings.is_muted = (volume_pct == 0);
+    if (playback_handle) {
+        esp_codec_dev_set_out_vol(playback_handle, (int)volume_pct);
+    }
+}
+
 // =========================================================================
 // Audio Beep Synthesis via ES8311 (Optional Feedback for Logging / Screenshot)
 // =========================================================================
@@ -74,7 +91,7 @@ static void audio_bsp_init(void)
     if (init_codec(&codec_cfg) == 0) {
         playback_handle = get_playback_handle();
         if (playback_handle) {
-            esp_codec_dev_set_out_vol(playback_handle, (float)current_settings.volume);
+            esp_codec_dev_set_out_vol(playback_handle, (int)current_settings.volume);
             esp_codec_dev_sample_info_t fs = {};
             fs.sample_rate = AUDIO_SAMPLE_RATE;
             fs.channel = 2;
@@ -448,12 +465,12 @@ void loop()
     }
 
     // =====================================================================
-    // Physical BOOT Button (GPIO 0) State Machine:
-    // - Short-Press (< 1.2s release): Log Waypoint ONLY when on Tile 2 (col == 1)
-    // - Long-Press  (>= 1.5s hold):   Save Screenshot to SD Card on ALL screens
+    // Physical BOOT Button (GPIO 0):
+    // - Long-Press (>= 1.5s hold): Save Screenshot to SD Card on ALL screens
+    // (Short-press logging removed per user request: on-screen buttons used instead)
     // =====================================================================
     static uint32_t btn_press_start = 0;
-    static bool     btn_is_pressed  = false;
+    static bool     btn_is_pressed   = false;
     static bool     long_press_fired = false;
 
     if (digitalRead(ROVER_PIN_BOOT_BTN) == LOW) {
@@ -469,19 +486,7 @@ void loop()
             take_screenshot_to_sd();
         }
     } else {
-        if (btn_is_pressed) {
-            uint32_t held_ms = millis() - btn_press_start;
-            if (!long_press_fired && held_ms >= 40 && held_ms < 1200) {
-                // Short press released: check if Tile 2 (Field Survey Logger, col == 1) is active
-                if (rover_get_active_tile_index() == 1) {
-                    Serial.println("BOOT Short-Press on Tile 2: Triggering Survey Waypoint Log!");
-                    trigger_survey_waypoint_log();
-                } else {
-                    Serial.println("BOOT Short-Press ignored (not on Tile 2 Survey Logger).");
-                }
-            }
-            btn_is_pressed = false;
-        }
+        btn_is_pressed = false;
     }
 
     vTaskDelay(pdMS_TO_TICKS(15));

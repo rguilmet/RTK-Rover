@@ -154,8 +154,15 @@ void imu_compute_pose_and_bubble(const float *acc,
     // Compute enclosure Pitch (tilt from flat horizontal) and Roll in degrees.
     // On Waveshare ESP32-S3-Touch-LCD-3.5B, gravity points along -Z (-1.0g) when LCD is face-up flat.
     // Using -az ensures resting flat orientation produces Pitch = 0 deg and Roll = 0 deg.
-    float raw_pitch = atan2f(-ay, sqrtf(ax * ax + az * az)) * (180.0f / (float)M_PI);
-    float raw_roll  = atan2f(ax, -az) * (180.0f / (float)M_PI);
+    // Physical QMI8658 orientation in Portrait mode:
+    // - Sensor Y axis aligns with Screen Horizontal (Left/Right Roll / Bubble X)
+    // - Sensor X axis aligns with Screen Vertical (Up/Down Pitch / Bubble Y)
+    // Tipping left (ay < 0) -> raw_roll < 0 -> bubble moves Left
+    // Tipping right (ay > 0) -> raw_roll > 0 -> bubble moves Right
+    // Tipping up (ax < 0) -> raw_pitch < 0 -> bubble moves Up
+    // Tipping down (ax > 0) -> raw_pitch > 0 -> bubble moves Down
+    float raw_roll  = atan2f(ay, -az) * (180.0f / (float)M_PI);
+    float raw_pitch = atan2f(ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
 
     if (first_run) {
         ema_pitch = raw_pitch;

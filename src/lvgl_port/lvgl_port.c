@@ -38,6 +38,10 @@ esp_io_expander_handle_t io_expander = NULL;
 
 extern void init_backlight_pwm(void);
 extern void set_backlight_pwm(uint8_t brightness);
+extern void set_rover_brightness(uint8_t brightness_pct);
+extern void set_rover_volume(uint8_t volume_pct);
+extern void mark_settings_dirty(void);
+extern void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms);
 
 // =========================================================================
 // Persistent Top Header Bar Widgets (Visible on ALL Screens)
@@ -170,7 +174,14 @@ static lv_obj_t *t4_nmea_btn            = NULL;
 static lv_obj_t *t4_nmea_btn_lbl        = NULL;
 static lv_obj_t *t4_route_btn           = NULL;
 static lv_obj_t *t4_route_btn_lbl       = NULL;
+static lv_obj_t *t4_bright_btn          = NULL;
+static lv_obj_t *t4_bright_btn_lbl      = NULL;
+static lv_obj_t *t4_vol_btn             = NULL;
+static lv_obj_t *t4_vol_btn_lbl         = NULL;
 static lv_obj_t *t4_storage_status_lbl  = NULL;
+static lv_obj_t *t4_ant_master_lbl      = NULL;
+static lv_obj_t *t4_ant_slave_lbl       = NULL;
+static lv_obj_t *t4_ant_diff_lbl        = NULL;
 static lv_obj_t *t4_com1_lbl            = NULL;
 static lv_obj_t *t4_com2_lbl            = NULL;
 static lv_obj_t *t4_e220_lbl            = NULL;
@@ -464,6 +475,71 @@ static void update_all_control_buttons(void)
             lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0x2F3B4C), 0); // Blue/Slate
         }
     }
+
+    // 7. Brightness Button on Tile 4
+    if (t4_bright_btn && t4_bright_btn_lbl) {
+        char b_buf[32];
+        snprintf(b_buf, sizeof(b_buf), "Bright: %u%%", current_settings.brightness);
+        lv_label_set_text(t4_bright_btn_lbl, b_buf);
+        lv_obj_set_style_bg_color(t4_bright_btn, lv_color_hex(0x2F3B4C), 0);
+    }
+
+    // 8. Volume Button on Tile 4
+    if (t4_vol_btn && t4_vol_btn_lbl) {
+        char v_buf[32];
+        if (current_settings.volume == 0) {
+            snprintf(v_buf, sizeof(v_buf), "Vol: MUTE");
+            lv_obj_set_style_bg_color(t4_vol_btn, lv_color_hex(0x555555), 0);
+        } else {
+            snprintf(v_buf, sizeof(v_buf), "Vol: %u%%", current_settings.volume);
+            lv_obj_set_style_bg_color(t4_vol_btn, lv_color_hex(0x2F3B4C), 0);
+        }
+        lv_label_set_text(t4_vol_btn_lbl, v_buf);
+    }
+}
+
+static void bright_toggle_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    uint8_t b = current_settings.brightness;
+    if (b >= 100) b = 25;
+    else if (b >= 75) b = 100;
+    else if (b >= 50) b = 75;
+    else if (b >= 25) b = 50;
+    else b = 25;
+
+    set_rover_brightness(b);
+    mark_settings_dirty();
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Bright: %u%%", b);
+    if (t4_bright_btn_lbl) lv_label_set_text(t4_bright_btn_lbl, buf);
+}
+
+static void vol_toggle_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    uint8_t v = current_settings.volume;
+    if (v >= 100) v = 0;
+    else if (v >= 75) v = 100;
+    else if (v >= 50) v = 75;
+    else if (v >= 25) v = 50;
+    else if (v == 0) v = 25;
+    else v = 50;
+
+    set_rover_volume(v);
+    mark_settings_dirty();
+
+    char buf[32];
+    if (v == 0) {
+        snprintf(buf, sizeof(buf), "Vol: MUTE");
+        if (t4_vol_btn) lv_obj_set_style_bg_color(t4_vol_btn, lv_color_hex(0x555555), 0);
+    } else {
+        snprintf(buf, sizeof(buf), "Vol: %u%%", v);
+        if (t4_vol_btn) lv_obj_set_style_bg_color(t4_vol_btn, lv_color_hex(0x2F3B4C), 0);
+        play_rover_beep(1750, 40);
+    }
+    if (t4_vol_btn_lbl) lv_label_set_text(t4_vol_btn_lbl, buf);
 }
 
 static void unit_toggle_btn_cb(lv_event_t *e)
@@ -804,13 +880,15 @@ void create_rover_ui(void)
     lv_obj_set_size(main_tv, ROVER_LCD_H_RES, ROVER_LCD_V_RES - 74 - 32);
     lv_obj_align(main_tv, LV_ALIGN_TOP_MID, 0, 74);
     lv_obj_set_style_bg_color(main_tv, lv_color_hex(0x121417), 0);
+    lv_obj_remove_flag(main_tv, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(main_tv, tv_changed_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    tile_guidance = lv_tileview_add_tile(main_tv, 0, 0, LV_DIR_RIGHT);
-    tile_survey   = lv_tileview_add_tile(main_tv, 1, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tile_csv      = lv_tileview_add_tile(main_tv, 2, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tile_compass  = lv_tileview_add_tile(main_tv, 3, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tile_test     = lv_tileview_add_tile(main_tv, 4, 0, LV_DIR_LEFT);
+    // Disable horizontal swipe gestures; navigate strictly via Prev/Next bottom bar buttons
+    tile_guidance = lv_tileview_add_tile(main_tv, 0, 0, LV_DIR_NONE);
+    tile_survey   = lv_tileview_add_tile(main_tv, 1, 0, LV_DIR_NONE);
+    tile_csv      = lv_tileview_add_tile(main_tv, 2, 0, LV_DIR_NONE);
+    tile_compass  = lv_tileview_add_tile(main_tv, 3, 0, LV_DIR_NONE);
+    tile_test     = lv_tileview_add_tile(main_tv, 4, 0, LV_DIR_NONE);
 
     // =====================================================================
     // TILE 0: Pin Seeker & Guidance (Hybrid Navigation Canvas)
@@ -1012,7 +1090,7 @@ void create_rover_ui(void)
     lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 324);
 
     // =====================================================================
-    // TILE 1: Field Survey / Waypoint Logger (BOOT Short-Press Active Here)
+    // TILE 1: Field Survey / Waypoint Logger (On-Screen Button)
     // =====================================================================
     lv_obj_t *t1_title = lv_label_create(tile_survey);
     lv_label_set_text(t1_title, "FIELD SURVEY LOGGER (BOOT Key Active)");
@@ -1079,7 +1157,7 @@ void create_rover_ui(void)
     lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     lv_obj_add_event_cb(t1_log_btn, log_pin_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_log_btn_lbl = lv_label_create(t1_log_btn);
-    lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW (or Short-Press BOOT)");
+    lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
     lv_obj_center(t1_log_btn_lbl);
 
     t1_status_lbl = lv_label_create(tile_survey);
@@ -1172,6 +1250,9 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 4: Settings & System Info / Hardware Diagnostics
     // =====================================================================
+    lv_obj_set_scroll_dir(tile_test, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(tile_test, LV_SCROLLBAR_MODE_AUTO);
+
     t4_title = lv_label_create(tile_test);
     lv_label_set_text(t4_title, "RTK ROVER " ROVER_FIRMWARE_VERSION " - SETTINGS & DIAG");
     lv_obj_set_style_text_color(t4_title, lv_color_hex(0x00FFAA), 0);
@@ -1180,15 +1261,15 @@ void create_rover_ui(void)
 
     // Section 1: User Preferences & Controls
     t4_wifi_btn = lv_button_create(tile_test);
-    lv_obj_set_size(t4_wifi_btn, 145, 32);
-    lv_obj_align(t4_wifi_btn, LV_ALIGN_TOP_LEFT, 8, 26);
+    lv_obj_set_size(t4_wifi_btn, 145, 30);
+    lv_obj_align(t4_wifi_btn, LV_ALIGN_TOP_LEFT, 8, 24);
     lv_obj_add_event_cb(t4_wifi_btn, wifi_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_wifi_btn_lbl = lv_label_create(t4_wifi_btn);
     lv_obj_center(t4_wifi_btn_lbl);
 
     t4_unit_btn = lv_button_create(tile_test);
-    lv_obj_set_size(t4_unit_btn, 145, 32);
-    lv_obj_align(t4_unit_btn, LV_ALIGN_TOP_RIGHT, -8, 26);
+    lv_obj_set_size(t4_unit_btn, 145, 30);
+    lv_obj_align(t4_unit_btn, LV_ALIGN_TOP_RIGHT, -8, 24);
     lv_obj_add_event_cb(t4_unit_btn, unit_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_unit_btn_lbl = lv_label_create(t4_unit_btn);
     lv_obj_center(t4_unit_btn_lbl);
@@ -1198,21 +1279,35 @@ void create_rover_ui(void)
     lv_label_set_text(t4_wifi_status_lbl, "Wi-Fi: Inactive (Tap Start to enable)");
     lv_obj_set_style_text_color(t4_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_set_style_text_font(t4_wifi_status_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_wifi_status_lbl, LV_ALIGN_TOP_LEFT, 10, 62);
+    lv_obj_align(t4_wifi_status_lbl, LV_ALIGN_TOP_LEFT, 10, 58);
 
     t4_nmea_btn = lv_button_create(tile_test);
-    lv_obj_set_size(t4_nmea_btn, 145, 32);
-    lv_obj_align(t4_nmea_btn, LV_ALIGN_TOP_LEFT, 8, 80);
+    lv_obj_set_size(t4_nmea_btn, 145, 30);
+    lv_obj_align(t4_nmea_btn, LV_ALIGN_TOP_LEFT, 8, 76);
     lv_obj_add_event_cb(t4_nmea_btn, nmea_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_nmea_btn_lbl = lv_label_create(t4_nmea_btn);
     lv_obj_center(t4_nmea_btn_lbl);
 
     t4_route_btn = lv_button_create(tile_test);
-    lv_obj_set_size(t4_route_btn, 145, 32);
-    lv_obj_align(t4_route_btn, LV_ALIGN_TOP_RIGHT, -8, 80);
+    lv_obj_set_size(t4_route_btn, 145, 30);
+    lv_obj_align(t4_route_btn, LV_ALIGN_TOP_RIGHT, -8, 76);
     lv_obj_add_event_cb(t4_route_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t4_route_btn_lbl = lv_label_create(t4_route_btn);
     lv_obj_center(t4_route_btn_lbl);
+
+    t4_bright_btn = lv_button_create(tile_test);
+    lv_obj_set_size(t4_bright_btn, 145, 30);
+    lv_obj_align(t4_bright_btn, LV_ALIGN_TOP_LEFT, 8, 110);
+    lv_obj_add_event_cb(t4_bright_btn, bright_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    t4_bright_btn_lbl = lv_label_create(t4_bright_btn);
+    lv_obj_center(t4_bright_btn_lbl);
+
+    t4_vol_btn = lv_button_create(tile_test);
+    lv_obj_set_size(t4_vol_btn, 145, 30);
+    lv_obj_align(t4_vol_btn, LV_ALIGN_TOP_RIGHT, -8, 110);
+    lv_obj_add_event_cb(t4_vol_btn, vol_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    t4_vol_btn_lbl = lv_label_create(t4_vol_btn);
+    lv_obj_center(t4_vol_btn_lbl);
 
     update_all_control_buttons();
 
@@ -1221,51 +1316,83 @@ void create_rover_ui(void)
     lv_label_set_text(t4_storage_status_lbl, "Storage: Auto-Detecting...");
     lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_storage_status_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_storage_status_lbl, LV_ALIGN_TOP_LEFT, 10, 116);
+    lv_obj_align(t4_storage_status_lbl, LV_ALIGN_TOP_LEFT, 10, 144);
 
-    // Section 2: UM982 COM1 Diagnostics
+    // Section 2: Antenna & GNSS Diagnostics
+    lv_obj_t *t4_ant_hdr = lv_label_create(tile_test);
+    lv_label_set_text(t4_ant_hdr, "--- [ANTENNA & GNSS DIAGNOSTICS] ---");
+    lv_obj_set_style_text_color(t4_ant_hdr, lv_color_hex(0x00FFAA), 0);
+    lv_obj_set_style_text_font(t4_ant_hdr, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_ant_hdr, LV_ALIGN_TOP_MID, 0, 166);
+
+    t4_ant_master_lbl = lv_label_create(tile_test);
+    lv_obj_set_width(t4_ant_master_lbl, 304);
+    lv_label_set_text(t4_ant_master_lbl, "[ANT1 MASTER] Waiting for GNSS fix...");
+    lv_obj_set_style_text_color(t4_ant_master_lbl, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_style_text_font(t4_ant_master_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_ant_master_lbl, LV_ALIGN_TOP_LEFT, 8, 184);
+
+    t4_ant_slave_lbl = lv_label_create(tile_test);
+    lv_obj_set_width(t4_ant_slave_lbl, 304);
+    lv_label_set_text(t4_ant_slave_lbl, "[ANT2 SLAVE] Waiting for heading/slave data...");
+    lv_obj_set_style_text_color(t4_ant_slave_lbl, lv_color_hex(0xFFCC00), 0);
+    lv_obj_set_style_text_font(t4_ant_slave_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_ant_slave_lbl, LV_ALIGN_TOP_LEFT, 8, 232);
+
+    t4_ant_diff_lbl = lv_label_create(tile_test);
+    lv_obj_set_width(t4_ant_diff_lbl, 304);
+    lv_label_set_text(t4_ant_diff_lbl, "RTCM3 Diff Age: -- s | 1005: 0 MSM: 0");
+    lv_obj_set_style_text_color(t4_ant_diff_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(t4_ant_diff_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_ant_diff_lbl, LV_ALIGN_TOP_LEFT, 8, 280);
+
+    // Section 3: Hardware Port Diagnostics
+    lv_obj_t *t4_hw_hdr = lv_label_create(tile_test);
+    lv_label_set_text(t4_hw_hdr, "--- [HARDWARE PORT DIAGNOSTICS] ---");
+    lv_obj_set_style_text_color(t4_hw_hdr, lv_color_hex(0x94A3B8), 0);
+    lv_obj_set_style_text_font(t4_hw_hdr, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_hw_hdr, LV_ALIGN_TOP_MID, 0, 302);
+
     t4_com1_lbl = lv_label_create(tile_test);
     lv_obj_set_width(t4_com1_lbl, 304);
     lv_label_set_long_mode(t4_com1_lbl, LV_LABEL_LONG_CLIP);
     lv_label_set_text(t4_com1_lbl, "[UM982 COM1 IO17/18 @ 115200]\nRX: 0 B | TX: 0 B | NMEA: 0 | HDG: 0\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com1_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t4_com1_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_com1_lbl, LV_ALIGN_TOP_LEFT, 8, 138);
+    lv_obj_align(t4_com1_lbl, LV_ALIGN_TOP_LEFT, 8, 320);
 
     lv_obj_t *btn_c1_ver = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c1_ver, 145, 30);
-    lv_obj_align(btn_c1_ver, LV_ALIGN_TOP_LEFT, 8, 188);
+    lv_obj_set_size(btn_c1_ver, 145, 28);
+    lv_obj_align(btn_c1_ver, LV_ALIGN_TOP_LEFT, 8, 368);
     lv_obj_add_event_cb(btn_c1_ver, test_com1_ver_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_c1_ver = lv_label_create(btn_c1_ver);
     lv_label_set_text(l_c1_ver, "COM1: VERSIONA");
     lv_obj_center(l_c1_ver);
 
     lv_obj_t *btn_c1_cfg = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c1_cfg, 145, 30);
-    lv_obj_align(btn_c1_cfg, LV_ALIGN_TOP_RIGHT, -8, 188);
+    lv_obj_set_size(btn_c1_cfg, 145, 28);
+    lv_obj_align(btn_c1_cfg, LV_ALIGN_TOP_RIGHT, -8, 368);
     lv_obj_add_event_cb(btn_c1_cfg, test_com1_cfg_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_c1_cfg = lv_label_create(btn_c1_cfg);
     lv_label_set_text(l_c1_cfg, "COM1: CONFIG");
     lv_obj_center(l_c1_cfg);
 
-    // Section 3: UM982 COM2 Diagnostics
     t4_com2_lbl = lv_label_create(tile_test);
     lv_obj_set_width(t4_com2_lbl, 304);
     lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_CLIP);
     lv_label_set_text(t4_com2_lbl, "[UM982 COM2 IO47/48 @ 115200]\nRTCM TX: 0 B | RX: 0 B | Diff Age: -- s\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_com2_lbl, LV_ALIGN_TOP_LEFT, 8, 224);
+    lv_obj_align(t4_com2_lbl, LV_ALIGN_TOP_LEFT, 8, 402);
 
     lv_obj_t *btn_c2_test = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c2_test, 304, 30);
-    lv_obj_align(btn_c2_test, LV_ALIGN_TOP_MID, 0, 274);
+    lv_obj_set_size(btn_c2_test, 304, 28);
+    lv_obj_align(btn_c2_test, LV_ALIGN_TOP_MID, 0, 450);
     lv_obj_add_event_cb(btn_c2_test, test_com2_pulse_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_c2_test = lv_label_create(btn_c2_test);
     lv_label_set_text(l_c2_test, "COM2: Send VERSIONA Test (IO47/48)");
     lv_obj_center(l_c2_test);
 
-    // Section 4: E220 LoRa
     char init_buf[128];
     t4_e220_lbl = lv_label_create(tile_test);
     snprintf(init_buf, sizeof(init_buf),
@@ -1274,7 +1401,7 @@ void create_rover_ui(void)
     lv_label_set_text(t4_e220_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_e220_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 310);
+    lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 484);
 
     t4_e220_cfg_lbl = lv_label_create(tile_test);
     snprintf(init_buf, sizeof(init_buf),
@@ -1287,19 +1414,19 @@ void create_rover_ui(void)
     lv_label_set_text(t4_e220_cfg_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_cfg_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(t4_e220_cfg_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_e220_cfg_lbl, LV_ALIGN_TOP_LEFT, 8, 360);
+    lv_obj_align(t4_e220_cfg_lbl, LV_ALIGN_TOP_LEFT, 8, 532);
 
     lv_obj_t *btn_e220_cfg = lv_button_create(tile_test);
-    lv_obj_set_size(btn_e220_cfg, 145, 32);
-    lv_obj_align(btn_e220_cfg, LV_ALIGN_TOP_LEFT, 8, 380);
+    lv_obj_set_size(btn_e220_cfg, 145, 28);
+    lv_obj_align(btn_e220_cfg, LV_ALIGN_TOP_LEFT, 8, 552);
     lv_obj_add_event_cb(btn_e220_cfg, test_e220_read_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_e220_cfg = lv_label_create(btn_e220_cfg);
     lv_label_set_text(l_e220_cfg, "Read E220 Regs");
     lv_obj_center(l_e220_cfg);
 
     lv_obj_t *btn_e220_wr = lv_button_create(tile_test);
-    lv_obj_set_size(btn_e220_wr, 145, 32);
-    lv_obj_align(btn_e220_wr, LV_ALIGN_TOP_RIGHT, -8, 380);
+    lv_obj_set_size(btn_e220_wr, 145, 28);
+    lv_obj_align(btn_e220_wr, LV_ALIGN_TOP_RIGHT, -8, 552);
     lv_obj_set_style_bg_color(btn_e220_wr, lv_palette_main(LV_PALETTE_ORANGE), 0);
     lv_obj_add_event_cb(btn_e220_wr, test_e220_write_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *l_e220_wr = lv_label_create(btn_e220_wr);
@@ -1686,7 +1813,7 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t1_log_btn_lbl, buf);
         lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
     } else {
-        lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW (or Short-Press BOOT)");
+        lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
         lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     }
     snprintf(buf, sizeof(buf), "Last Logged: %s\nFile: /survey_logged_pins.csv",
@@ -1734,12 +1861,90 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
-    // 6. Update Tile 4: Hardware Diagnostics
+    // 6. Update Tile 4: Antenna & GNSS Diagnostics
+    if (t4_ant_master_lbl) {
+        char h_acc_str[24], v_acc_str[24], hgt_str[24];
+        nav_format_distance(d->h_acc_m, h_acc_str, sizeof(h_acc_str));
+        nav_format_distance(d->v_acc_m, v_acc_str, sizeof(v_acc_str));
+        nav_format_height(d->tip_height_m, hgt_str, sizeof(hgt_str));
+        uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
+
+        const char *m_fix_str = "NO FIX";
+        if (d->fix_type == GNSS_FIX_RTK_FIXED)      m_fix_str = "RTK FIX";
+        else if (d->fix_type == GNSS_FIX_RTK_FLOAT) m_fix_str = "RTK FLT";
+        else if (d->fix_type == GNSS_FIX_DGPS)      m_fix_str = "DGPS";
+        else if (d->fix_type == GNSS_FIX_SINGLE)    m_fix_str = "SINGLE";
+
+        snprintf(buf, sizeof(buf),
+                 "[ANT1 MASTER] %s | SV:%u/%u | HDOP:%.1f\n"
+                 "Acc:+/-%s (V:+/-%s) | Alt:%s\n"
+                 "Pos:%.8f, %.8f",
+                 m_fix_str,
+                 d->num_sats,
+                 sv_view,
+                 d->hdop,
+                 h_acc_str,
+                 v_acc_str,
+                 hgt_str,
+                 d->tip_lat,
+                 d->tip_lon);
+        lv_label_set_text(t4_ant_master_lbl, buf);
+    }
+
+    if (t4_ant_slave_lbl) {
+        const char *s_fix_str = "NO FIX";
+        if (d->heading_valid) {
+            s_fix_str = d->heading_is_fixed ? "HDG FIX" : "HDG FLT";
+        } else if (d->slave_fix_type == GNSS_FIX_RTK_FIXED) {
+            s_fix_str = "SLV FIX";
+        } else if (d->slave_fix_type == GNSS_FIX_RTK_FLOAT) {
+            s_fix_str = "SLV FLT";
+        } else if (d->slave_fix_type == GNSS_FIX_DGPS) {
+            s_fix_str = "SLV DGPS";
+        } else if (d->slave_fix_type == GNSS_FIX_SINGLE) {
+            s_fix_str = "SLV SGL";
+        }
+
+        char bl_str[24];
+        if (d->baseline_length_m > 0.01f) {
+            snprintf(bl_str, sizeof(bl_str), "%.1fcm", d->baseline_length_m * 100.0f);
+        } else {
+            snprintf(bl_str, sizeof(bl_str), "--.-cm");
+        }
+
+        char hdg_str[24];
+        if (d->heading_valid) {
+            snprintf(hdg_str, sizeof(hdg_str), "%.1f deg", d->true_heading_deg);
+        } else {
+            snprintf(hdg_str, sizeof(hdg_str), "---.- deg");
+        }
+
+        snprintf(buf, sizeof(buf),
+                 "[ANT2 SLAVE] %s | SV:%u | HDOP:%.1f\n"
+                 "Baseline:%s | Pitch:%+.1f deg\n"
+                 "Heading:%s",
+                 s_fix_str,
+                 d->slave_num_sats,
+                 d->slave_hdop,
+                 bl_str,
+                 d->baseline_pitch_deg,
+                 hdg_str);
+        lv_label_set_text(t4_ant_slave_lbl, buf);
+    }
+
+    if (t4_ant_diff_lbl) {
+        snprintf(buf, sizeof(buf),
+                 "RTCM3 Diff Age:%.1fs | 1005:%u MSM:%u",
+                 d->diff_age_s,
+                 d->e220_stats.msg_1005_count,
+                 d->e220_stats.msg_msm_count);
+        lv_label_set_text(t4_ant_diff_lbl, buf);
+    }
+
+    // 7. Update Tile 4: Hardware Port Diagnostics
     snprintf(buf, sizeof(buf),
-             "[UM982 COM1 IO17/18 @ 115200] [%s] (M_HDOP:%.1f | S_HDOP:%.1f)\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+             "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
              d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
-             d->hdop,
-             d->slave_hdop,
              (unsigned long)d->um982_stats.com1_rx_bytes,
              (unsigned long)d->um982_stats.com1_tx_bytes,
              (unsigned long)d->um982_stats.nmea_sentences_ok,
