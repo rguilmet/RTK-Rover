@@ -248,10 +248,74 @@ extern "C" void start_wifi(void) {
         WiFi.disconnect(true);
         vTaskDelay(pdMS_TO_TICKS(100));
 
+        static wifi_event_id_t s_wifi_event_id = 0;
+        if (s_wifi_event_id == 0) {
+            s_wifi_event_id = WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+                if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+                    uint8_t reason = info.wifi_sta_disconnected.reason;
+                    Serial.printf("[WIFI EVENT] STA Disconnected (Reason: %u - %s)\n",
+                                  reason, WiFi.disconnectReasonName((wifi_err_reason_t)reason));
+                } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+                    Serial.println("[WIFI EVENT] STA Associated with AP!");
+                } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+                    Serial.printf("[WIFI EVENT] STA Got IP: %s\n",
+                                  IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+                }
+            });
+        }
+
         WiFi.mode(WIFI_STA);
         WiFi.setSleep(false);
         WiFi.setAutoReconnect(true);
-        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+
+        Serial.println("[WIFI] Scanning visible 2.4GHz networks...");
+        update_wifi_ip_label("Scanning Wi-Fi...");
+        int n = WiFi.scanNetworks(false, false);
+        Serial.printf("[WIFI] Scan found %d networks:\n", n);
+        int target_ch = 0;
+        int target_rssi = -999;
+        wifi_auth_mode_t target_auth = WIFI_AUTH_OPEN;
+        for (int i = 0; i < n; i++) {
+            String s = WiFi.SSID(i);
+            int ch = WiFi.channel(i);
+            int r = WiFi.RSSI(i);
+            wifi_auth_mode_t auth = (wifi_auth_mode_t)WiFi.encryptionType(i);
+            const char *auth_str = (auth == WIFI_AUTH_OPEN) ? "OPEN" :
+                                   (auth == WIFI_AUTH_WEP) ? "WEP" :
+                                   (auth == WIFI_AUTH_WPA_PSK) ? "WPA" :
+                                   (auth == WIFI_AUTH_WPA2_PSK) ? "WPA2" :
+                                   (auth == WIFI_AUTH_WPA_WPA2_PSK) ? "WPA/WPA2" :
+                                   (auth == WIFI_AUTH_WPA2_ENTERPRISE) ? "WPA2-ENT" :
+                                   (auth == WIFI_AUTH_WPA3_PSK) ? "WPA3" :
+                                   (auth == WIFI_AUTH_WPA2_WPA3_PSK) ? "WPA2/WPA3" :
+                                   (auth == WIFI_AUTH_WAPI_PSK) ? "WAPI" : "OTHER";
+            Serial.printf("  [%d] SSID: '%s' | Ch: %2d | RSSI: %3d dBm | Auth: %s (%d)\n",
+                          i, s.c_str(), ch, r, auth_str, (int)auth);
+            if (s.equals(current_settings.wifi_ssid)) {
+                target_ch = ch;
+                target_rssi = r;
+                target_auth = auth;
+            }
+        }
+        WiFi.scanDelete();
+
+        if (target_ch > 0) {
+            Serial.printf("[WIFI] Target AP '%s' DETECTED on Channel %d (RSSI: %d dBm, Auth: %d)!\n",
+                          current_settings.wifi_ssid, target_ch, target_rssi, (int)target_auth);
+        } else {
+            Serial.printf("[WIFI] Target AP '%s' NOT seen in 2.4GHz scan (len=%d). Attempting blind connect...\n",
+                          current_settings.wifi_ssid, (int)strlen(current_settings.wifi_ssid));
+        }
+
+        WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+        WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+        WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
+
+        if (target_ch > 0) {
+            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
+        } else {
+            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+        }
 
         int attempts = 0;
         const int max_attempts = 50; // 25 seconds timeout (50 * 500ms)
@@ -317,7 +381,7 @@ extern "C" void start_wifi(void) {
             Serial.printf("[WIFI] SoftAP Active! Connect phone to SSID 'RTK-Rover' (pwd: 12345678) -> http://%s/\n", s_wifi_ip);
         }
         vTaskDelete(NULL);
-    }, "wifi_connect", 4096, NULL, 1, NULL, 0);
+    }, "wifi_connect", 8192, NULL, 1, NULL, 0);
 }
 
 extern "C" void stop_wifi(void) {

@@ -205,6 +205,7 @@ void task_display_and_audio(void *pvParameters)
     RoverUIData_t   ui_state          = {};
     Axp2101Status_t pwr               = {};
     uint32_t        last_imu_poll_ms  = 0;
+    uint32_t        last_imu_log_ms   = 0;
     uint32_t        last_pwr_poll_ms  = 0;
     float           cached_imu_pitch  = 0.0f;
     float           cached_imu_roll   = 0.0f;
@@ -236,6 +237,14 @@ void task_display_and_audio(void *pvParameters)
                                             &cached_bubble_x,
                                             &cached_bubble_y,
                                             &cached_pose);
+
+                if (Serial && current_settings.enable_serial_logging && (now - last_imu_log_ms >= 1000)) {
+                    last_imu_log_ms = now;
+                    Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
+                                  cached_imu_pitch, cached_imu_roll,
+                                  cached_bubble_x, cached_bubble_y,
+                                  (int)cached_pose);
+                }
 
                 if (pending_tare_level) {
                     pending_tare_level = false;

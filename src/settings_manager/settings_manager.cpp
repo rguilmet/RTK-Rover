@@ -143,6 +143,16 @@ extern "C" void load_settings(void) {
                       (int)strlen(current_settings.wifi_password));
 
         if (!doc["enable_serial_logging"].isNull()) current_settings.enable_serial_logging = doc["enable_serial_logging"];
+
+        // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
+        if (sd_card_mounted) {
+            File ffat_file = FFat.open("/settings.json", "w");
+            if (ffat_file) {
+                serializeJsonPretty(doc, ffat_file);
+                ffat_file.close();
+                Serial.println("[SETTINGS] Mirrored SD Card settings.json to internal FFat.");
+            }
+        }
     } else {
         Serial.printf("[SETTINGS] Deserialization error in /settings.json: %s\n", error.c_str());
     }

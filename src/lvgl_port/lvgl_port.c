@@ -664,19 +664,21 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_datetime_lbl, "2026-10-26 00:00:00");
     lv_obj_set_style_text_color(hdr_datetime_lbl, lv_color_hex(0xE0E6ED), 0);
     lv_obj_set_style_text_font(hdr_datetime_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_width(hdr_datetime_lbl, 165);
+    lv_label_set_long_mode(hdr_datetime_lbl, LV_LABEL_LONG_CLIP);
     lv_obj_align(hdr_datetime_lbl, LV_ALIGN_TOP_LEFT, 4, 2);
 
     hdr_units_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_units_lbl, "SI");
-    lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
+    lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
+    lv_obj_set_style_text_color(hdr_units_lbl, current_settings.use_imperial_units ? COLOR_UNIT_IMP_AMBER : COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_LEFT, 138, 2);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -120, 2);
 
     hdr_wifi_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " OFF");
     lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x64748B), 0);
     lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_LEFT, 168, 2);
+    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -74, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");

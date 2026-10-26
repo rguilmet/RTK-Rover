@@ -38,16 +38,28 @@ void imu_init(void)
     ctrl_buf = 0x40;
     i2c_write_buff(imu_dev_handle, 0x02, &ctrl_buf, 1);
 
-    // 5. CTRL2 (0x03): Accel Config (4g range, 250Hz ODR -> 0x95)
-    ctrl_buf = 0x95;
+    // 5. CTRL2 (0x03): Accel Config (4g range = 0x10, 250Hz ODR = 0x05 -> 0x15, NO self-test bit 7)
+    ctrl_buf = 0x15;
     i2c_write_buff(imu_dev_handle, 0x03, &ctrl_buf, 1);
 
-    // 6. CTRL3 (0x04): Gyro Config (512dps range, 250Hz ODR -> 0xD5)
-    ctrl_buf = 0xD5;
+    // 6. CTRL3 (0x04): Gyro Config (512dps range = 0x50, 250Hz ODR = 0x05 -> 0x55, NO self-test bit 7)
+    ctrl_buf = 0x55;
     i2c_write_buff(imu_dev_handle, 0x04, &ctrl_buf, 1);
 
-    // 7. CTRL7 (0x08): Now Enable Accelerometer (Bit 0) & Gyroscope (Bit 1) -> 0x03
-    ctrl_buf = 0x03;
+    // 7. CTRL5 (0x06): Low-Pass Filter (LPF_MODE_0 = 0x00, enable filters for accel & gyro = 0x11)
+    ctrl_buf = 0x11;
+    i2c_write_buff(imu_dev_handle, 0x06, &ctrl_buf, 1);
+
+    // 8. CTRL6 (0x07): Disable AttitudeEngine Motion On Demand
+    ctrl_buf = 0x00;
+    i2c_write_buff(imu_dev_handle, 0x07, &ctrl_buf, 1);
+
+    // 9. CTRL8 (0x09): Handshake configuration
+    ctrl_buf = 0x80;
+    i2c_write_buff(imu_dev_handle, 0x09, &ctrl_buf, 1);
+
+    // 10. CTRL7 (0x08): Enable internal high-speed clock (0x40) + Gyro (0x02) + Accel (0x01) -> 0x43
+    ctrl_buf = 0x43;
     i2c_write_buff(imu_dev_handle, 0x08, &ctrl_buf, 1);
     vTaskDelay(pdMS_TO_TICKS(15));
 
@@ -62,11 +74,13 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
 {
     static float last_acc[3] = {0.0f, 0.0f, 1.0f};
     static uint8_t fail_count = 0;
+    static uint32_t last_log_ms = 0;
 
     // Direct read 6 bytes from QMI8658_AX_L (0x35).
     // Address auto-increment reads AX_L, AX_H, AY_L, AY_H, AZ_L, AZ_H in one I2C transaction.
     uint8_t raw[6] = {0};
-    if (i2c_read_buff(imu_dev_handle, 0x35, raw, 6) == 0) {
+    uint8_t err = i2c_read_buff(imu_dev_handle, 0x35, raw, 6);
+    if (err == 0) {
         int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
         int16_t ay = (int16_t)(((uint16_t)raw[3] << 8) | raw[2]);
         int16_t az = (int16_t)(((uint16_t)raw[5] << 8) | raw[4]);
@@ -83,6 +97,19 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
         }
     } else {
         fail_count++;
+    }
+
+    uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    if (now_ms - last_log_ms >= 1000) {
+        last_log_ms = now_ms;
+        int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
+        int16_t ay = (int16_t)(((uint16_t)raw[3] << 8) | raw[2]);
+        int16_t az = (int16_t)(((uint16_t)raw[5] << 8) | raw[4]);
+        printf("[IMU] err=%d raw:[%02X %02X %02X %02X %02X %02X] ax=%d ay=%d az=%d | Acc(g): %+.2f %+.2f %+.2f | fails=%u\n",
+               (int)err, raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
+               ax, ay, az,
+               last_acc[0], last_acc[1], last_acc[2],
+               (unsigned int)fail_count);
     }
 
     // Auto-recovery: only reinitialize if 50 consecutive polls fail (5 continuous seconds of silence)
