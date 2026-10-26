@@ -1738,7 +1738,6 @@ void update_rover_ui(const RoverUIData_t *d)
              d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
              d->hdop,
              d->slave_hdop,
-             d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
              (unsigned long)d->um982_stats.com1_rx_bytes,
              (unsigned long)d->um982_stats.com1_tx_bytes,
              (unsigned long)d->um982_stats.nmea_sentences_ok,

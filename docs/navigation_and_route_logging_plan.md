@@ -1,8 +1,8 @@
-# RTK Rover v0.2.5 Implementation Plan: Hybrid Navigation, Wi-Fi File Portal & Field Logging
+# RTK Rover v0.2.6 Implementation Plan: Hybrid Navigation, Wi-Fi File Portal & Field Logging
 
 ## 1. Executive Summary & Updated Scope
 
-This plan defines the architecture and implementation for **RTK Rover v0.2.5**. It incorporates:
+This plan defines the architecture and implementation for **RTK Rover v0.2.6**. It incorporates:
 1. **Dual-Mode Hybrid Navigation Engine (Screen 1 / Tile 0):** Dynamic Course-Up Field Grid with Rover beam orientation and line-of-sight tracking for coarse navigation ($> 1.5\text{ m}$), auto-switching into a High-Precision Centimeter Bullseye for fine pin stakeout ($< 1.5\text{ m}$).
 2. **On-Screen Breadcrumb Trail:** RAM ring buffer tracking recent detours around obstacles.
 3. **Route File Logging:** Continuous CSV track logging to storage with Start/Stop toggle.
@@ -158,7 +158,7 @@ Per user requirements, settings that do not need live field toggling (such as `s
 Tile 4 is cleanly organized into:
 * **Prominent Header:**
   * Bold application title & active firmware version banner:
-    `RTK Rover v0.2.5 (FreeRTOS / LVGL 9)`
+    `RTK Rover v0.2.6 (FreeRTOS / LVGL 9)`
   * Instantly confirms the active firmware version without needing serial monitor access.
 * **User Preferences & Controls:**
   * `[Units: SI (m/cm) | IMP (ft/in)]` toggle.
@@ -202,7 +202,7 @@ Tile 4 is cleanly organized into:
 | **4** | **Wi-Fi Web File Portal** | [`src/web_server/web_server.h`](../src/web_server/web_server.h)<br>[`src/web_server/web_server.cpp`](../src/web_server/web_server.cpp) | Port web server from MFS, supporting SD Card and FFat directory browsing, file downloading, file uploading (`waypoints.csv`), file deleting, and NTP time sync. |
 | **5** | **Breadcrumbs & Hybrid Canvas** | [`src/nav_engine/nav_engine.h`](../src/nav_engine/nav_engine.h)<br>[`src/lvgl_port/lvgl_port.c`](../src/lvgl_port/lvgl_port.c) | Rebuild Tile 0 with Course-Up field grid, dynamic scaling, antenna beam arrow, line-of-sight vector, 64-point breadcrumb ring buffer, and auto-switching bullseye (< 1.5m). Remove redundant buttons. |
 | **6** | **Settings & Diagnostics Tile** | [`src/lvgl_port/lvgl_port.c`](../src/lvgl_port/lvgl_port.c) | Add Unit toggle, NMEA log toggle, Route log toggle, and Wi-Fi Start/Stop + IP label on Tile 4. |
-| **7** | **Main Orchestration & Core Integration** | [`RTK_Rover.ino`](../RTK_Rover.ino) | Call `handle_wifi_server()` in main loop or FreeRTOS task, pipe NMEA sentences into NMEA logger, connect route logger, bump version to `v0.2.5`. |
+| **7** | **Main Orchestration & Core Integration** | [`RTK_Rover.ino`](../RTK_Rover.ino) | Call `handle_wifi_server()` in main loop or FreeRTOS task, pipe NMEA sentences into NMEA logger, connect route logger, bump version to `v0.2.6`. |
 
 ---
 
