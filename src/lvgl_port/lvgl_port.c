@@ -838,7 +838,7 @@ void create_rover_ui(void)
     hdr_coords_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_coords_lbl, "0.00000000, 0.00000000, 0.000 m");
     lv_obj_set_style_text_color(hdr_coords_lbl, lv_color_hex(0x00FFAA), 0);
-    lv_obj_set_style_text_font(hdr_coords_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(hdr_coords_lbl, &lv_font_montserrat_14, 0);
     lv_obj_align(hdr_coords_lbl, LV_ALIGN_TOP_MID, 0, 56);
 
     // =====================================================================
@@ -1332,7 +1332,7 @@ void create_rover_ui(void)
     lv_obj_set_scrollbar_mode(tile_test, LV_SCROLLBAR_MODE_AUTO);
 
     t4_title = lv_label_create(tile_test);
-    lv_label_set_text(t4_title, "RTK ROVER " ROVER_FIRMWARE_VERSION " - HARDWARE DIAGNOSTICS");
+    lv_label_set_text(t4_title, "RTK ROVER " ROVER_FIRMWARE_VERSION);
     lv_obj_set_style_text_color(t4_title, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t4_title, &lv_font_montserrat_12, 0);
     lv_obj_align(t4_title, LV_ALIGN_TOP_MID, 0, 4);
