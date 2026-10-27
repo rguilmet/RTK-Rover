@@ -1237,29 +1237,23 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 3: Dual-Antenna Compass & Pole Bubble Level
     // =====================================================================
-    lv_obj_t *t3_title = lv_label_create(tile_compass);
-    lv_label_set_text(t3_title, "DUAL-ANTENNA COMPASS & POLE LEVEL");
-    lv_obj_set_style_text_color(t3_title, lv_color_hex(0xFFCC00), 0);
-    lv_obj_set_style_text_font(t3_title, &lv_font_montserrat_12, 0);
-    lv_obj_align(t3_title, LV_ALIGN_TOP_MID, 0, 4);
-
     t3_hdg_lbl = lv_label_create(tile_compass);
     lv_label_set_text(t3_hdg_lbl, "Heading: ---.-");
     lv_obj_set_style_text_color(t3_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t3_hdg_lbl, &lv_font_montserrat_24, 0);
-    lv_obj_align(t3_hdg_lbl, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_align(t3_hdg_lbl, LV_ALIGN_TOP_MID, 0, 8);
 
     t3_base_lbl = lv_label_create(tile_compass);
     lv_label_set_text(t3_base_lbl, "Baseline: 0.555 m | Pitch: 0.0 deg");
     lv_obj_set_style_text_color(t3_base_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t3_base_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t3_base_lbl, LV_ALIGN_TOP_MID, 0, 46);
+    lv_obj_align(t3_base_lbl, LV_ALIGN_TOP_MID, 0, 38);
 
     t3_pose_lbl = lv_label_create(tile_compass);
     lv_label_set_text(t3_pose_lbl, "Display Pose: Held Flat");
     lv_obj_set_style_text_color(t3_pose_lbl, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_text_font(t3_pose_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t3_pose_lbl, LV_ALIGN_TOP_MID, 0, 62);
+    lv_obj_align(t3_pose_lbl, LV_ALIGN_TOP_MID, 0, 56);
 
     // Fixed Course-Up Index (12 o'clock heading indicator)
     lv_obj_t *t3_hdg_pointer = lv_label_create(tile_compass);
@@ -1268,10 +1262,10 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(t3_hdg_pointer, &lv_font_montserrat_12, 0);
     lv_obj_align(t3_hdg_pointer, LV_ALIGN_TOP_MID, 0, 76);
 
-    // 2D Pole Plumb Bubble Level Circle with Integrated Compass Ring (224x224 px, center at 160, 200)
+    // 2D Pole Plumb Bubble Level Circle with Integrated Compass Ring (224x224 px, center at 160, 206)
     t3_level_circle = lv_obj_create(tile_compass);
     lv_obj_set_size(t3_level_circle, 224, 224);
-    lv_obj_align(t3_level_circle, LV_ALIGN_TOP_MID, 0, 88);
+    lv_obj_align(t3_level_circle, LV_ALIGN_TOP_MID, 0, 94);
     lv_obj_set_style_radius(t3_level_circle, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(t3_level_circle, lv_color_hex(0x1A2421), 0);
     lv_obj_set_style_border_color(t3_level_circle, lv_color_hex(0x3B6E5C), 0);
@@ -1314,10 +1308,10 @@ void create_rover_ui(void)
         lv_obj_align(t3_card_lbls[i], LV_ALIGN_CENTER, cx, cy);
     }
 
-    // Compact Tare Button positioned in the bottom-right corner of the compass circle bounding box
+    // Compact Tare Button shifted to the right edge of the screen
     t3_tare_btn = lv_button_create(tile_compass);
-    lv_obj_set_size(t3_tare_btn, 62, 28);
-    lv_obj_align(t3_tare_btn, LV_ALIGN_TOP_LEFT, 210, 284);
+    lv_obj_set_size(t3_tare_btn, 64, 28);
+    lv_obj_align(t3_tare_btn, LV_ALIGN_TOP_RIGHT, -10, 290);
     lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0x2563EB), 0); // Default Blue
     lv_obj_add_event_cb(t3_tare_btn, tare_level_btn_cb, LV_EVENT_CLICKED, NULL);
     t3_tare_lbl = lv_label_create(t3_tare_btn);
@@ -1329,7 +1323,7 @@ void create_rover_ui(void)
     lv_label_set_text(t3_tilt_lbl, "Pole Tilt: dX: 0.0 deg | dY: 0.0 deg");
     lv_obj_set_style_text_color(t3_tilt_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t3_tilt_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t3_tilt_lbl, LV_ALIGN_TOP_MID, 0, 324);
+    lv_obj_align(t3_tilt_lbl, LV_ALIGN_TOP_MID, 0, 336);
 
     // =====================================================================
     // TILE 4: Hardware Diagnostics
