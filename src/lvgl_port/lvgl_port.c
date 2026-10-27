@@ -111,11 +111,14 @@ static lv_obj_t *t0_bullseye_ring1  = NULL;
 static lv_obj_t *t0_bullseye_ring2  = NULL;
 static lv_obj_t *t0_bullseye_center = NULL;
 static lv_obj_t *t0_track_line      = NULL;
+static lv_obj_t *t0_track_arrow     = NULL;
 static lv_obj_t *t0_beam_arrow      = NULL;
+static lv_obj_t *t0_wedge_amber_l   = NULL;
+static lv_obj_t *t0_wedge_amber_r   = NULL;
+static lv_obj_t *t0_wedge_green_l   = NULL;
+static lv_obj_t *t0_wedge_green_r   = NULL;
 static lv_obj_t *t0_target_icon     = NULL;
 static lv_obj_t *t0_rover_icon      = NULL;
-#define T0_BREADCRUMB_DOTS 16
-static lv_obj_t *t0_bc_dots[T0_BREADCRUMB_DOTS] = {0};
 #define T0_GRID_H_LINES 4
 #define T0_GRID_V_LINES 4
 static lv_obj_t *t0_grid_h[T0_GRID_H_LINES] = {0};
@@ -964,7 +967,7 @@ void create_rover_ui(void)
 
     // Mode badge & scale
     t0_mode_badge = lv_label_create(t0_nav_canvas);
-    lv_label_set_text(t0_mode_badge, "TACTICAL GRID");
+    lv_label_set_text(t0_mode_badge, "TACTICAL GUIDANCE");
     lv_obj_set_style_text_font(t0_mode_badge, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_mode_badge, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x00D8FF), 0);
@@ -1054,24 +1057,51 @@ void create_rover_ui(void)
     lv_obj_set_style_border_color(t0_bullseye_center, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_width(t0_bullseye_center, 2, 0);
 
-    // Breadcrumb dots (16 pre-allocated)
-    for (int i = 0; i < T0_BREADCRUMB_DOTS; i++) {
-        t0_bc_dots[i] = lv_obj_create(t0_nav_canvas);
-        lv_obj_set_size(t0_bc_dots[i], 4, 4);
-        lv_obj_set_style_radius(t0_bc_dots[i], LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(t0_bc_dots[i], lv_color_hex(0x00E5FF), 0);
-        lv_obj_set_style_border_width(t0_bc_dots[i], 0, 0);
-        lv_obj_set_hidden(t0_bc_dots[i], true);
-    }
+    // Stage 1 Visual Tolerance Wedges (Emanating from Rover Origin (152, 170))
+    // Amber Outer Sector (+/- 15 deg)
+    t0_wedge_amber_l = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_wedge_amber_l, lv_color_hex(0xB45309), 0);
+    lv_obj_set_style_line_width(t0_wedge_amber_l, 2, 0);
 
-    // Line of sight (track line)
+    t0_wedge_amber_r = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_wedge_amber_r, lv_color_hex(0xB45309), 0);
+    lv_obj_set_style_line_width(t0_wedge_amber_r, 2, 0);
+
+    // Green Inner Sector (+/- 3 deg)
+    t0_wedge_green_l = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_wedge_green_l, lv_color_hex(0x15803D), 0);
+    lv_obj_set_style_line_width(t0_wedge_green_l, 2, 0);
+
+    t0_wedge_green_r = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_wedge_green_r, lv_color_hex(0x15803D), 0);
+    lv_obj_set_style_line_width(t0_wedge_green_r, 2, 0);
+
+    static const lv_point_precise_t pts_amb_l[2] = {{152, 170}, {117, 40}};
+    static const lv_point_precise_t pts_amb_r[2] = {{152, 170}, {187, 40}};
+    static const lv_point_precise_t pts_grn_l[2] = {{152, 170}, {145, 35}};
+    static const lv_point_precise_t pts_grn_r[2] = {{152, 170}, {159, 35}};
+    lv_line_set_points(t0_wedge_amber_l, pts_amb_l, 2);
+    lv_line_set_points(t0_wedge_amber_r, pts_amb_r, 2);
+    lv_line_set_points(t0_wedge_green_l, pts_grn_l, 2);
+    lv_line_set_points(t0_wedge_green_r, pts_grn_r, 2);
+
+    // Line of sight (fixed vertical track line from Rover (152, 170) to Target Pin (152, 35))
     t0_track_line = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_track_line, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_line_width(t0_track_line, 2, 0);
+    static const lv_point_precise_t pts_track[2] = {{152, 170}, {152, 35}};
+    lv_line_set_points(t0_track_line, pts_track, 2);
 
-    // Rover antenna beam vector
+    // Target Track Chevron Arrowhead (pointing into Target Pin at (152, 35))
+    t0_track_arrow = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_track_arrow, lv_color_hex(0x00D8FF), 0);
+    lv_obj_set_style_line_width(t0_track_arrow, 3, 0);
+    static const lv_point_precise_t pts_track_arrow[3] = {{144, 47}, {152, 35}, {160, 47}};
+    lv_line_set_points(t0_track_arrow, pts_track_arrow, 3);
+
+    // Rover antenna beam vector with directional arrow (shaft + dual barbs)
     t0_beam_arrow = lv_line_create(t0_nav_canvas);
-    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFCC00), 0);
+    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_line_width(t0_beam_arrow, 3, 0);
 
     // Target pin marker
@@ -1660,12 +1690,13 @@ void update_rover_ui(const RoverUIData_t *d)
         if (d->has_active_target) {
             snprintf(hud_buf, sizeof(hud_buf), "Tgt: %05.1f deg", d->bearing_to_target_deg);
             lv_label_set_text(t0_tgt_hdg_lbl, hud_buf);
-            bool on_target = (d->heading_valid && fabsf(d->rel_bearing_deg) <= 3.0f) ||
-                             (d->distance_to_target_m <= 0.05);
-            if (on_target) {
-                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0); // Green
+            if ((d->heading_valid && fabsf(d->rel_bearing_deg) <= 3.0f) ||
+                (d->distance_to_target_m <= 0.05)) {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0); // Green (within +/-3 deg or on pin)
+            } else if (d->heading_valid && fabsf(d->rel_bearing_deg) <= 15.0f) {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFB800), 0); // Amber (within +/-15 deg)
             } else {
-                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0); // White
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0); // White (>15 deg or no heading)
             }
         } else {
             lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
@@ -1707,6 +1738,11 @@ void update_rover_ui(const RoverUIData_t *d)
                 if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
             }
             lv_obj_set_hidden(t0_track_line, true);
+            lv_obj_set_hidden(t0_track_arrow, true);
+            lv_obj_set_hidden(t0_wedge_amber_l, true);
+            lv_obj_set_hidden(t0_wedge_amber_r, true);
+            lv_obj_set_hidden(t0_wedge_green_l, true);
+            lv_obj_set_hidden(t0_wedge_green_r, true);
 
             // Show bullseye rings
             lv_obj_set_hidden(t0_bullseye_ring1, false);
@@ -1715,12 +1751,9 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_obj_set_hidden(t0_cross_h, false);
             lv_obj_set_hidden(t0_cross_v, false);
 
-            for (int i = 0; i < T0_BREADCRUMB_DOTS; i++) {
-                if (t0_bc_dots[i]) lv_obj_set_hidden(t0_bc_dots[i], true);
-            }
-
             // Target Pin at Center
             lv_obj_align(t0_target_icon, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_set_hidden(t0_target_icon, false);
 
             // Rover Pole Tip moves relative to target center (70 px = 1.0m)
             int16_t r_px = (int16_t)(-d->d_east_m * 70.0f);
@@ -1728,6 +1761,7 @@ void update_rover_ui(const RoverUIData_t *d)
             if (r_px > 80) r_px = 80; else if (r_px < -80) r_px = -80;
             if (r_py > 80) r_py = 80; else if (r_py < -80) r_py = -80;
             lv_obj_align(t0_rover_icon, LV_ALIGN_CENTER, r_px, r_py);
+            lv_obj_set_hidden(t0_rover_icon, false);
 
             // Antenna beam vector
             if (d->heading_valid) {
@@ -1740,6 +1774,7 @@ void update_rover_ui(const RoverUIData_t *d)
                 arrow_pts[1].x = 152 + r_px + arrow_dx;
                 arrow_pts[1].y = 105 + r_py + arrow_dy;
                 lv_line_set_points(t0_beam_arrow, arrow_pts, 2);
+                lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFCC00), 0);
                 lv_obj_set_hidden(t0_beam_arrow, false);
             } else {
                 lv_obj_set_hidden(t0_beam_arrow, true);
@@ -1760,87 +1795,109 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_label_set_text(t0_steer_lbl, buf);
         } else {
             // -------------------------------------------------------------
-            // Coarse Tactical Grid Mode (> 1.5 m): Course-Up Tactical Canvas
+            // Stage 1 Tactical Guidance Mode (> 1.5 m): Course-Up Director
             // -------------------------------------------------------------
-            lv_label_set_text(t0_mode_badge, "TACTICAL GRID");
+            lv_label_set_text(t0_mode_badge, "TACTICAL GUIDANCE");
             lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x0088CC), 0);
 
-            // Show tactical background grid & track line
-            for (int i = 0; i < T0_GRID_H_LINES; i++) {
-                if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], false);
-            }
-            for (int i = 0; i < T0_GRID_V_LINES; i++) {
-                if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], false);
-            }
-            lv_obj_set_hidden(t0_track_line, false);
-
-            // Hide fine bullseye rings
+            // Hide fine bullseye rings, center, and crosshairs
             lv_obj_set_hidden(t0_bullseye_ring1, true);
             lv_obj_set_hidden(t0_bullseye_ring2, true);
             lv_obj_set_hidden(t0_bullseye_center, true);
-            lv_obj_set_hidden(t0_cross_h, false);
-            lv_obj_set_hidden(t0_cross_v, false);
+            lv_obj_set_hidden(t0_cross_h, true);
+            lv_obj_set_hidden(t0_cross_v, true);
 
-            // Dynamic scaling
-            float scale_m = 5.0f;
-            if (d->distance_to_target_m > 250.0) scale_m = 500.0f;
-            else if (d->distance_to_target_m > 100.0) scale_m = 250.0f;
-            else if (d->distance_to_target_m > 50.0) scale_m = 100.0f;
-            else if (d->distance_to_target_m > 20.0) scale_m = 50.0f;
-            else if (d->distance_to_target_m > 10.0) scale_m = 20.0f;
-            else if (d->distance_to_target_m > 5.0) scale_m = 10.0f;
+            // Hide coarse grid lines for clean high-contrast canvas
+            for (int i = 0; i < T0_GRID_H_LINES; i++) {
+                if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
+            }
+            for (int i = 0; i < T0_GRID_V_LINES; i++) {
+                if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
+            }
 
+            // Continuous Distance in Range HUD
             char scale_str[24];
-            nav_format_distance((double)scale_m, scale_str, sizeof(scale_str));
+            nav_format_distance(d->distance_to_target_m, scale_str, sizeof(scale_str));
             snprintf(buf, sizeof(buf), "Range: %s", scale_str);
             lv_label_set_text(t0_scale_lbl, buf);
 
-            // Rover icon anchored near bottom (y = 170)
+            // Fixed Course-Up Anchor Positions:
+            // Rover Origin at bottom center (152, 170)
             int16_t rover_x = 152;
             int16_t rover_y = 170;
             lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, rover_x - 8, rover_y - 8);
+            lv_obj_set_hidden(t0_rover_icon, false);
 
-            // Target pin projected along Course-Up forward line
-            float norm_dist = (float)d->distance_to_target_m / scale_m;
-            if (norm_dist > 1.0f) norm_dist = 1.0f;
-            else if (norm_dist < 0.15f) norm_dist = 0.15f;
-
-            int16_t target_x = rover_x;
-            int16_t target_y = rover_y - (int16_t)(norm_dist * 135.0f);
+            // Target Pin fixed at top center (152, 35)
+            int16_t target_x = 152;
+            int16_t target_y = 35;
             lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, target_x - 8, target_y - 8);
+            lv_obj_set_hidden(t0_target_icon, false);
 
-            // Track line
-            static lv_point_precise_t track_pts[2];
-            track_pts[0].x = rover_x;
-            track_pts[0].y = rover_y;
-            track_pts[1].x = target_x;
-            track_pts[1].y = target_y;
-            lv_line_set_points(t0_track_line, track_pts, 2);
+            // Show fixed track line and track chevron arrowhead
+            lv_obj_set_hidden(t0_track_line, false);
+            lv_obj_set_hidden(t0_track_arrow, false);
 
-            // Rover antenna beam vector
+            // Show tolerance wedges radiating from Rover (152, 170)
+            lv_obj_set_hidden(t0_wedge_amber_l, false);
+            lv_obj_set_hidden(t0_wedge_amber_r, false);
+            lv_obj_set_hidden(t0_wedge_green_l, false);
+            lv_obj_set_hidden(t0_wedge_green_r, false);
+
+            // Rotating Beam Pointer with Directional Arrowhead (shaft + dual barbs)
             if (d->heading_valid) {
                 float rel_turn = d->rel_bearing_deg;
-                float beam_angle_rad = (-rel_turn) * (float)(M_PI / 180.0);
-                int16_t b_dx = (int16_t)(32.0f * sinf(beam_angle_rad));
-                int16_t b_dy = (int16_t)(-32.0f * cosf(beam_angle_rad));
-                static lv_point_precise_t arrow_pts[2];
-                arrow_pts[0].x = rover_x;
-                arrow_pts[0].y = rover_y;
-                arrow_pts[1].x = rover_x + b_dx;
-                arrow_pts[1].y = rover_y + b_dy;
-                lv_line_set_points(t0_beam_arrow, arrow_pts, 2);
+                float abs_turn = fabsf(rel_turn);
+                float beam_rad = (-rel_turn) * (float)(M_PI / 180.0);
+
+                float tip_x = (float)rover_x + 55.0f * sinf(beam_rad);
+                float tip_y = (float)rover_y - 55.0f * cosf(beam_rad);
+
+                float b1_rad = beam_rad - 2.61799f; // -150 deg
+                float b2_rad = beam_rad + 2.61799f; // +150 deg
+                float b1_x = tip_x + 12.0f * sinf(b1_rad);
+                float b1_y = tip_y - 12.0f * cosf(b1_rad);
+                float b2_x = tip_x + 12.0f * sinf(b2_rad);
+                float b2_y = tip_y - 12.0f * cosf(b2_rad);
+
+                static lv_point_precise_t beam_pts[5];
+                beam_pts[0].x = rover_x;
+                beam_pts[0].y = rover_y;
+                beam_pts[1].x = (int16_t)roundf(tip_x);
+                beam_pts[1].y = (int16_t)roundf(tip_y);
+                beam_pts[2].x = (int16_t)roundf(b1_x);
+                beam_pts[2].y = (int16_t)roundf(b1_y);
+                beam_pts[3].x = (int16_t)roundf(tip_x);
+                beam_pts[3].y = (int16_t)roundf(tip_y);
+                beam_pts[4].x = (int16_t)roundf(b2_x);
+                beam_pts[4].y = (int16_t)roundf(b2_y);
+                lv_line_set_points(t0_beam_arrow, beam_pts, 5);
                 lv_obj_set_hidden(t0_beam_arrow, false);
 
-                // Clean ASCII steering cues
-                if (fabsf(rel_turn) <= 3.0f) {
+                // 3-Tier Dynamic Color & Steering Feedback
+                if (abs_turn <= 3.0f) {
+                    // Tier 1: Inner Green Wedge (<= +/-3 deg)
+                    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0x00FF88), 0);
                     snprintf(buf, sizeof(buf), "[OK] ON TRACK - Aimed at Pin");
                     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-                } else if (rel_turn > 0) {
-                    snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg", rel_turn);
-                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
+                } else if (abs_turn <= 15.0f) {
+                    // Tier 2: Outer Amber Wedge (+/-4 to +/-15 deg)
+                    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFB800), 0);
+                    if (rel_turn > 0.0f) {
+                        snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg", rel_turn);
+                    } else {
+                        snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg", -rel_turn);
+                    }
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFB800), 0);
                 } else {
-                    snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg", -rel_turn);
-                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
+                    // Tier 3: Outside Wedges (> 15 deg)
+                    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
+                    if (rel_turn > 0.0f) {
+                        snprintf(buf, sizeof(buf), ">>> Turn Right %.0f deg", rel_turn);
+                    } else {
+                        snprintf(buf, sizeof(buf), "<<< Turn Left %.0f deg", -rel_turn);
+                    }
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
                 }
             } else {
                 lv_obj_set_hidden(t0_beam_arrow, true);
@@ -1848,45 +1905,6 @@ void update_rover_ui(const RoverUIData_t *d)
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
             }
             lv_label_set_text(t0_steer_lbl, buf);
-
-            // Breadcrumb trail dots
-            int bc_total = nav_breadcrumb_get_count();
-            float brg_rad = d->bearing_to_target_deg * (float)(M_PI / 180.0);
-            float cos_b = cosf(brg_rad);
-            float sin_b = sinf(brg_rad);
-
-            for (int i = 0; i < T0_BREADCRUMB_DOTS; i++) {
-                if (!t0_bc_dots[i]) continue;
-                if (i < bc_total) {
-                    NavBreadcrumb_t pt;
-                    int sample_idx = bc_total - 1 - i;
-                    if (nav_breadcrumb_get_point(sample_idx, &pt)) {
-                        double dlat = pt.lat - d->tip_lat;
-                        double dlon = pt.lon - d->tip_lon;
-                        float dn = (float)(dlat * 111132.95);
-                        float de = (float)(dlon * 111132.95 * cos(d->tip_lat * 0.0174532925));
-
-                        float u =  de * cos_b - dn * sin_b;
-                        float v =  de * sin_b + dn * cos_b;
-
-                        int16_t dot_x = rover_x + (int16_t)((u / scale_m) * 135.0f);
-                        int16_t dot_y = rover_y - (int16_t)((v / scale_m) * 135.0f);
-
-                        if (dot_x >= 220 && dot_y >= 174) {
-                            lv_obj_set_hidden(t0_bc_dots[i], true);
-                        } else if (dot_x >= 4 && dot_x <= 300 && dot_y >= 4 && dot_y <= 206) {
-                            lv_obj_align(t0_bc_dots[i], LV_ALIGN_TOP_LEFT, dot_x - 2, dot_y - 2);
-                            lv_obj_set_hidden(t0_bc_dots[i], false);
-                        } else {
-                            lv_obj_set_hidden(t0_bc_dots[i], true);
-                        }
-                    } else {
-                        lv_obj_set_hidden(t0_bc_dots[i], true);
-                    }
-                } else {
-                    lv_obj_set_hidden(t0_bc_dots[i], true);
-                }
-            }
         }
 
         snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
@@ -1904,6 +1922,36 @@ void update_rover_ui(const RoverUIData_t *d)
                 lv_label_set_text(t0_notes_lbl, "---");
             }
         }
+        if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, "---");
+        if (t0_offsets_lbl) lv_label_set_text(t0_offsets_lbl, "dN: ---   dE: ---");
+        lv_label_set_text(t0_mode_badge, "NO TARGET");
+        lv_obj_set_style_bg_color(t0_mode_badge, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_label_set_text(t0_scale_lbl, "Range: ---");
+        lv_label_set_text(t0_steer_lbl, "Select target in Tile 3 Waypoints");
+        lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x888888), 0);
+
+        // Hide navigation overlays
+        lv_obj_set_hidden(t0_bullseye_ring1, true);
+        lv_obj_set_hidden(t0_bullseye_ring2, true);
+        lv_obj_set_hidden(t0_bullseye_center, true);
+        lv_obj_set_hidden(t0_cross_h, true);
+        lv_obj_set_hidden(t0_cross_v, true);
+        for (int i = 0; i < T0_GRID_H_LINES; i++) {
+            if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
+        }
+        for (int i = 0; i < T0_GRID_V_LINES; i++) {
+            if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
+        }
+        lv_obj_set_hidden(t0_track_line, true);
+        lv_obj_set_hidden(t0_track_arrow, true);
+        lv_obj_set_hidden(t0_beam_arrow, true);
+        lv_obj_set_hidden(t0_wedge_amber_l, true);
+        lv_obj_set_hidden(t0_wedge_amber_r, true);
+        lv_obj_set_hidden(t0_wedge_green_l, true);
+        lv_obj_set_hidden(t0_wedge_green_r, true);
+        lv_obj_set_hidden(t0_target_icon, true);
+        lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 170 - 8);
+        lv_obj_set_hidden(t0_rover_icon, false);
     }
 
     // 3. Update Tile 1: Field Survey Logger
