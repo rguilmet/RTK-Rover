@@ -830,7 +830,7 @@ void create_rover_ui(void)
     lv_obj_set_style_pad_all(hdr_s_fix_badge, 0, 0);
 
     hdr_s_fix_lbl = lv_label_create(hdr_s_fix_badge);
-    lv_label_set_text(hdr_s_fix_lbl, "HDG --");
+    lv_label_set_text(hdr_s_fix_lbl, "HDG ---");
     lv_obj_set_style_text_color(hdr_s_fix_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(hdr_s_fix_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(hdr_s_fix_lbl);
@@ -1563,14 +1563,14 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     // Row 3: Dual-Antenna Heading Status & Metrics
-    const char *hdg_badge_str = "HDG --";
+    const char *hdg_badge_str = "HDG ---";
     lv_color_t hdg_badge_col  = lv_color_hex(0x3A3F47);
     if (d->heading_valid) {
         if (d->heading_source == HDG_SRC_DUAL_FIX) {
-            hdg_badge_str = "HDG FIX";
+            hdg_badge_str = "SLV FIX";
             hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
         } else if (d->heading_source == HDG_SRC_DUAL_FLT) {
-            hdg_badge_str = "HDG FLT";
+            hdg_badge_str = "SLV FLT";
             hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
         } else if (d->heading_source == HDG_SRC_COG) {
             hdg_badge_str = "HDG COG";
@@ -1579,10 +1579,10 @@ void update_rover_ui(const RoverUIData_t *d)
             hdg_badge_str = "HDG HLD";
             hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
         } else if (d->heading_is_fixed) {
-            hdg_badge_str = "HDG FIX";
+            hdg_badge_str = "SLV FIX";
             hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
         } else {
-            hdg_badge_str = "HDG FLT";
+            hdg_badge_str = "SLV FLT";
             hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
         }
     }
@@ -2010,11 +2010,11 @@ void update_rover_ui(const RoverUIData_t *d)
     if (t4_ant_slave_lbl) {
         const char *s_fix_str = "NO FIX";
         if (d->heading_valid) {
-            if (d->heading_source == HDG_SRC_DUAL_FIX)      s_fix_str = "HDG FIX";
-            else if (d->heading_source == HDG_SRC_DUAL_FLT) s_fix_str = "HDG FLT";
+            if (d->heading_source == HDG_SRC_DUAL_FIX)      s_fix_str = "SLV FIX";
+            else if (d->heading_source == HDG_SRC_DUAL_FLT) s_fix_str = "SLV FLT";
             else if (d->heading_source == HDG_SRC_COG)      s_fix_str = "HDG COG";
             else if (d->heading_source == HDG_SRC_HOLD)     s_fix_str = "HDG HLD";
-            else s_fix_str = d->heading_is_fixed ? "HDG FIX" : "HDG FLT";
+            else s_fix_str = d->heading_is_fixed ? "SLV FIX" : "SLV FLT";
         } else if (d->slave_fix_type == GNSS_FIX_RTK_FIXED) {
             s_fix_str = "SLV FIX";
         } else if (d->slave_fix_type == GNSS_FIX_RTK_FLOAT) {
