@@ -1,0 +1,11 @@
+timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes
+,,PIN_NW_01,42.360100000,-71.094200000,,RTK_FIX,HDG_FIX,0.035,0.032,0.6,26,0,0.0,0,0.00,0.00,1,5/8in Rebar w/ Yellow Cap 'METCALF #2081' (Found, Station 393.79ft)
+,,PIN_TREE_BASE_REF,42.360450000,-71.093500000,,RTK_FIX,HDG_FIX,0.035,0.032,0.6,26,0,0.0,0,0.00,0.00,1,5/8in Rebar w/ Yellow Cap 'METCALF #2081' (Found, Station 293.79ft)
+,,PIN_GRAY_POB,43.730735030,-70.623622555,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Capped Iron Rod (Southerly Corner of Haslam & End of 50ft ROW, Paxton Woods)
+,,PIN_GRAY_SOUTH_ANGLE,43.729058945,-70.620588908,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Angle Point on Paxton Woods / Deer Hill Boundary (1007.82ft SE of Gray POB)
+,,PIN_SOUTHERN_CORNER,43.729943365,-70.619714937,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,1in Iron Pipe Found (Verne Blake / Michelle Hatch / Casey Gray SE Corner)
+,,TRI_CONVERGENCE,43.731757070,-70.623423291,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,5/8in Rebar w/ Yellow Cap 'METCALF #2081' (Guilmet-Gray-Haslam T-Junction, Station 493.79ft)
+,,ROAD_ARC_MID_OUTER,43.731437056,-70.623140428,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Midpoint of Road Arc along Casey Gray Boundary (R=175.00ft, Arc=142.59ft from PT)
+,,PIN_GRAY_PC_OUTER,43.731068820,-70.623268606,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Point of Curvature PC along Gray Boundary (R=175.00ft, 285.18ft Arc from PT)
+,,ROAD_ARC_CENTER,43.731360251,-70.623794972,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Center of Curvature for Sample Rd Arc (R=175.00ft from Gray Property Line)
+,,PIN_HASLAM_POB,43.730818182,-70.623773065,,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Capped Iron Rod (Northerly Corner of 50ft ROW, 50.00ft NW of Gray POB)
