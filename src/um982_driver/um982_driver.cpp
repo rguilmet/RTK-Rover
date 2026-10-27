@@ -437,13 +437,16 @@ extern "C" void um982_configure_rover_defaults(void)
     send_um982_com1_command("CONFIG PVTALG MULTI");
     vTaskDelay(pdMS_TO_TICKS(40));
 
-    send_um982_com1_command("CONFIG HEADING RELIABILITY 2");
+    send_um982_com1_command("CONFIG HEADING LOWDYNAMIC");
     vTaskDelay(pdMS_TO_TICKS(40));
 
     send_um982_com1_command("CONFIG HEADING FIXLENGTH");
     vTaskDelay(pdMS_TO_TICKS(40));
 
-    send_um982_com1_command("CONFIG HEADING LENGTH 55.50 12.00");
+    char hdg_cmd[64];
+    float spacing = (current_settings.antenna_spacing_m > 0.05f) ? current_settings.antenna_spacing_m : 0.555f;
+    snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.3f 0.100", spacing);
+    send_um982_com1_command(hdg_cmd);
     vTaskDelay(pdMS_TO_TICKS(40));
   
     send_um982_com1_command("GPGGA COM1 0.5");

@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.19] - 2026-10-27
+
+### Fixed
+- **UM982 Dual-Antenna Baseline Configuration:** Corrected `CONFIG HEADING LENGTH` command in `src/um982_driver/um982_driver.cpp`. The Unicore UM982 command expects units in meters, not centimeters. Replaced `CONFIG HEADING LENGTH 55.50 12.00` (which configured a 55.5-meter baseline) with `CONFIG HEADING LENGTH 0.555 0.100` dynamically formatted from `current_settings.antenna_spacing_m`. Added `CONFIG HEADING LOWDYNAMIC` and `CONFIG HEADING FIXLENGTH` to optimize heading carrier-phase integer ambiguity search for surveyor pole dynamics.
+- **Row 3 Heading Status Badge Logic:** Fixed misleading bright green `SLV FIX` badge displayed in Row 3 when heading was unresolved. Decoupled the heading badge from Slave antenna RTK position fix (`d->slave_fix_type`). The badge strictly reflects heading status: `HDG FIX` (Green), `HDG FLT` (Orange), `HDG COG` (Cyan), `HDG HLD` (Amber), or `HDG --` (Dark Gray) when heading is invalid.
+- **Web Portal Log Download (Chrome HTTP Block Bypass):** Fixed Chrome blocking `.log` file downloads over HTTP (`Unconfirmed *.crdownload`). Added safe `.txt` download naming (`.txt safe`) and in-memory Blob conversion to bypass Chrome's download filter. Added a `[View]` link that streams raw log text directly to the browser with `Content-Type: text/plain; charset=utf-8` without attachment disposition, plus an explicit `[.log]` button.
+
 ## [v0.2.10] - 2026-10-26
 
 ### Added
