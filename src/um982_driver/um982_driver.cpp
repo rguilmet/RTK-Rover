@@ -393,7 +393,7 @@ static void process_com1_line(char *line)
             strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
         }
         Serial.printf("[UM982 COM1 RX] %s\n", line);
-    } else if (strncmp(line, "$command,", 9) == 0 || strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG", 7) == 0) {
+    } else if (strncmp(line, "$command,", 9) == 0 || strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG", 7) == 0 || strncmp(line, "#MODE", 5) == 0 || strncmp(line, "$MODE", 5) == 0) {
         Serial.printf("[UM982 COM1 RX] %s\n", line);
     }
 }
@@ -437,6 +437,10 @@ extern "C" void um982_configure_rover_defaults(void)
     send_um982_com1_command("CONFIG PVTALG MULTI");
     vTaskDelay(pdMS_TO_TICKS(40));
 
+    // Put UM982 into precision surveying mode (overrides factory default UAV drone mode)
+    send_um982_com1_command("MODE ROVER SURVEY");
+    vTaskDelay(pdMS_TO_TICKS(40));
+
     send_um982_com1_command("CONFIG HEADING LOWDYNAMIC");
     vTaskDelay(pdMS_TO_TICKS(40));
 
@@ -444,8 +448,11 @@ extern "C" void um982_configure_rover_defaults(void)
     vTaskDelay(pdMS_TO_TICKS(40));
 
     char hdg_cmd[64];
-    float spacing = (current_settings.antenna_spacing_m > 0.05f) ? current_settings.antenna_spacing_m : 0.555f;
-    snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.3f 0.100", spacing);
+    float spacing_m = (current_settings.antenna_spacing_m > 0.05f) ? current_settings.antenna_spacing_m : 0.555f;
+    float spacing_cm = spacing_m * 100.0f;
+    // Parameter 1: baseline length in centimeters (Table 4-14 in manual: 55.5 cm)
+    // Parameter 2: tolerance in centimeters (12 cm tolerance)
+    snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.1f 12", spacing_cm);
     send_um982_com1_command(hdg_cmd);
     vTaskDelay(pdMS_TO_TICKS(40));
   
@@ -467,6 +474,11 @@ extern "C" void um982_configure_rover_defaults(void)
     send_um982_com1_command("BASEINFOA COM1 ONCHANGED");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("SAVECONFIG");
+    vTaskDelay(pdMS_TO_TICKS(100));
+    // Query active mode and heading configuration to confirm in telemetry
+    send_um982_com1_command("MODE");
+    vTaskDelay(pdMS_TO_TICKS(40));
+    send_um982_com1_command("CONFIG HEADING");
     vTaskDelay(pdMS_TO_TICKS(40));
 }
 
