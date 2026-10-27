@@ -5,6 +5,18 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.28] - 2026-10-27
+
+### Fixed
+- **Restored Complete I2C Hardware Peripheral Control (`src/i2c_bsp/i2c_bsp.c`):**
+  - **Removed Manual `gpio_set_direction` on I2C Lines:** Removed the experimental `i2c_bus_clear_stuck_sda()` routine. In ESP-IDF v5, calling `gpio_set_direction()` directly on pins attached to the `i2c_master` peripheral disconnects the GPIO matrix routing from the hardware controller, permanently breaking the SCL line upon the first timeout and locking up the bus.
+  - **Native Peripheral Hardware Bus Reset:** Bus recovery now delegates cleanly to `i2c_master_bus_reset(user_i2c_port0_handle)`, which safely clocks the hardware bus without corrupting peripheral GPIO matrix assignments.
+  - **Retained Safe Transfer Headroom:** Maintained `i2c_data_pdMS_TICKS = 100` and `dev_cfg.scl_wait_us = 0` (ESP-IDF default) with rate-limited warning logs.
+- **Restored Responsive Native Touch Polling (`src/lvgl_port/lvgl_port.c`):**
+  - **Reverted Synthetic Polling Throttling:** Restored `TouchInputReadCallback` to the proven `v0.2.24` implementation. Removed the artificial 16 ms throttle and `last_state` caching that interfered with LVGL's internal event debouncing, click timers, and gesture recognizers.
+  - **Instant Button & Swipe Response:** Touch input is sampled directly on LVGL's natural timer schedule, restoring instant single-tap recognition and smooth screen swipe navigation across all tiles.
+  - **Guaranteed Wi-Fi Thread Safety:** Kept the decoupled `s_pending_wifi_status` / `s_wifi_status_dirty` buffer architecture, ensuring Core 0 Wi-Fi callbacks never touch LVGL widgets or heap structures.
+
 ## [v0.2.27] - 2026-10-27
 
 ### Fixed

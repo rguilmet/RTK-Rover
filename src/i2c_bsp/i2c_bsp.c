@@ -3,8 +3,6 @@
 #include "../../user_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "driver/gpio.h"
-#include "esp_rom_sys.h"
 
 i2c_master_bus_handle_t user_i2c_port0_handle = NULL;
 i2c_master_dev_handle_t disp_touch_dev_handle = NULL;
@@ -41,27 +39,6 @@ static const char* i2c_dev_name(i2c_master_dev_handle_t h)
     return "I2C_DEV";
 }
 
-static void i2c_bus_clear_stuck_sda(void)
-{
-    // If a slave was interrupted mid-byte, it holds SDA low waiting for remaining clock pulses.
-    // Pulsing SCL up to 9 times with SDA as input allows the slave to finish shifting out and release the line.
-    gpio_set_direction((gpio_num_t)ROVER_PIN_I2C0_SDA, GPIO_MODE_INPUT);
-    gpio_pullup_en((gpio_num_t)ROVER_PIN_I2C0_SDA);
-    if (gpio_get_level((gpio_num_t)ROVER_PIN_I2C0_SDA) == 0) {
-        gpio_set_direction((gpio_num_t)ROVER_PIN_I2C0_SCL, GPIO_MODE_OUTPUT_OD);
-        gpio_pullup_en((gpio_num_t)ROVER_PIN_I2C0_SCL);
-        for (int i = 0; i < 9; i++) {
-            gpio_set_level((gpio_num_t)ROVER_PIN_I2C0_SCL, 0);
-            esp_rom_delay_us(5);
-            gpio_set_level((gpio_num_t)ROVER_PIN_I2C0_SCL, 1);
-            esp_rom_delay_us(5);
-            if (gpio_get_level((gpio_num_t)ROVER_PIN_I2C0_SDA) == 1) {
-                break;
-            }
-        }
-    }
-}
-
 static void i2c_bus_recover_locked(const char *action, i2c_master_dev_handle_t dev_handle, int reg, esp_err_t err)
 {
     static uint32_t last_warn_ms = 0;
@@ -76,10 +53,9 @@ static void i2c_bus_recover_locked(const char *action, i2c_master_dev_handle_t d
                    action, i2c_dev_name(dev_handle), (unsigned int)err);
         }
     }
-    i2c_bus_clear_stuck_sda();
     if (user_i2c_port0_handle != NULL) {
         i2c_master_bus_reset(user_i2c_port0_handle);
-        // Settle delay while holding mutex so subsequent tasks (e.g. Touch) do not collide with recovering lines
+        // Settle delay while holding mutex so subsequent tasks do not collide with recovering lines
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
