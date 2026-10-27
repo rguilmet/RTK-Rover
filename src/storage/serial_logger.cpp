@@ -19,29 +19,8 @@ static uint8_t s_ring_buf[SERIAL_RING_BUF_SIZE];
 static size_t s_ring_head = 0;
 static size_t s_ring_tail = 0;
 static bool s_in_logger = false;
-static vprintf_like_t s_orig_vprintf = NULL;
 
 SerialLoggerClass SerialLogger;
-
-static int serial_vprintf_hook(const char *fmt, va_list args) {
-    if (s_in_logger) {
-        if (s_orig_vprintf) return s_orig_vprintf(fmt, args);
-        return 0;
-    }
-    char buf[256];
-    va_list copy;
-    va_copy(copy, args);
-    int len = vsnprintf(buf, sizeof(buf), fmt, copy);
-    va_end(copy);
-
-    if (len > 0) {
-        SerialLogger.write((const uint8_t*)buf, len);
-    }
-    if (s_orig_vprintf) {
-        return s_orig_vprintf(fmt, args);
-    }
-    return len;
-}
 
 SerialLoggerClass::SerialLoggerClass() {}
 
@@ -49,9 +28,6 @@ void SerialLoggerClass::begin(unsigned long baud) {
     ::Serial.begin(baud);
     if (!s_serial_mux) {
         s_serial_mux = xSemaphoreCreateMutex();
-    }
-    if (s_orig_vprintf == NULL) {
-        s_orig_vprintf = esp_log_set_vprintf(serial_vprintf_hook);
     }
 }
 

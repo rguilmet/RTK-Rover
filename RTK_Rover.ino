@@ -337,6 +337,7 @@ void task_display_and_audio(void *pvParameters)
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
         }
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 

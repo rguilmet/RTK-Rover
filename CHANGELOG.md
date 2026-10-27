@@ -5,6 +5,17 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.26] - 2026-10-27
+
+### Fixed
+- **Restored Power-Up Boot Messages & USB CDC Detection (`src/storage/serial_logger.h`):** Corrected `SerialLoggerClass::operator bool()` to return `(bool)::Serial` instead of unconditionally returning `true`. This restores the initial 3-second USB CDC connection wait during `setup()`, ensuring the entire startup banner, I2C bus scan, PMIC status, IMU self-test, and storage mounting diagnostics are fully rendered to the Serial Monitor.
+- **Eliminated UI Freeze & Restored Touch Responsiveness (`src/lvgl_port/lvgl_port.c`):**
+  - **Reverted LVGL Mutex to Standard FreeRTOS Mutex:** Restored `lvgl_mux` to a standard mutex (`xSemaphoreCreateMutex()`) with standard priority inheritance.
+  - **Zero-Contention Wi-Fi Status Updates:** Decoupled Core 0 Wi-Fi status changes from the LVGL widget tree using a thread-safe pending status buffer (`s_pending_wifi_status` / `s_wifi_status_dirty`). Status changes are now applied exclusively from Core 1 inside `update_rover_ui()`, preventing cross-core mutex contention and FreeRTOS task starvation.
+  - **Correct Initialization Order:** Guaranteed `create_rover_ui()` runs and completes before `rover_lvgl_port_task` is scheduled, preventing race conditions against uninitialized UI structures.
+  - **Cooperative Time-Slicing on Core 1 (`RTK_Rover.ino`):** Added a 5ms delay in `task_display_and_audio` to yield CPU cycles to `rover_lvgl_port_task`, guaranteeing smooth touch gesture responsiveness.
+- **Removed Dangerous `esp_log_set_vprintf` Hook (`src/storage/serial_logger.cpp`):** Removed the global ESP-IDF C-runtime `vprintf` hook that intercepted internal system logs and created re-entrancy risks in USB CDC (`HWCDC`) and file drivers. `SerialLogger` operates purely through standard Arduino `Print`/`Stream` redirection.
+
 ## [v0.2.25] - 2026-10-27
 
 ### Fixed

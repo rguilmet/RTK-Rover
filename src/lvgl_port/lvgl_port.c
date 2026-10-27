@@ -281,13 +281,13 @@ bool rover_lvgl_lock(int timeout_ms)
 {
     if (!lvgl_mux) return false;
     const TickType_t timeout_ticks = (timeout_ms == -1) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-    return xSemaphoreTakeRecursive(lvgl_mux, timeout_ticks) == pdTRUE;
+    return xSemaphoreTake(lvgl_mux, timeout_ticks) == pdTRUE;
 }
 
 void rover_lvgl_unlock(void)
 {
     if (lvgl_mux) {
-        xSemaphoreGiveRecursive(lvgl_mux);
+        xSemaphoreGive(lvgl_mux);
     }
 }
 
@@ -619,23 +619,19 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
     update_all_control_buttons();
 }
 
+static char s_pending_wifi_status[64] = "Wi-Fi Inactive";
+static bool s_wifi_status_dirty = true;
+
 void update_wifi_ip_label(const char* ip)
 {
-    if (rover_lvgl_lock(500)) {
-        if (t1_wifi_status_lbl) {
-            if (ip && ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 && strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 && strstr(ip, "...") == NULL) {
-                char buf[64];
-                snprintf(buf, sizeof(buf), "Portal: http://%s/", ip);
-                lv_label_set_text(t1_wifi_status_lbl, buf);
-                lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x00FF88), 0);
-            } else {
-                lv_label_set_text(t1_wifi_status_lbl, ip ? ip : "Wi-Fi Inactive");
-                lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
-            }
-        }
-        update_all_control_buttons();
-        rover_lvgl_unlock();
+    if (ip && ip[0]) {
+        strncpy(s_pending_wifi_status, ip, sizeof(s_pending_wifi_status) - 1);
+        s_pending_wifi_status[sizeof(s_pending_wifi_status) - 1] = '\0';
+    } else {
+        strncpy(s_pending_wifi_status, "Wi-Fi Inactive", sizeof(s_pending_wifi_status) - 1);
+        s_pending_wifi_status[sizeof(s_pending_wifi_status) - 1] = '\0';
     }
+    s_wifi_status_dirty = true;
 }
 
 static void match_target_sw_cb(lv_event_t *e)
@@ -1570,6 +1566,23 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
+    // Tile 1 Wi-Fi Status Label
+    if (s_wifi_status_dirty && t1_wifi_status_lbl) {
+        s_wifi_status_dirty = false;
+        const char *ip = s_pending_wifi_status;
+        if (ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 &&
+            strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 && strstr(ip, "...") == NULL) {
+            char ip_buf[64];
+            snprintf(ip_buf, sizeof(ip_buf), "Portal: http://%s/", ip);
+            lv_label_set_text(t1_wifi_status_lbl, ip_buf);
+            lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x00FF88), 0);
+        } else {
+            lv_label_set_text(t1_wifi_status_lbl, ip);
+            lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
+        }
+        update_all_control_buttons();
+    }
+
     // Row 2: Master Antenna (ANT1) Fix Badge & Metrics
     const char *fix_str = "NO FIX";
     lv_color_t fix_col  = lv_palette_main(LV_PALETTE_RED);
@@ -2262,12 +2275,13 @@ void lvgl_port_init(void)
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));
 
-    lvgl_mux = xSemaphoreCreateRecursiveMutex();
+    lvgl_mux = xSemaphoreCreateMutex();
     assert(lvgl_mux);
-    xTaskCreatePinnedToCore(rover_lvgl_port_task, "LVGL", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL, 1);
 
     if (rover_lvgl_lock(-1)) {
         create_rover_ui();
         rover_lvgl_unlock();
     }
+
+    xTaskCreatePinnedToCore(rover_lvgl_port_task, "LVGL", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL, 1);
 }

@@ -23,7 +23,7 @@ public:
     int peek() override;
     void flush() override;
 
-    operator bool() const { return true; }
+    operator bool() const { return (bool)::Serial; }
 
     bool start();
     void stop();
