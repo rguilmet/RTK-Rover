@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.3.0`  
-**Last Updated:** October 26, 2026  
-**Firmware Target:** `v0.2.10`  
+**Document Version:** `v1.4.0`  
+**Last Updated:** October 27, 2026  
+**Firmware Target:** `v0.2.11`  
 **Python Ecosystem Target:** `v1.0.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -118,20 +118,22 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
   * Antenna crossbar beam arrow, line-of-sight track vector, turn prompt, and 64-point breadcrumb ring buffer.
   * High-precision Bullseye mode automatically active at distance $\le 1.5\text{ m}$ with $1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings.
   * On-screen Route recording toggle (`REC ON` / `REC OFF`).
-* **Tile 1 (Col 1) — Field Survey Logger:**
-  * Live pole tip coordinates and next auto-incrementing ID.
+* **Tile 1 (Col 1) — Field Survey & Settings:**
+  * Auto-incrementing point ID with configurable prefix dropdown.
   * Prefix dropdown (`PIN`, `BENCHMARK`, `CONTROL`, `CORNER`, etc.) and quick note tags (`IP`, `MAG NAIL`, `REBAR`, `STONE`).
   * Target Match toggle to log design vs. as-found offsets.
-  * Visual averaging progress bar and large on-screen `[LOG PIN NOW]` button.
+  * Visual averaging progress bar, on-screen `[LOG PIN NOW]` button, and last logged status.
+  * Quick Settings buttons: Row 1 (`NMEA Log` | `Route Log`), Row 2 (`Bright: 20%..100%` | `Vol: MUTE..100%` in 20% steps), Row 3 (`Wi-Fi: Start/Stop` | `Units: SI/IMP`), Row 4 (`Wi-Fi Status & Portal URL`).
 * **Tile 2 (Col 2) — Waypoint CSV Browser:**
   * Scrollable table of waypoints loaded from `/waypoints.csv`.
   * Tapping any row selects it as the active guidance target.
 * **Tile 3 (Col 3) — Dual-Antenna Compass & Bubble Level:**
-  * High-precision True Heading readout, baseline length/pitch verification.
-  * Display pose indicator (`Held Flat`, `Handheld Viewing Angle`, `Clipped Vertically to Pole`).
-  * 2D spirit bubble level aligned for portrait LCD with **Tare Pole Bracket Angle** button.
-* **Tile 4 (Col 4) — Settings & System Diagnostics:**
-  * Preferences: Unit toggle, Wi-Fi portal toggle, NMEA log toggle, Route log toggle.
-  * Stepped controls: Backlight Brightness (`25%..100%`) and Audio Volume (`MUTE..100%`).
+  * High-precision True Heading numerical readout (e.g. `Heading: 162.4`) in 24pt font.
+  * Baseline length/pitch verification and display pose indicator.
+  * Enlarged $224\text{ px}$ diameter spirit bubble level with Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping heading UP (12 o'clock).
+  * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
+  * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
+* **Tile 4 (Col 4) — Hardware Diagnostics:**
+  * Dedicated diagnostics screen with Section 1 preferences moved to Tile 1, shifting diagnostics up by $\approx 120\text{ px}$.
   * Dedicated **Antenna & GNSS Diagnostics Card**: Full Master and Slave metrics including **HDOP**, satellite counts, precision estimates, and RTCM age.
   * Hardware Port Diagnostics: COM1, COM2, and E220 register query and pulse test triggers.

@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.2.10`  
+**Firmware Version:** `v0.2.11`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))
 
 ---
@@ -23,7 +23,8 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 * **Storage Auto-Routing & Settings Mirroring:** Primary storage routes automatically to the MicroSD Card (`/sdcard/`) with internal Flash (`FFat`) as fallback. Changes to `settings.json` are automatically mirrored to FFat on boot and whenever settings are saved.
 * **Standardized Timestamp-First CSV Logging:** Standardized `timestamp` as the primary key in Column 1 and `firmware_ver` in Column 2 across both `route_*.csv` and `survey_logged_pins.csv`. Fully logs moving-baseline heading fix status (`hdg_fix`), Master and Slave antenna satellites and HDOP, differential correction age, base station ID, vertical accuracy, and survey pole tilt angle.
 * **Unicore Extended Base Station Telemetry (`BASEINFOA`):** The UM982 receiver autonomously parses incoming RTCM 1005/1006 reference frames received via LoRa on COM2 and outputs `#BASEINFOA` with base station ID, status, and precise ECEF coordinates. Closed-form Bowring conversion translates these to WGS84 base station latitude, longitude, and elevation in real time without software RTCM bit-sniffing.
-* **On-Screen Brightness & Volume Controls (Tile 4):** Stepped touch buttons on Tile 4 cycle backlight brightness (`25% -> 50% -> 75% -> 100%`) and audio volume (`MUTE -> 25% -> 50% -> 75% -> 100%`), automatically debounced and saved to `settings.json`.
+* **On-Screen Quick Settings & Logging Controls (Tile 1):** Touch controls for NMEA and Route logging, 20% stepped Backlight Brightness (`20% -> 40% -> 60% -> 80% -> 100%`), Audio Volume (`MUTE -> 20% -> 40% -> 60% -> 80% -> 100%`), Wi-Fi portal toggle, and Units (`SI / IMP`) reside at the base of Tile 1, debounced and persisted to `settings.json`.
+* **Integrated 8-Point Compass Ring & Plumb Level (Tile 3):** Enlarged 224px spirit bubble level with dynamic Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping the rover's heading oriented at 12 o'clock, with a compact **Tare** (`TARE` / `RST`) button nested in the bottom-right of the circle's bounding rectangle.
 * **Stable Field UI Navigation:** Tile swipe gestures are disabled to eliminate accidental page turns while scrolling diagnostics. Screens are switched via the persistent `< Prev` and `Next >` navigation bar. Physical BOOT button (GPIO 0) is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
 
 ---
@@ -72,25 +73,25 @@ The user interface is structured into 5 functional screens, navigated via the pe
   * True antenna heading beam arrow and line-of-sight track vector.
   * Distance, bearing, steer prompt, and cardinal North/East offsets.
   * Route recording toggle (`REC ON` / `REC OFF`).
-* **Tile 1 (Screen 2) — Field Survey Logger:**
+* **Tile 1 (Screen 2) — Field Survey & Settings:**
   * Dedicated point capture tool with multi-epoch RTK averaging (`1s`, `5s`, `10s`).
   * Auto-incrementing point ID with configurable prefix dropdown.
   * Quick condition and feature note tags (`IP`, `MAG NAIL`, `REBAR`, `STONE`, `BENCHMARK`).
   * Target Match toggle to automatically record as-found offsets against design coordinates.
-  * Large on-screen `[LOG PIN NOW]` button with visual progress bar.
+  * On-screen `[LOG PIN NOW]` button with visual progress bar and last logged point status.
+  * Quick Settings buttons: Row 1 (`NMEA Log: ON/OFF` | `Route: ON/OFF`), Row 2 (`Bright: 20%..100%` | `Vol: MUTE..100%`), Row 3 (`Wi-Fi: Start/Stop` | `Units: SI/IMP`), Row 4 (`Wi-Fi Status & Web Portal URL`).
 * **Tile 2 (Screen 3) — Waypoint CSV Browser:**
   * Scrollable table of all loaded waypoints from `/waypoints.csv`.
   * Tapping any row selects it as the active navigation target.
 * **Tile 3 (Screen 4) — Dual-Antenna Compass & Bubble Level:**
-  * Large numerical True Heading readout with fix status (`FIX` / `FLT`).
+  * Numerical True Heading readout (e.g. `Heading: 162.4`) in prominent 24pt font.
   * Baseline length ($55.5\text{ cm}$) and pitch ($^\circ$) verification.
   * Display pose classification (`Held Flat`, `Handheld Viewing Angle`, `Clipped Vertically to Pole`).
-  * 2D spirit plumb bubble level with **Tare Pole Bracket Angle** calibration button.
-* **Tile 4 (Screen 5) — Settings & System Diagnostics:**
-  * Preferences: Unit toggle (`SI / IMP`), Wi-Fi web portal toggle (`Start / Stop`), NMEA logging toggle, Route logging toggle.
-  * Hardware controls: Stepped Backlight Brightness (`25%..100%`) and Audio Volume (`MUTE..100%`).
-  * Dedicated **Antenna & GNSS Diagnostics Card**: Full Master and Slave metrics including **HDOP**, satellite counts, precision estimates, and RTCM differential age.
-  * Hardware Port Diagnostics: COM1, COM2, and E220 register query and pulse test triggers.
+  * Enlarged $224\text{ px}$ diameter plumb bubble level with Course-Up 8-Point Compass Ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping current heading oriented UP (12 o'clock).
+  * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
+  * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
+* **Tile 4 (Screen 5) — Hardware Diagnostics:**
+  * Cleaned-up dedicated diagnostics screen displaying Storage state (MicroSD/FFat), Antenna Master (ANT1) metrics, Antenna Slave (ANT2) metrics, RTCM Differential / Base Station telemetry, UM982 COM1/COM2 statuses with query/test buttons, and E220 LoRa configuration registers.
 
 ---
 

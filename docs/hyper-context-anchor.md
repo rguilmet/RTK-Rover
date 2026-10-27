@@ -35,6 +35,10 @@
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
+* **Completed (`v0.2.11`):**
+  - **Tile 1 Layout Streamlining & Quick Settings Integration:** Removed redundant `Tip Lat`, `Tip Lon`, and `Ground Hgt` rows (already in Row 4 persistent top header). Integrated Quick Settings buttons directly onto Tile 1 (Row 1: NMEA & Route logs; Row 2: 20% stepped Brightness & Volume; Row 3: Wi-Fi & Units; Row 4: Wi-Fi status & web portal URL).
+  - **Tile 3 Integrated 8-Point Compass Ring & Plumb Level:** Enlarged bubble level circle to $224\text{ px}$ diameter. Added Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping rover heading oriented UP (12 o'clock). Nested compact Tare button (`62x28 px`) into the bottom-right corner of the circle's bounding rectangle (`TARE` Blue / `RST` Orange). Centered Pole Tilt readout below circle.
+  - **Tile 4 Hardware Diagnostics Cleanup:** Removed preference controls, updated title to `HARDWARE DIAGNOSTICS`, and shifted antenna, COM port, and LoRa diagnostics up by $\approx 120\text{ px}$ for immediate access without scrolling. Updated bottom bar titles to `"2/5: Survey & Settings"` and `"5/5: Diagnostics"`.
 * **Completed (`v0.2.10`):**
   - **Standardized Timestamp-First CSV Schemas:** Standardized `timestamp` as Column 1 and `firmware_ver` as Column 2 across both `route_*.csv` and `survey_logged_pins.csv` with standard ISO/MFS `%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%03d` format.
   - **Unicore Extended Base Station Telemetry (`BASEINFOA`):** Initialized UM982 with `BASEINFOA COM1 ONCHANGED` to parse incoming RTCM 1005/1006 reference frames and report Base Station ID and ECEF coordinates. Closed-form Bowring conversion translates to WGS84 coordinates on-the-fly without software RTCM sniffing.
@@ -51,4 +55,4 @@
   - **Dual Logging Subsystems:** Continuous Route track CSV logging (`/routes/`) and raw UM982 NMEA logging (`/nmea/`).
   - **Storage Auto-Routing & FFat Mirroring:** MicroSD primary, FFat fallback, automatic mirror of `settings.json`.
   - **Audio Queue:** FreeRTOS `beepQueue` synthesized on Core 1 for reliable multi-tone chirps.
-* **Current Status:** Firmware `v0.2.10` active, compiled, committed, and ready for field operation.
+* **Current Status:** Firmware `v0.2.11` active, updated, and ready for field operation.

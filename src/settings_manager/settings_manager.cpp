@@ -36,8 +36,8 @@ struct SystemSettings current_settings = {
     5,                // survey_avg_seconds (1, 5, or 10s)
     "PIN_",           // default_label_prefix
     "/waypoints.csv", // active_waypoint_file
-    85,               // brightness (%)
-    30,               // volume (%)
+    80,               // brightness (%)
+    40,               // volume (%)
     false,            // is_muted
     "Your_SSID",      // wifi_ssid
     "Your_PASSWORD",  // wifi_password
