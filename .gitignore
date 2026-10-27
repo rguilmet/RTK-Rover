@@ -16,3 +16,7 @@ GEMINI.md
 gemini.md
 session_handoff.md
 docs/session_handoff.md
+__pycache__/
+*.pyc
+*.bak
+

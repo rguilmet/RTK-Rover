@@ -137,3 +137,11 @@ This prevents the displayed or logged ground-tip coordinates from orbiting in a 
   * Dedicated diagnostics screen with Section 1 preferences moved to Tile 1, shifting diagnostics up by $\approx 120\text{ px}$.
   * Dedicated **Antenna & GNSS Diagnostics Card**: Full Master and Slave metrics including **HDOP**, satellite counts, precision estimates, and RTCM age.
   * Hardware Port Diagnostics: COM1, COM2, and E220 register query and pulse test triggers.
+
+---
+
+## 5. Python Survey & Ingestion Scripts (`scripts/`)
+
+* **`cogo_network_solver.py` (v1.0.0):** Multi-deed Coordinate Geometry (COGO) solver. Merges metes-and-bounds legal descriptions across multiple adjacent deeds, ties relative traverses to surveyed RTK ground pins (`PIN_DRIVEWAY_REF` and `PIN_TREE_BASE_REF`), calculates grid-to-true convergence rotation, verifies boundary closure (sub-inch misclosure over 4,045 ft), and computes true coordinates for intermediate line intersections, corners, and elusive legal anchors (e.g. `MONUMENT_STONE_EAST`).
+* **`kml_to_waypoints.py` (v1.0.0):** Ingests GIS or Google Earth KML files and extracts placemarks, linestrings, and polygon boundaries into the standardized 19-column rover CSV format.
+* **`validate_waypoints.py` (v1.2.0):** Validates CSV schema compliance, bounds, and computes traverse leg distances, bearings, and total closed perimeter.

@@ -154,6 +154,16 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
 
 ---
 
-## 7. License
+## 7. Waypoint & Survey Utilities (`scripts/`)
+
+Python command-line tools in `scripts/` automate waypoint generation, validation, and deed boundary network solving:
+
+* **`cogo_network_solver.py`**: Multi-deed Coordinate Geometry (COGO) network solver. Solves relative legal deed calls (bearings, distances, easements, rights of way) across adjacent property deeds, anchors them to real-world RTK-surveyed ground control pins, derives the local grid-to-true rotation offset (State Plane West convergence), and computes intermediate boundary pins, T-junctions, and elusive legal anchors (e.g. Stone Monument) with sub-inch closure. Outputs standard 19-column `waypoints.csv`.
+* **`kml_to_waypoints.py`**: Converts Google Earth or GIS `.kml` boundary polygons, paths, and placemarks directly into the rover's 19-column `waypoints.csv` format with automatic label sanitization and multi-line description handling.
+* **`validate_waypoints.py`**: Checks syntax, column count, bounds, and computes leg-by-leg distances, bearings, and closed-loop perimeter for any waypoint CSV file.
+
+---
+
+## 8. License
 
 This project is licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
