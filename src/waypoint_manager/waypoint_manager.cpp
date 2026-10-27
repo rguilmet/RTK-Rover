@@ -66,19 +66,19 @@ extern "C" const char* waypoint_get_note_tag_options(void) {
 
 static void create_default_sample_waypoints_if_missing(void)
 {
-    if (get_active_fs().exists("/waypoints-guilmet.csv") || get_active_fs().exists("/waypoints.csv")) {
+    if (get_active_fs().exists("/waypoints.csv")) {
         return;
     }
-    File f = get_active_fs().open("/waypoints-guilmet.csv", "w");
+    File f = get_active_fs().open("/waypoints.csv", "w");
     if (!f) return;
 
     f.println("timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_NW_01,42.360100000,-71.094200000,12.500,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe near oak");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_NE_02,42.360450000,-71.093500000,13.100,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar by stone wall");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_SE_03,42.359800000,-71.093400000,11.800,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner monument");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_SW_04,42.359750000,-71.094150000,12.000,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin by driveway");
+    f.println("2026-10-27_12-00-00.000-240,v0.2.17,PIN_NW_01,42.360100000,-71.094200000,12.500,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe near oak tree (sample waypoint with extended notes to demonstrate circular marquee autoscroll)");
+    f.println("2026-10-27_12-00-00.000-240,v0.2.17,PIN_NE_02,42.360450000,-71.093500000,13.100,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar by stone wall (sample pin)");
+    f.println("2026-10-27_12-00-00.000-240,v0.2.17,PIN_SE_03,42.359800000,-71.093400000,11.800,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner granite monument bound");
+    f.println("2026-10-27_12-00-00.000-240,v0.2.17,PIN_SW_04,42.359750000,-71.094150000,12.000,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin by driveway entrance");
     f.close();
-    Serial.println("Created sample /waypoints-guilmet.csv with 4 property pins.");
+    Serial.println("Created sample /waypoints.csv with 4 generic property pins.");
 }
 
 extern "C" bool waypoint_load_csv(const char *filepath)
@@ -87,15 +87,10 @@ extern "C" bool waypoint_load_csv(const char *filepath)
     if (!f && sd_card_mounted) {
         f = FFat.open(filepath, "r");
     }
-    // Fallback between /waypoints-guilmet.csv and /waypoints.csv
-    if (!f) {
-        if (strstr(filepath, "waypoints-guilmet.csv")) {
-            f = get_active_fs().open("/waypoints.csv", "r");
-            if (!f && sd_card_mounted) f = FFat.open("/waypoints.csv", "r");
-        } else if (strcmp(filepath, "/waypoints.csv") == 0) {
-            f = get_active_fs().open("/waypoints-guilmet.csv", "r");
-            if (!f && sd_card_mounted) f = FFat.open("/waypoints-guilmet.csv", "r");
-        }
+    // Fallback to default /waypoints.csv if specific file not found
+    if (!f && strcmp(filepath, "/waypoints.csv") != 0) {
+        f = get_active_fs().open("/waypoints.csv", "r");
+        if (!f && sd_card_mounted) f = FFat.open("/waypoints.csv", "r");
     }
     if (!f) {
         Serial.printf("waypoint_load_csv: Could not open %s\n", filepath);
@@ -242,10 +237,8 @@ extern "C" void waypoint_scan_files(void)
 
     // Fallback if no files on disk
     if (s_waypoint_file_cnt == 0) {
-        strncpy(s_waypoint_files[0], "/waypoints-guilmet.csv", sizeof(s_waypoint_files[0]) - 1);
-        strncpy(s_waypoint_files[1], "/waypoints-haslam.csv", sizeof(s_waypoint_files[0]) - 1);
-        strncpy(s_waypoint_files[2], "/waypoints-gray.csv", sizeof(s_waypoint_files[0]) - 1);
-        s_waypoint_file_cnt = 3;
+        strncpy(s_waypoint_files[0], "/waypoints.csv", sizeof(s_waypoint_files[0]) - 1);
+        s_waypoint_file_cnt = 1;
     }
 
     // Sort files alphabetically
@@ -297,7 +290,7 @@ extern "C" void waypoint_file_select_prev(void)
 extern "C" const char* waypoint_file_get_active_name(void)
 {
     if (s_waypoint_file_cnt <= 0 || s_active_file_idx < 0 || s_active_file_idx >= s_waypoint_file_cnt) {
-        return "waypoints-guilmet.csv";
+        return "waypoints.csv";
     }
     const char *p = s_waypoint_files[s_active_file_idx];
     if (*p == '/') p++;

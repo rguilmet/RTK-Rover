@@ -1239,7 +1239,7 @@ void create_rover_ui(void)
 
     // =====================================================================
     // TILE 2: Waypoint CSV Browser (Tile 3 to user)
-    // Fixed Top File Selector Row: [ < ] waypoints-guilmet.csv (1/3) [ > ]
+    // Fixed Top File Selector Row: [ < ] waypoints.csv (1/1) [ > ]
     // =====================================================================
     lv_obj_t *btn_file_prev = lv_button_create(tile_csv);
     lv_obj_set_size(btn_file_prev, 38, 26);
@@ -1250,7 +1250,7 @@ void create_rover_ui(void)
     lv_obj_center(lbl_fprev);
 
     t2_file_lbl = lv_label_create(tile_csv);
-    lv_label_set_text(t2_file_lbl, "waypoints-guilmet.csv (1/3)");
+    lv_label_set_text(t2_file_lbl, "waypoints.csv");
     lv_obj_set_style_text_color(t2_file_lbl, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_text_font(t2_file_lbl, &lv_font_montserrat_14, 0);
     lv_obj_align(t2_file_lbl, LV_ALIGN_TOP_MID, 0, 8);
