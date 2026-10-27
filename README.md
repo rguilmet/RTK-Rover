@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.2.11`  
+**Firmware Version:** `v0.2.12`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))
 
 ---
@@ -148,7 +148,9 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
   "is_muted": false,
   "wifi_ssid": "YourWiFiSSID",
   "wifi_password": "YourWiFiPassword",
-  "enable_serial_logging": true
+  "enable_serial_logging": true,
+  "enable_imu_logging": false,
+  "enable_telemetry_logging": true
 }
 ```
 

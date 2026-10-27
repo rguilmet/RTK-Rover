@@ -193,7 +193,7 @@ void task_rover_core0(void *pvParameters)
             }
 
             // Periodic 5-second diagnostic telemetry log to Serial Monitor (only if USB terminal connected)
-            if (Serial && current_settings.enable_serial_logging && (now - last_telem_log_ms >= 5000)) {
+            if (Serial && current_settings.enable_serial_logging && current_settings.enable_telemetry_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
                 const char *hdg_mode = state.heading_valid ? (state.heading_is_fixed ? "FIX" : "FLT") : "--";
                 Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
@@ -262,7 +262,7 @@ void task_display_and_audio(void *pvParameters)
                                         &cached_bubble_y,
                                         &cached_pose);
 
-            if (Serial && current_settings.enable_serial_logging && (now - last_imu_log_ms >= 1000)) {
+            if (Serial && current_settings.enable_serial_logging && current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
                 last_imu_log_ms = now;
                 Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
                               cached_imu_pitch, cached_imu_roll,
@@ -439,7 +439,6 @@ void setup()
 
     // 4. Load Settings & CSV Waypoints
     init_settings_manager();
-    current_settings.enable_serial_logging = true; // Ensure 5s [TELEM] diagnostic heartbeat is enabled
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)

@@ -41,7 +41,9 @@ struct SystemSettings current_settings = {
     false,            // is_muted
     "Your_SSID",      // wifi_ssid
     "Your_PASSWORD",  // wifi_password
-    true              // enable_serial_logging (enabled by default for bring-up & link verification)
+    true,             // enable_serial_logging (master switch for serial monitor output)
+    false,            // enable_imu_logging (periodic 1 Hz IMU pose and raw accelerometer logs)
+    true              // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
 };
 
 volatile bool settings_dirty = false;
@@ -143,6 +145,11 @@ extern "C" void load_settings(void) {
                       (int)strlen(current_settings.wifi_password));
 
         if (!doc["enable_serial_logging"].isNull()) current_settings.enable_serial_logging = doc["enable_serial_logging"];
+        if (!doc["enable_imu_logging"].isNull()) current_settings.enable_imu_logging = doc["enable_imu_logging"];
+        else if (!doc["log_imu_periodic"].isNull()) current_settings.enable_imu_logging = doc["log_imu_periodic"];
+        if (!doc["enable_telemetry_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telemetry_logging"];
+        else if (!doc["log_telemetry_periodic"].isNull()) current_settings.enable_telemetry_logging = doc["log_telemetry_periodic"];
+        else if (!doc["enable_telem_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telem_logging"];
 
         // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
         if (sd_card_mounted) {
@@ -184,6 +191,8 @@ extern "C" void save_settings(void) {
     doc["wifi_ssid"]                 = current_settings.wifi_ssid;
     doc["wifi_password"]             = current_settings.wifi_password;
     doc["enable_serial_logging"]     = current_settings.enable_serial_logging;
+    doc["enable_imu_logging"]        = current_settings.enable_imu_logging;
+    doc["enable_telemetry_logging"]  = current_settings.enable_telemetry_logging;
 
     String output;
     serializeJsonPretty(doc, output);
