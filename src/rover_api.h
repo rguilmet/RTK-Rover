@@ -35,7 +35,7 @@ typedef enum {
 // =========================================================================
 #define MAX_WAYPOINTS         128
 #define WAYPOINT_LABEL_LEN    28
-#define WAYPOINT_NOTES_LEN    48
+#define WAYPOINT_NOTES_LEN    128
 
 typedef struct {
     char     label[WAYPOINT_LABEL_LEN];

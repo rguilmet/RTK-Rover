@@ -35,7 +35,7 @@ struct SystemSettings current_settings = {
     false,            // e220_lbt_enable
     5,                // survey_avg_seconds (1, 5, or 10s)
     "PIN_",           // default_label_prefix
-    "/waypoints.csv", // active_waypoint_file
+    "/waypoints-guilmet.csv", // active_waypoint_file (default)
     80,               // brightness (%)
     40,               // volume (%)
     false,            // is_muted

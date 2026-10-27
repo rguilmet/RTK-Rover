@@ -19,6 +19,14 @@ void waypoint_select_prev(void);
 void waypoint_select_index(int16_t idx);
 bool waypoint_get_active(WaypointRecord_t *wp_out);
 
+// Multi-File Waypoint Browser
+void        waypoint_scan_files(void);
+void        waypoint_file_select_next(void);
+void        waypoint_file_select_prev(void);
+const char* waypoint_file_get_active_name(void);
+int16_t     waypoint_file_get_active_index(void);
+int16_t     waypoint_file_get_count(void);
+
 // Survey Logger (Tile 2 BOOT Button / Touch Trigger)
 extern bool     g_survey_target_match_mode;
 extern uint8_t  g_survey_prefix_idx;

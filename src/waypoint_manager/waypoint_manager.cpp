@@ -3,6 +3,7 @@
 #include "../settings_manager/settings_manager.h"
 #include "../rtc_bsp/rtc_bsp.h"
 #include "../nav_engine/nav_engine.h"
+#include "../lvgl_port/lvgl_port.h"
 #include <math.h>
 #include <Arduino.h>
 #include <SD_MMC.h>
@@ -13,6 +14,11 @@
 WaypointRecord_t g_waypoints[MAX_WAYPOINTS];
 int16_t          g_waypoint_count      = 0;
 int16_t          g_active_waypoint_idx = 0;
+
+#define MAX_WAYPOINT_FILES 16
+static char s_waypoint_files[MAX_WAYPOINT_FILES][48];
+static int16_t s_waypoint_file_cnt = 0;
+static int16_t s_active_file_idx   = 0;
 
 bool     g_survey_target_match_mode = true;
 uint8_t  g_survey_prefix_idx        = 0;
@@ -60,19 +66,19 @@ extern "C" const char* waypoint_get_note_tag_options(void) {
 
 static void create_default_sample_waypoints_if_missing(void)
 {
-    if (get_active_fs().exists("/waypoints.csv")) {
+    if (get_active_fs().exists("/waypoints-guilmet.csv") || get_active_fs().exists("/waypoints.csv")) {
         return;
     }
-    File f = get_active_fs().open("/waypoints.csv", "w");
+    File f = get_active_fs().open("/waypoints-guilmet.csv", "w");
     if (!f) return;
 
     f.println("timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.10,PIN_NW_01,42.360100000,-71.094200000,12.500,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe near oak");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.10,PIN_NE_02,42.360450000,-71.093500000,13.100,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar by stone wall");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.10,PIN_SE_03,42.359800000,-71.093400000,11.800,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner monument");
-    f.println("2026-10-26_00-00-00.000-240,v0.2.10,PIN_SW_04,42.359750000,-71.094150000,12.000,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin by driveway");
+    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_NW_01,42.360100000,-71.094200000,12.500,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe near oak");
+    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_NE_02,42.360450000,-71.093500000,13.100,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar by stone wall");
+    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_SE_03,42.359800000,-71.093400000,11.800,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner monument");
+    f.println("2026-10-26_00-00-00.000-240,v0.2.16,PIN_SW_04,42.359750000,-71.094150000,12.000,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin by driveway");
     f.close();
-    Serial.println("Created sample /waypoints.csv with 4 property pins.");
+    Serial.println("Created sample /waypoints-guilmet.csv with 4 property pins.");
 }
 
 extern "C" bool waypoint_load_csv(const char *filepath)
@@ -80,6 +86,16 @@ extern "C" bool waypoint_load_csv(const char *filepath)
     File f = get_active_fs().open(filepath, "r");
     if (!f && sd_card_mounted) {
         f = FFat.open(filepath, "r");
+    }
+    // Fallback between /waypoints-guilmet.csv and /waypoints.csv
+    if (!f) {
+        if (strstr(filepath, "waypoints-guilmet.csv")) {
+            f = get_active_fs().open("/waypoints.csv", "r");
+            if (!f && sd_card_mounted) f = FFat.open("/waypoints.csv", "r");
+        } else if (strcmp(filepath, "/waypoints.csv") == 0) {
+            f = get_active_fs().open("/waypoints-guilmet.csv", "r");
+            if (!f && sd_card_mounted) f = FFat.open("/waypoints-guilmet.csv", "r");
+        }
     }
     if (!f) {
         Serial.printf("waypoint_load_csv: Could not open %s\n", filepath);
@@ -157,9 +173,151 @@ extern "C" bool waypoint_load_csv(const char *filepath)
     return g_waypoint_count > 0;
 }
 
+extern "C" void waypoint_scan_files(void)
+{
+    s_waypoint_file_cnt = 0;
+
+    // Check files on active filesystem (SD card or FFat)
+    fs::FS &fs = get_active_fs();
+    File root = fs.open("/");
+    if (root && root.isDirectory()) {
+        File file = root.openNextFile();
+        while (file && s_waypoint_file_cnt < MAX_WAYPOINT_FILES) {
+            if (!file.isDirectory()) {
+                String fname = file.name();
+                if (!fname.startsWith("/")) fname = "/" + fname;
+                String fname_lower = fname;
+                fname_lower.toLowerCase();
+                if (fname_lower.startsWith("/waypoints") && fname_lower.endsWith(".csv")) {
+                    bool exists = false;
+                    for (int i = 0; i < s_waypoint_file_cnt; i++) {
+                        if (strcasecmp(s_waypoint_files[i], fname.c_str()) == 0) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        strncpy(s_waypoint_files[s_waypoint_file_cnt], fname.c_str(), sizeof(s_waypoint_files[0]) - 1);
+                        s_waypoint_files[s_waypoint_file_cnt][sizeof(s_waypoint_files[0]) - 1] = '\0';
+                        s_waypoint_file_cnt++;
+                    }
+                }
+            }
+            file = root.openNextFile();
+        }
+        root.close();
+    }
+
+    // Also check FFat if SD card is mounted
+    if (sd_card_mounted && s_waypoint_file_cnt < MAX_WAYPOINT_FILES) {
+        File froot = FFat.open("/");
+        if (froot && froot.isDirectory()) {
+            File file = froot.openNextFile();
+            while (file && s_waypoint_file_cnt < MAX_WAYPOINT_FILES) {
+                if (!file.isDirectory()) {
+                    String fname = file.name();
+                    if (!fname.startsWith("/")) fname = "/" + fname;
+                    String fname_lower = fname;
+                    fname_lower.toLowerCase();
+                    if (fname_lower.startsWith("/waypoints") && fname_lower.endsWith(".csv")) {
+                        bool exists = false;
+                        for (int i = 0; i < s_waypoint_file_cnt; i++) {
+                            if (strcasecmp(s_waypoint_files[i], fname.c_str()) == 0) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            strncpy(s_waypoint_files[s_waypoint_file_cnt], fname.c_str(), sizeof(s_waypoint_files[0]) - 1);
+                            s_waypoint_files[s_waypoint_file_cnt][sizeof(s_waypoint_files[0]) - 1] = '\0';
+                            s_waypoint_file_cnt++;
+                        }
+                    }
+                }
+                file = froot.openNextFile();
+            }
+            froot.close();
+        }
+    }
+
+    // Fallback if no files on disk
+    if (s_waypoint_file_cnt == 0) {
+        strncpy(s_waypoint_files[0], "/waypoints-guilmet.csv", sizeof(s_waypoint_files[0]) - 1);
+        strncpy(s_waypoint_files[1], "/waypoints-haslam.csv", sizeof(s_waypoint_files[0]) - 1);
+        strncpy(s_waypoint_files[2], "/waypoints-gray.csv", sizeof(s_waypoint_files[0]) - 1);
+        s_waypoint_file_cnt = 3;
+    }
+
+    // Sort files alphabetically
+    for (int i = 0; i < s_waypoint_file_cnt - 1; i++) {
+        for (int j = i + 1; j < s_waypoint_file_cnt; j++) {
+            if (strcmp(s_waypoint_files[i], s_waypoint_files[j]) > 0) {
+                char temp[48];
+                strcpy(temp, s_waypoint_files[i]);
+                strcpy(s_waypoint_files[i], s_waypoint_files[j]);
+                strcpy(s_waypoint_files[j], temp);
+            }
+        }
+    }
+
+    // Match active file to settings
+    s_active_file_idx = 0;
+    for (int i = 0; i < s_waypoint_file_cnt; i++) {
+        if (strcasecmp(s_waypoint_files[i], current_settings.active_waypoint_file) == 0) {
+            s_active_file_idx = i;
+            break;
+        }
+    }
+}
+
+extern "C" void waypoint_file_select_next(void)
+{
+    if (s_waypoint_file_cnt <= 0) return;
+    s_active_file_idx = (s_active_file_idx + 1) % s_waypoint_file_cnt;
+    strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
+    current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
+    save_settings();
+    waypoint_load_csv(current_settings.active_waypoint_file);
+    g_active_waypoint_idx = 0;
+    refresh_waypoint_table_ui();
+}
+
+extern "C" void waypoint_file_select_prev(void)
+{
+    if (s_waypoint_file_cnt <= 0) return;
+    s_active_file_idx = (s_active_file_idx - 1 + s_waypoint_file_cnt) % s_waypoint_file_cnt;
+    strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
+    current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
+    save_settings();
+    waypoint_load_csv(current_settings.active_waypoint_file);
+    g_active_waypoint_idx = 0;
+    refresh_waypoint_table_ui();
+}
+
+extern "C" const char* waypoint_file_get_active_name(void)
+{
+    if (s_waypoint_file_cnt <= 0 || s_active_file_idx < 0 || s_active_file_idx >= s_waypoint_file_cnt) {
+        return "waypoints-guilmet.csv";
+    }
+    const char *p = s_waypoint_files[s_active_file_idx];
+    if (*p == '/') p++;
+    return p;
+}
+
+extern "C" int16_t waypoint_file_get_active_index(void)
+{
+    return s_active_file_idx;
+}
+
+extern "C" int16_t waypoint_file_get_count(void)
+{
+    return s_waypoint_file_cnt;
+}
+
 extern "C" void waypoint_manager_init(void)
 {
     create_default_sample_waypoints_if_missing();
+    waypoint_scan_files();
     waypoint_load_csv(current_settings.active_waypoint_file);
 }
 
