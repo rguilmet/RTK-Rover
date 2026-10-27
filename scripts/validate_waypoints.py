@@ -11,7 +11,7 @@ import math
 import argparse
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v1.2.0"
 
 WGS84_A = 6378137.0
 WGS84_E2 = 0.00669437999014
@@ -59,7 +59,10 @@ def main():
         has_header = False
 
         for row_idx, row in enumerate(reader):
-            if not row or not row[0].strip() or row[0].strip().startswith("#"):
+            if not row or not any(c.strip() for c in row):
+                continue
+            first_non_empty = next((c.strip() for c in row if c.strip()), "")
+            if first_non_empty.startswith("#"):
                 continue
 
             # Header detection
@@ -76,14 +79,19 @@ def main():
                         elif "note" in h or "desc" in h: col_notes = c_idx
                     continue
 
-            if len(row) <= max(col_lat, col_lon):
+            if len(row) <= max(col_label, col_lat, col_lon):
                 print(f"[WARN] Skipping malformed row {row_idx + 1}: {row}")
                 continue
 
+            label = row[col_label].strip()
+            lat_str = row[col_lat].strip()
+            lon_str = row[col_lon].strip()
+            if not label or not lat_str or not lon_str:
+                continue
+
             try:
-                label = row[col_label].strip()
-                lat = float(row[col_lat].strip())
-                lon = float(row[col_lon].strip())
+                lat = float(lat_str)
+                lon = float(lon_str)
                 elev = float(row[col_elev].strip()) if col_elev >= 0 and col_elev < len(row) and row[col_elev].strip() else 0.0
                 fix = row[col_fix].strip() if col_fix >= 0 and col_fix < len(row) else ""
                 notes = row[col_notes].strip() if col_notes >= 0 and col_notes < len(row) else ""

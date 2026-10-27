@@ -129,7 +129,8 @@ extern "C" bool waypoint_load_csv(const char *filepath)
             }
         }
 
-        if (col_cnt <= col_lon) continue;
+        if (col_cnt <= col_label || col_cnt <= col_lat || col_cnt <= col_lon) continue;
+        if (cols[col_label].length() == 0 || cols[col_lat].length() == 0 || cols[col_lon].length() == 0) continue;
 
         WaypointRecord_t *wp = &g_waypoints[g_waypoint_count];
         memset(wp, 0, sizeof(WaypointRecord_t));
