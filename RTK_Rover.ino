@@ -24,6 +24,7 @@
 #include "src/codec_board/codec_init.h"
 #include "src/storage/route_logger.h"
 #include "src/storage/nmea_logger.h"
+#include "src/storage/serial_logger.h"
 #include "src/web_server/web_server.h"
 
 extern esp_io_expander_handle_t io_expander;
@@ -192,8 +193,8 @@ void task_rover_core0(void *pvParameters)
                 xQueueOverwrite(roverStateQueue, &state);
             }
 
-            // Periodic 5-second diagnostic telemetry log to Serial Monitor (only if USB terminal connected)
-            if (Serial && current_settings.enable_serial_logging && current_settings.enable_telemetry_logging && (now - last_telem_log_ms >= 5000)) {
+            // Periodic 5-second diagnostic telemetry log to Serial Monitor / SD Logger
+            if (current_settings.enable_telemetry_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
                 const char *hdg_mode = "--";
                 if (state.heading_valid) {
@@ -271,7 +272,7 @@ void task_display_and_audio(void *pvParameters)
                                         &cached_bubble_y,
                                         &cached_pose);
 
-            if (Serial && current_settings.enable_serial_logging && current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
+            if (current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
                 last_imu_log_ms = now;
                 Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
                               cached_imu_pitch, cached_imu_roll,
@@ -448,6 +449,9 @@ void setup()
 
     // 4. Load Settings & CSV Waypoints
     init_settings_manager();
+    if (current_settings.enable_serial_logging) {
+        serial_logger_start();
+    }
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)
@@ -478,6 +482,11 @@ void loop()
     // Flush pending raw NMEA sentences to active storage medium
     if (nmea_logger_is_active()) {
         nmea_logger_flush();
+    }
+
+    // Flush pending serial monitor logs to active storage medium
+    if (serial_logger_is_active()) {
+        serial_logger_flush();
     }
 
     // =====================================================================

@@ -11,7 +11,10 @@ extern "C" void take_screenshot_to_sd(void) {
     char filename[64];
     char ts[32];
     get_formatted_timestamp(ts, sizeof(ts), true);
-    snprintf(filename, sizeof(filename), "/screenshot_%s.bmp", ts);
+    if (!get_active_fs().exists("/screenshots")) {
+        get_active_fs().mkdir("/screenshots");
+    }
+    snprintf(filename, sizeof(filename), "/screenshots/screenshot_%s.bmp", ts);
 
     if (!rover_lvgl_lock(5000)) {
         Serial.println("Failed to lock LVGL for screenshot");
@@ -29,6 +32,11 @@ extern "C" void take_screenshot_to_sd(void) {
     }
 
     File file = get_active_fs().open(filename, FILE_WRITE);
+    if (!file) {
+        // Fallback to flat root filename if /screenshots directory is not supported
+        snprintf(filename, sizeof(filename), "/screenshot_%s.bmp", ts);
+        file = get_active_fs().open(filename, FILE_WRITE);
+    }
     if (file) {
         uint32_t w = snap->header.w;
         uint32_t h = snap->header.h;

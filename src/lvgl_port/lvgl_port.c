@@ -24,6 +24,7 @@
 #include "../waypoint_manager/waypoint_manager.h"
 #include "../storage/route_logger.h"
 #include "../storage/nmea_logger.h"
+#include "../storage/serial_logger.h"
 #include "../web_server/web_server.h"
 
 static const char *TAG = "lvgl_port";
@@ -149,8 +150,8 @@ static lv_obj_t *t1_status_lbl      = NULL;
 // Quick Settings Widgets (Moved from Tile 5)
 static lv_obj_t *t1_nmea_btn        = NULL;
 static lv_obj_t *t1_nmea_btn_lbl    = NULL;
-static lv_obj_t *t1_route_btn       = NULL;
-static lv_obj_t *t1_route_btn_lbl   = NULL;
+static lv_obj_t *t1_serial_log_btn     = NULL;
+static lv_obj_t *t1_serial_log_btn_lbl = NULL;
 static lv_obj_t *t1_bright_btn      = NULL;
 static lv_obj_t *t1_bright_btn_lbl  = NULL;
 static lv_obj_t *t1_vol_btn         = NULL;
@@ -462,14 +463,14 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // 4. Route Logging Button on Tile 1
-    if (t1_route_btn && t1_route_btn_lbl) {
-        if (route_logger_is_active()) {
-            lv_label_set_text(t1_route_btn_lbl, "Route: ON");
-            lv_obj_set_style_bg_color(t1_route_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+    // 4. Serial Logging Button on Tile 1 (Screen 2: Survey & Settings)
+    if (t1_serial_log_btn && t1_serial_log_btn_lbl) {
+        if (serial_logger_is_active()) {
+            lv_label_set_text(t1_serial_log_btn_lbl, "LOG: ON");
+            lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_ACTIVE_GREEN, 0);
         } else {
-            lv_label_set_text(t1_route_btn_lbl, "Route: OFF");
-            lv_obj_set_style_bg_color(t1_route_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+            lv_label_set_text(t1_serial_log_btn_lbl, "LOG: OFF");
+            lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
@@ -579,6 +580,19 @@ static void route_toggle_btn_cb(lv_event_t *e)
         route_logger_stop();
     } else {
         route_logger_start();
+    }
+    update_all_control_buttons();
+}
+
+static void serial_log_toggle_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    current_settings.enable_serial_logging = !current_settings.enable_serial_logging;
+    mark_settings_dirty();
+    if (current_settings.enable_serial_logging) {
+        serial_logger_start();
+    } else {
+        serial_logger_stop();
     }
     update_all_control_buttons();
 }
@@ -1229,12 +1243,12 @@ void create_rover_ui(void)
     t1_nmea_btn_lbl = lv_label_create(t1_nmea_btn);
     lv_obj_center(t1_nmea_btn_lbl);
 
-    t1_route_btn = lv_button_create(tile_survey);
-    lv_obj_set_size(t1_route_btn, 145, 28);
-    lv_obj_align(t1_route_btn, LV_ALIGN_TOP_RIGHT, -10, 238);
-    lv_obj_add_event_cb(t1_route_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
-    t1_route_btn_lbl = lv_label_create(t1_route_btn);
-    lv_obj_center(t1_route_btn_lbl);
+    t1_serial_log_btn = lv_button_create(tile_survey);
+    lv_obj_set_size(t1_serial_log_btn, 145, 28);
+    lv_obj_align(t1_serial_log_btn, LV_ALIGN_TOP_RIGHT, -10, 238);
+    lv_obj_add_event_cb(t1_serial_log_btn, serial_log_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    t1_serial_log_btn_lbl = lv_label_create(t1_serial_log_btn);
+    lv_obj_center(t1_serial_log_btn_lbl);
 
     t1_bright_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_bright_btn, 145, 28);

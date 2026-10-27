@@ -100,7 +100,7 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
     }
 
     uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    if (current_settings.enable_serial_logging && current_settings.enable_imu_logging && (now_ms - last_log_ms >= 1000)) {
+    if (current_settings.enable_imu_logging && (now_ms - last_log_ms >= 1000)) {
         last_log_ms = now_ms;
         int16_t ax = (int16_t)(((uint16_t)raw[1] << 8) | raw[0]);
         int16_t ay = (int16_t)(((uint16_t)raw[3] << 8) | raw[2]);

@@ -2,11 +2,12 @@
 #define USER_CONFIG_H
 
 #include "driver/gpio.h"
+#include "src/storage/serial_logger.h"
 
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.2.23"
+#define ROVER_FIRMWARE_VERSION "v0.2.24"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
