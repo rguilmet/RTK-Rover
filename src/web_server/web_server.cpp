@@ -15,6 +15,7 @@ extern bool sd_card_mounted;
 extern bool sd_card_use_spi;
 
 static bool wifi_active = false;
+static bool s_wifi_starting = false;
 static char s_wifi_ip[32] = {0};
 static WebServer server(80);
 
@@ -245,7 +246,8 @@ static void setup_web_routes(void) {
 }
 
 extern "C" void start_wifi(void) {
-    if (wifi_active) return;
+    if (wifi_active || s_wifi_starting) return;
+    s_wifi_starting = true;
     
     update_wifi_ip_label("Connecting...");
     Serial.printf("[WIFI] Attempting connection to SSID: '%s' (password len=%d)...\n",
@@ -254,8 +256,6 @@ extern "C" void start_wifi(void) {
     // Non-blocking connection task so UI stays responsive
     xTaskCreatePinnedToCore([](void* arg){
         WiFi.persistent(false);
-        WiFi.disconnect(true);
-        vTaskDelay(pdMS_TO_TICKS(100));
 
         static wifi_event_id_t s_wifi_event_id = 0;
         if (s_wifi_event_id == 0) {
@@ -276,55 +276,12 @@ extern "C" void start_wifi(void) {
         WiFi.mode(WIFI_STA);
         WiFi.setSleep(false);
         WiFi.setAutoReconnect(true);
-
-        Serial.println("[WIFI] Scanning visible 2.4GHz networks...");
-        update_wifi_ip_label("Scanning Wi-Fi...");
-        int n = WiFi.scanNetworks(false, false);
-        Serial.printf("[WIFI] Scan found %d networks:\n", n);
-        int target_ch = 0;
-        int target_rssi = -999;
-        wifi_auth_mode_t target_auth = WIFI_AUTH_OPEN;
-        for (int i = 0; i < n; i++) {
-            String s = WiFi.SSID(i);
-            int ch = WiFi.channel(i);
-            int r = WiFi.RSSI(i);
-            wifi_auth_mode_t auth = (wifi_auth_mode_t)WiFi.encryptionType(i);
-            const char *auth_str = (auth == WIFI_AUTH_OPEN) ? "OPEN" :
-                                   (auth == WIFI_AUTH_WEP) ? "WEP" :
-                                   (auth == WIFI_AUTH_WPA_PSK) ? "WPA" :
-                                   (auth == WIFI_AUTH_WPA2_PSK) ? "WPA2" :
-                                   (auth == WIFI_AUTH_WPA_WPA2_PSK) ? "WPA/WPA2" :
-                                   (auth == WIFI_AUTH_WPA2_ENTERPRISE) ? "WPA2-ENT" :
-                                   (auth == WIFI_AUTH_WPA3_PSK) ? "WPA3" :
-                                   (auth == WIFI_AUTH_WPA2_WPA3_PSK) ? "WPA2/WPA3" :
-                                   (auth == WIFI_AUTH_WAPI_PSK) ? "WAPI" : "OTHER";
-            Serial.printf("  [%d] SSID: '%s' | Ch: %2d | RSSI: %3d dBm | Auth: %s (%d)\n",
-                          i, s.c_str(), ch, r, auth_str, (int)auth);
-            if (s.equals(current_settings.wifi_ssid)) {
-                target_ch = ch;
-                target_rssi = r;
-                target_auth = auth;
-            }
-        }
-        WiFi.scanDelete();
-
-        if (target_ch > 0) {
-            Serial.printf("[WIFI] Target AP '%s' DETECTED on Channel %d (RSSI: %d dBm, Auth: %d)!\n",
-                          current_settings.wifi_ssid, target_ch, target_rssi, (int)target_auth);
-        } else {
-            Serial.printf("[WIFI] Target AP '%s' NOT seen in 2.4GHz scan (len=%d). Attempting blind connect...\n",
-                          current_settings.wifi_ssid, (int)strlen(current_settings.wifi_ssid));
-        }
-
         WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
         WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
         WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
 
-        if (target_ch > 0) {
-            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
-        } else {
-            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
-        }
+        Serial.printf("[WIFI] Connecting to '%s'...\n", current_settings.wifi_ssid);
+        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
 
         int attempts = 0;
         const int max_attempts = 50; // 25 seconds timeout (50 * 500ms)
@@ -353,6 +310,7 @@ extern "C" void start_wifi(void) {
 
         if (WiFi.status() == WL_CONNECTED) {
             wifi_active = true;
+            s_wifi_starting = false;
             String ip = WiFi.localIP().toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
             update_wifi_ip_label(s_wifi_ip);
@@ -383,17 +341,20 @@ extern "C" void start_wifi(void) {
             String ip = apIP.toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
             wifi_active = true;
+            s_wifi_starting = false;
             update_wifi_ip_label(s_wifi_ip);
             
             setup_web_routes();
             server.begin();
             Serial.printf("[WIFI] SoftAP Active! Connect phone to SSID 'RTK-Rover' (pwd: 12345678) -> http://%s/\n", s_wifi_ip);
         }
+        s_wifi_starting = false;
         vTaskDelete(NULL);
     }, "wifi_connect", 8192, NULL, 1, NULL, 0);
 }
 
 extern "C" void stop_wifi(void) {
+    s_wifi_starting = false;
     if (!wifi_active) return;
     server.stop();
     WiFi.disconnect(true);

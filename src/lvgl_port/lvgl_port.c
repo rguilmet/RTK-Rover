@@ -281,13 +281,13 @@ bool rover_lvgl_lock(int timeout_ms)
 {
     if (!lvgl_mux) return false;
     const TickType_t timeout_ticks = (timeout_ms == -1) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
-    return xSemaphoreTake(lvgl_mux, timeout_ticks) == pdTRUE;
+    return xSemaphoreTakeRecursive(lvgl_mux, timeout_ticks) == pdTRUE;
 }
 
 void rover_lvgl_unlock(void)
 {
     if (lvgl_mux) {
-        xSemaphoreGive(lvgl_mux);
+        xSemaphoreGiveRecursive(lvgl_mux);
     }
 }
 
@@ -621,18 +621,21 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
 
 void update_wifi_ip_label(const char* ip)
 {
-    if (t1_wifi_status_lbl) {
-        if (ip && ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 && strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0) {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "Portal: http://%s/", ip);
-            lv_label_set_text(t1_wifi_status_lbl, buf);
-            lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x00FF88), 0);
-        } else {
-            lv_label_set_text(t1_wifi_status_lbl, ip ? ip : "Wi-Fi Inactive");
-            lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
+    if (rover_lvgl_lock(500)) {
+        if (t1_wifi_status_lbl) {
+            if (ip && ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 && strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 && strstr(ip, "...") == NULL) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "Portal: http://%s/", ip);
+                lv_label_set_text(t1_wifi_status_lbl, buf);
+                lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x00FF88), 0);
+            } else {
+                lv_label_set_text(t1_wifi_status_lbl, ip ? ip : "Wi-Fi Inactive");
+                lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
+            }
         }
+        update_all_control_buttons();
+        rover_lvgl_unlock();
     }
-    update_all_control_buttons();
 }
 
 static void match_target_sw_cb(lv_event_t *e)
@@ -2259,7 +2262,7 @@ void lvgl_port_init(void)
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));
 
-    lvgl_mux = xSemaphoreCreateMutex();
+    lvgl_mux = xSemaphoreCreateRecursiveMutex();
     assert(lvgl_mux);
     xTaskCreatePinnedToCore(rover_lvgl_port_task, "LVGL", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL, 1);
 
