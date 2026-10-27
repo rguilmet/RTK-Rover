@@ -35,6 +35,8 @@
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
+* **Completed (`v0.2.14`):**
+  - **I2C Device Config Correction:** Relocated `scl_wait_us = 20000` (20 ms) to `i2c_device_config_t` (its correct location in ESP-IDF v5) applied across RTC, IMU, Touch, and PMIC device handles.
 * **Completed (`v0.2.13`):**
   - **I2C Bus Hardening:** Configured `scl_wait_us = 20000` (20 ms) in `i2c_bus_config` to tolerate slave clock stretching on capacitive touch and IMU. Reduced transaction timeout from 100 ms to 25 ms. Added 5 ms settle delay inside `i2c_bus_recover_locked` while holding recursive bus mutex to eliminate cascade bus resets.
   - **Coordinates Bar Font Upgrade:** Increased Header Row 4 (`hdr_coords_lbl`) font from Montserrat 12 to Montserrat 14 (255.8 px width fits cleanly within 320 px screen with 64 px margin and zero vertical layout shift).
@@ -63,4 +65,4 @@
   - **Dual Logging Subsystems:** Continuous Route track CSV logging (`/routes/`) and raw UM982 NMEA logging (`/nmea/`).
   - **Storage Auto-Routing & FFat Mirroring:** MicroSD primary, FFat fallback, automatic mirror of `settings.json`.
   - **Audio Queue:** FreeRTOS `beepQueue` synthesized on Core 1 for reliable multi-tone chirps.
-* **Current Status:** Firmware `v0.2.13` active, updated, and ready for field operation.
+* **Current Status:** Firmware `v0.2.14` active, updated, and ready for field operation.

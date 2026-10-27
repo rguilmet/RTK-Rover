@@ -74,7 +74,6 @@ void i2c_master_Init(void)
         .glitch_ignore_cnt = 7,
         .intr_priority = 0,
         .trans_queue_depth = 0,
-        .scl_wait_us = 20000, // Allow up to 20ms for slave clock stretching (capacitive touch & IMU DSP)
         .flags = {
             .enable_internal_pullup = true,
         },
@@ -86,6 +85,7 @@ void i2c_master_Init(void)
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = ROVER_I2C_ADDR_RTC,
         .scl_speed_hz = 400000,
+        .scl_wait_us = 20000, // Allow up to 20ms for slave clock stretching (capacitive touch & IMU DSP)
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &rtc_dev_handle));
 
