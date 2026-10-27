@@ -9,6 +9,7 @@ build/
 .vscode/
 scratch/
 github_connect.md
+reference/
 test/
 plots/
 temp_cal/
