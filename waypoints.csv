@@ -1,5 +1,5 @@
-label,latitude,longitude,elevation,notes
-PIN_NW_01,42.36010000,-71.09420000,12.500,NW corner iron pipe near oak
-PIN_NE_02,42.36045000,-71.09350000,13.100,NE corner rebar by stone wall
-PIN_SE_03,42.35980000,-71.09340000,11.800,SE corner monument
-PIN_SW_04,42.35975000,-71.09415000,12.000,SW corner pin by driveway
+timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes
+2026-10-26_00-00-00.000-240,v0.2.10,PIN_NW_01,42.360100000,-71.094200000,12.500,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe near oak
+2026-10-26_00-00-00.000-240,v0.2.10,PIN_NE_02,42.360450000,-71.093500000,13.100,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar by stone wall
+2026-10-26_00-00-00.000-240,v0.2.10,PIN_SE_03,42.359800000,-71.093400000,11.800,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner monument
+2026-10-26_00-00-00.000-240,v0.2.10,PIN_SW_04,42.359750000,-71.094150000,12.000,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin by driveway

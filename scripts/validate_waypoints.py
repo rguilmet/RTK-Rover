@@ -11,7 +11,7 @@ import math
 import argparse
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.1"
+__version__ = "v1.1.0"
 
 WGS84_A = 6378137.0
 WGS84_E2 = 0.00669437999014
@@ -54,34 +54,63 @@ def main():
     waypoints = []
     with open(clean_path, "r", encoding="utf-8-sig") as f:
         reader = csv.reader(f)
+        col_label, col_lat, col_lon, col_elev, col_notes = 0, 1, 2, 3, 4
+        col_fix = -1
+        has_header = False
+
         for row_idx, row in enumerate(reader):
-            if not row or row[0].strip().startswith("#"):
+            if not row or not row[0].strip() or row[0].strip().startswith("#"):
                 continue
-            if row_idx == 0 and any(k in row[0].lower() for k in ("label", "name", "id")):
-                continue
-            if len(row) < 3:
+
+            # Header detection
+            if row_idx == 0:
+                row_lower = [c.strip().lower() for c in row]
+                if any(k in row_lower[0] for k in ("timestamp", "label", "name", "id")) or any("lat" in c for c in row_lower):
+                    has_header = True
+                    for c_idx, h in enumerate(row_lower):
+                        if "label" in h or "name" in h: col_label = c_idx
+                        elif "lat" in h: col_lat = c_idx
+                        elif "lon" in h: col_lon = c_idx
+                        elif "elev" in h or "alt" in h or "height" in h: col_elev = c_idx
+                        elif "fix" in h: col_fix = c_idx
+                        elif "note" in h or "desc" in h: col_notes = c_idx
+                    continue
+
+            if len(row) <= max(col_lat, col_lon):
                 print(f"[WARN] Skipping malformed row {row_idx + 1}: {row}")
                 continue
-            label = row[0].strip()
-            lat = float(row[1].strip())
-            lon = float(row[2].strip())
-            elev = float(row[3].strip()) if len(row) > 3 and row[3].strip() else 0.0
-            notes = row[4].strip() if len(row) > 4 else ""
-            waypoints.append((label, lat, lon, elev, notes))
+
+            try:
+                label = row[col_label].strip()
+                lat = float(row[col_lat].strip())
+                lon = float(row[col_lon].strip())
+                elev = float(row[col_elev].strip()) if col_elev >= 0 and col_elev < len(row) and row[col_elev].strip() else 0.0
+                fix = row[col_fix].strip() if col_fix >= 0 and col_fix < len(row) else ""
+                notes = row[col_notes].strip() if col_notes >= 0 and col_notes < len(row) else ""
+                waypoints.append((label, lat, lon, elev, fix, notes))
+            except ValueError as e:
+                print(f"[WARN] Skipping row {row_idx + 1} due to parse error: {e}")
+                continue
 
     print(f"Loaded {len(waypoints)} waypoints from {clean_path}:\n")
-    print(f"{'#':<4} {'Label':<16} {'Latitude':<14} {'Longitude':<14} {'Elev(m)':<9} {'Next Leg':<18} {'Notes'}")
-    print("-" * 95)
+    print(f"{'#':<4} {'Label':<24} {'Latitude':<14} {'Longitude':<14} {'Elev(m)':<9} {'Fix':<11} {'Next Leg':<20} {'Notes'}")
+    print("-" * 115)
 
-    for i, (label, lat, lon, elev, notes) in enumerate(waypoints):
+    total_perimeter_m = 0.0
+    for i, (label, lat, lon, elev, fix, notes) in enumerate(waypoints):
+        leg_str = "--"
         if len(waypoints) > 1:
             nxt = waypoints[(i + 1) % len(waypoints)]
             dist_m, brg_deg = compute_geodesic_segment(lat, lon, nxt[1], nxt[2])
             dist_ft = dist_m * 3.280839895
-            leg_str = f"{dist_m:.2f}m ({dist_ft:.1f}ft) @{brg_deg:05.1f}deg"
-        else:
-            leg_str = "--"
-        print(f"{i+1:<4} {label:<16} {lat:<14.8f} {lon:<14.8f} {elev:<9.3f} {leg_str:<18} {notes}")
+            total_perimeter_m += dist_m
+            leg_str = f"{dist_m:.2f}m ({dist_ft:.1f}ft) @{brg_deg:.1f}d"
+
+        print(f"{i+1:<4} {label:<24} {lat:<14.8f} {lon:<14.8f} {elev:<9.3f} {fix:<11} {leg_str:<20} {notes}")
+
+    if len(waypoints) > 2:
+        print("-" * 115)
+        print(f"Total Closed Loop Perimeter: {total_perimeter_m:.2f} m ({total_perimeter_m * 3.280839895:.2f} ft)")
 
 
 if __name__ == "__main__":
