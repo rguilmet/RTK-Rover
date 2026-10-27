@@ -104,6 +104,7 @@ static lv_obj_t *t0_mode_badge      = NULL;
 static lv_obj_t *t0_hdg_hud_lbl     = NULL;
 static lv_obj_t *t0_pitch_hud_lbl   = NULL;
 static lv_obj_t *t0_scale_lbl       = NULL;
+static lv_obj_t *t0_tgt_hdg_lbl     = NULL;
 static lv_obj_t *t0_cross_h         = NULL;
 static lv_obj_t *t0_cross_v         = NULL;
 static lv_obj_t *t0_bullseye_ring1  = NULL;
@@ -992,6 +993,12 @@ void create_rover_ui(void)
     lv_obj_set_style_text_color(t0_scale_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_align(t0_scale_lbl, LV_ALIGN_TOP_RIGHT, -6, 8);
 
+    t0_tgt_hdg_lbl = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+    lv_obj_set_style_text_font(t0_tgt_hdg_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(t0_tgt_hdg_lbl, LV_ALIGN_TOP_RIGHT, -6, 28);
+
     // Tactical Background Grid Lines
     for (int i = 0; i < T0_GRID_H_LINES; i++) {
         t0_grid_h[i] = lv_obj_create(t0_nav_canvas);
@@ -1641,14 +1648,29 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (t0_pitch_hud_lbl) {
-        if (d->heading_valid) {
-            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f", d->baseline_pitch_deg);
-        } else if (fabsf(d->imu_pitch_deg) > 0.01f) {
-            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f", d->imu_pitch_deg);
+        if (d->heading_valid || d->baseline_length_m > 0.01f) {
+            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f deg", d->baseline_pitch_deg);
         } else {
-            snprintf(hud_buf, sizeof(hud_buf), "Pitch: --.-");
+            snprintf(hud_buf, sizeof(hud_buf), "Pitch: --.- deg");
         }
         lv_label_set_text(t0_pitch_hud_lbl, hud_buf);
+    }
+
+    if (t0_tgt_hdg_lbl) {
+        if (d->has_active_target) {
+            snprintf(hud_buf, sizeof(hud_buf), "Tgt: %05.1f deg", d->bearing_to_target_deg);
+            lv_label_set_text(t0_tgt_hdg_lbl, hud_buf);
+            bool on_target = (d->heading_valid && fabsf(d->rel_bearing_deg) <= 3.0f) ||
+                             (d->distance_to_target_m <= 0.05);
+            if (on_target) {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0); // Green
+            } else {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0); // White
+            }
+        } else {
+            lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+            lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);     // White
+        }
     }
 
     if (d->has_active_target) {
