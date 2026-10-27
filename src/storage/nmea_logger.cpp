@@ -38,12 +38,12 @@ extern "C" bool nmea_logger_start(void)
 
     char ts[64];
     get_formatted_timestamp(ts, sizeof(ts), true);
-    snprintf(s_nmea_filename, sizeof(s_nmea_filename), "/nmea/nmea_%s.log", ts);
+    snprintf(s_nmea_filename, sizeof(s_nmea_filename), "/nmea/nema-log_%s.txt", ts);
 
     s_nmea_file = get_active_fs().open(s_nmea_filename, FILE_WRITE);
     if (!s_nmea_file) {
         // Fallback to flat root filename if /nmea directory is not supported
-        snprintf(s_nmea_filename, sizeof(s_nmea_filename), "/nmea_%s.log", ts);
+        snprintf(s_nmea_filename, sizeof(s_nmea_filename), "/nema-log_%s.txt", ts);
         s_nmea_file = get_active_fs().open(s_nmea_filename, FILE_WRITE);
     }
     if (!s_nmea_file) {

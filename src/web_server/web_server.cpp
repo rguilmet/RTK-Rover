@@ -59,13 +59,6 @@ static void list_directory_recursive(String& out, const char* fs_param, const ch
                 size_t size = st.st_size;
                 if (filename.endsWith(".bmp")) {
                     out += "<li><a href=\"/view?fs=" + String(fs_param) + "&file=" + item_rel + "\" target=\"_blank\">" + item_rel + "</a> (" + String(size) + " bytes) - <a href=\"/delete?fs=" + String(fs_param) + "&file=" + item_rel + "\" onclick=\"return confirm('Delete " + filename + "?');\">[Delete]</a></li>";
-                } else if (filename.endsWith(".log")) {
-                    String txt_name = filename.substring(0, filename.length() - 4) + ".txt";
-                    out += "<li><a href=\"#\" onclick=\"dlFile('/download?fs=" + String(fs_param) + "&file=" + item_rel + "&as_txt=1', '" + txt_name + "'); return false;\" title=\"Download safely as .txt (bypasses browser HTTP warning)\">" + item_rel + "</a> (" + String(size) + " bytes) "
-                           + "<span class='badge' style='background:#059669;font-size:10px;margin-left:4px;'>.txt safe</span> - "
-                           + "<a href=\"/download?fs=" + String(fs_param) + "&file=" + item_rel + "&raw=1\" target=\"_blank\" title=\"View raw text in browser\">[View]</a> - "
-                           + "<a href=\"#\" onclick=\"dlFile('/download?fs=" + String(fs_param) + "&file=" + item_rel + "', '" + filename + "'); return false;\" title=\"Download with original .log extension\">[.log]</a> - "
-                           + "<a href=\"/delete?fs=" + String(fs_param) + "&file=" + item_rel + "\" onclick=\"return confirm('Delete " + filename + "?');\">[Delete]</a></li>";
                 } else {
                     out += "<li><a href=\"#\" onclick=\"dlFile('/download?fs=" + String(fs_param) + "&file=" + item_rel + "', '" + filename + "'); return false;\" title=\"Download securely via in-memory Blob\">" + item_rel + "</a> (" + String(size) + " bytes) - "
                            + "<a href=\"/download?fs=" + String(fs_param) + "&file=" + item_rel + "&raw=1\" target=\"_blank\" title=\"View raw text in browser\">[View]</a> - "
@@ -165,12 +158,7 @@ static void handleDownload() {
         return;
     }
 
-    String dl_filename = filename;
-    if (server.hasArg("as_txt") && dl_filename.endsWith(".log")) {
-        dl_filename = dl_filename.substring(0, dl_filename.length() - 4) + ".txt";
-    }
-
-    server.sendHeader("Content-Disposition", disposition + "; filename=\"" + dl_filename + "\"");
+    server.sendHeader("Content-Disposition", disposition + "; filename=\"" + filename + "\"");
     server.sendHeader("X-Content-Type-Options", "nosniff");
     server.sendHeader("Content-Length", String(file.size()));
     server.sendHeader("Connection", "close");
