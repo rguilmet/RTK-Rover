@@ -21,6 +21,8 @@ static uint8_t         pending_rtc_dd       = 1;
 static uint8_t         pending_rtc_hh       = 0;
 static uint8_t         pending_rtc_mm       = 0;
 static uint8_t         pending_rtc_ss       = 0;
+static volatile bool   saveconfig_ack_received = false;
+static volatile bool   mode_query_ack_received = false;
 
 static uint8_t  gsv_sats_gp = 0;
 static uint8_t  gsv_sats_gl = 0;
@@ -393,7 +395,20 @@ static void process_com1_line(char *line)
             strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
         }
         Serial.printf("[UM982 COM1 RX] %s\n", line);
-    } else if (strncmp(line, "$command,", 9) == 0 || strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG", 7) == 0 || strncmp(line, "#MODE", 5) == 0 || strncmp(line, "$MODE", 5) == 0) {
+    } else if (strncmp(line, "$command,", 9) == 0 ||
+               strncmp(line, "$CONFIG,", 8) == 0 ||
+               strncmp(line, "#CONFIG", 7) == 0 ||
+               strncmp(line, "#MODE", 5) == 0 ||
+               strncmp(line, "$MODE", 5) == 0 ||
+               strstr(line, "MODE") != NULL ||
+               strstr(line, "CONFIG") != NULL ||
+               strstr(line, "response:") != NULL) {
+        if (strstr(line, "SAVECONFIG") != NULL && strstr(line, "response:") != NULL) {
+            saveconfig_ack_received = true;
+        }
+        if (strstr(line, "MODE") != NULL) {
+            mode_query_ack_received = true;
+        }
         Serial.printf("[UM982 COM1 RX] %s\n", line);
     }
 }
@@ -473,13 +488,33 @@ extern "C" void um982_configure_rover_defaults(void)
     // BASEINFOA provides base station ID, health status, and ECEF coordinates ONCHANGED
     send_um982_com1_command("BASEINFOA COM1 ONCHANGED");
     vTaskDelay(pdMS_TO_TICKS(40));
+    saveconfig_ack_received = false;
     send_um982_com1_command("SAVECONFIG");
-    vTaskDelay(pdMS_TO_TICKS(100));
-    // Query active mode and heading configuration to confirm in telemetry
+    // Wait for SAVECONFIG flash writing to complete before querying
+    uint32_t t_save = millis();
+    while (!saveconfig_ack_received && (millis() - t_save < 1500)) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // Query active mode to confirm in telemetry
+    mode_query_ack_received = false;
     send_um982_com1_command("MODE");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    send_um982_com1_command("CONFIG HEADING");
-    vTaskDelay(pdMS_TO_TICKS(40));
+    uint32_t t_mode = millis();
+    while (!mode_query_ack_received && (millis() - t_mode < 800)) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // Query full receiver configuration dump
+    send_um982_com1_command("CONFIG");
+    uint32_t t_cfg = millis();
+    while (millis() - t_cfg < 1200) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
 extern "C" void um982_run_powerup_selftest(void)
