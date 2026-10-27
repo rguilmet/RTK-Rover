@@ -886,7 +886,7 @@ void create_rover_ui(void)
     lv_obj_set_size(main_tv, ROVER_LCD_H_RES, ROVER_LCD_V_RES - 74 - 32);
     lv_obj_align(main_tv, LV_ALIGN_TOP_MID, 0, 74);
     lv_obj_set_style_bg_color(main_tv, lv_color_hex(0x121417), 0);
-    lv_obj_remove_flag(main_tv, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(main_tv, false);
     lv_obj_add_event_cb(main_tv, tv_changed_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     // Disable horizontal swipe gestures; navigate strictly via Prev/Next bottom bar buttons
@@ -1309,7 +1309,7 @@ void create_rover_ui(void)
             lv_obj_set_style_text_font(t3_card_lbls[i], &lv_font_montserrat_12, 0);
         } else {
             lv_obj_set_style_text_color(t3_card_lbls[i], lv_color_hex(0x94A3B8), 0); // Slate Intercardinal
-            lv_obj_set_style_text_font(t3_card_lbls[i], &lv_font_montserrat_10, 0);
+            lv_obj_set_style_text_font(t3_card_lbls[i], &lv_font_montserrat_12, 0);
         }
         float rad = kCardAngles[i] * 0.0174532925f;
         int16_t cx = (int16_t)roundf(sinf(rad) * 96.0f);
