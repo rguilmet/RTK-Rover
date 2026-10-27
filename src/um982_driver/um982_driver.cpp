@@ -116,7 +116,35 @@ static void handle_rmc_sentence(char *line)
     int n = split_csv_fields(line, f, 14);
     if (n < 10) return;
 
-    if (!rtc_synced_from_gnss && f[2] && f[2][0] == 'A' && strlen(f[1]) >= 6 && strlen(f[9]) == 6) {
+    // Field 2: Status ('A'=Active, 'V'=Void, or 'D'=Differential)
+    bool pos_active = (f[2] && (f[2][0] == 'A' || f[2][0] == 'D'));
+
+    // Field 7: Speed over ground in knots (1 knot = 0.514444 m/s)
+    if (f[7] && f[7][0]) {
+        gnss_state.speed_m_s = (float)atof(f[7]) * 0.514444f;
+    }
+
+    // Field 8: Track angle / Course Over Ground (COG) in degrees True
+    if (pos_active && f[8] && f[8][0]) {
+        gnss_state.cog_deg = (float)atof(f[8]);
+
+        // Kinematic Motion Fallback:
+        // If dual-antenna baseline heading is invalid or currently steering via COG/HOLD:
+        if (!gnss_state.heading_valid || gnss_state.heading_source == HDG_SRC_COG || gnss_state.heading_source == HDG_SRC_HOLD) {
+            if (gnss_state.speed_m_s >= 0.40f) {
+                // Moving forward at normal walking pace (> 0.40 m/s / ~0.8 knots / ~1.4 km/h)
+                gnss_state.true_heading_deg = gnss_state.cog_deg;
+                gnss_state.heading_valid    = true;
+                gnss_state.heading_is_fixed = false;
+                gnss_state.heading_source   = HDG_SRC_COG;
+            } else if (gnss_state.heading_source == HDG_SRC_COG && gnss_state.speed_m_s < 0.20f) {
+                // Surveyor has stopped walking; hold the last confirmed heading
+                gnss_state.heading_source = HDG_SRC_HOLD;
+            }
+        }
+    }
+
+    if (!rtc_synced_from_gnss && pos_active && strlen(f[1]) >= 6 && strlen(f[9]) == 6) {
         int hh = (f[1][0] - '0') * 10 + (f[1][1] - '0');
         int mm = (f[1][2] - '0') * 10 + (f[1][3] - '0');
         int ss = (f[1][4] - '0') * 10 + (f[1][5] - '0');
@@ -214,16 +242,44 @@ static void handle_uniheadinga_sentence(char *line)
     char *f[12] = {0};
     int n = split_csv_fields(semi + 1, f, 12);
     if (n >= 5 && f[0] && f[1] && f[2] && f[3] && f[4]) {
+        float bl_m = (float)atof(f[2]);
+        gnss_state.baseline_length_m = bl_m;
+
         if (strstr(f[0], "SOL_COMPUTED") != NULL && strstr(f[1], "NONE") == NULL && strstr(f[1], "INSUFFICIENT") == NULL) {
-            gnss_state.baseline_length_m  = (float)atof(f[2]);
-            gnss_state.true_heading_deg   = (float)atof(f[3]);
-            gnss_state.baseline_pitch_deg = (float)atof(f[4]);
-            gnss_state.heading_valid      = true;
-            gnss_state.heading_is_fixed   = (strstr(f[1], "INT") != NULL);
-            port_stats.heading_sentences_ok++;
+            float expected_bl = (current_settings.antenna_spacing_m > 0.05f) ? current_settings.antenna_spacing_m : 0.555f;
+            // Physical sanity gate: Dual-antenna baseline must be within +/- 15cm of expected beam spacing
+            bool bl_physically_sane = (fabsf(bl_m - expected_bl) <= 0.150f);
+            bool is_int = (strstr(f[1], "INT") != NULL);
+
+            if (is_int && bl_physically_sane) {
+                gnss_state.true_heading_deg   = (float)atof(f[3]);
+                gnss_state.baseline_pitch_deg = (float)atof(f[4]);
+                gnss_state.heading_valid      = true;
+                gnss_state.heading_is_fixed   = true;
+                gnss_state.heading_source     = HDG_SRC_DUAL_FIX;
+                port_stats.heading_sentences_ok++;
+            } else if (bl_physically_sane) {
+                // Float with sane physical baseline
+                gnss_state.true_heading_deg   = (float)atof(f[3]);
+                gnss_state.baseline_pitch_deg = (float)atof(f[4]);
+                gnss_state.heading_valid      = true;
+                gnss_state.heading_is_fixed   = false;
+                gnss_state.heading_source     = HDG_SRC_DUAL_FLT;
+                port_stats.heading_sentences_ok++;
+            } else {
+                // Wild baseline vector (e.g. 4.88m in Float) - reject as invalid heading!
+                gnss_state.heading_valid    = false;
+                gnss_state.heading_is_fixed = false;
+                if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
+                    gnss_state.heading_source = HDG_SRC_NONE;
+                }
+            }
         } else {
             gnss_state.heading_valid    = false;
             gnss_state.heading_is_fixed = false;
+            if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
+                gnss_state.heading_source = HDG_SRC_NONE;
+            }
         }
     }
 }
@@ -563,9 +619,12 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
 	state_out->diff_age_s         = gnss_state.diff_age_s;
 	state_out->heading_valid      = gnss_state.heading_valid;
 	state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
+	state_out->heading_source     = gnss_state.heading_source;
 	state_out->true_heading_deg   = gnss_state.true_heading_deg;
 	state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
 	state_out->baseline_length_m  = gnss_state.baseline_length_m;
+	state_out->speed_m_s          = gnss_state.speed_m_s;
+	state_out->cog_deg            = gnss_state.cog_deg;
 	state_out->slave_fix_type     = gnss_state.slave_fix_type;
 	state_out->slave_num_sats     = gnss_state.slave_num_sats;
 	state_out->slave_hdop         = gnss_state.slave_hdop;

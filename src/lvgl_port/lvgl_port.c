@@ -852,12 +852,12 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(hdr_s_hdg_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(hdr_s_hdg_lbl, LV_ALIGN_TOP_RIGHT, -4, 37);
 
-    // Row 4 (y = 56): Streamlined Coordinates Bar
+    // Row 4 (y = 55): Streamlined Coordinates Bar (Montserrat 16 high-visibility font)
     hdr_coords_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_coords_lbl, "0.00000000, 0.00000000, 0.000 m");
+    lv_label_set_text(hdr_coords_lbl, "0.0000000, 0.0000000, 0.000 m");
     lv_obj_set_style_text_color(hdr_coords_lbl, lv_color_hex(0x00FFAA), 0);
-    lv_obj_set_style_text_font(hdr_coords_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(hdr_coords_lbl, LV_ALIGN_TOP_MID, 0, 56);
+    lv_obj_set_style_text_font(hdr_coords_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_align(hdr_coords_lbl, LV_ALIGN_TOP_MID, 0, 55);
 
     // =====================================================================
     // 2. Persistent Bottom Screen Navigation Bar (320 x 32, always visible)
@@ -1591,20 +1591,25 @@ void update_rover_ui(const RoverUIData_t *d)
     lv_label_set_text(hdr_s_bl_lbl, buf);
 
     if (d->heading_valid) {
-        snprintf(buf, sizeof(buf), "Hdg:%.1f", d->true_heading_deg);
+        const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
+                              (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
+                              (d->heading_source == HDG_SRC_COG)      ? "COG" :
+                              (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
+                              (d->heading_is_fixed ? "FIX" : "FLT");
+        snprintf(buf, sizeof(buf), "Hdg:%.1f %s", d->true_heading_deg, src_tag);
     } else {
         snprintf(buf, sizeof(buf), "Hdg:---.-");
     }
     lv_label_set_text(hdr_s_hdg_lbl, buf);
 
-    // Row 4: Streamlined Coordinates Bar
+    // Row 4: Streamlined Coordinates Bar (7 decimals in Montserrat 16 for high visibility)
     char hgt_str[24], dist_str[24], dn_str[24], de_str[24];
     nav_format_height(d->tip_height_m, hgt_str, sizeof(hgt_str));
     nav_format_distance(d->distance_to_target_m, dist_str, sizeof(dist_str));
     nav_format_offset(d->d_north_m, dn_str, sizeof(dn_str));
     nav_format_offset(d->d_east_m, de_str, sizeof(de_str));
 
-    snprintf(buf, sizeof(buf), "%.8f, %.8f, %s", d->tip_lat, d->tip_lon, hgt_str);
+    snprintf(buf, sizeof(buf), "%.7f, %.7f, %s", d->tip_lat, d->tip_lon, hgt_str);
     if (hdr_coords_lbl) lv_label_set_text(hdr_coords_lbl, buf);
 
     // Push position into breadcrumb buffer
@@ -1617,9 +1622,14 @@ void update_rover_ui(const RoverUIData_t *d)
     char hud_buf[32];
     if (t0_hdg_hud_lbl) {
         if (d->heading_valid) {
-            snprintf(hud_buf, sizeof(hud_buf), "Hdg: %06.2f", d->true_heading_deg);
+            const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
+                                  (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
+                                  (d->heading_source == HDG_SRC_COG)      ? "COG" :
+                                  (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
+                                  (d->heading_is_fixed ? "FIX" : "FLT");
+            snprintf(hud_buf, sizeof(hud_buf), "Hdg: %05.1f %s", d->true_heading_deg, src_tag);
         } else {
-            snprintf(hud_buf, sizeof(hud_buf), "Hdg: ---.--");
+            snprintf(hud_buf, sizeof(hud_buf), "Hdg: ---.-");
         }
         lv_label_set_text(t0_hdg_hud_lbl, hud_buf);
     }

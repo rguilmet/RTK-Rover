@@ -88,6 +88,17 @@ typedef struct {
 } Um982PortStats_t;
 
 // =========================================================================
+// Heading Source Resolution
+// =========================================================================
+typedef enum {
+    HDG_SRC_NONE = 0,
+    HDG_SRC_DUAL_FIX,    // Dual-antenna integer carrier phase RTK (NARROW_INT)
+    HDG_SRC_DUAL_FLT,    // Dual-antenna float carrier phase with verified baseline
+    HDG_SRC_COG,         // Kinematic Course-Over-Ground from walking motion (> 0.4 m/s)
+    HDG_SRC_HOLD         // Stationary hold of last valid heading (< 0.2 m/s)
+} HeadingSource_t;
+
+// =========================================================================
 // Master Rover State Snapshot (Passed via FreeRTOS Queue to UI at 30Hz)
 // =========================================================================
 typedef struct {
@@ -113,9 +124,12 @@ typedef struct {
     // Dual-Antenna Heading & Pitch (from UNIHEADINGA / GPHDT)
     bool             heading_valid;
     bool             heading_is_fixed;   // True if UNIHEADINGA pos_type == NARROW_INT
+    HeadingSource_t  heading_source;     // Active heading origin
     float            true_heading_deg;   // 0..360 deg True North
     float            baseline_pitch_deg; // Baseline tilt angle (deg)
     float            baseline_length_m;  // Measured Master->Slave distance (e.g. 0.555m)
+    float            speed_m_s;          // Speed over ground (m/s) from RMC
+    float            cog_deg;            // Course over ground (deg) from RMC
 
     // Slave Antenna (ANT2) Diagnostics (from GNGGAH)
     GnssFixType_t    slave_fix_type;

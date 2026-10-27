@@ -195,13 +195,22 @@ void task_rover_core0(void *pvParameters)
             // Periodic 5-second diagnostic telemetry log to Serial Monitor (only if USB terminal connected)
             if (Serial && current_settings.enable_serial_logging && current_settings.enable_telemetry_logging && (now - last_telem_log_ms >= 5000)) {
                 last_telem_log_ms = now;
-                const char *hdg_mode = state.heading_valid ? (state.heading_is_fixed ? "FIX" : "FLT") : "--";
-                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
+                const char *hdg_mode = "--";
+                if (state.heading_valid) {
+                    if (state.heading_source == HDG_SRC_DUAL_FIX) hdg_mode = "FIX";
+                    else if (state.heading_source == HDG_SRC_DUAL_FLT) hdg_mode = "FLT";
+                    else if (state.heading_source == HDG_SRC_COG) hdg_mode = "COG";
+                    else if (state.heading_source == HDG_SRC_HOLD) hdg_mode = "HLD";
+                    else hdg_mode = state.heading_is_fixed ? "FIX" : "FLT";
+                }
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
                               (int)state.fix_type,
                               state.num_sats,
                               state.sats_in_view,
                               hdg_mode,
                               state.true_heading_deg,
+                              state.baseline_length_m * 100.0f,
+                              state.speed_m_s,
                               state.base_station_id,
                               state.diff_age_s,
                               (unsigned long)state.um982_stats.com1_rx_bytes,

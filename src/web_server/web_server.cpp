@@ -65,7 +65,11 @@ static void list_directory_recursive(String& out, const char* fs_param, const ch
                 } else {
                     link_attrs = "download=\"" + filename + "\"";
                 }
-                out += "<li><a href=\"" + endpoint + "?fs=" + String(fs_param) + "&file=" + item_rel + "\" " + link_attrs + ">" + item_rel + "</a> (" + String(size) + " bytes) - <a href=\"/delete?fs=" + String(fs_param) + "&file=" + item_rel + "\" onclick=\"return confirm('Delete " + filename + "?');\">[Delete]</a></li>";
+                if (filename.endsWith(".bmp")) {
+                    out += "<li><a href=\"/view?fs=" + String(fs_param) + "&file=" + item_rel + "\" target=\"_blank\">" + item_rel + "</a> (" + String(size) + " bytes) - <a href=\"/delete?fs=" + String(fs_param) + "&file=" + item_rel + "\" onclick=\"return confirm('Delete " + filename + "?');\">[Delete]</a></li>";
+                } else {
+                    out += "<li><a href=\"#\" onclick=\"dlFile('/download?fs=" + String(fs_param) + "&file=" + item_rel + "', '" + filename + "'); return false;\" title=\"Download securely via in-memory Blob\">" + item_rel + "</a> (" + String(size) + " bytes) - <a href=\"/download?fs=" + String(fs_param) + "&file=" + item_rel + "\" target=\"_blank\" title=\"View raw text in browser\">[Raw]</a> - <a href=\"/delete?fs=" + String(fs_param) + "&file=" + item_rel + "\" onclick=\"return confirm('Delete " + filename + "?');\">[Delete]</a></li>";
+                }
             }
         }
     }
@@ -73,7 +77,7 @@ static void list_directory_recursive(String& out, const char* fs_param, const ch
 }
 
 static void handleRoot() {
-    String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><title>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:20px;background:#12181b;color:#e0e6ed;} h1{color:#00ffaa;} h2{color:#00d8ff;border-bottom:1px solid #334;padding-bottom:5px;} a{color:#38bdf8;text-decoration:none;} a:hover{text-decoration:underline;} li{margin:8px 0;font-family:monospace;font-size:14px;} .up{margin-bottom:20px;padding:15px;background:#1e293b;border-radius:8px;} input[type=submit],button{background:#00ffaa;color:#000;font-weight:bold;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;} .badge{background:#0284c7;padding:3px 8px;border-radius:4px;font-size:12px;}</style></head><body><h1>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</h1>";
+    String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><title>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:20px;background:#12181b;color:#e0e6ed;} h1{color:#00ffaa;} h2{color:#00d8ff;border-bottom:1px solid #334;padding-bottom:5px;} a{color:#38bdf8;text-decoration:none;} a:hover{text-decoration:underline;} li{margin:8px 0;font-family:monospace;font-size:14px;} .up{margin-bottom:20px;padding:15px;background:#1e293b;border-radius:8px;} input[type=submit],button{background:#00ffaa;color:#000;font-weight:bold;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;} .badge{background:#0284c7;padding:3px 8px;border-radius:4px;font-size:12px;}</style><script>function dlFile(url, name){fetch(url).then(r=>{if(!r.ok) throw new Error('Download failed: ' + r.status); return r.blob();}).then(blob=>{var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href); a.remove();}, 1500);}).catch(err=>{window.location.href=url;});}</script></head><body><h1>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</h1>";
     
     auto upload_html = [](const char* fs_param, const char* title) -> String {
         return "<div class='up'><h3>Upload to " + String(title) + "</h3><form method='POST' action='/upload?fs=" + String(fs_param) + "' enctype='multipart/form-data'><input type='file' name='f' style='color:#fff'> <input type='submit' value='Upload'></form></div>";
@@ -137,20 +141,21 @@ static void handleDownload() {
     String filename = (slashIndex >= 0) ? path.substring(slashIndex + 1) : path;
     
     String mimeType = "application/octet-stream";
-    String disposition = "attachment";
+    String disposition = "inline";
     
     if (filename.endsWith(".csv")) {
-        mimeType = "text/csv";
+        mimeType = "text/csv; charset=utf-8";
     } else if (filename.endsWith(".bmp")) {
         mimeType = "image/bmp";
         disposition = "inline";
     } else if (filename.endsWith(".json")) {
-        mimeType = "application/json";
+        mimeType = "application/json; charset=utf-8";
     } else if (filename.endsWith(".log") || filename.endsWith(".txt")) {
-        mimeType = "text/plain";
+        mimeType = "text/plain; charset=utf-8";
     }
     
     server.sendHeader("Content-Disposition", disposition + "; filename=\"" + filename + "\"");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
     server.sendHeader("Content-Length", String(file.size()));
     server.sendHeader("Connection", "close");
     server.streamFile(file, mimeType);
