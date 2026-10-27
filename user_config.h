@@ -6,7 +6,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.2.14"
+#define ROVER_FIRMWARE_VERSION "v0.2.15"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)

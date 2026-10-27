@@ -922,13 +922,14 @@ void create_rover_ui(void)
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_next);
 
-    // Target notes row
+    // Target notes row (circular marquee autoscroll when text exceeds width)
     t0_notes_lbl = lv_label_create(tile_guidance);
+    lv_label_set_long_mode(t0_notes_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_width(t0_notes_lbl, 304);
     lv_label_set_text(t0_notes_lbl, "NW corner iron pipe");
     lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t0_notes_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 10, 34);
+    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 8, 34);
 
     // Navigation Canvas (304x210)
     t0_nav_canvas = lv_obj_create(tile_guidance);
@@ -1601,9 +1602,20 @@ void update_rover_ui(const RoverUIData_t *d)
     if (d->has_active_target) {
         snprintf(buf, sizeof(buf), "%s (%d/%d)",
                  d->target_label, d->active_target_idx + 1, d->total_targets);
-        lv_label_set_text(t0_target_lbl, buf);
-        lv_label_set_text(t0_notes_lbl, d->target_notes[0] ? d->target_notes : "---");
-        lv_label_set_text(t0_dist_lbl, dist_str);
+        if (t0_target_lbl) {
+            const char *cur_tgt = lv_label_get_text(t0_target_lbl);
+            if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
+                lv_label_set_text(t0_target_lbl, buf);
+            }
+        }
+        if (t0_notes_lbl) {
+            const char *new_notes = d->target_notes[0] ? d->target_notes : "---";
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
+                lv_label_set_text(t0_notes_lbl, new_notes);
+            }
+        }
+        if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, dist_str);
 
         if (d->distance_to_target_m <= 1.5) {
             // -------------------------------------------------------------
@@ -1805,6 +1817,19 @@ void update_rover_ui(const RoverUIData_t *d)
 
         snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
         lv_label_set_text(t0_offsets_lbl, buf);
+    } else {
+        if (t0_target_lbl) {
+            const char *cur_tgt = lv_label_get_text(t0_target_lbl);
+            if (!cur_tgt || strcmp(cur_tgt, "No Target (0/0)") != 0) {
+                lv_label_set_text(t0_target_lbl, "No Target (0/0)");
+            }
+        }
+        if (t0_notes_lbl) {
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, "---") != 0) {
+                lv_label_set_text(t0_notes_lbl, "---");
+            }
+        }
     }
 
     // 3. Update Tile 1: Field Survey Logger
