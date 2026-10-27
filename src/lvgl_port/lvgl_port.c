@@ -1085,18 +1085,18 @@ void create_rover_ui(void)
     lv_line_set_points(t0_wedge_green_l, pts_grn_l, 2);
     lv_line_set_points(t0_wedge_green_r, pts_grn_r, 2);
 
-    // Line of sight (fixed vertical track line from Rover (152, 170) to Target Pin (152, 35))
+    // Line of sight (fixed vertical track line from Rover (152, 170) to Target Pin outer radius at (152, 66))
     t0_track_line = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_track_line, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_line_width(t0_track_line, 2, 0);
-    static const lv_point_precise_t pts_track[2] = {{152, 170}, {152, 35}};
+    static const lv_point_precise_t pts_track[2] = {{152, 170}, {152, 66}};
     lv_line_set_points(t0_track_line, pts_track, 2);
 
-    // Target Track Chevron Arrowhead (pointing into Target Pin at (152, 35))
+    // Target Track Chevron Arrowhead (terminating at Target Pin outer radius at (152, 66))
     t0_track_arrow = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_track_arrow, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_line_width(t0_track_arrow, 3, 0);
-    static const lv_point_precise_t pts_track_arrow[3] = {{144, 47}, {152, 35}, {160, 47}};
+    static const lv_point_precise_t pts_track_arrow[3] = {{144, 78}, {152, 66}, {160, 78}};
     lv_line_set_points(t0_track_arrow, pts_track_arrow, 3);
 
     // Rover antenna beam vector with directional arrow (shaft + dual barbs)
@@ -1828,9 +1828,9 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, rover_x - 8, rover_y - 8);
             lv_obj_set_hidden(t0_rover_icon, false);
 
-            // Target Pin fixed at top center (152, 35)
+            // Target Pin fixed at top center (152, 58)
             int16_t target_x = 152;
-            int16_t target_y = 35;
+            int16_t target_y = 58;
             lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, target_x - 8, target_y - 8);
             lv_obj_set_hidden(t0_target_icon, false);
 
