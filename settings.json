@@ -17,10 +17,12 @@
   "survey_avg_seconds": 5,
   "default_label_prefix": "PIN_",
   "active_waypoint_file": "/waypoints.csv",
-  "brightness": 85,
-  "volume": 30,
+  "brightness": 80,
+  "volume": 40,
   "is_muted": false,
   "wifi_ssid": "Your-SSID-Here",
   "wifi_password": "Your-Password-Here",
-  "enable_serial_logging": false
+  "enable_serial_logging": false,
+  "enable_imu_logging": false,
+  "enable_telemetry_logging": true
 }

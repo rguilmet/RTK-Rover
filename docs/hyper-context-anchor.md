@@ -35,6 +35,14 @@
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
+* **Completed (`v0.2.13`):**
+  - **I2C Bus Hardening:** Configured `scl_wait_us = 20000` (20 ms) in `i2c_bus_config` to tolerate slave clock stretching on capacitive touch and IMU. Reduced transaction timeout from 100 ms to 25 ms. Added 5 ms settle delay inside `i2c_bus_recover_locked` while holding recursive bus mutex to eliminate cascade bus resets.
+  - **Coordinates Bar Font Upgrade:** Increased Header Row 4 (`hdr_coords_lbl`) font from Montserrat 12 to Montserrat 14 (255.8 px width fits cleanly within 320 px screen with 64 px margin and zero vertical layout shift).
+  - **Tile 5 Diagnostics Title:** Simplified header to `"RTK ROVER " ROVER_FIRMWARE_VERSION` (clean ASCII).
+* **Completed (`v0.2.12`):**
+  - **Configurable Serial Logging Flags:** Added `enable_imu_logging` (default `false`) and `enable_telemetry_logging` (default `true`) to `settings.json` and `SystemSettings`. Silenced 1 Hz raw IMU spam while preserving boot diagnostics and 5s `[TELEM]` heartbeat. Removed hardcoded override in `setup()`.
+  - **Tile 2 & Tile 4 UI Rebalance:** Removed redundant screen titles on Tile 2 and Tile 4. Shifted Tare button to right screen edge (`LV_ALIGN_TOP_RIGHT, -10, 290`). Centered 2-line `Last Logged` status at $y = 198$ with 12 px separation from Quick Settings at $y = 238$ to eliminate text overlap.
+  - **Multi-Deed COGO & KML Ingestion Ecosystem:** Created `reference/cogo_network_solver.py` (0.010 ft closure over 4,045 ft perimeter), `scripts/kml_to_waypoints.py`, and upgraded `scripts/validate_waypoints.py` to `v1.2.0`.
 * **Completed (`v0.2.11`):**
   - **Tile 1 Layout Streamlining & Quick Settings Integration:** Removed redundant `Tip Lat`, `Tip Lon`, and `Ground Hgt` rows (already in Row 4 persistent top header). Integrated Quick Settings buttons directly onto Tile 1 (Row 1: NMEA & Route logs; Row 2: 20% stepped Brightness & Volume; Row 3: Wi-Fi & Units; Row 4: Wi-Fi status & web portal URL).
   - **Tile 3 Integrated 8-Point Compass Ring & Plumb Level:** Enlarged bubble level circle to $224\text{ px}$ diameter. Added Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping rover heading oriented UP (12 o'clock). Nested compact Tare button (`62x28 px`) into the bottom-right corner of the circle's bounding rectangle (`TARE` Blue / `RST` Orange). Centered Pole Tilt readout below circle.
@@ -55,4 +63,4 @@
   - **Dual Logging Subsystems:** Continuous Route track CSV logging (`/routes/`) and raw UM982 NMEA logging (`/nmea/`).
   - **Storage Auto-Routing & FFat Mirroring:** MicroSD primary, FFat fallback, automatic mirror of `settings.json`.
   - **Audio Queue:** FreeRTOS `beepQueue` synthesized on Core 1 for reliable multi-tone chirps.
-* **Current Status:** Firmware `v0.2.11` active, updated, and ready for field operation.
+* **Current Status:** Firmware `v0.2.13` active, updated, and ready for field operation.
