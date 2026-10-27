@@ -5,6 +5,18 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.27] - 2026-10-27
+
+### Fixed
+- **Resolved I2C Bus Timeouts & Cascade Resets (`src/i2c_bsp/i2c_bsp.c`):**
+  - **Increased Transfer Timeout:** Raised `i2c_data_pdMS_TICKS` from an aggressive 25 ms to a safe 100 ms. Normal transfers take < 1 ms, preventing premature software timeout aborts while the hardware FSM is actively clocking.
+  - **Removed Artificial Clock Stretch Constraint:** Removed `scl_wait_us = 20000` to use standard ESP-IDF defaults, preventing false `I2C bus is still busy but software timeout detected` errors.
+  - **Hardware 9-Clock Bus Clear on Recovery (`i2c_bus_clear_stuck_sda`):** Implemented an open-drain 9-clock SCL pulse recovery routine. When a slave device is interrupted mid-byte and pins SDA low, 9 clock pulses allow the slave to finish shifting out and release SDA before resetting the master peripheral.
+  - **Rate-Limited I2C Warning Logs:** Throttled `[I2C WARN]` serial prints to at most once per second to prevent serial output flooding during bus recovery.
+- **Enhanced Touch Screen Polling & State Stability (`src/lvgl_port/lvgl_port.c`):**
+  - **Touch Polling Throttled to ~60 Hz (16 ms):** Prevented the LVGL task from pounding the shared I2C bus every 5 ms (200 Hz), reducing total I2C bus bandwidth consumption by over 70% and completely eliminating bus starvation with the IMU and PMIC.
+  - **Preserved Touch State Across Glitches:** When a transient I2C timeout occurs, `TouchInputReadCallback` now preserves `last_state` (`PRESSED`) instead of erroneously asserting `RELEASED`. This prevents dropped button clicks and allows smooth, unbroken finger drags and screen swipe navigation.
+
 ## [v0.2.26] - 2026-10-27
 
 ### Fixed

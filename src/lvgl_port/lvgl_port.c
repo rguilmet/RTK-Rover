@@ -248,33 +248,54 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
     (void)indev;
     static int16_t last_x = 0;
     static int16_t last_y = 0;
+    static lv_indev_state_t last_state = LV_INDEV_STATE_RELEASED;
+    static uint32_t last_poll_ms = 0;
+
+    uint32_t now = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    // Throttle I2C touch polling to ~60 Hz (16 ms) to prevent I2C bus congestion with IMU / PMIC
+    if (now - last_poll_ms < 16) {
+        indevData->point.x = last_x;
+        indevData->point.y = last_y;
+        indevData->state   = last_state;
+        return;
+    }
+    last_poll_ms = now;
 
     // Command byte 7 = 0x0E (14 bytes): matches Waveshare ESP32-S3-Touch-LCD-3.5B bsp_touch.c
     uint8_t read_touchpad_cmd[11] = {0xb5, 0xab, 0xa5, 0x5a, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00};
     uint8_t buff[14] = {0};
 
-    if (i2c_master_write_read_dev(disp_touch_dev_handle, read_touchpad_cmd, 11, buff, 14) == ESP_OK) {
-        // buff[0]: gesture (0xFF = invalid), buff[1]: touch points (1..2)
-        // buff[2] bits [7:6]: event flag (0x80 = contact/down, 0x40 = release/up)
-        uint8_t event_flag = (buff[2] >> 6) & 0x03;
-        if (buff[0] != 0xFF && buff[1] >= 1 && buff[1] <= 2 && event_flag != 0x01) {
-            uint16_t pointX = (((uint16_t)buff[2] & 0x0F) << 8) | (uint16_t)buff[3];
-            uint16_t pointY = (((uint16_t)buff[4] & 0x0F) << 8) | (uint16_t)buff[5];
-            if (pointX >= ROVER_LCD_H_RES) pointX = ROVER_LCD_H_RES - 1;
-            if (pointY >= ROVER_LCD_V_RES) pointY = ROVER_LCD_V_RES - 1;
-            last_x = (int16_t)pointX;
-            last_y = (int16_t)pointY;
-            indevData->point.x = last_x;
-            indevData->point.y = last_y;
-            indevData->state   = LV_INDEV_STATE_PRESSED;
-            return;
-        }
+    uint8_t err = i2c_master_write_read_dev(disp_touch_dev_handle, read_touchpad_cmd, 11, buff, 14);
+    if (err != 0) {
+        // Transient I2C timeout or bus busy: preserve last_state to avoid breaking active touch gestures / button holds
+        indevData->point.x = last_x;
+        indevData->point.y = last_y;
+        indevData->state   = last_state;
+        return;
     }
 
-    // Always preserve last_x / last_y on release so LVGL 9 recognizes swipes and clicks
+    // buff[0]: gesture (0xFF = invalid), buff[1]: touch points (1..2)
+    // buff[2] bits [7:6]: event flag (0x80 = contact/down, 0x40 = release/up)
+    uint8_t event_flag = (buff[2] >> 6) & 0x03;
+    if (buff[0] != 0xFF && buff[1] >= 1 && buff[1] <= 2 && event_flag != 0x01) {
+        uint16_t pointX = (((uint16_t)buff[2] & 0x0F) << 8) | (uint16_t)buff[3];
+        uint16_t pointY = (((uint16_t)buff[4] & 0x0F) << 8) | (uint16_t)buff[5];
+        if (pointX >= ROVER_LCD_H_RES) pointX = ROVER_LCD_H_RES - 1;
+        if (pointY >= ROVER_LCD_V_RES) pointY = ROVER_LCD_V_RES - 1;
+        last_x = (int16_t)pointX;
+        last_y = (int16_t)pointY;
+        last_state = LV_INDEV_STATE_PRESSED;
+        indevData->point.x = last_x;
+        indevData->point.y = last_y;
+        indevData->state   = last_state;
+        return;
+    }
+
+    // Clean release confirmed by touch controller
+    last_state = LV_INDEV_STATE_RELEASED;
     indevData->point.x = last_x;
     indevData->point.y = last_y;
-    indevData->state   = LV_INDEV_STATE_RELEASED;
+    indevData->state   = last_state;
 }
 
 bool rover_lvgl_lock(int timeout_ms)
