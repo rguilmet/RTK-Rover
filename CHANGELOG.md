@@ -5,6 +5,17 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.29] - 2026-10-27
+
+### Fixed
+- **Fixed Spotty Single Taps & Restored Instant Touch Response (`src/lvgl_port/lvgl_port.c`):**
+  - **Removed Erroneous `buff[0] != 0xFF` Filter:** On the AXS15231B touch controller, `buff[0]` is the hardware gesture ID, which returns `0xFF` (no gesture detected) during normal, stationary single-finger taps. The check `buff[0] != 0xFF` was discarding single taps that were not swipes/drags. Relying strictly on active touch point count (`buff[1] >= 1 && buff[1] <= 2`) allows instant single-press recognition.
+  - **Removed `event_flag != 0x01` Filter:** Prevented premature rejection of release frames when fingers lift off the glass, ensuring clean `LV_INDEV_STATE_RELEASED` events at the exact release coordinates.
+  - **Disabled Scrolling on Bottom Navigation Bar:** Added `lv_obj_remove_flag(nav_bar, LV_OBJ_FLAG_SCROLLABLE)` so minor finger micro-movements during a tap cannot trigger container drag tracking or cancel the click event.
+  - **Enlarged Touch Target & Added Extended Click Padding:** Increased `< Prev` and `Next >` navigation bar buttons to 68x28 with `lv_obj_set_ext_click_area(btn, 6)`, expanding the touch sensitivity area by 6 pixels on all edges. Also padded the `<` and `>` waypoint and file selector buttons on Tiles 0 and 2.
+  - **Added Audio Click Feedback:** Integrated immediate 20 ms sound feedback on screen change (`play_rover_beep(1200, 20)`) and waypoint/file selection (`play_rover_beep(1500, 20)`).
+  - **Clamped LVGL Task Max Latency (`user_config.h`):** Reduced `LVGL_TASK_MAX_DELAY_MS` from 500 ms to 30 ms so the FreeRTOS LVGL task polls touch at least ~33 Hz even when no animations are active, eliminating idle sleep lag.
+
 ## [v0.2.28] - 2026-10-27
 
 ### Fixed
