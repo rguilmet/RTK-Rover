@@ -5,7 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.2.40] - 2026-10-28
+## [v0.2.41] - 2026-10-28
+
+### Fixed
+- **E220 RTCM Sniffer Timeout and False Error Resync (`src/e220_driver/e220_driver.cpp`):**
+  - **Eliminated False Errors from Premature 250ms Timeout:** Multi-packet LoRa RTCM3 bursts (split into 128-byte sub-packets) routinely have inter-packet or inter-epoch on-air gaps exceeding $250\text{ ms}$. Expanded the silence timeout to $3,000\text{ ms}$ (3.0 seconds) and removed spurious mid-stream error incrementing, preventing the sniffer from desyncing and falsely reporting 100% errors (`Err: 107`).
+  - **Zero-Latency Serial0 FIFO Drain:** Replaced single-buffer read (`if (avail > 0)`) with a continuous `while ((avail = Serial0.available()) > 0)` drain loop, immediately forwarding full 2,100-byte bursts to UM982 COM2 without multi-tick queuing delay.
+  - **Robust Preamble Hunting:** Removed false error flags in `RTCM_WAIT_LEN_H` and `RTCM_WAIT_LEN_L` when encountering non-preamble binary bytes during resynchronization, ensuring only genuinely received frames that fail CRC24Q or contain invalid message types increment the error counter.
 
 ### Changed
 - **E220 Default Air Data Rate Upgraded to 62.5 kbps (`user_config.h`, `src/settings_manager/settings_manager.cpp`, `settings.json`):**

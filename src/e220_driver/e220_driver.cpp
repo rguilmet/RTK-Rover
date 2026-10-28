@@ -336,11 +336,10 @@ static void feed_rtcm_sniffer(uint8_t b)
                 rtcm_hdr_buf[0] = b;
                 rtcm_state = RTCM_WAIT_LEN_L;
             } else if (b == 0xD3) {
-                e220_stats.rtcm_crc_errors++;
+                // Previous 0xD3 was payload byte; this 0xD3 is candidate preamble
                 rtcm_crc_accum = rtcm_crc24q_step(0, 0xD3);
                 rtcm_state = RTCM_WAIT_LEN_H;
             } else {
-                e220_stats.rtcm_crc_errors++;
                 rtcm_state = RTCM_WAIT_PREAMBLE;
             }
             break;
@@ -353,7 +352,6 @@ static void feed_rtcm_sniffer(uint8_t b)
                 rtcm_bytes_read = 0;
                 rtcm_state = RTCM_READ_PAYLOAD;
             } else {
-                e220_stats.rtcm_crc_errors++;
                 rtcm_state = RTCM_WAIT_PREAMBLE;
             }
             break;
@@ -366,16 +364,14 @@ static void feed_rtcm_sniffer(uint8_t b)
             rtcm_bytes_read++;
             // Total frame after length is payload_len + 3 bytes CRC24Q
             if (rtcm_bytes_read >= rtcm_payload_len + 3) {
-                // When entire frame + 3-byte CRC24Q is fed into polynomial division,
-                // remainder is exactly 0 for uncorrupted packets.
-                if (rtcm_crc_accum == 0) {
-                    uint16_t msg_type = ((uint16_t)rtcm_hdr_buf[2] << 4) | ((rtcm_hdr_buf[3] >> 4) & 0x0F);
-                    if (msg_type >= 1001 && msg_type <= 1300) {
+                uint16_t msg_type = ((uint16_t)rtcm_hdr_buf[2] << 4) | ((rtcm_hdr_buf[3] >> 4) & 0x0F);
+                if (msg_type >= 1001 && msg_type <= 1300) {
+                    if (rtcm_crc_accum == 0) {
                         e220_stats.rtcm_frames_ok++;
                         e220_stats.last_msg_type = msg_type;
                         if (msg_type == 1005 || msg_type == 1006) {
                             e220_stats.msg_1005_count++;
-                        } else if (msg_type >= 1071 && msg_type <= 1127) {
+                        } else if (msg_type >= 1071 && msg_type <= 1130) {
                             e220_stats.msg_msm_count++;
                         }
                     } else {
@@ -404,27 +400,28 @@ extern "C" void e220_poll_and_forward_rtcm(void)
     }
 
     uint8_t buf[256];
-    int avail = Serial0.available();
-    if (avail > 0) {
+    int avail;
+    // Drain all available bytes in the Serial0 FIFO to forward RTCM bursts with zero latency
+    while ((avail = Serial0.available()) > 0) {
         if (avail > (int)sizeof(buf)) avail = sizeof(buf);
-        int n = Serial0.readBytes(buf, avail);
-        if (n > 0) {
-            e220_stats.rx_bytes_total += (uint32_t)n;
-            e220_stats.last_rx_ms = millis();
+        int n = Serial0.readBytes((char *)buf, avail);
+        if (n <= 0) break;
 
-            // Forward raw RTCM bytes transparently to UM982 COM2
-            um982_forward_rtcm_to_com2(buf, (size_t)n);
+        e220_stats.rx_bytes_total += (uint32_t)n;
+        e220_stats.last_rx_ms = millis();
 
-            for (int i = 0; i < n; i++) {
-                feed_rtcm_sniffer(buf[i]);
-            }
+        // Forward raw RTCM bytes transparently to UM982 COM2
+        um982_forward_rtcm_to_com2(buf, (size_t)n);
+
+        for (int i = 0; i < n; i++) {
+            feed_rtcm_sniffer(buf[i]);
         }
-    } else {
-        // Inter-byte timeout: If mid-frame and silence exceeds 250ms, mark dropped/truncated frame
-        if (rtcm_state != RTCM_WAIT_PREAMBLE && (millis() - rtcm_last_rx_byte_ms > 250)) {
-            e220_stats.rtcm_crc_errors++;
-            rtcm_state = RTCM_WAIT_PREAMBLE;
-        }
+    }
+
+    // Inter-byte timeout: Reset state machine if radio has been silent for > 3.0s mid-frame
+    // to cleanly recover from lost packets without falsely aborting valid multi-packet bursts
+    if (rtcm_state != RTCM_WAIT_PREAMBLE && (millis() - rtcm_last_rx_byte_ms > 3000)) {
+        rtcm_state = RTCM_WAIT_PREAMBLE;
     }
 }
 
