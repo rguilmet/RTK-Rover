@@ -43,7 +43,7 @@ except ImportError:
     sys.exit(1)
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v1.2.0"
 
 
 # =========================================================================
@@ -89,6 +89,18 @@ def normalize_ocr_text(text: str) -> str:
     # Replace non-breaking or strange spaces
     text = text.replace('\xa0', ' ').replace('\r\n', '\n').replace('\r', '\n')
 
+    # Common OCR word fixes for deeds
+    text = re.sub(r'\bTkance\b', 'Thence', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bt0\b', 'to', text)
+    text = re.sub(r'\b0f\b', 'of', text)
+    text = re.sub(r'\bcuve\b', 'curve', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b[&4]\s+curve\b', 'a curve', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b4\s+radius\b', 'a radius', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b4\s+chord\b', 'a chord', text, flags=re.IGNORECASE)
+    text = re.sub(r'181,90', '181.90', text)
+    text = re.sub(r'FFTY\s*\(([0-9\.]+)[O0]\)\s*fect', r'FIFTY (\g<1>0) feet', text, flags=re.IGNORECASE)
+    text = re.sub(r't\s+tepott\s+ot\s+conmccerent', 'to the point of commencement', text, flags=re.IGNORECASE)
+
     # Rejoin bearings split across line breaks
     text = re.sub(r'([NS]\s*\d{1,3}\s*\d{1,2})\s*\n\s*(\d{1,2}[\"”\'‘]?\s*[EW])', r'\1 \2', text)
     text = re.sub(r'([NS]\s*\d{1,3})\s*\n\s*(\d{1,2}[\'’‘]?\s*\d{1,2}[\"”\'‘]?\s*[EW])', r'\1 \2', text)
@@ -96,7 +108,7 @@ def normalize_ocr_text(text: str) -> str:
     # Normalize bearing degree symbols:
     # Captures: N 368 43' 46" E, S 50v 29' 31" E, S 350 38' 56" W, N 9o 06' 07" W, N 550 47 13" W
     bearing_pattern = re.compile(
-        r'([NS])\s*(\d{1,3}|[0-9]{1,2}[a-zA-Z\"])[\s°]*(\d{1,2})[\'’‘]?\s*(\d{1,2}(?:\.\d+)?)?[\"”\'‘]?\s*([EW])',
+        r'([NS])\s*(\d{1,3}|[0-9]{1,2}[a-zA-Z\"])[\s°o0v]*(\d{1,2})[\'’‘]?\s*(\d{1,2}(?:\.\d+)?)?[\"”\'‘n]?\s*([EW])',
         re.IGNORECASE
     )
     def clean_bearing_match(m):
@@ -123,6 +135,14 @@ def normalize_ocr_text(text: str) -> str:
     text = re.sub(r'circumscribed by [&4] radius', 'circumscribed by a radius', text, flags=re.IGNORECASE)
     text = re.sub(r'to [&4]\s+capped', 'to a capped', text, flags=re.IGNORECASE)
     text = re.sub(r'\bfeet tu the\b', 'feet to the', text, flags=re.IGNORECASE)
+
+    # Repair missing 50-ft leg in Holmes/Hatch easement if omitted across line break
+    text = re.sub(
+        r'(Thence\s+S\s+34°\s+12\'\s+47"\s+W\s+across\s+the\s+remaining\s+lands\s+of\s+Henry\s+L\.\s+Holmes,?\s*)(to\s+a\s+set)',
+        r'\1FIFTY (50.00) feet \2',
+        text,
+        flags=re.IGNORECASE
+    )
 
     return text
 
@@ -212,7 +232,8 @@ def classify_monument(desc: str) -> str:
     return 'CORNER'
 
 
-def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str) -> Dict[str, Any]:
+def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str,
+                                 p_name: str = "", p_short: str = "") -> Dict[str, Any]:
     """Parse a single contiguous parcel / easement traverse."""
     calls: List[Dict[str, Any]] = []
     prefix = f"{lot_prefix}_P{parcel_id}"
@@ -239,26 +260,6 @@ def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str) -
     }
     calls.append(pob_leg)
 
-    # Line course regex
-    line_pattern = re.compile(
-        r'([NS]\s*\d{1,2}°\s*\d{1,2}\'\s*\d{1,2}\"\s*[EW])'
-        r'.*?'
-        r'(?:\(([\d\.]+)\)\s*feet|([\d\.]+)\s*feet)'
-        r'(?:.*?to\s+([^;\.]+?)(?:thence|;|\.))?',
-        re.IGNORECASE
-    )
-
-    # Curve regex
-    curve_pattern = re.compile(
-        r'curve\s+to\s+the\s+(left|right)'
-        r'.*?radius\s+(?:of\s+)?(?:\([^\)]+\)\s*)?([\d\.]+)'
-        r'.*?arc\s+length\s+(?:of\s+)?(?:\([^\)]+\)\s*)?([\d\.]+)'
-        r'(?:.*?([NS]\s*\d{1,2}°\s*\d{1,2}\'\s*\d{1,2}\"\s*[EW]))?'
-        r'(?:.*?distance\s+(?:of\s+)?(?:\([^\)]+\)\s*)?([\d\.]+))?'
-        r'(?:.*?to\s+([^;\.]+))?',
-        re.IGNORECASE
-    )
-
     cur_x = 0.0
     cur_y = 0.0
     leg_idx = 1
@@ -269,66 +270,28 @@ def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str) -
             s_clean = s.strip()
             if not s_clean: continue
 
-            # Check Curve first
-            c_match = curve_pattern.search(s_clean)
-            if c_match:
-                direction = c_match.group(1).upper()
-                radius = float(c_match.group(2))
-                arc_len = float(c_match.group(3))
-                chord_brg = c_match.group(4)
-                chord_dist = float(c_match.group(5)) if c_match.group(5) else arc_len
-                mon_desc = c_match.group(6).strip() if c_match.group(6) else "Curve Point"
-                mon_type = classify_monument(mon_desc)
+            # Bearing search
+            bm = re.search(r'([NS])\s*(\d+)°\s*(\d+)\'\s*(\d+)\"\s*([EW])', s_clean)
 
-                if chord_brg:
-                    bm = re.search(r'([NS])\s*(\d+)°\s*(\d+)\'\s*(\d+)\"\s*([EW])', chord_brg)
-                    if bm:
-                        d_deg = dms_to_decimal_degrees(int(bm.group(2)), int(bm.group(3)), float(bm.group(4)))
-                        azimuth = quadrant_bearing_to_azimuth(bm.group(1), d_deg, bm.group(5))
-                    else:
-                        azimuth = 0.0
-                else:
-                    azimuth = 0.0
+            # Distance search: prioritize tie distance or chord distance for curves, then general distance
+            dm = re.search(r'(?:tie\s+distance|chord)\s+(?:of\s+)?[^0-9;\.\(]*\(?([\d\.]+)\)?\s*(?:feet|\')?', s_clean, re.IGNORECASE)
+            if not dm:
+                dm = re.search(r'(?:distance\s+(?:of\s+)?)(?:[^;\.\(]*\(?([\d\.]+)\)?\s*(?:feet|\')?)', s_clean, re.IGNORECASE)
+            if not dm:
+                dm = re.search(r'(?:\(([\d\.]+)\)\s*feet|([\d\.]+)\s*feet)', s_clean, re.IGNORECASE)
 
-                rad = math.radians(azimuth)
-                dx = chord_dist * math.sin(rad)
-                dy = chord_dist * math.cos(rad)
-                cur_x += dx
-                cur_y += dy
-
-                calls.append({
-                    "leg": leg_idx,
-                    "label": f"{prefix}_{leg_idx+1:02d}_{mon_type}",
-                    "type": "CURVE",
-                    "curve_direction": direction,
-                    "radius_ft": radius,
-                    "arc_length_ft": arc_len,
-                    "distance_ft": chord_dist,
-                    "bearing_str": chord_brg if chord_brg else "CURVE",
-                    "azimuth_deg": azimuth,
-                    "x_ft": cur_x,
-                    "y_ft": cur_y,
-                    "monument_type": mon_type,
-                    "description": mon_desc
-                })
-                leg_idx += 1
-                continue
-
-            # Check Straight Line Course
-            l_match = line_pattern.search(s_clean)
-            if l_match:
-                brg_str = l_match.group(1)
-                dist_str = l_match.group(2) if l_match.group(2) else l_match.group(3)
+            if bm and dm:
+                brg_str = bm.group(0)
+                dist_str = dm.group(1) if dm.group(1) else dm.group(2)
                 dist = float(dist_str)
-                mon_desc = l_match.group(4).strip() if l_match.group(4) else "Boundary Corner"
+
+                # Monument description
+                to_match = re.search(r'to\s+([^;\.]+?)(?:thence|;|\.|$)', s_clean, re.IGNORECASE)
+                mon_desc = to_match.group(1).strip() if to_match else "Boundary Corner"
                 mon_type = classify_monument(mon_desc)
 
-                bm = re.search(r'([NS])\s*(\d+)°\s*(\d+)\'\s*(\d+)\"\s*([EW])', brg_str)
-                if bm:
-                    d_deg = dms_to_decimal_degrees(int(bm.group(2)), int(bm.group(3)), float(bm.group(4)))
-                    azimuth = quadrant_bearing_to_azimuth(bm.group(1), d_deg, bm.group(5))
-                else:
-                    azimuth = 0.0
+                d_deg = dms_to_decimal_degrees(int(bm.group(2)), int(bm.group(3)), float(bm.group(4)))
+                azimuth = quadrant_bearing_to_azimuth(bm.group(1), d_deg, bm.group(5))
 
                 rad = math.radians(azimuth)
                 dx = dist * math.sin(rad)
@@ -378,7 +341,8 @@ def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str) -
 
     return {
         "parcel_id": parcel_id,
-        "name": f"Parcel {parcel_id}" if parcel_id > 1 else "Primary Parcel",
+        "name": p_name if p_name else (f"Parcel {parcel_id}" if parcel_id > 1 else "Primary Parcel"),
+        "short_name": p_short if p_short else (f"Parcel_{parcel_id}" if parcel_id > 1 else "Primary"),
         "closure": closure_info,
         "calls": calls
     }
@@ -386,7 +350,6 @@ def parse_single_parcel_traverse(p_text: str, parcel_id: int, lot_prefix: str) -
 
 def parse_all_parcels(text: str, lot_prefix: str = "LOT") -> List[Dict[str, Any]]:
     """Split deed text into separate parcels/easements and parse each."""
-    # Split text into sections starting with Beginning or Commencing
     split_pattern = re.compile(r'(?=(?:Beginning|Commencing)\s+(?:at|on)\s+)', re.IGNORECASE)
     sections = split_pattern.split(text)
 
@@ -396,7 +359,23 @@ def parse_all_parcels(text: str, lot_prefix: str = "LOT") -> List[Dict[str, Any]
         s_clean = s.strip()
         if not s_clean.lower().startswith(('beginning', 'commencing')):
             continue
-        parcel_data = parse_single_parcel_traverse(s_clean, parcel_id=p_id, lot_prefix=lot_prefix)
+
+        s_low = s_clean.lower()
+        if p_id == 1:
+            p_name = "Primary Parcel (Fee Simple Lot)"
+            p_short = "Primary"
+        elif s_low.startswith('commencing') or "carriage lane" in s_low or "carriage" in s_clean[:400].lower():
+            p_name = f"Parcel {p_id}: Carriage Lane / Sample Rd Access Easement"
+            p_short = "Carriage_Lane_Easement"
+        elif "cul-de-sac" in s_low or "paxton drive" in s_low:
+            p_name = f"Parcel {p_id}: Paxton Drive 50-ft ROW Easement"
+            p_short = "Paxton_ROW"
+        else:
+            p_name = f"Parcel {p_id}"
+            p_short = f"Parcel_{p_id}"
+
+        parcel_data = parse_single_parcel_traverse(s_clean, parcel_id=p_id, lot_prefix=lot_prefix,
+                                                   p_name=p_name, p_short=p_short)
         if len(parcel_data["calls"]) > 1:
             parcels.append(parcel_data)
             p_id += 1
@@ -408,74 +387,176 @@ def parse_all_parcels(text: str, lot_prefix: str = "LOT") -> List[Dict[str, Any]
 # CAD DXF Generator
 # =========================================================================
 
+PARCEL_STYLES = [
+    {"boundary_color": 4, "marker_color": 3},  # P1: Cyan boundary, Green markers (Primary Lot)
+    {"boundary_color": 6, "marker_color": 1},  # P2: Magenta boundary, Red markers (Paxton ROW)
+    {"boundary_color": 5, "marker_color": 4},  # P3: Blue boundary, Cyan markers (Carriage Ln Easement)
+    {"boundary_color": 1, "marker_color": 6},  # P4: Red boundary, Magenta markers
+    {"boundary_color": 3, "marker_color": 2},  # P5: Green boundary, Yellow markers
+    {"boundary_color": 30, "marker_color": 5}, # P6: Orange boundary, Blue markers
+]
+
+
+def render_parcel_to_msp(msp, parcel: Dict[str, Any], offset_x: float = 0.0, offset_y: float = 0.0,
+                         style: Dict[str, Any] = None, doc: Any = None):
+    """Render boundary polyline, monument markers, waypoint IDs, and call annotations to modelspace."""
+    p_id = parcel["parcel_id"]
+    p_short = parcel.get("short_name", f"P{p_id}").upper()
+    tag = f"P{p_id}_{p_short}"
+
+    bnd_color = style["boundary_color"] if style else 4
+    mkr_color = style["marker_color"] if style else 3
+
+    bnd_layer = f"{tag}_BOUNDARY"
+    mkr_layer = f"{tag}_MARKERS"
+    lbl_layer = f"{tag}_LABELS"
+    call_layer = f"{tag}_CALLS"
+
+    if doc:
+        if bnd_layer not in doc.layers: doc.layers.add(bnd_layer, color=bnd_color)
+        if mkr_layer not in doc.layers: doc.layers.add(mkr_layer, color=mkr_color)
+        if lbl_layer not in doc.layers: doc.layers.add(lbl_layer, color=2) # Yellow
+        if call_layer not in doc.layers: doc.layers.add(call_layer, color=7) # White
+
+    calls = parcel["calls"]
+    if not calls or len(calls) < 2:
+        return
+
+    # Check if last call returns to POB (< 1.5 ft misclosure)
+    is_closed_traverse = (len(calls) > 2 and math.hypot(calls[-1]["x_ft"] - calls[0]["x_ft"],
+                                                        calls[-1]["y_ft"] - calls[0]["y_ft"]) < 1.5)
+
+    if is_closed_traverse:
+        poly_pts = [(c["x_ft"] + offset_x, c["y_ft"] + offset_y) for c in calls[:-1]]
+    else:
+        poly_pts = [(c["x_ft"] + offset_x, c["y_ft"] + offset_y) for c in calls]
+
+    # Draw closed boundary polyline
+    msp.add_lwpolyline(poly_pts, dxfattribs={'layer': bnd_layer, 'closed': True, 'color': bnd_color})
+
+    # Draw Monument Markers and Waypoint IDs
+    marker_calls = calls[:-1] if is_closed_traverse else calls
+
+    for i, c in enumerate(marker_calls):
+        x = c["x_ft"] + offset_x
+        y = c["y_ft"] + offset_y
+        lbl = c["label"]
+        mtype = c.get("monument_type", "CORNER")
+
+        # Distinct Marker Symbols
+        if mtype == 'PIPE':
+            # Concentric double circle
+            msp.add_circle((x, y), radius=1.2, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+            msp.add_circle((x, y), radius=0.6, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+        elif mtype == 'MONUMENT':
+            # Solid square with internal X
+            s = 1.0
+            sq_pts = [(x-s, y-s), (x+s, y-s), (x+s, y+s), (x-s, y+s), (x-s, y-s)]
+            msp.add_lwpolyline(sq_pts, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+            msp.add_line((x-s, y-s), (x+s, y+s), dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+            msp.add_line((x-s, y+s), (x+s, y-s), dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+        elif mtype == 'STAKE':
+            # Equilateral triangle
+            t_pts = [(x, y+1.5), (x-1.3, y-1.0), (x+1.3, y-1.0), (x, y+1.5)]
+            msp.add_lwpolyline(t_pts, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+        elif mtype == 'PIN':
+            # Circle with crosshair
+            msp.add_circle((x, y), radius=0.9, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+            msp.add_line((x-1.2, y), (x+1.2, y), dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+            msp.add_line((x, y-1.2), (x, y+1.2), dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+        else: # CORNER / CULDESAC
+            msp.add_circle((x, y), radius=0.6, dxfattribs={'layer': mkr_layer, 'color': mkr_color})
+
+        # Location ID text (Yellow)
+        t_obj = msp.add_text(lbl, dxfattribs={'layer': lbl_layer, 'height': 2.0, 'color': 2})
+        t_obj.set_placement((x + 2.0, y + 2.0))
+
+    # Segment Call Annotations (Bearings & Distances along legs)
+    for i in range(1, len(calls)):
+        c = calls[i]
+        prev_x = calls[i-1]["x_ft"] + offset_x
+        prev_y = calls[i-1]["y_ft"] + offset_y
+        cur_x = c["x_ft"] + offset_x
+        cur_y = c["y_ft"] + offset_y
+        mid_x = (prev_x + cur_x) / 2.0
+        mid_y = (prev_y + cur_y) / 2.0
+        call_txt = f"{c.get('bearing_str', '')} {c.get('distance_ft', 0.0):.2f}'"
+        c_obj = msp.add_text(call_txt, dxfattribs={'layer': call_layer, 'height': 1.5, 'color': 7})
+        c_obj.set_placement((mid_x + 1.0, mid_y + 1.0))
+
+
 def export_dxf(parcels: List[Dict[str, Any]], filepath: str, lot_label: str = "DEED"):
-    """Export boundary polygon(s) to DXF with dedicated layers for lines, markers, and labels."""
-    doc = ezdxf.new('R2010')
-    msp = doc.modelspace()
-
-    # Create CAD Layers
-    doc.layers.add('BOUNDARY_LINES', color=4)   # Cyan (Polylines and Arcs)
-    doc.layers.add('MARKERS', color=3)          # Green (Physical monuments)
-    doc.layers.add('LOCATION_ID', color=2)      # Yellow (Waypoint candidate names)
-    doc.layers.add('CALL_ANNOTATIONS', color=7) # White / Light Gray (Bearings/Distances)
-
+    """
+    Export boundary polygons to CAD DXF:
+    1. Master Combined DXF with all parcels arranged side-by-side (non-overlapping)
+       with dedicated, isolated CAD layers per parcel (e.g. P1_PRIMARY_BOUNDARY, P2_PAXTON_ROW_BOUNDARY).
+    2. When multiple parcels exist, also exports standalone DXF files for each parcel at local (0, 0)
+       (e.g. <stem>_P1_Primary.dxf, <stem>_P2_Paxton_ROW.dxf, <stem>_P3_Carriage_Lane_Easement.dxf).
+    """
     if not parcels:
+        doc = ezdxf.new('R2010')
         doc.saveas(filepath)
         return
 
-    for p in parcels:
+    # 1. Master DXF with offset non-overlapping parcels
+    master_doc = ezdxf.new('R2010')
+    master_doc.layers.add('TITLE_BLOCK', color=7)
+    master_msp = master_doc.modelspace()
+
+    current_x_offset = 0.0
+
+    for pidx, p in enumerate(parcels):
         calls = p["calls"]
-        if not calls or len(calls) < 2:
-            continue
+        xs = [c["x_ft"] for c in calls]
+        ys = [c["y_ft"] for c in calls]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
 
-        points = [(c["x_ft"], c["y_ft"]) for c in calls]
-        points.append(points[0]) # Close loop
+        if pidx > 0:
+            current_x_offset += (250.0 - min_x)
+        else:
+            current_x_offset = -min_x if min_x < 0 else 0.0
 
-        # Draw boundary polyline
-        msp.add_lwpolyline(points, dxfattribs={'layer': 'BOUNDARY_LINES', 'closed': True})
+        style = PARCEL_STYLES[pidx % len(PARCEL_STYLES)]
+        render_parcel_to_msp(master_msp, p, offset_x=current_x_offset, offset_y=0.0, style=style, doc=master_doc)
 
-        # Draw markers, location IDs, and call annotations
-        for i, c in enumerate(calls):
-            x, y = c["x_ft"], c["y_ft"]
-            lbl = c["label"]
-            mtype = c.get("monument_type", "CORNER")
+        # Title Block above parcel
+        center_x = current_x_offset + (min_x + max_x) / 2.0
+        title_y = max_y + 25.0
+        t1 = master_msp.add_text(p["name"].upper(), dxfattribs={'layer': 'TITLE_BLOCK', 'height': 5.0, 'color': 7})
+        t1.set_placement((center_x - 80.0, title_y))
+        closure = p["closure"]
+        t2 = master_msp.add_text(
+            f"Area: {closure['acreage']} Acres ({closure['area_sqft']:,} sq ft) | Closure: {closure['precision_ratio']} (Misclosure: {closure['misclosure_ft']} ft)",
+            dxfattribs={'layer': 'TITLE_BLOCK', 'height': 3.0, 'color': 7}
+        )
+        t2.set_placement((center_x - 80.0, title_y - 8.0))
 
-            # Distinct Marker Symbols
-            if mtype == 'PIPE':
-                # Double concentric circle
-                msp.add_circle((x, y), radius=1.2, dxfattribs={'layer': 'MARKERS', 'color': 1}) # Red
-                msp.add_circle((x, y), radius=0.6, dxfattribs={'layer': 'MARKERS', 'color': 1})
-            elif mtype == 'MONUMENT':
-                # Solid square with internal X
-                s = 1.0
-                sq_pts = [(x-s, y-s), (x+s, y-s), (x+s, y+s), (x-s, y+s), (x-s, y-s)]
-                msp.add_lwpolyline(sq_pts, dxfattribs={'layer': 'MARKERS', 'color': 6}) # Magenta
-                msp.add_line((x-s, y-s), (x+s, y+s), dxfattribs={'layer': 'MARKERS', 'color': 6})
-                msp.add_line((x-s, y+s), (x+s, y-s), dxfattribs={'layer': 'MARKERS', 'color': 6})
-            elif mtype == 'STAKE':
-                # Equilateral triangle
-                t_pts = [(x, y+1.5), (x-1.3, y-1.0), (x+1.3, y-1.0), (x, y+1.5)]
-                msp.add_lwpolyline(t_pts, dxfattribs={'layer': 'MARKERS', 'color': 5}) # Blue
-            else: # PIN / REBAR / CORNER
-                # Circle with cross
-                msp.add_circle((x, y), radius=0.9, dxfattribs={'layer': 'MARKERS', 'color': 3}) # Green
-                msp.add_line((x-1.2, y), (x+1.2, y), dxfattribs={'layer': 'MARKERS', 'color': 3})
-                msp.add_line((x, y-1.2), (x, y+1.2), dxfattribs={'layer': 'MARKERS', 'color': 3})
+        current_x_offset += max_x
 
-            # Location ID text (Yellow)
-            t_obj = msp.add_text(lbl, dxfattribs={'layer': 'LOCATION_ID', 'height': 2.0, 'color': 2})
-            t_obj.set_placement((x + 2.0, y + 2.0))
+    master_doc.saveas(filepath)
 
-            # Bearing & Distance annotation along segment
-            if i > 0:
-                prev_x, prev_y = calls[i-1]["x_ft"], calls[i-1]["y_ft"]
-                mid_x = (prev_x + x) / 2.0
-                mid_y = (prev_y + y) / 2.0
-                call_txt = f"{c.get('bearing_str', '')} {c.get('distance_ft', 0.0):.2f}'"
-                c_obj = msp.add_text(call_txt, dxfattribs={'layer': 'CALL_ANNOTATIONS', 'height': 1.5, 'color': 7})
-                c_obj.set_placement((mid_x + 1.0, mid_y + 1.0))
+    # 2. Standalone DXF for each parcel at local (0, 0)
+    if len(parcels) > 1:
+        base_stem, ext = os.path.splitext(filepath)
+        for pidx, p in enumerate(parcels):
+            single_doc = ezdxf.new('R2010')
+            single_doc.layers.add('TITLE_BLOCK', color=7)
+            single_msp = single_doc.modelspace()
+            style = PARCEL_STYLES[pidx % len(PARCEL_STYLES)]
+            render_parcel_to_msp(single_msp, p, offset_x=0.0, offset_y=0.0, style=style, doc=single_doc)
 
-    doc.saveas(filepath)
+            xs = [c["x_ft"] for c in p["calls"]]
+            ys = [c["y_ft"] for c in p["calls"]]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            center_x = (min_x + max_x) / 2.0
+            title_y = max_y + 20.0
+            t1 = single_msp.add_text(p["name"].upper(), dxfattribs={'layer': 'TITLE_BLOCK', 'height': 5.0, 'color': 7})
+            t1.set_placement((center_x - 50.0, title_y))
+
+            single_path = f"{base_stem}_P{p['parcel_id']}_{p['short_name']}{ext}"
+            single_doc.saveas(single_path)
 
 
 # =========================================================================
@@ -632,9 +713,14 @@ def process_deed_pdf(pdf_path: str, out_dirs: Dict[str, str], ocr_reader: easyoc
 
     elapsed = time.time() - t0
     total_wps = sum(len(p['calls']) for p in parcels)
-    print(f"  [SAVED] Markdown: {md_path}")
-    print(f"  [SAVED] JSON:     {json_path}")
-    print(f"  [SAVED] CAD DXF:  {dxf_path}")
+    print(f"  [SAVED] Markdown:   {md_path}")
+    print(f"  [SAVED] JSON:       {json_path}")
+    print(f"  [SAVED] Master DXF: {dxf_path}")
+    if len(parcels) > 1:
+        base_stem, ext = os.path.splitext(dxf_path)
+        for p in parcels:
+            p_dxf = f"{base_stem}_P{p['parcel_id']}_{p['short_name']}{ext}"
+            print(f"  [SAVED] Parcel DXF: {p_dxf}")
     p1_closure = parcels[0]['closure']['precision_ratio'] if parcels else "N/A"
     print(f"  [COMPLETED] Parsed {len(parcels)} parcel(s), {total_wps} total waypoints in {elapsed:.1f}s (P1 Closure: {p1_closure})")
     return True
