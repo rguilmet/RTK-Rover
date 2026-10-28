@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.2.29"
+#define ROVER_FIRMWARE_VERSION "v0.2.30"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -128,7 +128,7 @@
 // LVGL Task Timing & Priorities
 // =========================================================================
 #define LVGL_TICK_PERIOD_MS       5
-#define LVGL_TASK_MAX_DELAY_MS    30
+#define LVGL_TASK_MAX_DELAY_MS    500
 #define LVGL_TASK_MIN_DELAY_MS    5
 #define LVGL_TASK_STACK_SIZE      (10 * 1024)
 #define LVGL_TASK_PRIORITY        3

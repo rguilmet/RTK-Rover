@@ -66,9 +66,9 @@ void i2c_master_Init(void)
         return;
     }
     i2c_bus_mutex = xSemaphoreCreateRecursiveMutex();
-    // 100ms transfer timeout gives generous headroom so normal transfers never abort prematurely
-    i2c_data_pdMS_TICKS = 100;
-    i2c_done_pdMS_TICKS = 100;
+    // Fast 25ms timeout prevents noticeable UI stutter if a transient bus stretch occurs
+    i2c_data_pdMS_TICKS = 25;
+    i2c_done_pdMS_TICKS = 25;
 
     // ESP32-S3-Touch-LCD-3.5B shares I2C_NUM_0 on IO7 (SCL) and IO8 (SDA)
     i2c_master_bus_config_t i2c_bus_config = {
@@ -90,7 +90,7 @@ void i2c_master_Init(void)
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = ROVER_I2C_ADDR_RTC,
         .scl_speed_hz = 400000,
-        .scl_wait_us = 0, // 0 = standard ESP-IDF default clock-stretch timeout
+        .scl_wait_us = 20000, // Allow up to 20ms for slave clock stretching (capacitive touch & IMU DSP)
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &rtc_dev_handle));
 

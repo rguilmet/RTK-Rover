@@ -5,6 +5,18 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.30] - 2026-10-28
+
+### Fixed
+- **Restored Proven v0.2.24 Touch, Navigation & I2C Baseline:**
+  - **Restored Exact `TouchInputReadCallback` (`src/lvgl_port/lvgl_port.c`):** Reverted the experimental touch filter modifications back to the exact working implementation from `v0.2.24`. The touch controller's `buff[0] != 0xFF` and `event_flag != 0x01` checks are critical for detecting finger release on the AXS15231B; removing them caused the controller to appear permanently pressed at the coordinates of the last tap, triggering rapid-fire runaway screen changes.
+  - **Restored Exact Button Configurations & Geometry (`src/lvgl_port/lvgl_port.c`):** Reverted `< Prev` and `Next >` navigation buttons, waypoint buttons, and CSV file buttons to their exact `v0.2.24` specifications.
+  - **Restored Exact Task & Bus Timing (`user_config.h`, `RTK_Rover.ino`, `src/i2c_bsp/i2c_bsp.c`):** Restored `LVGL_TASK_MAX_DELAY_MS = 500`, `scl_wait_us = 20000`, `i2c_data_pdMS_TICKS = 25`, and removed intermediate task delays.
+  - **Preserved Only Surgical Wi-Fi Crash & Boot Fixes:** Retained strictly the two isolated fixes that prevent the `CORRUPT HEAP` Wi-Fi crash and preserve USB CDC power-up diagnostics:
+    1. Decoupled Core 0 Wi-Fi status update via static buffer (`s_pending_wifi_status`) applied strictly on Core 1 inside `update_rover_ui()`.
+    2. Non-blocking direct `WiFi.begin()` association in `src/web_server/web_server.cpp` with `s_wifi_starting` re-entrancy guard.
+    3. Proper `operator bool()` in `src/storage/serial_logger.h` for boot diagnostics over USB CDC.
+
 ## [v0.2.29] - 2026-10-27
 
 ### Fixed

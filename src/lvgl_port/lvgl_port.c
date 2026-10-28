@@ -254,10 +254,10 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
     uint8_t buff[14] = {0};
 
     if (i2c_master_write_read_dev(disp_touch_dev_handle, read_touchpad_cmd, 11, buff, 14) == ESP_OK) {
-        // buff[1]: active touch points count (1..2)
-        // Note: Do NOT check buff[0] != 0xFF. On AXS15231B, buff[0] is gesture ID, which is 0xFF (no gesture)
-        // during stationary single taps! Checking buff[0] != 0xFF caused all stationary single taps to be discarded!
-        if (buff[1] >= 1 && buff[1] <= 2) {
+        // buff[0]: gesture (0xFF = invalid), buff[1]: touch points (1..2)
+        // buff[2] bits [7:6]: event flag (0x80 = contact/down, 0x40 = release/up)
+        uint8_t event_flag = (buff[2] >> 6) & 0x03;
+        if (buff[0] != 0xFF && buff[1] >= 1 && buff[1] <= 2 && event_flag != 0x01) {
             uint16_t pointX = (((uint16_t)buff[2] & 0x0F) << 8) | (uint16_t)buff[3];
             uint16_t pointY = (((uint16_t)buff[4] & 0x0F) << 8) | (uint16_t)buff[5];
             if (pointX >= ROVER_LCD_H_RES) pointX = ROVER_LCD_H_RES - 1;
@@ -271,7 +271,7 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
         }
     }
 
-    // Always preserve last_x / last_y on release so LVGL 9 recognizes clicks at release point
+    // Always preserve last_x / last_y on release so LVGL 9 recognizes swipes and clicks
     indevData->point.x = last_x;
     indevData->point.y = last_y;
     indevData->state   = LV_INDEV_STATE_RELEASED;
@@ -387,7 +387,6 @@ static void nav_prev_screen_btn_cb(lv_event_t *e)
     (void)e;
     uint8_t next_idx = (active_tile_col == 0) ? 4 : (active_tile_col - 1);
     switch_to_tile_index(next_idx, LV_ANIM_ON);
-    play_rover_beep(1200, 20);
 }
 
 static void nav_next_screen_btn_cb(lv_event_t *e)
@@ -395,35 +394,30 @@ static void nav_next_screen_btn_cb(lv_event_t *e)
     (void)e;
     uint8_t next_idx = (active_tile_col + 1) % 5;
     switch_to_tile_index(next_idx, LV_ANIM_ON);
-    play_rover_beep(1200, 20);
 }
 
 static void prev_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_select_prev();
-    play_rover_beep(1500, 20);
 }
 
 static void next_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_select_next();
-    play_rover_beep(1500, 20);
 }
 
 static void prev_file_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_file_select_prev();
-    play_rover_beep(1500, 20);
 }
 
 static void next_file_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_file_select_next();
-    play_rover_beep(1500, 20);
 }
 
 static void update_all_control_buttons(void)
@@ -893,13 +887,11 @@ void create_rover_ui(void)
     lv_obj_set_style_radius(nav_bar, 0, 0);
     lv_obj_set_style_pad_all(nav_bar, 2, 0);
     lv_obj_set_scrollbar_mode(nav_bar, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_remove_flag(nav_bar, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *btn_scr_prev = lv_button_create(nav_bar);
-    lv_obj_set_size(btn_scr_prev, 68, 28);
+    lv_obj_set_size(btn_scr_prev, 64, 26);
     lv_obj_align(btn_scr_prev, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_scr_prev, lv_color_hex(0x2F3B4C), 0);
-    lv_obj_set_ext_click_area(btn_scr_prev, 6);
     lv_obj_add_event_cb(btn_scr_prev, nav_prev_screen_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_scr_prev = lv_label_create(btn_scr_prev);
     lv_label_set_text(lbl_scr_prev, LV_SYMBOL_LEFT " Prev");
@@ -913,10 +905,9 @@ void create_rover_ui(void)
     lv_obj_align(nav_screen_lbl, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_t *btn_scr_next = lv_button_create(nav_bar);
-    lv_obj_set_size(btn_scr_next, 68, 28);
+    lv_obj_set_size(btn_scr_next, 64, 26);
     lv_obj_align(btn_scr_next, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_scr_next, lv_color_hex(0x2F3B4C), 0);
-    lv_obj_set_ext_click_area(btn_scr_next, 6);
     lv_obj_add_event_cb(btn_scr_next, nav_next_screen_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_scr_next = lv_label_create(btn_scr_next);
     lv_label_set_text(lbl_scr_next, "Next " LV_SYMBOL_RIGHT);
@@ -945,9 +936,8 @@ void create_rover_ui(void)
     // =====================================================================
     // Target selector row (compacted to y = 4 since coordinates are now in persistent header)
     lv_obj_t *btn_prev = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_prev, 42, 28);
-    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 3);
-    lv_obj_set_ext_click_area(btn_prev, 6);
+    lv_obj_set_size(btn_prev, 38, 26);
+    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 4);
     lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_prev = lv_label_create(btn_prev);
     lv_label_set_text(lbl_prev, LV_SYMBOL_LEFT);
@@ -960,9 +950,8 @@ void create_rover_ui(void)
     lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
 
     lv_obj_t *btn_next = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_next, 42, 28);
-    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 3);
-    lv_obj_set_ext_click_area(btn_next, 6);
+    lv_obj_set_size(btn_next, 38, 26);
+    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 4);
     lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_next = lv_label_create(btn_next);
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
@@ -1303,9 +1292,8 @@ void create_rover_ui(void)
     // Fixed Top File Selector Row: [ < ] waypoints.csv (1/1) [ > ]
     // =====================================================================
     lv_obj_t *btn_file_prev = lv_button_create(tile_csv);
-    lv_obj_set_size(btn_file_prev, 42, 28);
-    lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 3);
-    lv_obj_set_ext_click_area(btn_file_prev, 6);
+    lv_obj_set_size(btn_file_prev, 38, 26);
+    lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 4);
     lv_obj_add_event_cb(btn_file_prev, prev_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fprev = lv_label_create(btn_file_prev);
     lv_label_set_text(lbl_fprev, LV_SYMBOL_LEFT);
@@ -1318,9 +1306,8 @@ void create_rover_ui(void)
     lv_obj_align(t2_file_lbl, LV_ALIGN_TOP_MID, 0, 8);
 
     lv_obj_t *btn_file_next = lv_button_create(tile_csv);
-    lv_obj_set_size(btn_file_next, 42, 28);
-    lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 3);
-    lv_obj_set_ext_click_area(btn_file_next, 6);
+    lv_obj_set_size(btn_file_next, 38, 26);
+    lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 4);
     lv_obj_add_event_cb(btn_file_next, next_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fnext = lv_label_create(btn_file_next);
     lv_label_set_text(lbl_fnext, LV_SYMBOL_RIGHT);
