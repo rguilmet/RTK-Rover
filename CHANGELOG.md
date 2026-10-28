@@ -5,6 +5,23 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.36] - 2026-10-28
+
+### Added
+- **Antenna 2 (Slave) Coordinates (`src/rover_api.h`, `src/um982_driver/um982_driver.cpp`, `src/lvgl_port/lvgl_port.c`):**
+  - Added `slave_lat` and `slave_lon` to `RoverUIData_t`.
+  - Parsed latitude and longitude from NMEA `$GNGGAH` / `$GPGGAH` sentences in `handle_ggah_sentence()`.
+  - Added fallback dual-antenna geodetic projection in `um982_get_latest_state()`: if secondary PVT has not solved independent lat/lon but carrier-phase dual-antenna heading/baseline is valid, ANT2 position is accurately computed along the measured 3D baseline vector ($\Delta N = L \cdot \cos(\theta_{\text{pitch}}) \cdot \cos(\theta_{\text{hdg}})$, $\Delta E = L \cdot \cos(\theta_{\text{pitch}}) \cdot \sin(\theta_{\text{hdg}})$).
+  - Displayed live `Pos: Lat, Lon` and `Alt` under `[ANT2 SLAVE]` on Tile 5.
+- **Base Station Telemetry Delivery Fix (`src/um982_driver/um982_driver.cpp`):**
+  - Fixed state-passing in `um982_get_latest_state()`: explicitly copies `base_station_id`, `base_coords_valid`, `base_lat`, `base_lon`, `base_alt_m`, and `base_ecef_{x,y,z}` from `gnss_state` to `state_out`.
+  - Configured UM982 COM1 to stream `BASEINFOA COM1 1` (1 Hz interval) so Base Station coordinates decoded from RTCM 1005 Station ARP are continuously pushed to the firmware and displayed.
+  - Relaxed `handle_baseinfoa_sentence()` validation to check valid physical ECEF coordinates ($|X| > 1000\,\text{m}$, $|Y| > 1000\,\text{m}$) regardless of status flags.
+
+### Fixed
+- **Storage Row Contrast & Visual Distinction (`src/lvgl_port/lvgl_port.c`):**
+  - Changed MicroSD storage status label color from Green (`#00FF88`) to Electric Cyan (`#22D3EE`). This eliminates visual confusion where the Storage row appeared merged into the green `[ANT1 MASTER]` block below it.
+
 ## [v0.2.35] - 2026-10-28
 
 ### Added

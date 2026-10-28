@@ -110,6 +110,11 @@ static void handle_ggah_sentence(char *line)
     gnss_state.slave_num_sats = f[7] ? (uint8_t)atoi(f[7]) : 0;
     if (f[8] && f[8][0]) gnss_state.slave_hdop  = (float)atof(f[8]);
     if (f[9] && f[9][0]) gnss_state.slave_alt_m = (float)atof(f[9]);
+
+    if (f[2] && f[2][0] && f[4] && f[4][0]) {
+        gnss_state.slave_lat = parse_nmea_deg_min(f[2], f[3]);
+        gnss_state.slave_lon = parse_nmea_deg_min(f[4], f[5]);
+    }
 }
 
 static void handle_rmc_sentence(char *line)
@@ -325,14 +330,13 @@ static void handle_baseinfoa_sentence(char *line)
 
     char *f[8] = {0};
     int n = split_csv_fields(semi + 1, f, 8);
-    if (n < 5) return;
+    if (n < 4) return;
 
-    long status = strtol(f[0], NULL, 16);
-    if (status == 0 && f[1] && f[2] && f[3]) {
-        double x = strtod(f[1], NULL);
-        double y = strtod(f[2], NULL);
-        double z = strtod(f[3], NULL);
+    double x = (n > 1 && f[1]) ? strtod(f[1], NULL) : 0.0;
+    double y = (n > 2 && f[2]) ? strtod(f[2], NULL) : 0.0;
+    double z = (n > 3 && f[3]) ? strtod(f[3], NULL) : 0.0;
 
+    if (fabs(x) > 1000.0 && fabs(y) > 1000.0) {
         gnss_state.base_ecef_x = x;
         gnss_state.base_ecef_y = y;
         gnss_state.base_ecef_z = z;
@@ -340,7 +344,7 @@ static void handle_baseinfoa_sentence(char *line)
         ecef_to_wgs84(x, y, z, &gnss_state.base_lat, &gnss_state.base_lon, &gnss_state.base_alt_m);
         gnss_state.base_coords_valid = true;
 
-        if (f[4] && f[4][0]) {
+        if (n > 4 && f[4] && f[4][0]) {
             const char *sid_str = f[4];
             if (sid_str[0] == '"') sid_str++;
             gnss_state.base_station_id = (uint16_t)atoi(sid_str);
@@ -485,8 +489,9 @@ extern "C" void um982_configure_rover_defaults(void)
     // GNGGAH provides Slave Antenna (ANT2) fix quality, satellites used, HDOP at 1 Hz
     send_um982_com1_command("GNGGAH COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
-    // BASEINFOA provides base station ID, health status, and ECEF coordinates ONCHANGED
-    send_um982_com1_command("BASEINFOA COM1 ONCHANGED");
+    // BASEINFOA provides base station ID, health status, and ECEF coordinates
+    // Log at 1 Hz so Base Station coordinates are continuously streamed whenever RTCM corrections arrive
+    send_um982_com1_command("BASEINFOA COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
     saveconfig_ack_received = false;
     send_um982_com1_command("SAVECONFIG");
@@ -666,19 +671,50 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
     state_out->hdop               = gnss_state.hdop;
     state_out->h_acc_m            = gnss_state.h_acc_m;
     state_out->v_acc_m            = gnss_state.v_acc_m;
-	state_out->diff_age_s         = gnss_state.diff_age_s;
-	state_out->heading_valid      = gnss_state.heading_valid;
-	state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
-	state_out->heading_source     = gnss_state.heading_source;
-	state_out->true_heading_deg   = gnss_state.true_heading_deg;
-	state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
-	state_out->baseline_length_m  = gnss_state.baseline_length_m;
-	state_out->speed_m_s          = gnss_state.speed_m_s;
-	state_out->cog_deg            = gnss_state.cog_deg;
-	state_out->slave_fix_type     = gnss_state.slave_fix_type;
-	state_out->slave_num_sats     = gnss_state.slave_num_sats;
-	state_out->slave_hdop         = gnss_state.slave_hdop;
-	state_out->slave_alt_m        = gnss_state.slave_alt_m;
+    state_out->diff_age_s         = gnss_state.diff_age_s;
+    state_out->heading_valid      = gnss_state.heading_valid;
+    state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
+    state_out->heading_source     = gnss_state.heading_source;
+    state_out->true_heading_deg   = gnss_state.true_heading_deg;
+    state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
+    state_out->baseline_length_m  = gnss_state.baseline_length_m;
+    state_out->speed_m_s          = gnss_state.speed_m_s;
+    state_out->cog_deg            = gnss_state.cog_deg;
+    state_out->slave_fix_type     = gnss_state.slave_fix_type;
+    state_out->slave_num_sats     = gnss_state.slave_num_sats;
+    state_out->slave_hdop         = gnss_state.slave_hdop;
+    state_out->slave_alt_m        = gnss_state.slave_alt_m;
+
+    // Slave Antenna (ANT2) Coordinates
+    if (gnss_state.slave_lat != 0.0 && gnss_state.slave_lon != 0.0) {
+        state_out->slave_lat      = gnss_state.slave_lat;
+        state_out->slave_lon      = gnss_state.slave_lon;
+    } else if (gnss_state.heading_valid && gnss_state.baseline_length_m > 0.05f && gnss_state.raw_lat != 0.0) {
+        // Geodetic projection from ANT1 to ANT2 along verified dual-antenna baseline vector
+        double lat_rad = gnss_state.raw_lat * (M_PI / 180.0);
+        double hdg_rad = gnss_state.true_heading_deg * (M_PI / 180.0);
+        double pitch_rad = gnss_state.baseline_pitch_deg * (M_PI / 180.0);
+        double horiz_len = gnss_state.baseline_length_m * cos(pitch_rad);
+        double d_north = horiz_len * cos(hdg_rad);
+        double d_east  = horiz_len * sin(hdg_rad);
+        double m_per_deg_lat = 111132.954 - 559.822 * cos(2.0 * lat_rad) + 1.175 * cos(4.0 * lat_rad);
+        double m_per_deg_lon = (111412.84 * cos(lat_rad) - 93.5 * cos(3.0 * lat_rad));
+        state_out->slave_lat      = gnss_state.raw_lat + (d_north / m_per_deg_lat);
+        state_out->slave_lon      = gnss_state.raw_lon + (d_east / m_per_deg_lon);
+    } else {
+        state_out->slave_lat      = 0.0;
+        state_out->slave_lon      = 0.0;
+    }
+
+    // Base Station Telemetry
+    state_out->base_station_id    = gnss_state.base_station_id;
+    state_out->base_coords_valid  = gnss_state.base_coords_valid;
+    state_out->base_lat           = gnss_state.base_lat;
+    state_out->base_lon           = gnss_state.base_lon;
+    state_out->base_alt_m         = gnss_state.base_alt_m;
+    state_out->base_ecef_x        = gnss_state.base_ecef_x;
+    state_out->base_ecef_y        = gnss_state.base_ecef_y;
+    state_out->base_ecef_z        = gnss_state.base_ecef_z;
 }
 
 extern "C" void um982_get_port_stats(Um982PortStats_t *stats_out)

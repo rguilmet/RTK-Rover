@@ -1800,7 +1800,7 @@ void create_rover_ui(void)
     lv_obj_set_width(t4_storage_status_lbl, 300);
     lv_label_set_long_mode(t4_storage_status_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_storage_status_lbl, "Storage: Auto-Detecting...");
-    lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x22D3EE), 0);
     lv_obj_set_style_text_font(t4_storage_status_lbl, &lv_font_montserrat_12, 0);
 
     // 2. ANT1 Master GNSS
@@ -2418,10 +2418,10 @@ void update_rover_ui(const RoverUIData_t *d)
         extern bool sd_card_mounted;
         if (sd_card_mounted) {
             lv_label_set_text(t4_storage_status_lbl, "Storage: MicroSD Card Ready (Primary)");
-            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x00FF88), 0);
+            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x22D3EE), 0); // Cyan (distinct from ANT1 green #00FF88)
         } else {
             lv_label_set_text(t4_storage_status_lbl, "Storage: FFat Internal Flash (Fallback)");
-            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0xFFA500), 0);
+            lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0xFFA500), 0); // Amber
         }
     }
 
@@ -2487,16 +2487,37 @@ void update_rover_ui(const RoverUIData_t *d)
             snprintf(hdg_str, sizeof(hdg_str), "---.- deg");
         }
 
-        snprintf(buf, sizeof(buf),
-                 "[ANT2 SLAVE] %s | SV:%u | HDOP:%.1f\n"
-                 "Baseline:%s | Pitch:%+.1f deg\n"
-                 "Heading:%s",
-                 s_fix_str,
-                 d->slave_num_sats,
-                 d->slave_hdop,
-                 bl_str,
-                 d->baseline_pitch_deg,
-                 hdg_str);
+        char s_alt_str[24];
+        nav_format_height(d->slave_alt_m, s_alt_str, sizeof(s_alt_str));
+
+        if (d->slave_lat != 0.0 || d->slave_lon != 0.0) {
+            snprintf(buf, sizeof(buf),
+                     "[ANT2 SLAVE] %s | SV:%u | HDOP:%.1f\n"
+                     "Baseline:%s | Pitch:%+.1f deg\n"
+                     "Heading:%s | Alt:%s\n"
+                     "Pos:%.8f, %.8f",
+                     s_fix_str,
+                     d->slave_num_sats,
+                     d->slave_hdop,
+                     bl_str,
+                     d->baseline_pitch_deg,
+                     hdg_str,
+                     s_alt_str,
+                     d->slave_lat,
+                     d->slave_lon);
+        } else {
+            snprintf(buf, sizeof(buf),
+                     "[ANT2 SLAVE] %s | SV:%u | HDOP:%.1f\n"
+                     "Baseline:%s | Pitch:%+.1f deg\n"
+                     "Heading:%s | Alt:%s",
+                     s_fix_str,
+                     d->slave_num_sats,
+                     d->slave_hdop,
+                     bl_str,
+                     d->baseline_pitch_deg,
+                     hdg_str,
+                     s_alt_str);
+        }
         lv_label_set_text(t4_ant_slave_lbl, buf);
     }
 

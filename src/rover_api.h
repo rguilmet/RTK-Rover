@@ -136,6 +136,8 @@ typedef struct {
     uint8_t          slave_num_sats;     // Satellites used by Slave Antenna
     float            slave_hdop;         // HDOP of Slave Antenna
     float            slave_alt_m;        // Altitude of Slave Antenna (m)
+    double           slave_lat;          // Latitude of Slave Antenna (deg)
+    double           slave_lon;          // Longitude of Slave Antenna (deg)
 
     // Base Station Telemetry (from GNGGA and BASEINFOA)
     uint16_t         base_station_id;    // Base station ID (e.g. 1)
