@@ -2,8 +2,9 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.2.14`  
-**License:** GNU General Public License v3.0 ([GPLv3](LICENSE))
+**Firmware Version:** `v0.2.38`  
+**License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
+**User Documentation:** [Complete Field User Manual](docs/user_manual.md)
 
 ---
 
@@ -13,23 +14,68 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 * **Dual-Mode Hybrid Navigation Engine (Tile 0):**
   * **Coarse Tactical Grid ($> 1.5\text{ m}$):** Dynamic Course-Up grid with antenna crossbar beam arrow, line-of-sight tracking vector, turn prompts, dynamic auto-scaling, and a 64-point on-screen breadcrumb trail.
   * **Fine Bullseye Stakeout ($\le 1.5\text{ m}$):** Seamlessly transitions into a centimeter bullseye with $1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings, providing real-time North/East and Forward/Right offsets with audio lock cues.
-* **3-Row Persistent Header Bar:**
+* **4-Row Persistent Top Status Header Bar:**
   * **Row 1:** Local calendar date, 24-hr time with timezone offset, SI/Imperial unit badge, Wi-Fi status badge, battery percentage, and voltage.
   * **Row 2 (Master Antenna ANT1):** RTK Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`), Satellites used/in-view, horizontal accuracy estimate ($+/-\text{cm}$), and RTCM differential age.
   * **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`), Slave satellites, measured baseline length ($55.5\text{ cm}$), baseline pitch ($^\circ$), and true heading ($^\circ$).
-  * **Row 4:** Streamlined ground-tip Latitude, Longitude, and Ellipsoidal Height.
-* **2D Pole Plumb Bubble Level (Tile 3):** Onboard QMI8658 6-axis IMU aligned for portrait orientation. Left/Right tilt drives horizontal bubble movement; Up/Down tilt drives vertical bubble movement. Includes a **Tare Pole Bracket Angle** button to zero the level when the display is clipped to an angled pole bracket.
-* **Wi-Fi Web File Portal:** Integrated HTML5 web server (`http://<rover-ip>/`) for wireless field maintenance from any phone, tablet, or laptop. Browse, download, and delete survey logs (`/survey_logged_pins.csv`), route tracks (`/routes/*.csv`), raw NMEA logs (`/nmea/*.log`), and upload updated `waypoints.csv` or `settings.json` without removing the SD card.
-* **Storage Auto-Routing & Settings Mirroring:** Primary storage routes automatically to the MicroSD Card (`/sdcard/`) with internal Flash (`FFat`) as fallback. Changes to `settings.json` are automatically mirrored to FFat on boot and whenever settings are saved.
-* **Standardized Timestamp-First CSV Logging:** Standardized `timestamp` as the primary key in Column 1 and `firmware_ver` in Column 2 across both `route_*.csv` and `survey_logged_pins.csv`. Fully logs moving-baseline heading fix status (`hdg_fix`), Master and Slave antenna satellites and HDOP, differential correction age, base station ID, vertical accuracy, and survey pole tilt angle.
-* **Unicore Extended Base Station Telemetry (`BASEINFOA`):** The UM982 receiver autonomously parses incoming RTCM 1005/1006 reference frames received via LoRa on COM2 and outputs `#BASEINFOA` with base station ID, status, and precise ECEF coordinates. Closed-form Bowring conversion translates these to WGS84 base station latitude, longitude, and elevation in real time without software RTCM bit-sniffing.
-* **On-Screen Quick Settings & Logging Controls (Tile 1):** Touch controls for NMEA and Route logging, 20% stepped Backlight Brightness (`20% -> 40% -> 60% -> 80% -> 100%`), Audio Volume (`MUTE -> 20% -> 40% -> 60% -> 80% -> 100%`), Wi-Fi portal toggle, and Units (`SI / IMP`) reside at the base of Tile 1, debounced and persisted to `settings.json`.
-* **Integrated 8-Point Compass Ring & Plumb Level (Tile 3):** Enlarged 224px spirit bubble level with dynamic Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping the rover's heading oriented at 12 o'clock, with a compact **Tare** (`TARE` / `RST`) button nested in the bottom-right of the circle's bounding rectangle.
-* **Stable Field UI Navigation:** Tile swipe gestures are disabled to eliminate accidental page turns while scrolling diagnostics. Screens are switched via the persistent `< Prev` and `Next >` navigation bar. Physical BOOT button (GPIO 0) is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
+  * **Row 4:** Streamlined ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt font.
+* **Field Survey Logger & Quick Settings (Tile 1):**
+  * Integrated `<DERIVED>` prefix mode and clean prefixes (`PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`).
+  * Universal collision-free `_Lxxx` numbering scanning `/survey_logged_pins.csv` with zero UI loop disk I/O latency.
+  * Multi-epoch averaging (`1s`, `5s`, `10s`, `30s`), visual progress bar, large `[LOG PIN NOW]` button, and circular marquee ID label.
+  * On-screen Quick Settings: NMEA/Route logging toggles, 20% stepped Brightness and Volume, Wi-Fi web portal toggle, and Units (`SI / IMP`).
+* **Multi-File Waypoint Browser & Selector (Tile 2):**
+  * Multi-file CSV selector scanning `/waypoints.csv` and all `/waypoints_*.csv` on MicroSD card or internal flash.
+  * Dynamic circular marquee autoscroll for long waypoint labels and filenames.
+  * Remembers and restores the active waypoint file and selected target index across power cycles and reboots.
+* **2D Pole Plumb Bubble Level & Course-Up Compass (Tile 3):**
+  * Enlarged 224px diameter spirit bubble level with dynamic Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping heading oriented at 12 o'clock.
+  * Compact **Tare** (`TARE` / `RST`) button to zero the level when the display is clipped to an angled pole bracket.
+  * Numerical True Heading in prominent 24pt font, baseline pitch, and live pole tilt angles.
+* **Dedicated Hardware Diagnostics & Live Observers (Tile 4):**
+  * Pinned top deck with firmware version header and 4 interactive logging toggle buttons (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
+  * Full multi-line auto-wrapping across all telemetry blocks.
+  * Observers for Storage, ANT1 Master, ANT2 Slave (with live coordinates), dedicated Base Station telemetry (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel g, 3-axis Gyro dps), UM982 COM1/COM2 metrics, and E220 LoRa configuration registers.
+* **Dedicated Hardware Screenshot Engine:**
+  * Long-press physical BOOT button (GPIO 0) for $\ge 1.5\text{ s}$ to capture a full 24-bit uncompressed BMP screenshot directly to `/screenshots/screenshot_YYYYMMDD_HHMMSS.bmp`.
+* **Wi-Fi Web File Portal:**
+  * Integrated HTML5 web server (`http://<rover-ip>/`) for wireless field maintenance from any phone, tablet, or laptop. Browse, download, and delete survey logs (`/survey_logged_pins.csv`), route tracks (`/routes/*.csv`), raw NMEA logs (`/nmea/*.log`), and screenshots.
 
 ---
 
-## 2. Bill of Materials (BOM)
+## 2. Visual Interface & Screenshot Gallery
+
+The user interface is optimized for high-contrast sunlight readability on the Waveshare 3.5" $320 \times 480$ IPS portrait display.
+
+### Persistent Top Header Bar
+![Header: 4-Row Persistent Status Header](docs/images/screenshot_header_bar.png)
+*Figure 1: Persistent 4-row header displaying system time, battery, ANT1 RTK fix, ANT2 heading fix, and ground-tip coordinates.*
+
+### Tile 0: Pin Seeker & Tactical Guidance
+| Tactical Course-Up ($> 1.5\text{ m}$) | Bullseye Centimeter Stakeout ($\le 1.5\text{ m}$) |
+| :---: | :---: |
+| ![Tile 0: Tactical Course-Up Navigation](docs/images/screenshot_tile0_guidance.png) | ![Tile 0: Bullseye Centimeter Stakeout](docs/images/screenshot_tile0_bullseye.png) |
+| *Rotating antenna crossbar, LOS vector, and breadcrumb trail.* | *Centimeter concentric rings ($1\text{ m}$, $20\text{ cm}$, $2\text{ cm}$) with lock audio cues.* |
+
+### Tile 1: Field Survey Logger & Quick Settings
+![Tile 1: Field Survey Logger and Quick Settings](docs/images/screenshot_tile1_survey_settings.png)
+*Figure 2: Row 1 Prefix & Avg duration, Row 2 Note Tag, Row 3 ID with marquee, Row 4 progress bar, Row 5 Log Pin Now, Row 6 Logged info, and Quick Settings deck.*
+
+### Tile 2: Multi-File Waypoint Browser & Selector
+![Tile 2: Multi-File Waypoint Browser](docs/images/screenshot_tile2_waypoint_browser.png)
+*Figure 3: Multi-file selector bar with circular marquee, waypoint table with tap-to-select target guidance.*
+
+### Tile 3: Dual-Antenna Compass & Plumb Bubble Level
+![Tile 3: Dual-Antenna Compass and Bubble Level](docs/images/screenshot_tile3_compass_level.png)
+*Figure 4: 24pt True Heading readout, 224px spirit bubble level with Course-Up 8-point compass ring, compact Tare button, and pole tilt metrics.*
+
+### Tile 4: Hardware Diagnostics & Live Observers
+![Tile 4: Hardware Diagnostics](docs/images/screenshot_tile4_diagnostics.png)
+*Figure 5: Pinned firmware header, dual-row logging buttons, MicroSD storage status, ANT1, ANT2, dedicated Base Station card, 6-DOF IMU, and COM/LoRa metrics.*
+
+---
+
+## 3. Bill of Materials (BOM)
 
 | Component | Model | Description |
 | :--- | :--- | :--- |
@@ -40,9 +86,9 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 ---
 
-## 3. Hardware Pin Mapping (`ESP32-S3-Touch-LCD-3.5B`)
+## 4. Hardware Pin Mapping (`ESP32-S3-Touch-LCD-3.5B`)
 
-All UART pin labels are **device-relative** (`<DEV>_TXD` is an output from the external module into an ESP32 RX pin):
+All peripheral UART pin labels are **device-relative** (`<DEV>_TXD` is an output from the external module into an ESP32 RX pin):
 
 | Subsystem | Signal Name | ESP32-S3 GPIO | Direction (ESP32 View) | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -59,39 +105,7 @@ All UART pin labels are **device-relative** (`<DEV>_TXD` is an output from the e
 | **Internal I2C0** | `ESP_SCL` / `SDA` | `GPIO 7` / `8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`) at `400 kHz` |
 | **LCD QSPI** | `CS/CLK/D0..3` | `12, 5, 1..4` | **QSPI Master** | `AXS15231B` $320 \times 480$ Portrait Display (`GPIO 6` Backlight PWM) |
 | **SD Card** | `D0/CMD/CLK` | `9, 10, 11` | **1-Bit SD_MMC / SPI** | 3-stage mount fallback (`SD_MMC` 1-bit `EXIO3=High-Z` $\rightarrow$ `EXIO3=LOW` $\rightarrow$ `SD` SPI) |
-| **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Long-Press ($\ge 1.5\text{ s}$):** Capture full-screen screenshot to storage |
-
----
-
-## 4. UI Tile Navigation
-
-The user interface is structured into 5 functional screens, navigated via the persistent bottom navigation bar (`< Prev` and `Next >`):
-
-* **Tile 0 (Screen 1) — Pin Seeker & Hybrid Guidance:**
-  * Active target selector (`Prev` / `Next` target with label and notes).
-  * Dynamic Course-Up canvas: auto-transitions between coarse navigation grid ($> 1.5\text{ m}$) and high-precision bullseye ($\le 1.5\text{ m}$).
-  * True antenna heading beam arrow and line-of-sight track vector.
-  * Distance, bearing, steer prompt, and cardinal North/East offsets.
-  * Route recording toggle (`REC ON` / `REC OFF`).
-* **Tile 1 (Screen 2) — Field Survey & Settings:**
-  * Dedicated point capture tool with multi-epoch RTK averaging (`1s`, `5s`, `10s`).
-  * Auto-incrementing point ID with configurable prefix dropdown.
-  * Quick condition and feature note tags (`IP`, `MAG NAIL`, `REBAR`, `STONE`, `BENCHMARK`).
-  * Target Match toggle to automatically record as-found offsets against design coordinates.
-  * On-screen `[LOG PIN NOW]` button with visual progress bar and last logged point status.
-  * Quick Settings buttons: Row 1 (`NMEA Log: ON/OFF` | `Route: ON/OFF`), Row 2 (`Bright: 20%..100%` | `Vol: MUTE..100%`), Row 3 (`Wi-Fi: Start/Stop` | `Units: SI/IMP`), Row 4 (`Wi-Fi Status & Web Portal URL`).
-* **Tile 2 (Screen 3) — Waypoint CSV Browser:**
-  * Scrollable table of all loaded waypoints from `/waypoints.csv`.
-  * Tapping any row selects it as the active navigation target.
-* **Tile 3 (Screen 4) — Dual-Antenna Compass & Bubble Level:**
-  * Numerical True Heading readout (e.g. `Heading: 162.4`) in prominent 24pt font.
-  * Baseline length ($55.5\text{ cm}$) and pitch ($^\circ$) verification.
-  * Display pose classification (`Held Flat`, `Handheld Viewing Angle`, `Clipped Vertically to Pole`).
-  * Enlarged $224\text{ px}$ diameter plumb bubble level with Course-Up 8-Point Compass Ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping current heading oriented UP (12 o'clock).
-  * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
-  * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
-* **Tile 4 (Screen 5) — Hardware Diagnostics:**
-  * Cleaned-up dedicated diagnostics screen displaying Storage state (MicroSD/FFat), Antenna Master (ANT1) metrics, Antenna Slave (ANT2) metrics, RTCM Differential / Base Station telemetry, UM982 COM1/COM2 statuses with query/test buttons, and E220 LoRa configuration registers.
+| **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Long-Press ($\ge 1.5\text{ s}$):** Capture full-screen BMP screenshot to storage |
 
 ---
 
@@ -102,7 +116,7 @@ flowchart TD
     subgraph Core0["Core 0: High-Throughput Real-Time Task (Priority 4)"]
         E220_RX["E220 LoRa UART0 (IO41/42 @ 57600)"] --> RTCM_FWD["Forward RTCM3 Bytes"]
         RTCM_FWD --> COM2_TX["UM982 COM2 UART2 (IO47/48 @ 115200)"]
-        COM1_RX["UM982 COM1 UART1 (IO17/18 @ 115200)"] --> NMEA_PARSE["NMEA & UNIHEADINGA Parser\n(GPGGA, GPRMC, GPGST, GPGSV, GNGGAH)"]
+        COM1_RX["UM982 COM1 UART1 (IO17/18 @ 115200)"] --> NMEA_PARSE["NMEA & UNIHEADINGA Parser\n(GPGGA, GPRMC, GPGST, GPGSV, GNGGAH, BASEINFOA)"]
         NMEA_PARSE --> KINEMATICS["3D Lever-Arm & Ground Tip Kinematics\n(Midpoint 27.75cm, Height 1.80m)"]
         KINEMATICS --> NAV_ENGINE["Geodesic Nav Engine\n(Range, Bearing, Offsets)"]
         NAV_ENGINE --> QUEUE["roverStateQueue (xQueueOverwrite)"]
@@ -110,10 +124,11 @@ flowchart TD
 
     subgraph Core1["Core 1: UI Rendering & Peripheral Task (Priority 2 & 3)"]
         QUEUE --> UI_UPDATE["update_rover_ui()"]
-        I2C_POLL["Shared I2C0 Bus Driver (400 kHz)\n• Touch AXS15231B (30 Hz)\n• IMU QMI8658 (10 Hz)\n• RTC PCF85063 (1 Hz)\n• PMIC AXP2101 (0.5 Hz)"]
+        I2C_POLL["Shared I2C0 Bus Driver (400 kHz)\n• Touch AXS15231B (30 Hz)\n• IMU QMI8658 12-byte burst (10 Hz)\n• RTC PCF85063 (1 Hz)\n• PMIC AXP2101 (0.5 Hz)"]
         UI_UPDATE --> LVGL["LVGL 9 Display Refresh (QSPI @ 40 MHz)"]
         AUDIO_QUEUE["beepQueue (FreeRTOS Queue)"] --> CODEC["ES8311 Audio Synthesizer"]
         SETTINGS["Debounced Settings Persistence"] --> STORAGE["MicroSD Card / FFat Mirror"]
+        SCREENSHOT["Screenshot Engine (GPIO 0 Long-Press)"] --> BMP_OUT["BMP Generator -> /screenshots/"]
     end
 ```
 
@@ -143,14 +158,16 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
   "survey_avg_seconds": 5,
   "default_label_prefix": "PIN",
   "active_waypoint_file": "/waypoints.csv",
-  "brightness": 85,
-  "volume": 30,
+  "active_waypoint_index": 0,
+  "brightness": 80,
+  "volume": 40,
   "is_muted": false,
   "wifi_ssid": "YourWiFiSSID",
   "wifi_password": "YourWiFiPassword",
   "enable_serial_logging": true,
   "enable_imu_logging": false,
-  "enable_telemetry_logging": true
+  "enable_telemetry_logging": true,
+  "enable_touch_logging": false
 }
 ```
 

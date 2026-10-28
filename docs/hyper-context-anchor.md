@@ -1,12 +1,12 @@
 # Hyper-Context Anchor
 
 ## 1. CORE TECHNICAL ARCHITECTURE & STACK
-* **Hardware:** Waveshare ESP32-S3-Touch-LCD-3.5B (`320x480` Portrait QSPI `AXS15231B` display, Capacitive Touch `0x3B`, `AXP2101` PMIC `0x34`, `TCA9554` IO Expander `0x20`, `PCF85063` RTC `0x51`, `QMI8658` IMU `0x6B`, `ES8311` Audio Codec `0x18`), Holybro H-RTK Unicore UM982 Dual-Antenna RTK GNSS module, and Ebyte E220-900T30S 900MHz LoRa module.
-* **Firmware:** Dual-core FreeRTOS architecture (`Core 0` for real-time E220 $\rightarrow$ UM982 COM2 RTCM3 streaming, UM982 COM1 NMEA/`UNIHEADINGA` parsing, and 3D lever-arm kinematics with zero I2C access; `Core 1` for LVGL 9 rendering, exclusive `I2C_NUM_0` peripheral polling, queue-driven audio synthesis via `beepQueue`, and storage).
-* **UI:** LVGL 9 (`320x480` Portrait) with a persistent 4-row Top Status Header Bar (Date/Time with `minutesOffsetToUTC`, SI/IMP badge, Wi-Fi badge, AXP2101 battery telemetry, Master Fix badge, Master SVs, accuracy, RTCM age, Slave Fix badge, Slave SVs, baseline length, true heading, and streamlined ground-tip coordinates) above 5 functional screens (Pin Seeker & Hybrid Guidance, Field Survey Logger, CSV Browser, Dual-Antenna Compass/Bubble Level, and Settings & Diagnostics) navigated strictly via the persistent Bottom Screen Navigation Bar (`< Prev`, `X/5: Title`, `Next >`). Horizontal swipe gestures are disabled.
+* **Hardware:** Waveshare ESP32-S3-Touch-LCD-3.5B (`320x480` Portrait QSPI `AXS15231B` display, Capacitive Touch `0x3B`, `AXP2101` PMIC `0x34`, `TCA9554` IO Expander `0x20`, `PCF85063` RTC `0x51`, `QMI8658` 6-DOF IMU `0x6B`, `ES8311` Audio Codec `0x18`), Holybro H-RTK Unicore UM982 Dual-Antenna RTK GNSS module, and Ebyte E220-900T30S 900MHz LoRa module.
+* **Firmware:** Dual-core FreeRTOS architecture (`Core 0` for real-time E220 $\rightarrow$ UM982 COM2 RTCM3 streaming, UM982 COM1 NMEA/`UNIHEADINGA`/`BASEINFOA` parsing, and 3D lever-arm kinematics with zero I2C access; `Core 1` for LVGL 9 rendering, exclusive `I2C_NUM_0` peripheral polling, queue-driven audio synthesis via `beepQueue`, screenshot generation, and storage).
+* **UI:** LVGL 9 (`320x480` Portrait) with a persistent 4-row Top Status Header Bar (Date/Time with `minutesOffsetToUTC`, SI/IMP badge, Wi-Fi badge, AXP2101 battery telemetry, Master Fix badge, Master SVs, accuracy, RTCM age, Slave Fix badge, Slave SVs, baseline length, true heading, and streamlined ground-tip coordinates in 14pt Montserrat) above 5 functional screens (Pin Seeker & Tactical Guidance, Field Survey Logger & Quick Settings, Multi-File CSV Browser, Dual-Antenna Compass/Bubble Level, and Hardware Diagnostics) navigated strictly via the persistent Bottom Screen Navigation Bar (`< Prev`, `X/5: Title`, `Next >`). Horizontal swipe gestures are disabled.
 * **Constraints & Kinematics:**
-  - **Shared Internal I2C0 Bus (Core 1 Exclusive):** All internal SMD peripherals share `I2C_NUM_0` on `GPIO 7` (SCL) and `GPIO 8` (SDA) at `400 kHz`, polled exclusively from **Core 1** (`Touch 0x3B` @ 30Hz, `QMI8658 0x6B` @ 10Hz independent of LVGL graphics mutex, `PCF85063 0x51` @ 1Hz cached, `AXP2101 0x34` @ 0.5Hz) protected by `i2c_bus_mutex` with automatic `i2c_master_bus_reset()` recovery.
-  - **Portrait IMU Coordinate Frame:** On the Waveshare 3.5B portrait LCD ($320 \times 480$), the QMI8658 accelerometer maps as: `raw_roll = atan2f(ay, -az)` (horizontal bubble motion $b_x$) and `raw_pitch = atan2f(ax, sqrtf(ay * ay + az * az))` (vertical bubble motion $b_y$). Resting flat produces $(0.0^\circ, 0.0^\circ)$.
+  - **Shared Internal I2C0 Bus (Core 1 Exclusive):** All internal SMD peripherals share `I2C_NUM_0` on `GPIO 7` (SCL) and `GPIO 8` (SDA) at `400 kHz`, polled exclusively from **Core 1** (`Touch 0x3B` @ 30Hz, `QMI8658 0x6B` 12-byte atomic burst @ 10Hz independent of LVGL graphics mutex, `PCF85063 0x51` @ 1Hz cached, `AXP2101 0x34` @ 0.5Hz) protected by `i2c_bus_mutex` with automatic `i2c_master_bus_reset()` recovery.
+  - **Portrait IMU Coordinate Frame & 6-DOF Telemetry:** Accelerometer $a_y$ drives horizontal roll ($b_x$), $a_x$ drives vertical pitch ($b_y$). Gyroscope measures angular rate at 64 LSB/(deg/s). Resting flat produces $(0.0^\circ, 0.0^\circ)$.
   - **Storage Auto-Routing & Settings Mirroring:** MicroSD card is primary (`/sdcard/`) with internal `FFat` as emergency fallback. On boot and whenever settings change, `settings.json` is automatically mirrored from SD card to `FFat`.
   - **Device-Relative UART Pin Labels:** All pin labels (`UM982_TXD0`, `UM982_RXD0`, `UM982_TXD1`, `UM982_RXD1`, `E220_TXD`, `E220_RXD`) are named relative to the external module (`<DEV>_TXD` = module output $\rightarrow$ ESP32 RX input; `<DEV>_RXD` = module input $\leftarrow$ ESP32 TX output).
   - **Dual-Antenna Lever-Arm & Pole Height Projection:** The UM982 reports the WGS84 position of the **Master Antenna**, while the survey pole centerline sits at the midpoint ($\frac{B}{2} = 0.2775\text{ m}$ for `0.555 m` spacing) between Master and Slave antennas at height `antenna_height_m` above the ground tip. `nav_engine` projects the Master position along the 3D `UNIHEADINGA` baseline vector (`heading`, `pitch`) to eliminate orbital offset when rotating the pole.
@@ -29,40 +29,27 @@
 * **NEVER** wrap I2C sensor reads inside the LVGL graphics mutex `rover_lvgl_lock()`. Sensor polling runs on Core 1 independent of LVGL render frame times, protected by `i2c_bus_mutex`.
 * **NEVER** touch LVGL widget pointers from outside `lv_timer_handler()` without acquiring `rover_lvgl_lock()` and releasing via `rover_lvgl_unlock()`.
 * **NEVER** use `lv_label_set_text_fmt()` with floating-point specifiers (`%f`); because the global Arduino LVGL library compiles with `LV_USE_FLOAT = 0`, `lv_vsnprintf_inner` skips `%f` without advancing `va_arg(va, double)`, causing subsequent arguments to crash (`LoadProhibited`). Always format floats with standard C `snprintf(buf, sizeof(buf), ...)` followed by `lv_label_set_text()`.
+* **NEVER** execute filesystem operations (such as scanning `/survey_logged_pins.csv`) inside the 30 Hz UI rendering update loop. Dynamic identifiers must be evaluated only on dirty state changes and served from cached strings.
 * **NEVER** use non-ASCII Unicode characters (such as $\pm$, $\circ$, degree symbols, arrows) in UI strings; standard ASCII equivalents (`+/-`, `deg`, `->`) must be used to ensure font glyph compatibility.
 * **NEVER** trigger waypoint logging from a short-press of the BOOT button (GPIO 0). Physical BOOT button is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
 
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
-* **Completed (`v0.2.14`):**
-  - **I2C Device Config Correction:** Relocated `scl_wait_us = 20000` (20 ms) to `i2c_device_config_t` (its correct location in ESP-IDF v5) applied across RTC, IMU, Touch, and PMIC device handles.
-* **Completed (`v0.2.13`):**
-  - **I2C Bus Hardening:** Configured `scl_wait_us = 20000` (20 ms) in `i2c_bus_config` to tolerate slave clock stretching on capacitive touch and IMU. Reduced transaction timeout from 100 ms to 25 ms. Added 5 ms settle delay inside `i2c_bus_recover_locked` while holding recursive bus mutex to eliminate cascade bus resets.
-  - **Coordinates Bar Font Upgrade:** Increased Header Row 4 (`hdr_coords_lbl`) font from Montserrat 12 to Montserrat 14 (255.8 px width fits cleanly within 320 px screen with 64 px margin and zero vertical layout shift).
-  - **Tile 5 Diagnostics Title:** Simplified header to `"RTK ROVER " ROVER_FIRMWARE_VERSION` (clean ASCII).
-* **Completed (`v0.2.12`):**
-  - **Configurable Serial Logging Flags:** Added `enable_imu_logging` (default `false`) and `enable_telemetry_logging` (default `true`) to `settings.json` and `SystemSettings`. Silenced 1 Hz raw IMU spam while preserving boot diagnostics and 5s `[TELEM]` heartbeat. Removed hardcoded override in `setup()`.
-  - **Tile 2 & Tile 4 UI Rebalance:** Removed redundant screen titles on Tile 2 and Tile 4. Shifted Tare button to right screen edge (`LV_ALIGN_TOP_RIGHT, -10, 290`). Centered 2-line `Last Logged` status at $y = 198$ with 12 px separation from Quick Settings at $y = 238$ to eliminate text overlap.
-  - **Multi-Deed COGO & KML Ingestion Ecosystem:** Created `reference/cogo_network_solver.py` (0.010 ft closure over 4,045 ft perimeter), `scripts/kml_to_waypoints.py`, and upgraded `scripts/validate_waypoints.py` to `v1.2.0`.
-* **Completed (`v0.2.11`):**
-  - **Tile 1 Layout Streamlining & Quick Settings Integration:** Removed redundant `Tip Lat`, `Tip Lon`, and `Ground Hgt` rows (already in Row 4 persistent top header). Integrated Quick Settings buttons directly onto Tile 1 (Row 1: NMEA & Route logs; Row 2: 20% stepped Brightness & Volume; Row 3: Wi-Fi & Units; Row 4: Wi-Fi status & web portal URL).
-  - **Tile 3 Integrated 8-Point Compass Ring & Plumb Level:** Enlarged bubble level circle to $224\text{ px}$ diameter. Added Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping rover heading oriented UP (12 o'clock). Nested compact Tare button (`62x28 px`) into the bottom-right corner of the circle's bounding rectangle (`TARE` Blue / `RST` Orange). Centered Pole Tilt readout below circle.
-  - **Tile 4 Hardware Diagnostics Cleanup:** Removed preference controls, updated title to `HARDWARE DIAGNOSTICS`, and shifted antenna, COM port, and LoRa diagnostics up by $\approx 120\text{ px}$ for immediate access without scrolling. Updated bottom bar titles to `"2/5: Survey & Settings"` and `"5/5: Diagnostics"`.
-* **Completed (`v0.2.10`):**
-  - **Standardized Timestamp-First CSV Schemas:** Standardized `timestamp` as Column 1 and `firmware_ver` as Column 2 across both `route_*.csv` and `survey_logged_pins.csv` with standard ISO/MFS `%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%03d` format.
-  - **Unicore Extended Base Station Telemetry (`BASEINFOA`):** Initialized UM982 with `BASEINFOA COM1 ONCHANGED` to parse incoming RTCM 1005/1006 reference frames and report Base Station ID and ECEF coordinates. Closed-form Bowring conversion translates to WGS84 coordinates on-the-fly without software RTCM sniffing.
-  - **Base Station ID & Differential Telemetry:** Extracted `base_id` from `$GNGGA` field 14 and `#BASEINFOA` field 4; streamed to `route_*.csv`, `survey_logged_pins.csv`, Tile 4 Antenna card, and `[TELEM]` serial monitor.
-  - **Dual-Antenna Moving-Baseline & Slave Telemetry:** Logged `hdg_fix` (`HDG_FIX`, `HDG_FLT`, `NONE`), Slave satellites (`slave_sats`), Slave HDOP (`slave_hdop`), and survey pole tilt angle (`pole_tilt_deg`).
-  - **Multi-Column Waypoint Ingestion:** Expanded `waypoint_load_csv()` from 10 to 24 columns with dynamic header discovery.
-* **Completed (`v0.2.9`):**
-  - **Dual-Mode Hybrid Navigation Engine (Tile 0):** Dynamic Course-Up grid ($> 1.5\text{ m}$) with antenna beam vector, turn cues, dynamic auto-scaling, and 64-point breadcrumbs; centimeter bullseye mode ($\le 1.5\text{ m}$) with green ring lock audio cue.
-  - **Persistent 4-Row Status Header:** Row 1 (Date, Time, Units, Wi-Fi, Battery), Row 2 (Master Antenna ANT1 fix, SVs, precision, RTCM age), Row 3 (Slave Antenna ANT2 fix, SVs, baseline, pitch, heading), Row 4 (Streamlined coordinates).
-  - **Portrait Bubble Level Realignment (Tile 3):** Fixed axis swap: $a_y$ drives horizontal roll ($b_x$), $a_x$ drives vertical pitch ($b_y$). Tare bracket angle button zeroed.
-  - **Settings & Diagnostics Tile (Tile 4):** Added stepped Backlight Brightness (`25%..100%`) and Audio Volume (`MUTE..100%`) controls with debounced `settings.json` persistence; added dedicated **Antenna & GNSS Diagnostics Card** displaying full Master and Slave metrics including **HDOP**.
-  - **Gesture Stabilization:** Disabled horizontal swipe gestures across tiles; navigation strictly via bottom bar `< Prev` and `Next >` buttons.
-  - **Wi-Fi HTML5 Web File Portal:** Wireless file manager (`http://<rover-ip>/`) for SD card and FFat with browser-based PNG conversion and NTP time sync.
-  - **Dual Logging Subsystems:** Continuous Route track CSV logging (`/routes/`) and raw UM982 NMEA logging (`/nmea/`).
-  - **Storage Auto-Routing & FFat Mirroring:** MicroSD primary, FFat fallback, automatic mirror of `settings.json`.
-  - **Audio Queue:** FreeRTOS `beepQueue` synthesized on Core 1 for reliable multi-tone chirps.
-* **Current Status:** Firmware `v0.2.14` active, updated, and ready for field operation.
+* **Completed (`v0.2.38`):**
+  - **Clean Prefix List & Unified Postfix:** Stripped trailing underscores from prefix list (`<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`). Unified all modes to the universal `base + "_L" + %03u` format with defensive trailing underscore sanitation.
+* **Completed (`v0.2.37`):**
+  - **Tile 2 Field Survey Redesign:** Integrated `<DERIVED>` prefix mode at dropdown index 0, eliminating separate Target Match switch. Added collision-free numbering via cached `/survey_logged_pins.csv` scanning. Expanded `WAYPOINT_LABEL_LEN` to 36 bytes with smart delimiter-aligned stem truncation. Added circular marquee on ID row and restructured rows vertically.
+* **Completed (`v0.2.36`):**
+  - **ANT2 Coordinates & Base Station Telemetry Delivery Fix:** Direct parsing of ANT2 lat/lon from `$GNGGAH` with dual-antenna geodetic projection fallback. Fixed base telemetry state copy and configured UM982 COM1 to push `BASEINFOA` at 1 Hz. Changed MicroSD storage label color to Electric Cyan (`#22D3EE`).
+* **Completed (`v0.2.35`):**
+  - **Full 6-DOF IMU Telemetry:** Implemented 12-byte atomic burst read on QMI8658 registers `0x35..0x40` capturing 3-axis Accelerometer (g) and 3-axis Gyroscope (dps). Inserted dedicated Base Station telemetry card in sky blue (`#38BDF8`). Auto-wrapped all diagnostic labels to 300 px width. Fixed preprocessor `"Serial" redefined` warning.
+* **Completed (`v0.2.34`):**
+  - **Pinned Diagnostic Top Deck:** Fixed firmware header in Montserrat 16 White. Pinned dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`) directly below header with static state change caching.
+* **Completed (`v0.2.24`):**
+  - **Screenshot Engine:** Long-press GPIO 0 ($\ge 1.5\text{ s}$) captures 24-bit uncompressed BMP screenshot directly to `/screenshots/screenshot_YYYYMMDD_HHMMSS.bmp` with audio beep confirmation.
+* **Completed (`v0.2.20`):**
+  - **Tactical Guidance Course-Up Canvas:** Rotating crossbar with green/amber antenna tips, green FOV wedge, LOS tracking vector, and 64-point breadcrumb trail.
+* **Completed (`v0.2.18`):**
+  - **Multi-File Waypoint Browser & Marquee:** Top bar file selector scanning `/waypoints.csv` and `/waypoints_*.csv` with circular marquee autoscroll and boot-time active file/index restoration.
+* **Current Status:** Firmware `v0.2.38` active, verified, documented, and fully production ready.
