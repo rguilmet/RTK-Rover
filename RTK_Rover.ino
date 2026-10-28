@@ -247,6 +247,8 @@ void task_display_and_audio(void *pvParameters)
     float           cached_bubble_x   = 0.0f;
     float           cached_bubble_y   = 0.0f;
     DisplayPose_t   cached_pose       = DISPLAY_POSE_FLAT;
+    float           cached_acc[3]     = {0.0f, 0.0f, 0.0f};
+    float           cached_gyr[3]     = {0.0f, 0.0f, 0.0f};
 
     for (;;) {
         uint32_t now = millis();
@@ -262,10 +264,9 @@ void task_display_and_audio(void *pvParameters)
 
         if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
             last_imu_poll_ms = (now == 0) ? 1 : now;
-            float acc[3] = {0}, gyr[3] = {0};
             int16_t imu_temp = 0;
-            imu_read(acc, gyr, &imu_temp);
-            imu_compute_pose_and_bubble(acc,
+            imu_read(cached_acc, cached_gyr, &imu_temp);
+            imu_compute_pose_and_bubble(cached_acc,
                                         &cached_imu_pitch,
                                         &cached_imu_roll,
                                         &cached_bubble_x,
@@ -274,9 +275,10 @@ void task_display_and_audio(void *pvParameters)
 
             if (current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
                 last_imu_log_ms = now;
-                Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Bubble: dX=%+.1f deg, dY=%+.1f deg | Pose: %d\n",
+                Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Acc(g): %+.2f %+.2f %+.2f | Gyr(dps): %+.1f %+.1f %+.1f | Pose: %d\n",
                               cached_imu_pitch, cached_imu_roll,
-                              cached_bubble_x, cached_bubble_y,
+                              cached_acc[0], cached_acc[1], cached_acc[2],
+                              cached_gyr[0], cached_gyr[1], cached_gyr[2],
                               (int)cached_pose);
             }
 
@@ -330,6 +332,12 @@ void task_display_and_audio(void *pvParameters)
             ui_state.pole_bubble_x_deg = cached_bubble_x;
             ui_state.pole_bubble_y_deg = cached_bubble_y;
             ui_state.display_pose      = cached_pose;
+            ui_state.imu_acc[0]        = cached_acc[0];
+            ui_state.imu_acc[1]        = cached_acc[1];
+            ui_state.imu_acc[2]        = cached_acc[2];
+            ui_state.imu_gyr[0]        = cached_gyr[0];
+            ui_state.imu_gyr[1]        = cached_gyr[1];
+            ui_state.imu_gyr[2]        = cached_gyr[2];
             ui_state.battery_voltage   = pwr.battery_voltage_v;
             ui_state.battery_percent   = pwr.battery_percent;
             ui_state.is_charging       = pwr.is_charging;

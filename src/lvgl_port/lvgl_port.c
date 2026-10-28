@@ -200,7 +200,7 @@ static lv_obj_t *t4_scroll_cont         = NULL;
 static lv_obj_t *t4_storage_status_lbl  = NULL;
 static lv_obj_t *t4_ant_master_lbl      = NULL;
 static lv_obj_t *t4_ant_slave_lbl       = NULL;
-static lv_obj_t *t4_ant_diff_lbl        = NULL;
+static lv_obj_t *t4_base_station_lbl    = NULL;
 static lv_obj_t *t4_com1_lbl            = NULL;
 static lv_obj_t *t4_com2_lbl            = NULL;
 static lv_obj_t *t4_e220_lbl            = NULL;
@@ -1797,44 +1797,48 @@ void create_rover_ui(void)
 
     // 1. Storage Status
     t4_storage_status_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_storage_status_lbl, 304);
+    lv_obj_set_width(t4_storage_status_lbl, 300);
+    lv_label_set_long_mode(t4_storage_status_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_storage_status_lbl, "Storage: Auto-Detecting...");
     lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_storage_status_lbl, &lv_font_montserrat_12, 0);
 
     // 2. ANT1 Master GNSS
     t4_ant_master_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_ant_master_lbl, 304);
+    lv_obj_set_width(t4_ant_master_lbl, 300);
+    lv_label_set_long_mode(t4_ant_master_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_ant_master_lbl, "[ANT1 MASTER] Waiting for GNSS fix...");
     lv_obj_set_style_text_color(t4_ant_master_lbl, lv_color_hex(0x00FF88), 0);
     lv_obj_set_style_text_font(t4_ant_master_lbl, &lv_font_montserrat_12, 0);
 
     // 3. ANT2 Slave GNSS
     t4_ant_slave_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_ant_slave_lbl, 304);
+    lv_obj_set_width(t4_ant_slave_lbl, 300);
+    lv_label_set_long_mode(t4_ant_slave_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_ant_slave_lbl, "[ANT2 SLAVE] Waiting for heading/slave data...");
     lv_obj_set_style_text_color(t4_ant_slave_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_ant_slave_lbl, &lv_font_montserrat_12, 0);
 
-    // 4. RTCM3 Diff Diagnostics
-    t4_ant_diff_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_ant_diff_lbl, 304);
-    lv_label_set_text(t4_ant_diff_lbl, "RTCM3 Diff Age: -- s | 1005: 0 MSM: 0");
-    lv_obj_set_style_text_color(t4_ant_diff_lbl, lv_color_hex(0x38BDF8), 0);
-    lv_obj_set_style_text_font(t4_ant_diff_lbl, &lv_font_montserrat_12, 0);
+    // 4. Base Station Telemetry
+    t4_base_station_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_base_station_lbl, 300);
+    lv_label_set_long_mode(t4_base_station_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(t4_base_station_lbl, "[BASE STATION] Waiting for RTCM...");
+    lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(t4_base_station_lbl, &lv_font_montserrat_12, 0);
 
     // 5. UM982 COM1 Info
     t4_com1_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_com1_lbl, 304);
-    lv_label_set_long_mode(t4_com1_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_com1_lbl, 300);
+    lv_label_set_long_mode(t4_com1_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_com1_lbl, "[UM982 COM1 IO17/18 @ 115200]\nRX: 0 B | TX: 0 B | NMEA: 0 | HDG: 0\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com1_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t4_com1_lbl, &lv_font_montserrat_12, 0);
 
     // 6. UM982 COM2 Info
     t4_com2_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_com2_lbl, 304);
-    lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_com2_lbl, 300);
+    lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_com2_lbl, "[UM982 COM2 IO47/48 @ 115200]\nRTCM TX: 0 B | RX: 0 B | Diff Age: -- s\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
@@ -1842,8 +1846,8 @@ void create_rover_ui(void)
     // 7. E220 LoRa Info
     char init_buf[128];
     t4_e220_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_e220_lbl, 304);
-    lv_label_set_long_mode(t4_e220_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_e220_lbl, 300);
+    lv_label_set_long_mode(t4_e220_lbl, LV_LABEL_LONG_WRAP);
     snprintf(init_buf, sizeof(init_buf),
              "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
              (unsigned long)current_settings.e220_uart_baud);
@@ -1853,8 +1857,8 @@ void create_rover_ui(void)
 
     // 8. E220 Target & Registers
     t4_e220_cfg_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_e220_cfg_lbl, 304);
-    lv_label_set_long_mode(t4_e220_cfg_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_e220_cfg_lbl, 300);
+    lv_label_set_long_mode(t4_e220_cfg_lbl, LV_LABEL_LONG_WRAP);
     snprintf(init_buf, sizeof(init_buf),
              "Target: CH%u %lu/%.1fk %uB %udBm",
              current_settings.e220_channel,
@@ -1868,32 +1872,32 @@ void create_rover_ui(void)
 
     // 9. Power & Battery (AXP2101 PMIC)
     t4_power_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_power_lbl, 304);
-    lv_label_set_long_mode(t4_power_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_power_lbl, 300);
+    lv_label_set_long_mode(t4_power_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_power_lbl, "[POWER / PMIC AXP2101]\nVBAT: --.-V (--%) | VBUS: -- | Chg: --");
     lv_obj_set_style_text_color(t4_power_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_power_lbl, &lv_font_montserrat_12, 0);
 
     // 10. IMU & Pole Tilt (QMI8658)
     t4_imu_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_imu_lbl, 304);
-    lv_label_set_long_mode(t4_imu_lbl, LV_LABEL_LONG_CLIP);
-    lv_label_set_text(t4_imu_lbl, "[IMU & POLE TILT] QMI8658 @ 250Hz\nLive: Pitch: 0.0 deg | Roll: 0.0 deg\nTare: P: 0.0 deg R: 0.0 deg | Lever: 1.80m [ON]");
+    lv_obj_set_width(t4_imu_lbl, 300);
+    lv_label_set_long_mode(t4_imu_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(t4_imu_lbl, "[IMU & POLE TILT] QMI8658 @ 250Hz\nLive: Pitch: 0.0 deg | Roll: 0.0 deg\nAcc(g): X:+0.00 Y:+0.00 Z:+0.00\nGyr(d/s): X:+0.0 Y:+0.0 Z:+0.0\nTare: P: 0.0 deg R: 0.0 deg | Lever: 1.80m [ON]");
     lv_obj_set_style_text_color(t4_imu_lbl, lv_color_hex(0x10B981), 0);
     lv_obj_set_style_text_font(t4_imu_lbl, &lv_font_montserrat_12, 0);
 
     // 11. Wi-Fi & Web Portal
     t4_wifi_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_wifi_lbl, 304);
-    lv_label_set_long_mode(t4_wifi_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_wifi_lbl, 300);
+    lv_label_set_long_mode(t4_wifi_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_wifi_lbl, "[WIFI & WEB PORTAL]\nWi-Fi: INACTIVE");
     lv_obj_set_style_text_color(t4_wifi_lbl, lv_color_hex(0xA78BFA), 0);
     lv_obj_set_style_text_font(t4_wifi_lbl, &lv_font_montserrat_12, 0);
 
     // 12. I2C Bus Status
     t4_i2c_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_i2c_lbl, 304);
-    lv_label_set_long_mode(t4_i2c_lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(t4_i2c_lbl, 300);
+    lv_label_set_long_mode(t4_i2c_lbl, LV_LABEL_LONG_WRAP);
     lv_label_set_text(t4_i2c_lbl, "[I2C0 BUS STATUS]\nTCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK");
     lv_obj_set_style_text_color(t4_i2c_lbl, lv_color_hex(0x2DD4BF), 0);
     lv_obj_set_style_text_font(t4_i2c_lbl, &lv_font_montserrat_12, 0);
@@ -1904,7 +1908,7 @@ void update_rover_ui(const RoverUIData_t *d)
     if (!d) return;
     if (!rover_lvgl_lock(100)) return;
 
-    char buf[256];
+    char buf[512];
 
     // 1. Update Persistent Header Bar (Date, Time, Units, Battery, Fix, RTCM)
     RtcDateTime_t lt;
@@ -2496,22 +2500,38 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t4_ant_slave_lbl, buf);
     }
 
-    if (t4_ant_diff_lbl) {
-        if (d->base_station_id > 0) {
+    if (t4_base_station_lbl) {
+        if (d->base_coords_valid) {
+            char alt_str[24];
+            nav_format_height((float)d->base_alt_m, alt_str, sizeof(alt_str));
             snprintf(buf, sizeof(buf),
-                     "Base ID:#%u | Diff:%.1fs | 1005:%u MSM:%u",
+                     "[BASE STATION] ID:#%u | Diff:%.1fs\n"
+                     "Pos:%.8f, %.8f\n"
+                     "Alt:%s | 1005:%u MSM:%u",
+                     d->base_station_id,
+                     d->diff_age_s,
+                     d->base_lat,
+                     d->base_lon,
+                     alt_str,
+                     d->e220_stats.msg_1005_count,
+                     d->e220_stats.msg_msm_count);
+        } else if (d->base_station_id > 0 || d->diff_age_s < 30.0f) {
+            snprintf(buf, sizeof(buf),
+                     "[BASE STATION] ID:#%u | Diff:%.1fs\n"
+                     "Pos: Waiting for RTCM 1005 ARP...\n"
+                     "RTCM: 1005:%u MSM:%u",
                      d->base_station_id,
                      d->diff_age_s,
                      d->e220_stats.msg_1005_count,
                      d->e220_stats.msg_msm_count);
         } else {
             snprintf(buf, sizeof(buf),
-                     "RTCM3 Diff Age:%.1fs | 1005:%u MSM:%u",
-                     d->diff_age_s,
+                     "[BASE STATION] Waiting for RTCM corrections...\n"
+                     "Diff: --.-s | 1005:%u MSM:%u",
                      d->e220_stats.msg_1005_count,
                      d->e220_stats.msg_msm_count);
         }
-        lv_label_set_text(t4_ant_diff_lbl, buf);
+        lv_label_set_text(t4_base_station_lbl, buf);
     }
 
     // 7. Update Tile 4: Hardware Port Diagnostics
@@ -2589,9 +2609,13 @@ void update_rover_ui(const RoverUIData_t *d)
         snprintf(buf, sizeof(buf),
                  "[IMU & POLE TILT] QMI8658 @ 250Hz\n"
                  "Live: Pitch:%+.1f deg | Roll:%+.1f deg\n"
+                 "Acc(g): X:%+.2f Y:%+.2f Z:%+.2f\n"
+                 "Gyr(d/s): X:%+.1f Y:%+.1f Z:%+.1f\n"
                  "Tare: P:%+.1f deg R:%+.1f deg | Lever: %.2fm [%s]",
                  d->imu_pitch_deg,
                  d->imu_roll_deg,
+                 d->imu_acc[0], d->imu_acc[1], d->imu_acc[2],
+                 d->imu_gyr[0], d->imu_gyr[1], d->imu_gyr[2],
                  current_settings.pole_tilt_tare_pitch_deg,
                  current_settings.pole_tilt_tare_roll_deg,
                  current_settings.antenna_height_m,

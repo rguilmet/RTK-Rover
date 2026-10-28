@@ -5,6 +5,23 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.35] - 2026-10-28
+
+### Added
+- **Full 6-DOF IMU Telemetry (`src/imu_bsp/imu_bsp.c`, `src/rover_api.h`, `RTK_Rover.ino`, `src/lvgl_port/lvgl_port.c`):**
+  - **Single 12-Byte Atomic I2C Burst Read:** Expanded `imu_read()` from 6 bytes to 12 bytes starting at register `0x35` with address auto-increment. In one atomic bus transaction, reads Accelerometer X, Y, Z (`0x35..0x3A`) and Gyroscope X, Y, Z (`0x3B..0x40`) with zero additional I2C transactions or bus overhead.
+  - **Calibrated Z-Axis & Gyroscope Units:** Accelerometer Z is converted at 8192 LSB/g (4g range); 3-axis Gyroscope (`gx`, `gy`, `gz`) is converted at 64 LSB/(deg/s) (512 dps full-scale range).
+  - **Tile 5 Diagnostics Display:** `t4_imu_lbl` now reports live `Pitch` & `Roll` (°), 3-axis `Acc(g): X, Y, Z`, 3-axis `Gyr(d/s): X, Y, Z`, calibrated tare offsets, and lever-arm compensation status.
+  - **Diagnostic IMU Serial Logging:** `[IMU]` and `[IMU POSE]` logs include live 3-axis acceleration (g) and angular velocity (°/s).
+- **Dedicated Base Station Telemetry Section (`src/lvgl_port/lvgl_port.c`):**
+  - Inserted dedicated `[BASE STATION]` observer block directly beneath `[ANT1 MASTER]` and `[ANT2 SLAVE]` in sky blue (`#38BDF8`).
+  - Displays Base Station ID (`#<id>`), RTCM differential age (`Diff: X.Xs`), exact WGS84 base coordinates (`Pos: Lat, Lon`, `Alt`) decoded from RTCM 1005 / UM982 `#BASEINFOA`, and RTCM message counters (1005 ARP and MSM).
+
+### Fixed
+- **Multi-Line Auto-Wrapping on Diagnostic Scroll Container (`src/lvgl_port/lvgl_port.c`):**
+  - Replaced `LV_LABEL_LONG_CLIP` with `LV_LABEL_LONG_WRAP` across all 12 telemetry sections in `t4_scroll_cont`.
+  - Set fixed 300 px width on all labels inside the flex column (`LV_FLEX_FLOW_COLUMN`). Text lines exceeding 300 px now wrap to subsequent lines dynamically, preventing right-edge truncation while LVGL flex flow adjusts block heights and vertical scrolling smoothly.
+
 ## [v0.2.34] - 2026-10-28
 
 ### Added

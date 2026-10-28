@@ -165,6 +165,8 @@ typedef struct {
     float            pole_bubble_x_deg;  // Tared pole tilt Roll
     float            pole_bubble_y_deg;  // Tared pole tilt Pitch
     DisplayPose_t    display_pose;
+    float            imu_acc[3];         // Accel X, Y, Z (g)
+    float            imu_gyr[3];         // Gyro X, Y, Z (deg/s)
 
     // Power & Battery (AXP2101)
     float            battery_voltage;
