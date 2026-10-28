@@ -28,19 +28,20 @@ int16_t     waypoint_file_get_active_index(void);
 int16_t     waypoint_file_get_count(void);
 
 // Survey Logger (Tile 2 BOOT Button / Touch Trigger)
-extern bool     g_survey_target_match_mode;
 extern uint8_t  g_survey_prefix_idx;
 extern uint16_t g_survey_auto_num;
 extern uint8_t  g_survey_note_tag_idx;
 
+bool        waypoint_is_derived_mode(void);
 const char* waypoint_get_prefix_options(void);
 const char* waypoint_get_note_tag_options(void);
-void waypoint_format_next_survey_label(char *buf, size_t max_len);
-void waypoint_update_survey_averaging(const RoverUIData_t *live_state,
-                                      bool *in_progress_out,
-                                      uint8_t *progress_pct_out,
-                                      uint16_t *epochs_out,
-                                      char *last_logged_out);
+void        waypoint_format_next_survey_label(char *buf, size_t max_len);
+void        waypoint_invalidate_survey_cache(void);
+void        waypoint_update_survey_averaging(const RoverUIData_t *live_state,
+                                              bool *in_progress_out,
+                                              uint8_t *progress_pct_out,
+                                              uint16_t *epochs_out,
+                                              char *last_logged_out);
 
 #ifdef __cplusplus
 }

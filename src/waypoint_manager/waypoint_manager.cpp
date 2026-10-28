@@ -20,16 +20,18 @@ static char s_waypoint_files[MAX_WAYPOINT_FILES][48];
 static int16_t s_waypoint_file_cnt = 0;
 static int16_t s_active_file_idx   = 0;
 
-bool     g_survey_target_match_mode = true;
 uint8_t  g_survey_prefix_idx        = 0;
 uint16_t g_survey_auto_num          = 1;
 uint8_t  g_survey_note_tag_idx      = 0;
 
+static uint16_t s_cached_next_num = 1;
+static char     s_cached_stem[WAYPOINT_LABEL_LEN] = "";
+
 static const char *kPrefixes[] = {
-    "PIN_", "CORNER_", "MONUMENT_", "STAKE_", "FENCE_", "TREE_", "UTIL_", "WP_"
+    "<DERIVED>", "PIN_", "CORNER_", "MONUMENT_", "STAKE_", "FENCE_", "TREE_", "UTIL_", "WP_"
 };
 static const char *kPrefixDropdownStr =
-    "PIN_\nCORNER_\nMONUMENT_\nSTAKE_\nFENCE_\nTREE_\nUTIL_\nWP_";
+    "<DERIVED>\nPIN_\nCORNER_\nMONUMENT_\nSTAKE_\nFENCE_\nTREE_\nUTIL_\nWP_";
 
 static const char *kNoteTags[] = {
     "",
@@ -43,6 +45,14 @@ static const char *kNoteTags[] = {
 };
 static const char *kNoteTagDropdownStr =
     "(No Tag)\nFound Iron Pipe\nFound Rebar\nFound Stone Bound\nSet Temp Flag\nMag Anomaly Only\nObstructed Sky\nNeeds Verification";
+
+extern "C" bool waypoint_is_derived_mode(void) {
+    return (g_survey_prefix_idx == 0);
+}
+
+extern "C" void waypoint_invalidate_survey_cache(void) {
+    s_cached_stem[0] = '\0';
+}
 
 // Multi-epoch Survey Averaging State
 static volatile bool survey_requested   = false;
@@ -331,6 +341,7 @@ extern "C" void waypoint_select_next(void)
     g_active_waypoint_idx = (g_active_waypoint_idx + 1) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
     mark_settings_dirty();
+    waypoint_invalidate_survey_cache();
 }
 
 extern "C" void waypoint_select_prev(void)
@@ -339,6 +350,7 @@ extern "C" void waypoint_select_prev(void)
     g_active_waypoint_idx = (g_active_waypoint_idx - 1 + g_waypoint_count) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
     mark_settings_dirty();
+    waypoint_invalidate_survey_cache();
 }
 
 extern "C" void waypoint_select_index(int16_t idx)
@@ -347,6 +359,7 @@ extern "C" void waypoint_select_index(int16_t idx)
         g_active_waypoint_idx = idx;
         current_settings.active_waypoint_index = g_active_waypoint_idx;
         mark_settings_dirty();
+        waypoint_invalidate_survey_cache();
     }
 }
 
@@ -361,14 +374,109 @@ extern "C" bool waypoint_get_active(WaypointRecord_t *wp_out)
     return true;
 }
 
+static void get_current_survey_stem(char *stem_out, size_t max_len)
+{
+    if (g_survey_prefix_idx == 0) {
+        // <DERIVED> mode: active target label + "_L"
+        if (g_waypoint_count > 0 && g_active_waypoint_idx >= 0 && g_active_waypoint_idx < g_waypoint_count) {
+            const char *src = g_waypoints[g_active_waypoint_idx].label;
+            char base[32];
+            size_t src_len = strlen(src);
+            if (src_len <= 30) {
+                strncpy(base, src, sizeof(base) - 1);
+                base[sizeof(base) - 1] = '\0';
+            } else {
+                // Delimiter-aligned truncation between 20 and 30
+                size_t cut = 30;
+                for (size_t i = 30; i >= 20; i--) {
+                    if (src[i] == '_' || src[i] == '-' || src[i] == ' ') {
+                        cut = i;
+                        break;
+                    }
+                }
+                strncpy(base, src, cut);
+                base[cut] = '\0';
+                Serial.printf("[WAYPOINTS] Target label truncated to %u chars for _Lxxx suffix: '%s' -> '%s'\n",
+                              (unsigned int)cut, src, base);
+            }
+            snprintf(stem_out, max_len, "%s_L", base);
+        } else {
+            // Fallback when no active waypoint is loaded
+            snprintf(stem_out, max_len, "WP_L");
+        }
+    } else {
+        // Standard prefix mode: e.g. "PIN_L", "MONUMENT_L"
+        uint8_t p_idx = g_survey_prefix_idx < 9 ? g_survey_prefix_idx : 1;
+        snprintf(stem_out, max_len, "%sL", kPrefixes[p_idx]);
+    }
+}
+
+static uint16_t find_next_available_suffix(const char *stem)
+{
+    uint16_t max_num = 0;
+    if (!get_active_fs().exists("/survey_logged_pins.csv")) {
+        return 1;
+    }
+    File f = get_active_fs().open("/survey_logged_pins.csv", "r");
+    if (!f) {
+        return 1;
+    }
+
+    size_t stem_len = strlen(stem);
+    char line[384];
+
+    // Skip CSV header
+    if (f.available()) {
+        f.readBytesUntil('\n', line, sizeof(line));
+    }
+
+    while (f.available()) {
+        int bytes = f.readBytesUntil('\n', line, sizeof(line) - 1);
+        if (bytes <= 0) continue;
+        line[bytes] = '\0';
+        if (line[bytes - 1] == '\r') line[bytes - 1] = '\0';
+
+        // Column 0: timestamp, Column 1: firmware_ver, Column 2: label (0-indexed)
+        char *p = line;
+        p = strchr(p, ',');
+        if (!p) continue;
+        p++; // Start of col 1
+        p = strchr(p, ',');
+        if (!p) continue;
+        p++; // Start of col 2 (label)
+
+        char *end_label = strchr(p, ',');
+        if (end_label) {
+            *end_label = '\0';
+        }
+
+        // Check if label matches current stem
+        if (strncmp(p, stem, stem_len) == 0) {
+            const char *num_part = p + stem_len;
+            if (*num_part >= '0' && *num_part <= '9') {
+                uint16_t num = (uint16_t)atoi(num_part);
+                if (num > max_num) {
+                    max_num = num;
+                }
+            }
+        }
+    }
+    f.close();
+    return max_num + 1;
+}
+
 extern "C" void waypoint_format_next_survey_label(char *buf, size_t max_len)
 {
-    if (g_survey_target_match_mode && g_waypoint_count > 0) {
-        snprintf(buf, max_len, "%s_FND", g_waypoints[g_active_waypoint_idx].label);
-    } else {
-        uint8_t p_idx = g_survey_prefix_idx < 8 ? g_survey_prefix_idx : 0;
-        snprintf(buf, max_len, "%s%03u", kPrefixes[p_idx], g_survey_auto_num);
+    char stem[WAYPOINT_LABEL_LEN];
+    get_current_survey_stem(stem, sizeof(stem));
+
+    if (strcmp(stem, s_cached_stem) != 0) {
+        s_cached_next_num = find_next_available_suffix(stem);
+        strncpy(s_cached_stem, stem, sizeof(s_cached_stem) - 1);
+        s_cached_stem[sizeof(s_cached_stem) - 1] = '\0';
     }
+
+    snprintf(buf, max_len, "%s%03u", stem, s_cached_next_num);
 }
 
 extern "C" void trigger_survey_waypoint_log(void)
@@ -428,7 +536,8 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     char note_buf[96] = {0};
 
     WaypointRecord_t active_wp;
-    if (g_survey_target_match_mode && waypoint_get_active(&active_wp)) {
+    bool is_derived = (g_survey_prefix_idx == 0);
+    if (is_derived && waypoint_get_active(&active_wp)) {
         double dist_m = 0.0;
         float brg = 0.0f, rel_brg = 0.0f, dn = 0.0f, de = 0.0f;
         nav_compute_target_guidance(lat, lon, 0.0f, active_wp.latitude, active_wp.longitude,
@@ -461,9 +570,8 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     f.close();
 
     strncpy(last_logged_label, label, sizeof(last_logged_label) - 1);
-    if (!g_survey_target_match_mode) {
-        g_survey_auto_num++;
-    }
+    last_logged_label[sizeof(last_logged_label) - 1] = '\0';
+    waypoint_invalidate_survey_cache();
     Serial.printf("SURVEY LOGGED: %s\n", row);
 }
 

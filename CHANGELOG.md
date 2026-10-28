@@ -5,6 +5,28 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.37] - 2026-10-28
+
+### Added
+- **Redesigned Tile 2 Field Survey / Waypoint Logger (`src/lvgl_port/lvgl_port.c`, `src/waypoint_manager/waypoint_manager.cpp`, `src/waypoint_manager/waypoint_manager.h`, `src/rover_api.h`):**
+  - **`<DERIVED>` Location ID Prefix:** Replaced the separate "Match Active Target Name" switch with an integrated `<DERIVED>` option at index 0 of the Location ID Prefix dropdown.
+  - **Collision-Free Numbering for Survey Points:**
+    - In `<DERIVED>` mode, derives stem from the active navigation waypoint name with `_L` and scans `/survey_logged_pins.csv` for the next available 3-digit zero-padded index (e.g. `PIN_TREE_BASE_L001`, `PIN_TREE_BASE_L002`). If no waypoints are loaded, cleanly falls back to `WP_L001`.
+    - In standard prefix mode (e.g. `MONUMENT_`), formats as `<prefix>Lxxx` (e.g. `MONUMENT_L001`), automatically finding the next unused sequence number.
+  - **Label Capacity Expansion & Smart Stem Truncation:**
+    - Expanded `WAYPOINT_LABEL_LEN` from 28 to 36 bytes in `src/rover_api.h` to fully support derived compound survey identifiers.
+    - Implemented delimiter-aware stem truncation ($\le 30$ chars) on `_`, `-`, or space boundaries so `_Lxxx` is always preserved intact without text truncation.
+  - **High-Performance Cached Label Generation:**
+    - Cached survey label generation in `waypoint_format_next_survey_label()`: CSV scanning executes only when prefix selection changes, active waypoint changes, or a pin is logged. Zero filesystem I/O occurs during 30 Hz LVGL rendering cycles.
+  - **Streamlined Vertical Layout & Marquee Support:**
+    - Row 1 (`y = 8`): Symmetrical Location ID Prefix dropdown (`145x30`) & Averaging duration button (`145x30`).
+    - Row 2 (`y = 44`): Quick Note Tag dropdown (`300x30`).
+    - Row 3 (`y = 82`): Concise `"ID:"` row in Montserrat 14 `#FFCC00` with `LV_LABEL_LONG_SCROLL_CIRCULAR` marquee to smoothly handle long names.
+    - Row 4 (`y = 108`): Multi-epoch progress bar (`300x8`).
+    - Row 5 (`y = 124`): Large `LOG PIN NOW` button (`300x40`).
+    - Row 6 (`y = 172`): Concise `"Logged:"` label and target CSV file path.
+    - Row 7 (`y = 218`): Subtle horizontal divider (`308x1`, `#283B47`) cleanly demarcating Field Survey from Quick Settings (`y = 238..360`).
+
 ## [v0.2.36] - 2026-10-28
 
 ### Added

@@ -138,7 +138,6 @@ static lv_obj_t *t0_offsets_lbl     = NULL;
 // Tile 1: Field Survey / Waypoint Logger & Quick Settings
 // =========================================================================
 static lv_obj_t *t1_next_lbl        = NULL;
-static lv_obj_t *t1_match_sw        = NULL;
 static lv_obj_t *t1_prefix_dd       = NULL;
 static lv_obj_t *t1_note_dd         = NULL;
 static lv_obj_t *t1_avg_btn_lbl     = NULL;
@@ -848,21 +847,11 @@ void update_wifi_ip_label(const char* ip)
     s_wifi_status_dirty = true;
 }
 
-static void match_target_sw_cb(lv_event_t *e)
-{
-    lv_obj_t *sw = (lv_obj_t *)lv_event_get_target(e);
-    g_survey_target_match_mode = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    play_rover_beep(1400, 20);
-    if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] Target Match switch -> %s\n",
-                     g_survey_target_match_mode ? "ON" : "OFF");
-    }
-}
-
 static void prefix_dd_cb(lv_event_t *e)
 {
     lv_obj_t *dd = (lv_obj_t *)lv_event_get_target(e);
     g_survey_prefix_idx = (uint8_t)lv_dropdown_get_selected(dd);
+    waypoint_invalidate_survey_cache();
     play_rover_beep(1400, 20);
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Prefix dropdown -> idx %u\n", g_survey_prefix_idx);
@@ -1463,70 +1452,72 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 1: Field Survey / Waypoint Logger & Quick Settings
     // =====================================================================
-    t1_next_lbl = lv_label_create(tile_survey);
-    lv_label_set_text(t1_next_lbl, "Next ID: PIN_NW_01_FND");
-    lv_obj_set_style_text_color(t1_next_lbl, lv_color_hex(0xFFCC00), 0);
-    lv_obj_set_style_text_font(t1_next_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t1_next_lbl, LV_ALIGN_TOP_LEFT, 10, 8);
-
-    // Target Match Switch
-    lv_obj_t *match_lbl = lv_label_create(tile_survey);
-    lv_label_set_text(match_lbl, "Match Active Target Name:");
-    lv_obj_set_style_text_color(match_lbl, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_set_style_text_font(match_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(match_lbl, LV_ALIGN_TOP_LEFT, 10, 32);
-
-    t1_match_sw = lv_switch_create(tile_survey);
-    lv_obj_align(t1_match_sw, LV_ALIGN_TOP_RIGHT, -10, 26);
-    if (g_survey_target_match_mode) lv_obj_add_state(t1_match_sw, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(t1_match_sw, match_target_sw_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // Prefix Dropdown & Averaging Button (Symmetrical 145px Columns)
+    // Row 1 (y=8): Location ID Prefix Dropdown (145x30) & Averaging Duration Button (145x30)
     t1_prefix_dd = lv_dropdown_create(tile_survey);
     lv_dropdown_set_options(t1_prefix_dd, waypoint_get_prefix_options());
+    lv_dropdown_set_selected(t1_prefix_dd, g_survey_prefix_idx);
     lv_obj_set_size(t1_prefix_dd, 145, 30);
-    lv_obj_align(t1_prefix_dd, LV_ALIGN_TOP_LEFT, 10, 64);
+    lv_obj_align(t1_prefix_dd, LV_ALIGN_TOP_LEFT, 10, 8);
     lv_obj_add_event_cb(t1_prefix_dd, prefix_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *btn_avg = lv_button_create(tile_survey);
     lv_obj_set_size(btn_avg, 145, 30);
-    lv_obj_align(btn_avg, LV_ALIGN_TOP_RIGHT, -10, 64);
+    lv_obj_align(btn_avg, LV_ALIGN_TOP_RIGHT, -10, 8);
     lv_obj_add_event_cb(btn_avg, avg_dur_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_avg_btn_lbl = lv_label_create(btn_avg);
     lv_label_set_text_fmt(t1_avg_btn_lbl, "Avg: %us", current_settings.survey_avg_seconds);
     lv_obj_center(t1_avg_btn_lbl);
 
-    // Quick Note Tag Dropdown
+    // Row 2 (y=44): Quick Note Tag Dropdown (300x30)
     t1_note_dd = lv_dropdown_create(tile_survey);
     lv_dropdown_set_options(t1_note_dd, waypoint_get_note_tag_options());
+    lv_dropdown_set_selected(t1_note_dd, g_survey_note_tag_idx);
     lv_obj_set_size(t1_note_dd, 300, 30);
-    lv_obj_align(t1_note_dd, LV_ALIGN_TOP_MID, 0, 102);
+    lv_obj_align(t1_note_dd, LV_ALIGN_TOP_MID, 0, 44);
     lv_obj_add_event_cb(t1_note_dd, note_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    // Progress bar for multi-epoch averaging
+    // Row 3 (y=82): ID Label (300px wide, Montserrat 14, scrolling marquee)
+    t1_next_lbl = lv_label_create(tile_survey);
+    lv_obj_set_width(t1_next_lbl, 300);
+    lv_label_set_long_mode(t1_next_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(t1_next_lbl, "ID: Acquiring...");
+    lv_obj_set_style_text_color(t1_next_lbl, lv_color_hex(0xFFCC00), 0);
+    lv_obj_set_style_text_font(t1_next_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_align(t1_next_lbl, LV_ALIGN_TOP_LEFT, 10, 82);
+
+    // Row 4 (y=108): Multi-epoch progress bar (300x8)
     t1_prog_bar = lv_bar_create(tile_survey);
     lv_obj_set_size(t1_prog_bar, 300, 8);
-    lv_obj_align(t1_prog_bar, LV_ALIGN_TOP_MID, 0, 140);
+    lv_obj_align(t1_prog_bar, LV_ALIGN_TOP_MID, 0, 108);
     lv_bar_set_range(t1_prog_bar, 0, 100);
     lv_bar_set_value(t1_prog_bar, 0, LV_ANIM_OFF);
 
-    // Large LOG WAYPOINT Button
+    // Row 5 (y=124): Large LOG PIN NOW Button (300x40)
     t1_log_btn = lv_button_create(tile_survey);
-    lv_obj_set_size(t1_log_btn, 300, 38);
-    lv_obj_align(t1_log_btn, LV_ALIGN_TOP_MID, 0, 154);
+    lv_obj_set_size(t1_log_btn, 300, 40);
+    lv_obj_align(t1_log_btn, LV_ALIGN_TOP_MID, 0, 124);
     lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     lv_obj_add_event_cb(t1_log_btn, log_pin_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_log_btn_lbl = lv_label_create(t1_log_btn);
     lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
     lv_obj_center(t1_log_btn_lbl);
 
+    // Row 6 (y=172): Status & Logged File Info
     t1_status_lbl = lv_label_create(tile_survey);
     lv_obj_set_width(t1_status_lbl, 300);
-    lv_label_set_text(t1_status_lbl, "Last Logged: None\nSaved to /survey_logged_pins.csv");
+    lv_label_set_text(t1_status_lbl, "Logged: None\nFile: /survey_logged_pins.csv");
     lv_obj_set_style_text_color(t1_status_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t1_status_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(t1_status_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(t1_status_lbl, LV_ALIGN_TOP_MID, 0, 198);
+    lv_obj_align(t1_status_lbl, LV_ALIGN_TOP_MID, 0, 172);
+
+    // Row 7 (y=218): Horizontal Divider separating Field Survey from Quick Settings
+    lv_obj_t *t1_sep = lv_obj_create(tile_survey);
+    lv_obj_set_size(t1_sep, 308, 1);
+    lv_obj_align(t1_sep, LV_ALIGN_TOP_MID, 0, 218);
+    lv_obj_set_style_bg_color(t1_sep, lv_color_hex(0x283B47), 0);
+    lv_obj_set_style_border_width(t1_sep, 0, 0);
+    lv_obj_remove_flag(t1_sep, LV_OBJ_FLAG_SCROLLABLE);
 
     // ---------------------------------------------------------------------
     // Quick Settings Controls (Row 1: NMEA & Route, Row 2: Bright & Vol, Row 3: WiFi & Units, Row 4: WiFi Status)
@@ -2357,7 +2348,7 @@ void update_rover_ui(const RoverUIData_t *d)
     // 3. Update Tile 1: Field Survey Logger
     char next_id[WAYPOINT_LABEL_LEN];
     waypoint_format_next_survey_label(next_id, sizeof(next_id));
-    snprintf(buf, sizeof(buf), "Next ID: %s", next_id);
+    snprintf(buf, sizeof(buf), "ID: %s", next_id);
     lv_label_set_text(t1_next_lbl, buf);
 
     lv_bar_set_value(t1_prog_bar, d->survey_progress_pct, LV_ANIM_OFF);
@@ -2370,7 +2361,7 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
         lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     }
-    snprintf(buf, sizeof(buf), "Last Logged: %s\nFile: /survey_logged_pins.csv",
+    snprintf(buf, sizeof(buf), "Logged: %s\nFile: /survey_logged_pins.csv",
              d->last_logged_label);
     lv_label_set_text(t1_status_lbl, buf);
 

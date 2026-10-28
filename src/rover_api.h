@@ -34,7 +34,7 @@ typedef enum {
 // Waypoint Record Structure (Parsed from / Saved to CSV)
 // =========================================================================
 #define MAX_WAYPOINTS         128
-#define WAYPOINT_LABEL_LEN    28
+#define WAYPOINT_LABEL_LEN    36
 #define WAYPOINT_NOTES_LEN    128
 
 typedef struct {
