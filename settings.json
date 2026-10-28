@@ -10,7 +10,7 @@
   "pole_tilt_tare_roll_deg": 0.0,
   "e220_uart_baud": 57600,
   "e220_channel": 55,
-  "e220_air_rate_kbps": 38.4,
+  "e220_air_rate_kbps": 62.5,
   "e220_tx_power_dbm": 21,
   "e220_subpacket_bytes": 128,
   "e220_lbt_enable": false,

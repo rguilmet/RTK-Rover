@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.40] - 2026-10-28
+
+### Changed
+- **E220 Default Air Data Rate Upgraded to 62.5 kbps (`user_config.h`, `src/settings_manager/settings_manager.cpp`, `settings.json`):**
+  - Updated default E220 LoRa air data rate from 38.4 kbps to 62.5 kbps (`REG0 = 0xC7`, bits `[2:0] = 0b111`).
+  - Provides $7,812\text{ bytes/sec}$ raw on-air bandwidth, reducing airtime occupancy of 1 Hz MSM7 multi-constellation RTCM bursts to ~12% and preventing packet collisions or buffer backlog.
+  - Automatically reprograms Rover E220 EEPROM to `0xC7` during power-up self-test if previous configuration was `0xC6`.
+
 ## [v0.2.39] - 2026-10-28
 
 ### Added

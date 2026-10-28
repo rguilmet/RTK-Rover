@@ -30,7 +30,7 @@ struct SystemSettings current_settings = {
     0.0f,             // pole_tilt_tare_roll_deg
     57600,            // e220_uart_baud (57600 paces UART input so 1400B bursts don't overrun E220 1000B FIFO)
     55,               // e220_channel (CH 55 = 905.125 MHz)
-    38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
+    62.5f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
     128,              // e220_subpacket_bytes (200, 128, 64, 32)
     false,            // e220_lbt_enable
