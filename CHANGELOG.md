@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.32] - 2026-10-28
+
+### Fixed
+- **Storage Safeguards & Wi-Fi Credential Protection (`src/settings_manager/settings_manager.cpp`):**
+  - **Eliminated Destructive Auto-Save on Read Failure:** Removed `save_settings()` inside `load_settings()` when `/settings.json` could not be opened. Missing or transiently busy storage now safely uses in-memory defaults without writing to or modifying the filesystem.
+  - **Multi-Tier Fallback Hierarchy:** Added sequential fallback checking in `load_settings()`: tries primary `/settings.json`, performs a 50 ms retry if SD card was recently mounted, checks active storage `/settings.json.bak`, and checks FFat internal flash mirror `/settings.json` and `/settings.json.bak`.
+  - **Read-Merge-Write Wi-Fi Protection:** Implemented credential preservation in `save_settings()`: if in-memory `wifi_ssid` contains a default placeholder (`"Your_SSID"`, `"Your-SSID-Here"`, or empty), `settings_manager` scans active disk and backup files for valid, non-placeholder credentials and preserves them. Real user credentials can never be overwritten by default template values.
+  - **Automatic Rolling Backups (`.bak`):** Any write to `/settings.json` (on both SD card and FFat) automatically copies the existing valid configuration to `/settings.json.bak` before saving.
+  - **Thread-Safe Mutex Locking:** Enforced `fs_mux` mutex acquisition around all storage read, parse, backup, and write operations in `settings_manager`.
+
 ## [v0.2.31] - 2026-10-28
 
 ### Added
