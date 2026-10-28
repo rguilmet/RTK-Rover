@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.38] - 2026-10-28
+
+### Changed
+- **Unified Location ID Prefix & Postfix Architecture (`src/waypoint_manager/waypoint_manager.cpp`):**
+  - **Clean Prefix List Without Underscores:** Stripped trailing underscores from the prefix list to enhance UI clarity in the Tile 2 dropdown. The updated options are: `<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`.
+  - **Universal `_Lxxx` Suffix Generation:** Unified the stem generation logic across all modes. Both `<DERIVED>` (from active waypoint or `WP` fallback) and selected prefix options now universally follow the standard `base + "_L" + %03u` pattern (e.g. `PIN_L001`, `PIPE_L001`, `MONUMENT_L001`, `PIN_NW_01_L001`).
+  - **Trailing Underscore Sanitation:** Added defensive sanitation to strip any trailing underscore from `base` prior to appending `_L`, guaranteeing clean identifiers without double underscores (e.g. `__L`).
+
 ## [v0.2.37] - 2026-10-28
 
 ### Added

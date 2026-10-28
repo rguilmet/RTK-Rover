@@ -28,10 +28,10 @@ static uint16_t s_cached_next_num = 1;
 static char     s_cached_stem[WAYPOINT_LABEL_LEN] = "";
 
 static const char *kPrefixes[] = {
-    "<DERIVED>", "PIN_", "CORNER_", "MONUMENT_", "STAKE_", "FENCE_", "TREE_", "UTIL_", "WP_"
+    "<DERIVED>", "PIN", "PIPE", "MONUMENT", "STAKE", "CORNER", "FENCE", "TREE", "UTILITY", "WP"
 };
 static const char *kPrefixDropdownStr =
-    "<DERIVED>\nPIN_\nCORNER_\nMONUMENT_\nSTAKE_\nFENCE_\nTREE_\nUTIL_\nWP_";
+    "<DERIVED>\nPIN\nPIPE\nMONUMENT\nSTAKE\nCORNER\nFENCE\nTREE\nUTILITY\nWP";
 
 static const char *kNoteTags[] = {
     "",
@@ -376,11 +376,11 @@ extern "C" bool waypoint_get_active(WaypointRecord_t *wp_out)
 
 static void get_current_survey_stem(char *stem_out, size_t max_len)
 {
+    char base[32];
     if (g_survey_prefix_idx == 0) {
-        // <DERIVED> mode: active target label + "_L"
+        // <DERIVED> mode: active target label (fallback to "WP")
         if (g_waypoint_count > 0 && g_active_waypoint_idx >= 0 && g_active_waypoint_idx < g_waypoint_count) {
             const char *src = g_waypoints[g_active_waypoint_idx].label;
-            char base[32];
             size_t src_len = strlen(src);
             if (src_len <= 30) {
                 strncpy(base, src, sizeof(base) - 1);
@@ -399,16 +399,27 @@ static void get_current_survey_stem(char *stem_out, size_t max_len)
                 Serial.printf("[WAYPOINTS] Target label truncated to %u chars for _Lxxx suffix: '%s' -> '%s'\n",
                               (unsigned int)cut, src, base);
             }
-            snprintf(stem_out, max_len, "%s_L", base);
         } else {
             // Fallback when no active waypoint is loaded
-            snprintf(stem_out, max_len, "WP_L");
+            strncpy(base, "WP", sizeof(base) - 1);
+            base[sizeof(base) - 1] = '\0';
         }
     } else {
-        // Standard prefix mode: e.g. "PIN_L", "MONUMENT_L"
-        uint8_t p_idx = g_survey_prefix_idx < 9 ? g_survey_prefix_idx : 1;
-        snprintf(stem_out, max_len, "%sL", kPrefixes[p_idx]);
+        // Standard prefix mode (e.g. PIN, PIPE, MONUMENT, etc.)
+        size_t num_prefixes = sizeof(kPrefixes) / sizeof(kPrefixes[0]);
+        uint8_t p_idx = (g_survey_prefix_idx < num_prefixes) ? g_survey_prefix_idx : 1;
+        strncpy(base, kPrefixes[p_idx], sizeof(base) - 1);
+        base[sizeof(base) - 1] = '\0';
     }
+
+    // Defensive sanitation: strip any trailing underscore from base to prevent accidental "__L"
+    size_t blen = strlen(base);
+    while (blen > 0 && base[blen - 1] == '_') {
+        base[--blen] = '\0';
+    }
+
+    // Universal rule: ALWAYS append "_L"
+    snprintf(stem_out, max_len, "%s_L", base);
 }
 
 static uint16_t find_next_available_suffix(const char *stem)
