@@ -4,7 +4,8 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 **Firmware Version:** `v0.2.38`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
-**User Documentation:** [Complete Field User Manual](docs/user_manual.md)
+**User Documentation:** [Field User Manual](docs/user_manual.md)  
+**Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)
 
 ---
 
