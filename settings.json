@@ -24,5 +24,6 @@
   "wifi_password": "Your-Password-Here",
   "enable_serial_logging": false,
   "enable_imu_logging": false,
-  "enable_telemetry_logging": true
+  "enable_telemetry_logging": true,
+  "enable_touch_logging": true
 }

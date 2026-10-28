@@ -248,12 +248,15 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
     (void)indev;
     static int16_t last_x = 0;
     static int16_t last_y = 0;
+    static lv_indev_state_t prev_state = LV_INDEV_STATE_RELEASED;
+    static uint32_t last_log_ms = 0;
 
     // Command byte 7 = 0x0E (14 bytes): matches Waveshare ESP32-S3-Touch-LCD-3.5B bsp_touch.c
     uint8_t read_touchpad_cmd[11] = {0xb5, 0xab, 0xa5, 0x5a, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00};
     uint8_t buff[14] = {0};
 
-    if (i2c_master_write_read_dev(disp_touch_dev_handle, read_touchpad_cmd, 11, buff, 14) == ESP_OK) {
+    esp_err_t err = i2c_master_write_read_dev(disp_touch_dev_handle, read_touchpad_cmd, 11, buff, 14);
+    if (err == ESP_OK) {
         // buff[0]: gesture (0xFF = invalid), buff[1]: touch points (1..2)
         // buff[2] bits [7:6]: event flag (0x80 = contact/down, 0x40 = release/up)
         uint8_t event_flag = (buff[2] >> 6) & 0x03;
@@ -267,7 +270,24 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
             indevData->point.x = last_x;
             indevData->point.y = last_y;
             indevData->state   = LV_INDEV_STATE_PRESSED;
+
+            if (current_settings.enable_touch_logging) {
+                uint32_t now = (uint32_t)(esp_timer_get_time() / 1000ULL);
+                if (prev_state != LV_INDEV_STATE_PRESSED) {
+                    rover_printf("[TOUCH DOWN] (%d, %d) | buf: %02X %02X %02X %02X %02X %02X | evt:%u pts:%u\n",
+                                 last_x, last_y, buff[0], buff[1], buff[2], buff[3], buff[4], buff[5],
+                                 event_flag, buff[1]);
+                    last_log_ms = now;
+                } else if (now - last_log_ms >= 250) {
+                    rover_printf("[TOUCH HELD] (%d, %d) | buf: %02X %02X %02X %02X | pts:%u\n",
+                                 last_x, last_y, buff[0], buff[1], buff[2], buff[3], buff[1]);
+                    last_log_ms = now;
+                }
+            }
+            prev_state = LV_INDEV_STATE_PRESSED;
             return;
+        } else if (buff[1] >= 1 && buff[0] == 0xFF && current_settings.enable_touch_logging) {
+            rover_printf("[TOUCH REJECTED: buff[0]==0xFF] pts=%u evt=%u\n", buff[1], event_flag);
         }
     }
 
@@ -275,6 +295,14 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
     indevData->point.x = last_x;
     indevData->point.y = last_y;
     indevData->state   = LV_INDEV_STATE_RELEASED;
+
+    if (current_settings.enable_touch_logging && prev_state == LV_INDEV_STATE_PRESSED) {
+        uint8_t event_flag = (buff[2] >> 6) & 0x03;
+        rover_printf("[TOUCH UP]   (%d, %d) | buf: %02X %02X %02X %02X %02X %02X | evt:%u pts:%u\n",
+                     last_x, last_y, buff[0], buff[1], buff[2], buff[3], buff[4], buff[5],
+                     event_flag, buff[1]);
+    }
+    prev_state = LV_INDEV_STATE_RELEASED;
 }
 
 bool rover_lvgl_lock(int timeout_ms)
@@ -387,6 +415,10 @@ static void nav_prev_screen_btn_cb(lv_event_t *e)
     (void)e;
     uint8_t next_idx = (active_tile_col == 0) ? 4 : (active_tile_col - 1);
     switch_to_tile_index(next_idx, LV_ANIM_ON);
+    play_rover_beep(1200, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] '< Prev' screen clicked -> Tile %u (%s)\n", next_idx + 1, kScreenTitles[next_idx]);
+    }
 }
 
 static void nav_next_screen_btn_cb(lv_event_t *e)
@@ -394,129 +426,211 @@ static void nav_next_screen_btn_cb(lv_event_t *e)
     (void)e;
     uint8_t next_idx = (active_tile_col + 1) % 5;
     switch_to_tile_index(next_idx, LV_ANIM_ON);
+    play_rover_beep(1200, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] 'Next >' screen clicked -> Tile %u (%s)\n", next_idx + 1, kScreenTitles[next_idx]);
+    }
+}
+
+static void update_t0_target_label(void)
+{
+    WaypointRecord_t active_wp;
+    if (t0_target_lbl && waypoint_get_active(&active_wp)) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                 active_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
+        lv_label_set_text(t0_target_lbl, buf);
+    }
+    if (t0_notes_lbl && waypoint_get_active(&active_wp)) {
+        lv_label_set_text(t0_notes_lbl, active_wp.notes[0] ? active_wp.notes : "---");
+    }
 }
 
 static void prev_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_select_prev();
+    play_rover_beep(1500, 20);
+    update_t0_target_label();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Waypoint '<' clicked -> Target idx: %d/%d\n",
+                     g_active_waypoint_idx + 1, g_waypoint_count);
+    }
 }
 
 static void next_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_select_next();
+    play_rover_beep(1500, 20);
+    update_t0_target_label();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Waypoint '>' clicked -> Target idx: %d/%d\n",
+                     g_active_waypoint_idx + 1, g_waypoint_count);
+    }
 }
 
 static void prev_file_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_file_select_prev();
+    play_rover_beep(1500, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] File '<' clicked -> %s\n", waypoint_file_get_active_name());
+    }
 }
 
 static void next_file_btn_cb(lv_event_t *e)
 {
     (void)e;
     waypoint_file_select_next();
+    play_rover_beep(1500, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] File '>' clicked -> %s\n", waypoint_file_get_active_name());
+    }
 }
 
 static void update_all_control_buttons(void)
 {
+    static int s_last_units = -1;
+    static int s_last_wifi = -1;
+    static int s_last_nmea = -1;
+    static int s_last_serial = -1;
+    static int s_last_route = -1;
+    static int s_last_tare = -1;
+    static int s_last_bright = -1;
+    static int s_last_vol = -1;
+    static int s_last_muted = -1;
+
     // 1. Units Button on Tile 1 & Header Badge on Header
-    if (t1_unit_btn && t1_unit_btn_lbl) {
-        if (!current_settings.use_imperial_units) {
-            lv_label_set_text(t1_unit_btn_lbl, "Units: SI");
-            lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_SI_TEAL, 0);
-            if (hdr_units_lbl) {
-                lv_label_set_text(hdr_units_lbl, "SI");
-                lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
-            }
-        } else {
-            lv_label_set_text(t1_unit_btn_lbl, "Units: IMP");
-            lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_IMP_AMBER, 0);
-            if (hdr_units_lbl) {
-                lv_label_set_text(hdr_units_lbl, "IMP");
-                lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_IMP_AMBER, 0);
+    int cur_units = current_settings.use_imperial_units ? 1 : 0;
+    if (cur_units != s_last_units) {
+        s_last_units = cur_units;
+        if (t1_unit_btn && t1_unit_btn_lbl) {
+            if (!current_settings.use_imperial_units) {
+                lv_label_set_text(t1_unit_btn_lbl, "Units: SI");
+                lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_SI_TEAL, 0);
+                if (hdr_units_lbl) {
+                    lv_label_set_text(hdr_units_lbl, "SI");
+                    lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
+                }
+            } else {
+                lv_label_set_text(t1_unit_btn_lbl, "Units: IMP");
+                lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_IMP_AMBER, 0);
+                if (hdr_units_lbl) {
+                    lv_label_set_text(hdr_units_lbl, "IMP");
+                    lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_IMP_AMBER, 0);
+                }
             }
         }
     }
 
     // 2. Wi-Fi Button on Tile 1
-    if (t1_wifi_btn && t1_wifi_btn_lbl) {
-        if (is_wifi_active()) {
-            lv_label_set_text(t1_wifi_btn_lbl, "Wi-Fi: Stop");
-            lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-        } else {
-            lv_label_set_text(t1_wifi_btn_lbl, "Wi-Fi: Start");
-            lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    int cur_wifi = is_wifi_active() ? 1 : 0;
+    if (cur_wifi != s_last_wifi) {
+        s_last_wifi = cur_wifi;
+        if (t1_wifi_btn && t1_wifi_btn_lbl) {
+            if (cur_wifi) {
+                lv_label_set_text(t1_wifi_btn_lbl, "Wi-Fi: Stop");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else {
+                lv_label_set_text(t1_wifi_btn_lbl, "Wi-Fi: Start");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+            }
         }
     }
 
     // 3. NMEA Logging Button on Tile 1
-    if (t1_nmea_btn && t1_nmea_btn_lbl) {
-        if (nmea_logger_is_active()) {
-            lv_label_set_text(t1_nmea_btn_lbl, "NMEA: ON");
-            lv_obj_set_style_bg_color(t1_nmea_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-        } else {
-            lv_label_set_text(t1_nmea_btn_lbl, "NMEA: OFF");
-            lv_obj_set_style_bg_color(t1_nmea_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    int cur_nmea = nmea_logger_is_active() ? 1 : 0;
+    if (cur_nmea != s_last_nmea) {
+        s_last_nmea = cur_nmea;
+        if (t1_nmea_btn && t1_nmea_btn_lbl) {
+            if (cur_nmea) {
+                lv_label_set_text(t1_nmea_btn_lbl, "NMEA: ON");
+                lv_obj_set_style_bg_color(t1_nmea_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else {
+                lv_label_set_text(t1_nmea_btn_lbl, "NMEA: OFF");
+                lv_obj_set_style_bg_color(t1_nmea_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+            }
         }
     }
 
     // 4. Serial Logging Button on Tile 1 (Screen 2: Survey & Settings)
-    if (t1_serial_log_btn && t1_serial_log_btn_lbl) {
-        if (serial_logger_is_active()) {
-            lv_label_set_text(t1_serial_log_btn_lbl, "LOG: ON");
-            lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-        } else {
-            lv_label_set_text(t1_serial_log_btn_lbl, "LOG: OFF");
-            lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    int cur_serial = serial_logger_is_active() ? 1 : 0;
+    if (cur_serial != s_last_serial) {
+        s_last_serial = cur_serial;
+        if (t1_serial_log_btn && t1_serial_log_btn_lbl) {
+            if (cur_serial) {
+                lv_label_set_text(t1_serial_log_btn_lbl, "LOG: ON");
+                lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else {
+                lv_label_set_text(t1_serial_log_btn_lbl, "LOG: OFF");
+                lv_obj_set_style_bg_color(t1_serial_log_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+            }
         }
     }
 
-    // 5. Route REC Button on Tile 0
-    if (t0_rec_btn && t0_rec_btn_lbl) {
-        if (route_logger_is_active()) {
-            lv_label_set_text(t0_rec_btn_lbl, "REC ON");
-            lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-        } else {
-            lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
-            lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    // 5. Route REC Button on Tile 0 HUD
+    int cur_route = route_logger_is_active() ? 1 : 0;
+    if (cur_route != s_last_route) {
+        s_last_route = cur_route;
+        if (t0_rec_btn && t0_rec_btn_lbl) {
+            if (cur_route) {
+                lv_label_set_text(t0_rec_btn_lbl, "REC ON");
+                lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else {
+                lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
+                lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+            }
         }
     }
 
     // 6. Compact Tare / Reset Tare Button on Tile 3
-    if (t3_tare_btn && t3_tare_lbl) {
-        bool has_tare = (fabsf(current_settings.pole_tilt_tare_pitch_deg) > 0.05f ||
-                         fabsf(current_settings.pole_tilt_tare_roll_deg)  > 0.05f);
-        if (has_tare) {
-            lv_label_set_text(t3_tare_lbl, "RST");
-            lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0xEA580C), 0); // Orange
-        } else {
-            lv_label_set_text(t3_tare_lbl, "TARE");
-            lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0x2563EB), 0); // Blue
+    bool has_tare = (fabsf(current_settings.pole_tilt_tare_pitch_deg) > 0.05f ||
+                     fabsf(current_settings.pole_tilt_tare_roll_deg)  > 0.05f);
+    int cur_tare = has_tare ? 1 : 0;
+    if (cur_tare != s_last_tare) {
+        s_last_tare = cur_tare;
+        if (t3_tare_btn && t3_tare_lbl) {
+            if (has_tare) {
+                lv_label_set_text(t3_tare_lbl, "RST");
+                lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0xEA580C), 0); // Orange
+            } else {
+                lv_label_set_text(t3_tare_lbl, "TARE");
+                lv_obj_set_style_bg_color(t3_tare_btn, lv_color_hex(0x2563EB), 0); // Blue
+            }
         }
     }
 
     // 7. Brightness Button on Tile 1 (20% steps from 20% to 100%)
-    if (t1_bright_btn && t1_bright_btn_lbl) {
-        char b_buf[32];
-        snprintf(b_buf, sizeof(b_buf), "Bright: %u%%", current_settings.brightness);
-        lv_label_set_text(t1_bright_btn_lbl, b_buf);
-        lv_obj_set_style_bg_color(t1_bright_btn, lv_color_hex(0x2F3B4C), 0);
+    int cur_bright = (int)current_settings.brightness;
+    if (cur_bright != s_last_bright) {
+        s_last_bright = cur_bright;
+        if (t1_bright_btn && t1_bright_btn_lbl) {
+            char b_buf[32];
+            snprintf(b_buf, sizeof(b_buf), "Bright: %u%%", current_settings.brightness);
+            lv_label_set_text(t1_bright_btn_lbl, b_buf);
+            lv_obj_set_style_bg_color(t1_bright_btn, lv_color_hex(0x2F3B4C), 0);
+        }
     }
 
     // 8. Volume Button on Tile 1 (20% steps from MUTE to 20%..100%)
-    if (t1_vol_btn && t1_vol_btn_lbl) {
-        char v_buf[32];
-        if (current_settings.volume == 0 || current_settings.is_muted) {
-            snprintf(v_buf, sizeof(v_buf), "Vol: MUTE");
-            lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x555555), 0);
-        } else {
-            snprintf(v_buf, sizeof(v_buf), "Vol: %u%%", current_settings.volume);
-            lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x2F3B4C), 0);
+    int cur_vol = (int)current_settings.volume;
+    int cur_muted = current_settings.is_muted ? 1 : 0;
+    if (cur_vol != s_last_vol || cur_muted != s_last_muted) {
+        s_last_vol = cur_vol;
+        s_last_muted = cur_muted;
+        if (t1_vol_btn && t1_vol_btn_lbl) {
+            char v_buf[32];
+            if (current_settings.volume == 0 || current_settings.is_muted) {
+                snprintf(v_buf, sizeof(v_buf), "Vol: MUTE");
+                lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x555555), 0);
+            } else {
+                snprintf(v_buf, sizeof(v_buf), "Vol: %u%%", current_settings.volume);
+                lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x2F3B4C), 0);
+            }
+            lv_label_set_text(t1_vol_btn_lbl, v_buf);
         }
-        lv_label_set_text(t1_vol_btn_lbl, v_buf);
     }
 }
 
@@ -532,10 +646,11 @@ static void bright_toggle_btn_cb(lv_event_t *e)
 
     set_rover_brightness(b);
     mark_settings_dirty();
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Bright: %u%%", b);
-    if (t1_bright_btn_lbl) lv_label_set_text(t1_bright_btn_lbl, buf);
+    update_all_control_buttons();
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Brightness clicked -> %u%%\n", b);
+    }
 }
 
 static void vol_toggle_btn_cb(lv_event_t *e)
@@ -552,17 +667,17 @@ static void vol_toggle_btn_cb(lv_event_t *e)
     set_rover_volume(v);
     current_settings.is_muted = (v == 0);
     mark_settings_dirty();
+    update_all_control_buttons();
 
-    char buf[32];
     if (v == 0) {
-        snprintf(buf, sizeof(buf), "Vol: MUTE");
-        if (t1_vol_btn) lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x555555), 0);
+        play_rover_beep(900, 30);
     } else {
-        snprintf(buf, sizeof(buf), "Vol: %u%%", v);
-        if (t1_vol_btn) lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x2F3B4C), 0);
         play_rover_beep(1750, 40);
     }
-    if (t1_vol_btn_lbl) lv_label_set_text(t1_vol_btn_lbl, buf);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Volume clicked -> %u%%%s\n",
+                     v, current_settings.is_muted ? " (MUTED)" : "");
+    }
 }
 
 static void unit_toggle_btn_cb(lv_event_t *e)
@@ -571,6 +686,11 @@ static void unit_toggle_btn_cb(lv_event_t *e)
     current_settings.use_imperial_units = !current_settings.use_imperial_units;
     mark_settings_dirty();
     update_all_control_buttons();
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Units clicked -> %s\n",
+                     current_settings.use_imperial_units ? "IMP" : "SI");
+    }
 }
 
 static void route_toggle_btn_cb(lv_event_t *e)
@@ -578,10 +698,16 @@ static void route_toggle_btn_cb(lv_event_t *e)
     (void)e;
     if (route_logger_is_active()) {
         route_logger_stop();
+        play_rover_beep(1200, 30);
     } else {
         route_logger_start();
+        play_rover_beep(1800, 40);
     }
     update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Route REC clicked -> %s\n",
+                     route_logger_is_active() ? "RECORDING (ON)" : "STOPPED (OFF)");
+    }
 }
 
 static void serial_log_toggle_btn_cb(lv_event_t *e)
@@ -591,10 +717,16 @@ static void serial_log_toggle_btn_cb(lv_event_t *e)
     mark_settings_dirty();
     if (current_settings.enable_serial_logging) {
         serial_logger_start();
+        play_rover_beep(1800, 40);
     } else {
         serial_logger_stop();
+        play_rover_beep(1200, 30);
     }
     update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Serial Log clicked -> %s\n",
+                     current_settings.enable_serial_logging ? "ON" : "OFF");
+    }
 }
 
 static void nmea_toggle_btn_cb(lv_event_t *e)
@@ -602,10 +734,16 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
     (void)e;
     if (nmea_logger_is_active()) {
         nmea_logger_stop();
+        play_rover_beep(1200, 30);
     } else {
         nmea_logger_start();
+        play_rover_beep(1800, 40);
     }
     update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] NMEA Log clicked -> %s\n",
+                     nmea_logger_is_active() ? "ON" : "OFF");
+    }
 }
 
 static void wifi_toggle_btn_cb(lv_event_t *e)
@@ -613,10 +751,16 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
     (void)e;
     if (is_wifi_active()) {
         stop_wifi();
+        play_rover_beep(1200, 30);
     } else {
         start_wifi();
+        play_rover_beep(1800, 40);
     }
     update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Wi-Fi clicked -> %s\n",
+                     is_wifi_active() ? "Starting" : "Stopping");
+    }
 }
 
 static char s_pending_wifi_status[64] = "Wi-Fi Inactive";
@@ -638,18 +782,31 @@ static void match_target_sw_cb(lv_event_t *e)
 {
     lv_obj_t *sw = (lv_obj_t *)lv_event_get_target(e);
     g_survey_target_match_mode = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    play_rover_beep(1400, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Target Match switch -> %s\n",
+                     g_survey_target_match_mode ? "ON" : "OFF");
+    }
 }
 
 static void prefix_dd_cb(lv_event_t *e)
 {
     lv_obj_t *dd = (lv_obj_t *)lv_event_get_target(e);
     g_survey_prefix_idx = (uint8_t)lv_dropdown_get_selected(dd);
+    play_rover_beep(1400, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Prefix dropdown -> idx %u\n", g_survey_prefix_idx);
+    }
 }
 
 static void note_dd_cb(lv_event_t *e)
 {
     lv_obj_t *dd = (lv_obj_t *)lv_event_get_target(e);
     g_survey_note_tag_idx = (uint8_t)lv_dropdown_get_selected(dd);
+    play_rover_beep(1400, 20);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Note tag dropdown -> idx %u\n", g_survey_note_tag_idx);
+    }
 }
 
 static void avg_dur_btn_cb(lv_event_t *e)
@@ -662,12 +819,20 @@ static void avg_dur_btn_cb(lv_event_t *e)
     if (t1_avg_btn_lbl) {
         lv_label_set_text_fmt(t1_avg_btn_lbl, "Avg: %us", current_settings.survey_avg_seconds);
     }
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Avg Duration clicked -> %ds\n", current_settings.survey_avg_seconds);
+    }
 }
 
 static void log_pin_btn_cb(lv_event_t *e)
 {
     (void)e;
     trigger_survey_waypoint_log();
+    play_rover_beep(1750, 40);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Log Pin clicked!\n");
+    }
 }
 
 static void wp_table_event_cb(lv_event_t *e)
@@ -677,7 +842,11 @@ static void wp_table_event_cb(lv_event_t *e)
     lv_table_get_selected_cell(table, &row, &col);
     if (row > 0 && (int16_t)(row - 1) < g_waypoint_count) {
         waypoint_select_index((int16_t)(row - 1));
+        play_rover_beep(1500, 20);
         switch_to_tile_index(0, LV_ANIM_ON);
+        if (current_settings.enable_touch_logging) {
+            rover_printf("[TOUCH BTN] Waypoint table row clicked -> Waypoint %u\n", (unsigned int)row);
+        }
     }
 }
 
@@ -693,38 +862,62 @@ static void tare_level_btn_cb(lv_event_t *e)
         play_rover_beep(1200, 80);
     } else {
         trigger_tare_pole_level();
+        play_rover_beep(1800, 40);
     }
     update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Tare clicked -> %s\n", has_tare ? "RESET" : "TARE");
+    }
 }
 
 static void test_com1_ver_btn_cb(lv_event_t *e)
 {
     (void)e;
     send_um982_com1_command("VERSIONA");
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] COM1: VERSIONA clicked\n");
+    }
 }
 
 static void test_com1_cfg_btn_cb(lv_event_t *e)
 {
     (void)e;
     send_um982_com1_command("CONFIG");
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] COM1: CONFIG clicked\n");
+    }
 }
 
 static void test_com2_pulse_btn_cb(lv_event_t *e)
 {
     (void)e;
     send_um982_com2_test_pulse();
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] COM2: Test Pulse clicked\n");
+    }
 }
 
 static void test_e220_read_btn_cb(lv_event_t *e)
 {
     (void)e;
     request_e220_config_read();
+    play_rover_beep(1400, 25);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] E220: Read Regs clicked\n");
+    }
 }
 
 static void test_e220_write_btn_cb(lv_event_t *e)
 {
     (void)e;
     request_e220_config_write();
+    play_rover_beep(1600, 30);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] E220: Write Config clicked\n");
+    }
 }
 
 void refresh_waypoint_table_ui(void)
@@ -889,9 +1082,10 @@ void create_rover_ui(void)
     lv_obj_set_scrollbar_mode(nav_bar, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t *btn_scr_prev = lv_button_create(nav_bar);
-    lv_obj_set_size(btn_scr_prev, 64, 26);
+    lv_obj_set_size(btn_scr_prev, 68, 28);
     lv_obj_align(btn_scr_prev, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_scr_prev, lv_color_hex(0x2F3B4C), 0);
+    lv_obj_set_ext_click_area(btn_scr_prev, 6);
     lv_obj_add_event_cb(btn_scr_prev, nav_prev_screen_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_scr_prev = lv_label_create(btn_scr_prev);
     lv_label_set_text(lbl_scr_prev, LV_SYMBOL_LEFT " Prev");
@@ -905,9 +1099,10 @@ void create_rover_ui(void)
     lv_obj_align(nav_screen_lbl, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_t *btn_scr_next = lv_button_create(nav_bar);
-    lv_obj_set_size(btn_scr_next, 64, 26);
+    lv_obj_set_size(btn_scr_next, 68, 28);
     lv_obj_align(btn_scr_next, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_scr_next, lv_color_hex(0x2F3B4C), 0);
+    lv_obj_set_ext_click_area(btn_scr_next, 6);
     lv_obj_add_event_cb(btn_scr_next, nav_next_screen_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_scr_next = lv_label_create(btn_scr_next);
     lv_label_set_text(lbl_scr_next, "Next " LV_SYMBOL_RIGHT);
@@ -934,10 +1129,11 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 0: Pin Seeker & Guidance (Hybrid Navigation Canvas)
     // =====================================================================
-    // Target selector row (compacted to y = 4 since coordinates are now in persistent header)
+    // Target selector row (compacted to y = 3 since coordinates are now in persistent header)
     lv_obj_t *btn_prev = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_prev, 38, 26);
-    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 4);
+    lv_obj_set_size(btn_prev, 44, 28);
+    lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 3);
+    lv_obj_set_ext_click_area(btn_prev, 8);
     lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_prev = lv_label_create(btn_prev);
     lv_label_set_text(lbl_prev, LV_SYMBOL_LEFT);
@@ -950,8 +1146,9 @@ void create_rover_ui(void)
     lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
 
     lv_obj_t *btn_next = lv_button_create(tile_guidance);
-    lv_obj_set_size(btn_next, 38, 26);
-    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 4);
+    lv_obj_set_size(btn_next, 44, 28);
+    lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 3);
+    lv_obj_set_ext_click_area(btn_next, 8);
     lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_next = lv_label_create(btn_next);
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
@@ -1135,10 +1332,11 @@ void create_rover_ui(void)
 
     // Route REC button (Tactical Grid HUD - Bottom Right)
     t0_rec_btn = lv_button_create(t0_nav_canvas);
-    lv_obj_set_size(t0_rec_btn, 76, 24);
+    lv_obj_set_size(t0_rec_btn, 80, 26);
     lv_obj_align(t0_rec_btn, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
     lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
     lv_obj_set_style_radius(t0_rec_btn, 4, 0);
+    lv_obj_set_ext_click_area(t0_rec_btn, 6);
     lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t0_rec_btn_lbl = lv_label_create(t0_rec_btn);
     lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
@@ -1238,6 +1436,7 @@ void create_rover_ui(void)
     t1_nmea_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_nmea_btn, 145, 28);
     lv_obj_align(t1_nmea_btn, LV_ALIGN_TOP_LEFT, 10, 238);
+    lv_obj_set_ext_click_area(t1_nmea_btn, 4);
     lv_obj_add_event_cb(t1_nmea_btn, nmea_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_nmea_btn_lbl = lv_label_create(t1_nmea_btn);
     lv_obj_center(t1_nmea_btn_lbl);
@@ -1245,6 +1444,7 @@ void create_rover_ui(void)
     t1_serial_log_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_serial_log_btn, 145, 28);
     lv_obj_align(t1_serial_log_btn, LV_ALIGN_TOP_RIGHT, -10, 238);
+    lv_obj_set_ext_click_area(t1_serial_log_btn, 4);
     lv_obj_add_event_cb(t1_serial_log_btn, serial_log_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_serial_log_btn_lbl = lv_label_create(t1_serial_log_btn);
     lv_obj_center(t1_serial_log_btn_lbl);
@@ -1252,6 +1452,7 @@ void create_rover_ui(void)
     t1_bright_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_bright_btn, 145, 28);
     lv_obj_align(t1_bright_btn, LV_ALIGN_TOP_LEFT, 10, 272);
+    lv_obj_set_ext_click_area(t1_bright_btn, 4);
     lv_obj_add_event_cb(t1_bright_btn, bright_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_bright_btn_lbl = lv_label_create(t1_bright_btn);
     lv_obj_center(t1_bright_btn_lbl);
@@ -1259,6 +1460,7 @@ void create_rover_ui(void)
     t1_vol_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_vol_btn, 145, 28);
     lv_obj_align(t1_vol_btn, LV_ALIGN_TOP_RIGHT, -10, 272);
+    lv_obj_set_ext_click_area(t1_vol_btn, 4);
     lv_obj_add_event_cb(t1_vol_btn, vol_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_vol_btn_lbl = lv_label_create(t1_vol_btn);
     lv_obj_center(t1_vol_btn_lbl);
@@ -1266,6 +1468,7 @@ void create_rover_ui(void)
     t1_wifi_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_wifi_btn, 145, 28);
     lv_obj_align(t1_wifi_btn, LV_ALIGN_TOP_LEFT, 10, 306);
+    lv_obj_set_ext_click_area(t1_wifi_btn, 4);
     lv_obj_add_event_cb(t1_wifi_btn, wifi_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_wifi_btn_lbl = lv_label_create(t1_wifi_btn);
     lv_obj_center(t1_wifi_btn_lbl);
@@ -1273,6 +1476,7 @@ void create_rover_ui(void)
     t1_unit_btn = lv_button_create(tile_survey);
     lv_obj_set_size(t1_unit_btn, 145, 28);
     lv_obj_align(t1_unit_btn, LV_ALIGN_TOP_RIGHT, -10, 306);
+    lv_obj_set_ext_click_area(t1_unit_btn, 4);
     lv_obj_add_event_cb(t1_unit_btn, unit_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_unit_btn_lbl = lv_label_create(t1_unit_btn);
     lv_obj_center(t1_unit_btn_lbl);
@@ -1292,8 +1496,9 @@ void create_rover_ui(void)
     // Fixed Top File Selector Row: [ < ] waypoints.csv (1/1) [ > ]
     // =====================================================================
     lv_obj_t *btn_file_prev = lv_button_create(tile_csv);
-    lv_obj_set_size(btn_file_prev, 38, 26);
-    lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 4);
+    lv_obj_set_size(btn_file_prev, 44, 28);
+    lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 3);
+    lv_obj_set_ext_click_area(btn_file_prev, 8);
     lv_obj_add_event_cb(btn_file_prev, prev_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fprev = lv_label_create(btn_file_prev);
     lv_label_set_text(lbl_fprev, LV_SYMBOL_LEFT);
@@ -1306,8 +1511,9 @@ void create_rover_ui(void)
     lv_obj_align(t2_file_lbl, LV_ALIGN_TOP_MID, 0, 8);
 
     lv_obj_t *btn_file_next = lv_button_create(tile_csv);
-    lv_obj_set_size(btn_file_next, 38, 26);
-    lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 4);
+    lv_obj_set_size(btn_file_next, 44, 28);
+    lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 3);
+    lv_obj_set_ext_click_area(btn_file_next, 8);
     lv_obj_add_event_cb(btn_file_next, next_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fnext = lv_label_create(btn_file_next);
     lv_label_set_text(lbl_fnext, LV_SYMBOL_RIGHT);

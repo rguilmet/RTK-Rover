@@ -43,7 +43,8 @@ struct SystemSettings current_settings = {
     "Your_PASSWORD",  // wifi_password
     true,             // enable_serial_logging (master switch for serial monitor output)
     false,            // enable_imu_logging (periodic 1 Hz IMU pose and raw accelerometer logs)
-    true              // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
+    true,             // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
+    true              // enable_touch_logging (log touch events and coordinates to Serial Monitor)
 };
 
 volatile bool settings_dirty = false;
@@ -150,6 +151,8 @@ extern "C" void load_settings(void) {
         if (!doc["enable_telemetry_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telemetry_logging"];
         else if (!doc["log_telemetry_periodic"].isNull()) current_settings.enable_telemetry_logging = doc["log_telemetry_periodic"];
         else if (!doc["enable_telem_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telem_logging"];
+        if (!doc["enable_touch_logging"].isNull()) current_settings.enable_touch_logging = doc["enable_touch_logging"];
+        else if (!doc["log_touch_events"].isNull()) current_settings.enable_touch_logging = doc["log_touch_events"];
 
         // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
         if (sd_card_mounted) {
@@ -193,6 +196,7 @@ extern "C" void save_settings(void) {
     doc["enable_serial_logging"]     = current_settings.enable_serial_logging;
     doc["enable_imu_logging"]        = current_settings.enable_imu_logging;
     doc["enable_telemetry_logging"]  = current_settings.enable_telemetry_logging;
+    doc["enable_touch_logging"]      = current_settings.enable_touch_logging;
 
     String output;
     serializeJsonPretty(doc, output);

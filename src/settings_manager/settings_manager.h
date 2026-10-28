@@ -36,6 +36,7 @@ struct SystemSettings {
     bool     enable_serial_logging;
     bool     enable_imu_logging;
     bool     enable_telemetry_logging;
+    bool     enable_touch_logging;
 };
 
 extern struct SystemSettings current_settings;

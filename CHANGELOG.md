@@ -5,6 +5,37 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.31] - 2026-10-28
+
+### Added
+- **Restored Acoustic Touch Confirmation (Audio Beeps):**
+  - Integrated immediate audio chirp feedback on all interactive touch buttons:
+    - Screen navigation (`< Prev` / `Next >`): 1200 Hz, 20 ms.
+    - Waypoint selection (`<` / `>`): 1500 Hz, 20 ms.
+    - Waypoint file selection (`<` / `>`): 1500 Hz, 20 ms.
+    - Route recording toggle (`REC ON/OFF`): 1800 Hz, 40 ms on Start, 1200 Hz, 30 ms on Stop.
+    - Waypoint table selection: 1500 Hz, 20 ms.
+    - Survey Log Pin: 1750 Hz, 40 ms.
+    - Quick controls (Wi-Fi, NMEA, Serial Log, Brightness, Volume, Units, Tare): distinct 1400–1800 Hz tones.
+- **Instrumented Real-Time Touch Diagnostics to Serial Monitor:**
+  - Added `enable_touch_logging` setting to `RoverSettings_t` and `settings.json` (defaults to `true`).
+  - Emits real-time diagnostic logs on touch transitions: `[TOUCH DOWN]`, `[TOUCH HELD]` (every 250 ms), and `[TOUCH UP]` reporting raw controller bytes (`buff[0..5]`), touch coordinates (`X, Y`), event flags, and active touch points.
+  - Emits `[TOUCH BTN]` button click logs with targeted button name and action.
+  - Logs `[TOUCH REJECTED: buff[0]==0xFF]` if a touch point is ever present while gesture byte indicates idle, enabling definitive hardware diagnostics.
+- **Instant Waypoint Target Label Refresh:**
+  - Added `update_t0_target_label()` called synchronously inside `prev_wp_btn_cb` and `next_wp_btn_cb` so the waypoint name and index change on screen immediately upon touch without waiting for Core 0's navigation frame cycle.
+
+### Fixed
+- **Fixed Button Click Interruption from 30 Hz UI Style Churn (`src/lvgl_port/lvgl_port.c`):**
+  - `update_all_control_buttons()` previously called `lv_label_set_text()` and `lv_obj_set_style_bg_color()` unconditionally 30 times a second on `t0_rec_btn`, `t1_unit_btn`, `t1_wifi_btn`, `t1_nmea_btn`, and `t1_serial_log_btn`. Calling styling and text APIs while a user's finger is actively pressing a button dirtied the style cache and reset LVGL's internal indev click state.
+  - Added static state caching across all control buttons so LVGL styling and label APIs are only invoked when a setting's value actually changes.
+- **Expanded Hitboxes & Added Extended Click Areas (`src/lvgl_port/lvgl_port.c`):**
+  - Enlarged Tile 0 waypoint selector buttons (`btn_prev`, `btn_next`) to 44x28 with `lv_obj_set_ext_click_area(btn, 8)` (creating a generous 60x44 px touch target).
+  - Enlarged `t0_rec_btn` to 80x26 with `lv_obj_set_ext_click_area(t0_rec_btn, 6)`.
+  - Enlarged bottom navigation bar buttons (`btn_scr_prev`, `btn_scr_next`) to 68x28 with 6 px extended click padding.
+  - Enlarged CSV file selector buttons (`btn_file_prev`, `btn_file_next`) to 44x28 with 8 px extended click padding.
+  - Added 4 px extended click padding to all Survey Screen quick toggle buttons.
+
 ## [v0.2.30] - 2026-10-28
 
 ### Fixed
