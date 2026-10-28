@@ -5,7 +5,17 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.2.41] - 2026-10-28
+## [v0.2.42] - 2026-10-28
+
+### Added
+- **NMEA Stream Logging Persistence Across Reboots (`src/settings_manager/`, `settings.json`, `src/lvgl_port/lvgl_port.c`, `RTK_Rover.ino`):**
+  - Added `enable_nmea_logging` boolean to `SystemSettings` struct and `settings.json`.
+  - Tile 2 `NMEA: ON/OFF` button toggle now marks settings dirty and commits to storage, persisting the state across power cycles.
+  - Power-up sequence now inspects `current_settings.enable_nmea_logging` and automatically starts `nmea_logger_start()` if previously enabled.
+
+### Changed
+- **RTCM Sniffer Telemetry Non-Gating (`src/e220_driver/e220_driver.cpp`):**
+  - Updated frame counting so that valid RTCM message types (1001..1300, 1005/1006, MSM) immediately increment `rtcm_frames_ok` and message type counters, while logging CRC mismatches independently without blocking telemetry.
 
 ### Fixed
 - **E220 RTCM Sniffer Timeout and False Error Resync (`src/e220_driver/e220_driver.cpp`):**

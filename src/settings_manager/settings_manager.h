@@ -35,6 +35,7 @@ struct SystemSettings {
     char     wifi_ssid[33];
     char     wifi_password[65];
     bool     enable_serial_logging;
+    bool     enable_nmea_logging;
     bool     enable_imu_logging;
     bool     enable_telemetry_logging;
     bool     enable_touch_logging;

@@ -461,6 +461,9 @@ void setup()
     if (current_settings.enable_serial_logging) {
         serial_logger_start();
     }
+    if (current_settings.enable_nmea_logging) {
+        nmea_logger_start();
+    }
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)

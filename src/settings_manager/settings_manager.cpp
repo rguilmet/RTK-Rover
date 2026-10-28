@@ -44,6 +44,7 @@ struct SystemSettings current_settings = {
     "Your_SSID",      // wifi_ssid
     "Your_PASSWORD",  // wifi_password
     true,             // enable_serial_logging (master switch for serial monitor output)
+    false,            // enable_nmea_logging (NMEA stream logging to SD card / FFat)
     false,            // enable_imu_logging (periodic 1 Hz IMU pose and raw accelerometer logs)
     true,             // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
     true              // enable_touch_logging (log touch events and coordinates to Serial Monitor)
@@ -301,6 +302,8 @@ extern "C" void load_settings(void) {
                   (int)strlen(current_settings.wifi_password));
 
     if (!doc["enable_serial_logging"].isNull()) current_settings.enable_serial_logging = doc["enable_serial_logging"];
+    if (!doc["enable_nmea_logging"].isNull()) current_settings.enable_nmea_logging = doc["enable_nmea_logging"];
+    else if (!doc["log_nmea_stream"].isNull()) current_settings.enable_nmea_logging = doc["log_nmea_stream"];
     if (!doc["enable_imu_logging"].isNull()) current_settings.enable_imu_logging = doc["enable_imu_logging"];
     else if (!doc["log_imu_periodic"].isNull()) current_settings.enable_imu_logging = doc["log_imu_periodic"];
     if (!doc["enable_telemetry_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telemetry_logging"];
@@ -375,6 +378,7 @@ extern "C" void save_settings(void) {
     doc["wifi_ssid"]                 = current_settings.wifi_ssid;
     doc["wifi_password"]             = current_settings.wifi_password;
     doc["enable_serial_logging"]     = current_settings.enable_serial_logging;
+    doc["enable_nmea_logging"]       = current_settings.enable_nmea_logging;
     doc["enable_imu_logging"]        = current_settings.enable_imu_logging;
     doc["enable_telemetry_logging"]  = current_settings.enable_telemetry_logging;
     doc["enable_touch_logging"]      = current_settings.enable_touch_logging;

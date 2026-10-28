@@ -803,15 +803,18 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
     (void)e;
     if (nmea_logger_is_active()) {
         nmea_logger_stop();
+        current_settings.enable_nmea_logging = false;
         play_rover_beep(1200, 30);
     } else {
         nmea_logger_start();
+        current_settings.enable_nmea_logging = true;
         play_rover_beep(1800, 40);
     }
+    mark_settings_dirty();
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] NMEA Log clicked -> %s\n",
-                     nmea_logger_is_active() ? "ON" : "OFF");
+                     current_settings.enable_nmea_logging ? "ON" : "OFF");
     }
 }
 
