@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Displays Base Station ID (`#<id>`), RTCM differential age (`Diff: X.Xs`), exact WGS84 base coordinates (`Pos: Lat, Lon`, `Alt`) decoded from RTCM 1005 / UM982 `#BASEINFOA`, and RTCM message counters (1005 ARP and MSM).
 
 ### Fixed
+- **Resolved Compiler Warning `"Serial" redefined` (`src/storage/serial_logger.h`):**
+  - Added `#ifdef Serial` / `#undef Serial` guard prior to `#define Serial SerialLogger` to cleanly suppress ESP32 Arduino core 3.x preprocessor warnings when USB CDC-on-boot (`-DARDUINO_USB_CDC_ON_BOOT=1`) is enabled.
 - **Multi-Line Auto-Wrapping on Diagnostic Scroll Container (`src/lvgl_port/lvgl_port.c`):**
   - Replaced `LV_LABEL_LONG_CLIP` with `LV_LABEL_LONG_WRAP` across all 12 telemetry sections in `t4_scroll_cont`.
   - Set fixed 300 px width on all labels inside the flex column (`LV_FLEX_FLOW_COLUMN`). Text lines exceeding 300 px now wrap to subsequent lines dynamically, preventing right-edge truncation while LVGL flex flow adjusts block heights and vertical scrolling smoothly.

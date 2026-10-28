@@ -50,6 +50,9 @@ int rover_printf(const char *format, ...);
 }
 
 #ifndef RTK_ROVER_NO_SERIAL_REDIRECT
+#ifdef Serial
+#undef Serial
+#endif
 #define Serial SerialLogger
 #endif
 
