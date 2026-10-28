@@ -439,10 +439,27 @@ static void update_t0_target_label(void)
         char buf[64];
         snprintf(buf, sizeof(buf), "%s (%d/%d)",
                  active_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
-        lv_label_set_text(t0_target_lbl, buf);
+        const char *cur = lv_label_get_text(t0_target_lbl);
+        if (!cur || strcmp(cur, buf) != 0) {
+            lv_label_set_text(t0_target_lbl, buf);
+        }
+    } else if (t0_target_lbl) {
+        const char *cur = lv_label_get_text(t0_target_lbl);
+        if (!cur || strcmp(cur, "No Target (0/0)") != 0) {
+            lv_label_set_text(t0_target_lbl, "No Target (0/0)");
+        }
     }
     if (t0_notes_lbl && waypoint_get_active(&active_wp)) {
-        lv_label_set_text(t0_notes_lbl, active_wp.notes[0] ? active_wp.notes : "---");
+        const char *new_notes = active_wp.notes[0] ? active_wp.notes : "---";
+        const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+        if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
+            lv_label_set_text(t0_notes_lbl, new_notes);
+        }
+    } else if (t0_notes_lbl) {
+        const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+        if (!cur_notes || strcmp(cur_notes, "---") != 0) {
+            lv_label_set_text(t0_notes_lbl, "---");
+        }
     }
 }
 
@@ -475,6 +492,7 @@ static void prev_file_btn_cb(lv_event_t *e)
     (void)e;
     waypoint_file_select_prev();
     play_rover_beep(1500, 20);
+    update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '<' clicked -> %s\n", waypoint_file_get_active_name());
     }
@@ -485,6 +503,7 @@ static void next_file_btn_cb(lv_event_t *e)
     (void)e;
     waypoint_file_select_next();
     play_rover_beep(1500, 20);
+    update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '>' clicked -> %s\n", waypoint_file_get_active_name());
     }
@@ -843,6 +862,7 @@ static void wp_table_event_cb(lv_event_t *e)
     if (row > 0 && (int16_t)(row - 1) < g_waypoint_count) {
         waypoint_select_index((int16_t)(row - 1));
         play_rover_beep(1500, 20);
+        update_t0_target_label();
         switch_to_tile_index(0, LV_ANIM_ON);
         if (current_settings.enable_touch_logging) {
             rover_printf("[TOUCH BTN] Waypoint table row clicked -> Waypoint %u\n", (unsigned int)row);
@@ -923,10 +943,15 @@ static void test_e220_write_btn_cb(lv_event_t *e)
 void refresh_waypoint_table_ui(void)
 {
     if (t2_file_lbl) {
-        lv_label_set_text_fmt(t2_file_lbl, "%s (%d/%d)",
-                              waypoint_file_get_active_name(),
-                              waypoint_file_get_active_index() + 1,
-                              waypoint_file_get_count());
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                 waypoint_file_get_active_name(),
+                 waypoint_file_get_active_index() + 1,
+                 waypoint_file_get_count());
+        const char *cur = lv_label_get_text(t2_file_lbl);
+        if (!cur || strcmp(cur, buf) != 0) {
+            lv_label_set_text(t2_file_lbl, buf);
+        }
     }
     if (!t2_wp_table) return;
     lv_table_set_col_cnt(t2_wp_table, 3);
@@ -1140,10 +1165,22 @@ void create_rover_ui(void)
     lv_obj_center(lbl_prev);
 
     t0_target_lbl = lv_label_create(tile_guidance);
-    lv_label_set_text(t0_target_lbl, "PIN_NW_01 (1/4)");
     lv_obj_set_style_text_color(t0_target_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t0_target_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_width(t0_target_lbl, 216);
+    lv_label_set_long_mode(t0_target_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t0_target_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
+
+    WaypointRecord_t init_wp;
+    if (waypoint_get_active(&init_wp)) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                 init_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
+        lv_label_set_text(t0_target_lbl, buf);
+    } else {
+        lv_label_set_text(t0_target_lbl, "No Target (0/0)");
+    }
 
     lv_obj_t *btn_next = lv_button_create(tile_guidance);
     lv_obj_set_size(btn_next, 44, 28);
@@ -1158,7 +1195,11 @@ void create_rover_ui(void)
     t0_notes_lbl = lv_label_create(tile_guidance);
     lv_label_set_long_mode(t0_notes_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_width(t0_notes_lbl, 304);
-    lv_label_set_text(t0_notes_lbl, "NW corner iron pipe");
+    if (waypoint_get_active(&init_wp)) {
+        lv_label_set_text(t0_notes_lbl, init_wp.notes[0] ? init_wp.notes : "---");
+    } else {
+        lv_label_set_text(t0_notes_lbl, "---");
+    }
     lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t0_notes_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 8, 34);
@@ -1505,10 +1546,13 @@ void create_rover_ui(void)
     lv_obj_center(lbl_fprev);
 
     t2_file_lbl = lv_label_create(tile_csv);
-    lv_label_set_text(t2_file_lbl, "waypoints.csv");
     lv_obj_set_style_text_color(t2_file_lbl, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_text_font(t2_file_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_width(t2_file_lbl, 216);
+    lv_label_set_long_mode(t2_file_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t2_file_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(t2_file_lbl, LV_ALIGN_TOP_MID, 0, 8);
+    lv_label_set_text(t2_file_lbl, "waypoints.csv");
 
     lv_obj_t *btn_file_next = lv_button_create(tile_csv);
     lv_obj_set_size(btn_file_next, 44, 28);

@@ -37,6 +37,7 @@ struct SystemSettings current_settings = {
     5,                // survey_avg_seconds (1, 5, or 10s)
     "PIN_",           // default_label_prefix
     "/waypoints.csv", // active_waypoint_file (default)
+    0,                // active_waypoint_index (default: 0)
     80,               // brightness (%)
     40,               // volume (%)
     false,            // is_muted
@@ -237,6 +238,7 @@ extern "C" void load_settings(void) {
     if (!doc["survey_avg_seconds"].isNull()) current_settings.survey_avg_seconds = doc["survey_avg_seconds"];
     if (!doc["default_label_prefix"].isNull()) strncpy(current_settings.default_label_prefix, doc["default_label_prefix"], sizeof(current_settings.default_label_prefix) - 1);
     if (!doc["active_waypoint_file"].isNull()) strncpy(current_settings.active_waypoint_file, doc["active_waypoint_file"], sizeof(current_settings.active_waypoint_file) - 1);
+    if (!doc["active_waypoint_index"].isNull()) current_settings.active_waypoint_index = doc["active_waypoint_index"];
     if (!doc["brightness"].isNull()) current_settings.brightness = doc["brightness"];
     if (!doc["volume"].isNull()) current_settings.volume = doc["volume"];
     if (!doc["is_muted"].isNull()) current_settings.is_muted = doc["is_muted"];
@@ -366,6 +368,7 @@ extern "C" void save_settings(void) {
     doc["survey_avg_seconds"]        = current_settings.survey_avg_seconds;
     doc["default_label_prefix"]      = current_settings.default_label_prefix;
     doc["active_waypoint_file"]      = current_settings.active_waypoint_file;
+    doc["active_waypoint_index"]     = current_settings.active_waypoint_index;
     doc["brightness"]                = current_settings.brightness;
     doc["volume"]                    = current_settings.volume;
     doc["is_muted"]                  = current_settings.is_muted;

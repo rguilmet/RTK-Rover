@@ -5,6 +5,23 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.33] - 2026-10-28
+
+### Added
+- **Remember & Restore Last Selected Waypoint Index (`src/waypoint_manager/waypoint_manager.cpp`, `src/settings_manager/settings_manager.cpp`):**
+  - Added `active_waypoint_index` to `SystemSettings` and `/settings.json`.
+  - Automatically persists the active waypoint index whenever changed via Tile 0 `<` / `>` buttons or Tile 2 CSV table clicks.
+  - Automatically restores `g_active_waypoint_idx` on boot during `waypoint_manager_init()` and safely clamps to 0 if out of bounds or when switching CSV files.
+  - Emits serial diagnostic `[WAYPOINTS] Restored active waypoint index: X/Y ('LABEL')` on startup.
+
+### Fixed
+- **Circular Marquee Scrolling for Waypoint & File Selectors (`src/lvgl_port/lvgl_port.c`):**
+  - **Bounded Control Widths:** Bounded both `t0_target_lbl` (Tile 0 Waypoint Selector) and `t2_file_lbl` (Tile 2 File Selector) to a strict 216 px width between the `<` and `>` buttons with 2 px margins on both sides.
+  - **Marquee Autoscroll:** Configured `lv_label_set_long_mode(..., LV_LABEL_LONG_MODE_SCROLL_CIRCULAR)` on both labels. When waypoint labels or CSV filenames exceed 216 px, text smoothly scrolls in a continuous circular loop instead of spreading over the interactive controls.
+  - **Centered Shorter Text:** Applied `lv_obj_set_style_text_align(..., LV_TEXT_ALIGN_CENTER, 0)` so standard-length labels remain centered between controls.
+  - **Animation Reset Protection:** Added `strcmp` guard checks in `update_t0_target_label()` and `refresh_waypoint_table_ui()` so marquee scroll animations are not restarted on identical text updates.
+  - **Immediate Tile 0 Refresh on File Switch / Table Tap:** Synchronously calls `update_t0_target_label()` on CSV file changes and table row clicks.
+
 ## [v0.2.32] - 2026-10-28
 
 ### Fixed

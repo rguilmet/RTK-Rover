@@ -269,9 +269,10 @@ extern "C" void waypoint_file_select_next(void)
     s_active_file_idx = (s_active_file_idx + 1) % s_waypoint_file_cnt;
     strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
     current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
+    current_settings.active_waypoint_index = 0;
     save_settings();
-    waypoint_load_csv(current_settings.active_waypoint_file);
     g_active_waypoint_idx = 0;
+    waypoint_load_csv(current_settings.active_waypoint_file);
     refresh_waypoint_table_ui();
 }
 
@@ -281,9 +282,10 @@ extern "C" void waypoint_file_select_prev(void)
     s_active_file_idx = (s_active_file_idx - 1 + s_waypoint_file_cnt) % s_waypoint_file_cnt;
     strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
     current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
+    current_settings.active_waypoint_index = 0;
     save_settings();
-    waypoint_load_csv(current_settings.active_waypoint_file);
     g_active_waypoint_idx = 0;
+    waypoint_load_csv(current_settings.active_waypoint_file);
     refresh_waypoint_table_ui();
 }
 
@@ -311,25 +313,40 @@ extern "C" void waypoint_manager_init(void)
 {
     create_default_sample_waypoints_if_missing();
     waypoint_scan_files();
+    g_active_waypoint_idx = current_settings.active_waypoint_index;
     waypoint_load_csv(current_settings.active_waypoint_file);
+    if (g_active_waypoint_idx < 0 || g_active_waypoint_idx >= g_waypoint_count) {
+        g_active_waypoint_idx = 0;
+    }
+    current_settings.active_waypoint_index = g_active_waypoint_idx;
+    if (g_waypoint_count > 0) {
+        Serial.printf("[WAYPOINTS] Restored active waypoint index: %d/%d ('%s')\n",
+                      g_active_waypoint_idx + 1, g_waypoint_count, g_waypoints[g_active_waypoint_idx].label);
+    }
 }
 
 extern "C" void waypoint_select_next(void)
 {
     if (g_waypoint_count <= 0) return;
     g_active_waypoint_idx = (g_active_waypoint_idx + 1) % g_waypoint_count;
+    current_settings.active_waypoint_index = g_active_waypoint_idx;
+    mark_settings_dirty();
 }
 
 extern "C" void waypoint_select_prev(void)
 {
     if (g_waypoint_count <= 0) return;
     g_active_waypoint_idx = (g_active_waypoint_idx - 1 + g_waypoint_count) % g_waypoint_count;
+    current_settings.active_waypoint_index = g_active_waypoint_idx;
+    mark_settings_dirty();
 }
 
 extern "C" void waypoint_select_index(int16_t idx)
 {
     if (idx >= 0 && idx < g_waypoint_count) {
         g_active_waypoint_idx = idx;
+        current_settings.active_waypoint_index = g_active_waypoint_idx;
+        mark_settings_dirty();
     }
 }
 

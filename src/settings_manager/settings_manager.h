@@ -28,6 +28,7 @@ struct SystemSettings {
     uint8_t  survey_avg_seconds;
     char     default_label_prefix[16];
     char     active_waypoint_file[48];
+    int16_t  active_waypoint_index;
     uint8_t  brightness;
     uint8_t  volume;
     bool     is_muted;

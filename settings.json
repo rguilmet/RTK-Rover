@@ -17,6 +17,7 @@
   "survey_avg_seconds": 5,
   "default_label_prefix": "PIN_",
   "active_waypoint_file": "/waypoints.csv",
+  "active_waypoint_index": 0,
   "brightness": 80,
   "volume": 40,
   "is_muted": false,
