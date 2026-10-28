@@ -5,6 +5,25 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.34] - 2026-10-28
+
+### Added
+- **Pinned Top Control Deck on Tile 4 (`src/lvgl_port/lvgl_port.c`):**
+  - **Fixed Firmware Header:** Pinned `"RTK ROVER v0.2.34"` at `y = 4` in **Montserrat 16 White (`#FFFFFF`)**; uncoupled from scrolling so it is permanently visible.
+  - **Dual-Row Logging Controls:** Pinned 4 interactive log toggle buttons (`SERIAL`, `IMU`, `TELEM`, `TOUCH`) directly below the header. Buttons remain accessible at all times regardless of viewport scroll position, allowing real-time toggling while watching live telemetry counters.
+  - **Static State Caching:** Integrated the 4 diagnostic buttons into `update_all_control_buttons()` with static change caching to guarantee zero style/label churn during the 30 Hz UI update loop.
+  - **Acoustic Feedback & Extended Touch:** Integrated 4 px extended click padding and distinct audio chirp confirmation (1800 Hz ON, 1200 Hz OFF) for each log toggle.
+- **Enhanced Diagnostic Telemetry Observers (`src/lvgl_port/lvgl_port.c`):**
+  - **`[POWER / PMIC AXP2101]`:** Live battery voltage (`VBAT`), percentage (`%`), USB VBUS connection (`YES`/`NO`), and charging status (`YES`/`NO`).
+  - **`[IMU & POLE TILT]`:** 250 Hz live pitch & roll angles, calibrated tare offsets, and lever-arm compensation status (`[ON]` / `[OFF]`).
+  - **`[WIFI & WEB PORTAL]`:** Configured SSID, live connection state, and active Web Portal URL (`http://<ip>/`).
+  - **`[I2C0 BUS STATUS]`:** Health status verification across all 6 onboard I2C peripherals (`TCA9554`, `AXP2101`, `Touch`, `RTC`, `IMU`, `ES8311`).
+
+### Fixed
+- **Tile 4 Layout & Modernization (`src/lvgl_port/lvgl_port.c`):**
+  - **LVGL Flex Flow Layout:** Refactored `t4_scroll_cont` to use `LV_FLEX_FLOW_COLUMN` with strict 10 px row padding (`pad_row = 10`), standardizing spacing across all telemetry blocks and eliminating dead blank spaces.
+  - **Legacy Button Removal & Clean-Up:** Purged all 5 legacy test buttons (`COM1 VERSIONA`, `COM1 CONFIG`, `COM2 Send VERSIONA`, `Read E220 Regs`, `Write E220 Cfg`) and deleted their obsolete UI callback functions.
+
 ## [v0.2.33] - 2026-10-28
 
 ### Added

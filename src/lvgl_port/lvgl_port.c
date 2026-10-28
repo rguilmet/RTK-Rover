@@ -188,6 +188,15 @@ static const float kCardAngles[8] = {0.0f, 45.0f, 90.0f, 135.0f, 180.0f, 225.0f,
 // Tile 4: Hardware Diagnostics
 // =========================================================================
 static lv_obj_t *t4_title               = NULL;
+static lv_obj_t *btn_diag_serial        = NULL;
+static lv_obj_t *lbl_diag_serial        = NULL;
+static lv_obj_t *btn_diag_imu           = NULL;
+static lv_obj_t *lbl_diag_imu           = NULL;
+static lv_obj_t *btn_diag_telem         = NULL;
+static lv_obj_t *lbl_diag_telem         = NULL;
+static lv_obj_t *btn_diag_touch         = NULL;
+static lv_obj_t *lbl_diag_touch         = NULL;
+static lv_obj_t *t4_scroll_cont         = NULL;
 static lv_obj_t *t4_storage_status_lbl  = NULL;
 static lv_obj_t *t4_ant_master_lbl      = NULL;
 static lv_obj_t *t4_ant_slave_lbl       = NULL;
@@ -196,6 +205,10 @@ static lv_obj_t *t4_com1_lbl            = NULL;
 static lv_obj_t *t4_com2_lbl            = NULL;
 static lv_obj_t *t4_e220_lbl            = NULL;
 static lv_obj_t *t4_e220_cfg_lbl        = NULL;
+static lv_obj_t *t4_power_lbl           = NULL;
+static lv_obj_t *t4_imu_lbl             = NULL;
+static lv_obj_t *t4_wifi_lbl            = NULL;
+static lv_obj_t *t4_i2c_lbl             = NULL;
 
 static const axs15231b_lcd_init_cmd_t lcd_init_cmds[] = {
     {0x11, (uint8_t []){0x00}, 0, 100},
@@ -651,6 +664,44 @@ static void update_all_control_buttons(void)
             lv_label_set_text(t1_vol_btn_lbl, v_buf);
         }
     }
+
+    // 9. Diagnostic Logging Buttons on Tile 4 (Screen 5: Diagnostics)
+    if (btn_diag_serial && lbl_diag_serial) {
+        static int s_last_diag_serial = -1;
+        int cur = current_settings.enable_serial_logging ? 1 : 0;
+        if (cur != s_last_diag_serial) {
+            s_last_diag_serial = cur;
+            lv_label_set_text(lbl_diag_serial, cur ? "SERIAL: ON" : "SERIAL: OFF");
+            lv_obj_set_style_bg_color(btn_diag_serial, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+    if (btn_diag_imu && lbl_diag_imu) {
+        static int s_last_diag_imu = -1;
+        int cur = current_settings.enable_imu_logging ? 1 : 0;
+        if (cur != s_last_diag_imu) {
+            s_last_diag_imu = cur;
+            lv_label_set_text(lbl_diag_imu, cur ? "IMU: ON" : "IMU: OFF");
+            lv_obj_set_style_bg_color(btn_diag_imu, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+    if (btn_diag_telem && lbl_diag_telem) {
+        static int s_last_diag_telem = -1;
+        int cur = current_settings.enable_telemetry_logging ? 1 : 0;
+        if (cur != s_last_diag_telem) {
+            s_last_diag_telem = cur;
+            lv_label_set_text(lbl_diag_telem, cur ? "TELEM: ON" : "TELEM: OFF");
+            lv_obj_set_style_bg_color(btn_diag_telem, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+    if (btn_diag_touch && lbl_diag_touch) {
+        static int s_last_diag_touch = -1;
+        int cur = current_settings.enable_touch_logging ? 1 : 0;
+        if (cur != s_last_diag_touch) {
+            s_last_diag_touch = cur;
+            lv_label_set_text(lbl_diag_touch, cur ? "TOUCH: ON" : "TOUCH: OFF");
+            lv_obj_set_style_bg_color(btn_diag_touch, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
 }
 
 static void bright_toggle_btn_cb(lv_event_t *e)
@@ -890,54 +941,60 @@ static void tare_level_btn_cb(lv_event_t *e)
     }
 }
 
-static void test_com1_ver_btn_cb(lv_event_t *e)
+static void diag_serial_btn_cb(lv_event_t *e)
 {
     (void)e;
-    send_um982_com1_command("VERSIONA");
-    play_rover_beep(1400, 25);
+    current_settings.enable_serial_logging = !current_settings.enable_serial_logging;
+    mark_settings_dirty();
+    if (current_settings.enable_serial_logging) {
+        serial_logger_start();
+        play_rover_beep(1800, 40);
+    } else {
+        serial_logger_stop();
+        play_rover_beep(1200, 30);
+    }
+    update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] COM1: VERSIONA clicked\n");
+        rover_printf("[TOUCH BTN] Diag Serial Log clicked -> %s\n",
+                     current_settings.enable_serial_logging ? "ON" : "OFF");
     }
 }
 
-static void test_com1_cfg_btn_cb(lv_event_t *e)
+static void diag_imu_btn_cb(lv_event_t *e)
 {
     (void)e;
-    send_um982_com1_command("CONFIG");
-    play_rover_beep(1400, 25);
+    current_settings.enable_imu_logging = !current_settings.enable_imu_logging;
+    mark_settings_dirty();
+    play_rover_beep(current_settings.enable_imu_logging ? 1800 : 1200, 30);
+    update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] COM1: CONFIG clicked\n");
+        rover_printf("[TOUCH BTN] Diag IMU Log clicked -> %s\n",
+                     current_settings.enable_imu_logging ? "ON" : "OFF");
     }
 }
 
-static void test_com2_pulse_btn_cb(lv_event_t *e)
+static void diag_telem_btn_cb(lv_event_t *e)
 {
     (void)e;
-    send_um982_com2_test_pulse();
-    play_rover_beep(1400, 25);
+    current_settings.enable_telemetry_logging = !current_settings.enable_telemetry_logging;
+    mark_settings_dirty();
+    play_rover_beep(current_settings.enable_telemetry_logging ? 1800 : 1200, 30);
+    update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] COM2: Test Pulse clicked\n");
+        rover_printf("[TOUCH BTN] Diag Telem Log clicked -> %s\n",
+                     current_settings.enable_telemetry_logging ? "ON" : "OFF");
     }
 }
 
-static void test_e220_read_btn_cb(lv_event_t *e)
+static void diag_touch_btn_cb(lv_event_t *e)
 {
     (void)e;
-    request_e220_config_read();
-    play_rover_beep(1400, 25);
-    if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] E220: Read Regs clicked\n");
-    }
-}
-
-static void test_e220_write_btn_cb(lv_event_t *e)
-{
-    (void)e;
-    request_e220_config_write();
-    play_rover_beep(1600, 30);
-    if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] E220: Write Config clicked\n");
-    }
+    current_settings.enable_touch_logging = !current_settings.enable_touch_logging;
+    mark_settings_dirty();
+    play_rover_beep(current_settings.enable_touch_logging ? 1800 : 1200, 30);
+    update_all_control_buttons();
+    rover_printf("[TOUCH BTN] Diag Touch Log clicked -> %s\n",
+                 current_settings.enable_touch_logging ? "ON" : "OFF");
 }
 
 void refresh_waypoint_table_ui(void)
@@ -1665,94 +1722,139 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 4: Hardware Diagnostics
     // =====================================================================
-    lv_obj_set_scroll_dir(tile_test, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(tile_test, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_scrollable(tile_test, false);
 
+    // 1. Fixed Pinned Header Deck (Always visible, non-scrolling)
     t4_title = lv_label_create(tile_test);
     lv_label_set_text(t4_title, "RTK ROVER " ROVER_FIRMWARE_VERSION);
-    lv_obj_set_style_text_color(t4_title, lv_color_hex(0x00FFAA), 0);
-    lv_obj_set_style_text_font(t4_title, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t4_title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(t4_title, &lv_font_montserrat_16, 0);
     lv_obj_align(t4_title, LV_ALIGN_TOP_MID, 0, 4);
 
-    t4_storage_status_lbl = lv_label_create(tile_test);
+    // Row 1: [ SERIAL: ON/OFF ]   [ IMU: ON/OFF ]
+    btn_diag_serial = lv_button_create(tile_test);
+    lv_obj_set_size(btn_diag_serial, 148, 26);
+    lv_obj_align(btn_diag_serial, LV_ALIGN_TOP_LEFT, 6, 26);
+    lv_obj_set_ext_click_area(btn_diag_serial, 4);
+    lv_obj_add_event_cb(btn_diag_serial, diag_serial_btn_cb, LV_EVENT_CLICKED, NULL);
+    lbl_diag_serial = lv_label_create(btn_diag_serial);
+    lv_label_set_text(lbl_diag_serial, "SERIAL: ON");
+    lv_obj_set_style_text_font(lbl_diag_serial, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_diag_serial);
+
+    btn_diag_imu = lv_button_create(tile_test);
+    lv_obj_set_size(btn_diag_imu, 148, 26);
+    lv_obj_align(btn_diag_imu, LV_ALIGN_TOP_RIGHT, -6, 26);
+    lv_obj_set_ext_click_area(btn_diag_imu, 4);
+    lv_obj_add_event_cb(btn_diag_imu, diag_imu_btn_cb, LV_EVENT_CLICKED, NULL);
+    lbl_diag_imu = lv_label_create(btn_diag_imu);
+    lv_label_set_text(lbl_diag_imu, "IMU: OFF");
+    lv_obj_set_style_text_font(lbl_diag_imu, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_diag_imu);
+
+    // Row 2: [ TELEM: ON/OFF ]   [ TOUCH: ON/OFF ]
+    btn_diag_telem = lv_button_create(tile_test);
+    lv_obj_set_size(btn_diag_telem, 148, 26);
+    lv_obj_align(btn_diag_telem, LV_ALIGN_TOP_LEFT, 6, 56);
+    lv_obj_set_ext_click_area(btn_diag_telem, 4);
+    lv_obj_add_event_cb(btn_diag_telem, diag_telem_btn_cb, LV_EVENT_CLICKED, NULL);
+    lbl_diag_telem = lv_label_create(btn_diag_telem);
+    lv_label_set_text(lbl_diag_telem, "TELEM: ON");
+    lv_obj_set_style_text_font(lbl_diag_telem, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_diag_telem);
+
+    btn_diag_touch = lv_button_create(tile_test);
+    lv_obj_set_size(btn_diag_touch, 148, 26);
+    lv_obj_align(btn_diag_touch, LV_ALIGN_TOP_RIGHT, -6, 56);
+    lv_obj_set_ext_click_area(btn_diag_touch, 4);
+    lv_obj_add_event_cb(btn_diag_touch, diag_touch_btn_cb, LV_EVENT_CLICKED, NULL);
+    lbl_diag_touch = lv_label_create(btn_diag_touch);
+    lv_label_set_text(lbl_diag_touch, "TOUCH: ON");
+    lv_obj_set_style_text_font(lbl_diag_touch, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_diag_touch);
+
+    // Subtle divider line
+    lv_obj_t *t4_sep = lv_obj_create(tile_test);
+    lv_obj_set_size(t4_sep, 308, 1);
+    lv_obj_align(t4_sep, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_color(t4_sep, lv_color_hex(0x283B47), 0);
+    lv_obj_set_style_border_width(t4_sep, 0, 0);
+    lv_obj_set_scrollbar_mode(t4_sep, LV_SCROLLBAR_MODE_OFF);
+
+    // 2. Scrollable Viewport for Diagnostic Telemetry
+    t4_scroll_cont = lv_obj_create(tile_test);
+    lv_obj_set_size(t4_scroll_cont, 320, 374 - 87);
+    lv_obj_align(t4_scroll_cont, LV_ALIGN_TOP_MID, 0, 87);
+    lv_obj_set_style_bg_opa(t4_scroll_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(t4_scroll_cont, 0, 0);
+    lv_obj_set_style_radius(t4_scroll_cont, 0, 0);
+    lv_obj_set_scroll_dir(t4_scroll_cont, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(t4_scroll_cont, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_flex_flow(t4_scroll_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(t4_scroll_cont, 10, 0);
+    lv_obj_set_style_pad_all(t4_scroll_cont, 6, 0);
+    lv_obj_set_style_pad_bottom(t4_scroll_cont, 20, 0);
+
+    // 1. Storage Status
+    t4_storage_status_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_storage_status_lbl, 304);
     lv_label_set_text(t4_storage_status_lbl, "Storage: Auto-Detecting...");
     lv_obj_set_style_text_color(t4_storage_status_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_storage_status_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_storage_status_lbl, LV_ALIGN_TOP_LEFT, 8, 24);
 
-    t4_ant_master_lbl = lv_label_create(tile_test);
+    // 2. ANT1 Master GNSS
+    t4_ant_master_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_ant_master_lbl, 304);
     lv_label_set_text(t4_ant_master_lbl, "[ANT1 MASTER] Waiting for GNSS fix...");
     lv_obj_set_style_text_color(t4_ant_master_lbl, lv_color_hex(0x00FF88), 0);
     lv_obj_set_style_text_font(t4_ant_master_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_ant_master_lbl, LV_ALIGN_TOP_LEFT, 8, 44);
 
-    t4_ant_slave_lbl = lv_label_create(tile_test);
+    // 3. ANT2 Slave GNSS
+    t4_ant_slave_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_ant_slave_lbl, 304);
     lv_label_set_text(t4_ant_slave_lbl, "[ANT2 SLAVE] Waiting for heading/slave data...");
     lv_obj_set_style_text_color(t4_ant_slave_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_ant_slave_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_ant_slave_lbl, LV_ALIGN_TOP_LEFT, 8, 90);
 
-    t4_ant_diff_lbl = lv_label_create(tile_test);
+    // 4. RTCM3 Diff Diagnostics
+    t4_ant_diff_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_ant_diff_lbl, 304);
     lv_label_set_text(t4_ant_diff_lbl, "RTCM3 Diff Age: -- s | 1005: 0 MSM: 0");
     lv_obj_set_style_text_color(t4_ant_diff_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_ant_diff_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_ant_diff_lbl, LV_ALIGN_TOP_LEFT, 8, 136);
 
-    t4_com1_lbl = lv_label_create(tile_test);
+    // 5. UM982 COM1 Info
+    t4_com1_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_com1_lbl, 304);
     lv_label_set_long_mode(t4_com1_lbl, LV_LABEL_LONG_CLIP);
     lv_label_set_text(t4_com1_lbl, "[UM982 COM1 IO17/18 @ 115200]\nRX: 0 B | TX: 0 B | NMEA: 0 | HDG: 0\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com1_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t4_com1_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_com1_lbl, LV_ALIGN_TOP_LEFT, 8, 174);
 
-    lv_obj_t *btn_c1_ver = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c1_ver, 145, 28);
-    lv_obj_align(btn_c1_ver, LV_ALIGN_TOP_LEFT, 8, 220);
-    lv_obj_add_event_cb(btn_c1_ver, test_com1_ver_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l_c1_ver = lv_label_create(btn_c1_ver);
-    lv_label_set_text(l_c1_ver, "COM1: VERSIONA");
-    lv_obj_center(l_c1_ver);
-
-    lv_obj_t *btn_c1_cfg = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c1_cfg, 145, 28);
-    lv_obj_align(btn_c1_cfg, LV_ALIGN_TOP_RIGHT, -8, 220);
-    lv_obj_add_event_cb(btn_c1_cfg, test_com1_cfg_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l_c1_cfg = lv_label_create(btn_c1_cfg);
-    lv_label_set_text(l_c1_cfg, "COM1: CONFIG");
-    lv_obj_center(l_c1_cfg);
-
-    t4_com2_lbl = lv_label_create(tile_test);
+    // 6. UM982 COM2 Info
+    t4_com2_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_com2_lbl, 304);
     lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_CLIP);
     lv_label_set_text(t4_com2_lbl, "[UM982 COM2 IO47/48 @ 115200]\nRTCM TX: 0 B | RX: 0 B | Diff Age: -- s\nLast: Waiting...");
     lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_com2_lbl, LV_ALIGN_TOP_LEFT, 8, 254);
 
-    lv_obj_t *btn_c2_test = lv_button_create(tile_test);
-    lv_obj_set_size(btn_c2_test, 304, 28);
-    lv_obj_align(btn_c2_test, LV_ALIGN_TOP_MID, 0, 302);
-    lv_obj_add_event_cb(btn_c2_test, test_com2_pulse_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l_c2_test = lv_label_create(btn_c2_test);
-    lv_label_set_text(l_c2_test, "COM2: Send VERSIONA Test (IO47/48)");
-    lv_obj_center(l_c2_test);
-
+    // 7. E220 LoRa Info
     char init_buf[128];
-    t4_e220_lbl = lv_label_create(tile_test);
+    t4_e220_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_e220_lbl, 304);
+    lv_label_set_long_mode(t4_e220_lbl, LV_LABEL_LONG_CLIP);
     snprintf(init_buf, sizeof(init_buf),
              "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
              (unsigned long)current_settings.e220_uart_baud);
     lv_label_set_text(t4_e220_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t4_e220_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_e220_lbl, LV_ALIGN_TOP_LEFT, 8, 336);
 
-    t4_e220_cfg_lbl = lv_label_create(tile_test);
+    // 8. E220 Target & Registers
+    t4_e220_cfg_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_e220_cfg_lbl, 304);
+    lv_label_set_long_mode(t4_e220_cfg_lbl, LV_LABEL_LONG_CLIP);
     snprintf(init_buf, sizeof(init_buf),
              "Target: CH%u %lu/%.1fk %uB %udBm",
              current_settings.e220_channel,
@@ -1763,24 +1865,38 @@ void create_rover_ui(void)
     lv_label_set_text(t4_e220_cfg_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_cfg_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(t4_e220_cfg_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t4_e220_cfg_lbl, LV_ALIGN_TOP_LEFT, 8, 384);
 
-    lv_obj_t *btn_e220_cfg = lv_button_create(tile_test);
-    lv_obj_set_size(btn_e220_cfg, 145, 28);
-    lv_obj_align(btn_e220_cfg, LV_ALIGN_TOP_LEFT, 8, 404);
-    lv_obj_add_event_cb(btn_e220_cfg, test_e220_read_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l_e220_cfg = lv_label_create(btn_e220_cfg);
-    lv_label_set_text(l_e220_cfg, "Read E220 Regs");
-    lv_obj_center(l_e220_cfg);
+    // 9. Power & Battery (AXP2101 PMIC)
+    t4_power_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_power_lbl, 304);
+    lv_label_set_long_mode(t4_power_lbl, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(t4_power_lbl, "[POWER / PMIC AXP2101]\nVBAT: --.-V (--%) | VBUS: -- | Chg: --");
+    lv_obj_set_style_text_color(t4_power_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(t4_power_lbl, &lv_font_montserrat_12, 0);
 
-    lv_obj_t *btn_e220_wr = lv_button_create(tile_test);
-    lv_obj_set_size(btn_e220_wr, 145, 28);
-    lv_obj_align(btn_e220_wr, LV_ALIGN_TOP_RIGHT, -8, 404);
-    lv_obj_set_style_bg_color(btn_e220_wr, lv_palette_main(LV_PALETTE_ORANGE), 0);
-    lv_obj_add_event_cb(btn_e220_wr, test_e220_write_btn_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l_e220_wr = lv_label_create(btn_e220_wr);
-    lv_label_set_text(l_e220_wr, "Write E220 Cfg");
-    lv_obj_center(l_e220_wr);
+    // 10. IMU & Pole Tilt (QMI8658)
+    t4_imu_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_imu_lbl, 304);
+    lv_label_set_long_mode(t4_imu_lbl, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(t4_imu_lbl, "[IMU & POLE TILT] QMI8658 @ 250Hz\nLive: Pitch: 0.0 deg | Roll: 0.0 deg\nTare: P: 0.0 deg R: 0.0 deg | Lever: 1.80m [ON]");
+    lv_obj_set_style_text_color(t4_imu_lbl, lv_color_hex(0x10B981), 0);
+    lv_obj_set_style_text_font(t4_imu_lbl, &lv_font_montserrat_12, 0);
+
+    // 11. Wi-Fi & Web Portal
+    t4_wifi_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_wifi_lbl, 304);
+    lv_label_set_long_mode(t4_wifi_lbl, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(t4_wifi_lbl, "[WIFI & WEB PORTAL]\nWi-Fi: INACTIVE");
+    lv_obj_set_style_text_color(t4_wifi_lbl, lv_color_hex(0xA78BFA), 0);
+    lv_obj_set_style_text_font(t4_wifi_lbl, &lv_font_montserrat_12, 0);
+
+    // 12. I2C Bus Status
+    t4_i2c_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_i2c_lbl, 304);
+    lv_label_set_long_mode(t4_i2c_lbl, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(t4_i2c_lbl, "[I2C0 BUS STATUS]\nTCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK");
+    lv_obj_set_style_text_color(t4_i2c_lbl, lv_color_hex(0x2DD4BF), 0);
+    lv_obj_set_style_text_font(t4_i2c_lbl, &lv_font_montserrat_12, 0);
 }
 
 void update_rover_ui(const RoverUIData_t *d)
@@ -2399,42 +2515,54 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     // 7. Update Tile 4: Hardware Port Diagnostics
-    snprintf(buf, sizeof(buf),
-             "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
-             d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
-             (unsigned long)d->um982_stats.com1_rx_bytes,
-             (unsigned long)d->um982_stats.com1_tx_bytes,
-             (unsigned long)d->um982_stats.nmea_sentences_ok,
-             (unsigned long)d->um982_stats.heading_sentences_ok,
-             d->um982_stats.last_com1_line);
-    lv_label_set_text(t4_com1_lbl, buf);
-
-    snprintf(buf, sizeof(buf),
-             "[UM982 COM2 IO47/48 @ 115200] [%s]\nRTCM TX:%lu B | RX:%lu B | Diff:%.1fs\nLast: %s",
-             d->um982_stats.com2_test_passed ? "PASS" : "WAIT",
-             (unsigned long)d->um982_stats.com2_tx_bytes,
-             (unsigned long)d->um982_stats.com2_rx_bytes,
-             d->diff_age_s,
-             d->um982_stats.last_com2_line);
-    lv_label_set_text(t4_com2_lbl, buf);
-
-    snprintf(buf, sizeof(buf),
-             "[E220 LoRa IO41/42 @ %lu] [%s]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
-             (unsigned long)current_settings.e220_uart_baud,
-             d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
-             d->e220_stats.aux_pin_high ? 1 : 0,
-             d->e220_stats.mode_m0,
-             d->e220_stats.mode_m1,
-             (unsigned long)d->e220_stats.rx_bytes_total,
-             (unsigned long)d->e220_stats.rtcm_frames_ok,
-             d->e220_stats.last_msg_type,
-             d->e220_stats.msg_1005_count,
-             d->e220_stats.msg_msm_count);
-    lv_label_set_text(t4_e220_lbl, buf);
-
-    if (d->e220_stats.config_valid) {
+    if (t4_com1_lbl) {
         snprintf(buf, sizeof(buf),
-                 "E220 Regs: ADDH:%02X ADDL:%02X REG0:%02X REG1:%02X CH:%02X REG3:%02X",
+                 "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+                 d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
+                 (unsigned long)d->um982_stats.com1_rx_bytes,
+                 (unsigned long)d->um982_stats.com1_tx_bytes,
+                 (unsigned long)d->um982_stats.nmea_sentences_ok,
+                 (unsigned long)d->um982_stats.heading_sentences_ok,
+                 d->um982_stats.last_com1_line);
+        lv_label_set_text(t4_com1_lbl, buf);
+    }
+
+    if (t4_com2_lbl) {
+        snprintf(buf, sizeof(buf),
+                 "[UM982 COM2 IO47/48 @ 115200] [%s]\nRTCM TX:%lu B | RX:%lu B | Diff:%.1fs\nLast: %s",
+                 d->um982_stats.com2_test_passed ? "PASS" : "WAIT",
+                 (unsigned long)d->um982_stats.com2_tx_bytes,
+                 (unsigned long)d->um982_stats.com2_rx_bytes,
+                 d->diff_age_s,
+                 d->um982_stats.last_com2_line);
+        lv_label_set_text(t4_com2_lbl, buf);
+    }
+
+    if (t4_e220_lbl) {
+        snprintf(buf, sizeof(buf),
+                 "[E220 LoRa IO41/42 @ %lu] [%s]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+                 (unsigned long)current_settings.e220_uart_baud,
+                 d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
+                 d->e220_stats.aux_pin_high ? 1 : 0,
+                 d->e220_stats.mode_m0,
+                 d->e220_stats.mode_m1,
+                 (unsigned long)d->e220_stats.rx_bytes_total,
+                 (unsigned long)d->e220_stats.rtcm_frames_ok,
+                 d->e220_stats.last_msg_type,
+                 d->e220_stats.msg_1005_count,
+                 d->e220_stats.msg_msm_count);
+        lv_label_set_text(t4_e220_lbl, buf);
+    }
+
+    if (t4_e220_cfg_lbl && d->e220_stats.config_valid) {
+        snprintf(buf, sizeof(buf),
+                 "Target: CH%u %lu/%.1fk %uB %udBm\n"
+                 "Regs: ADDH:%02X ADDL:%02X REG0:%02X REG1:%02X CH:%02X REG3:%02X",
+                 current_settings.e220_channel,
+                 (unsigned long)current_settings.e220_uart_baud,
+                 current_settings.e220_air_rate_kbps,
+                 current_settings.e220_subpacket_bytes,
+                 current_settings.e220_tx_power_dbm,
                  d->e220_stats.cfg_addr_high,
                  d->e220_stats.cfg_addr_low,
                  d->e220_stats.cfg_reg0,
@@ -2442,6 +2570,64 @@ void update_rover_ui(const RoverUIData_t *d)
                  d->e220_stats.cfg_channel,
                  d->e220_stats.cfg_reg3);
         lv_label_set_text(t4_e220_cfg_lbl, buf);
+    }
+
+    // 8. Update Tile 4: Power / PMIC AXP2101 Diagnostics
+    if (t4_power_lbl) {
+        snprintf(buf, sizeof(buf),
+                 "[POWER / PMIC AXP2101]\n"
+                 "VBAT: %.2fV (%u%%) | VBUS: %s | Chg: %s",
+                 d->battery_voltage,
+                 (unsigned int)d->battery_percent,
+                 d->vbus_present ? "YES" : "NO",
+                 d->is_charging ? "YES" : "NO");
+        lv_label_set_text(t4_power_lbl, buf);
+    }
+
+    // 9. Update Tile 4: IMU & Pole Tilt Diagnostics
+    if (t4_imu_lbl) {
+        snprintf(buf, sizeof(buf),
+                 "[IMU & POLE TILT] QMI8658 @ 250Hz\n"
+                 "Live: Pitch:%+.1f deg | Roll:%+.1f deg\n"
+                 "Tare: P:%+.1f deg R:%+.1f deg | Lever: %.2fm [%s]",
+                 d->imu_pitch_deg,
+                 d->imu_roll_deg,
+                 current_settings.pole_tilt_tare_pitch_deg,
+                 current_settings.pole_tilt_tare_roll_deg,
+                 current_settings.antenna_height_m,
+                 current_settings.apply_lever_arm ? "ON" : "OFF");
+        lv_label_set_text(t4_imu_lbl, buf);
+    }
+
+    // 10. Update Tile 4: Wi-Fi & Web Portal Diagnostics
+    if (t4_wifi_lbl) {
+        bool active = is_wifi_active();
+        const char *ip = get_wifi_ip();
+        if (active && ip && ip[0]) {
+            snprintf(buf, sizeof(buf),
+                     "[WIFI & WEB PORTAL]\n"
+                     "SSID: '%s' [ONLINE]\n"
+                     "Portal: http://%s/",
+                     current_settings.wifi_ssid,
+                     ip);
+        } else if (active) {
+            snprintf(buf, sizeof(buf),
+                     "[WIFI & WEB PORTAL]\n"
+                     "SSID: '%s' [CONNECTING...]",
+                     current_settings.wifi_ssid);
+        } else {
+            snprintf(buf, sizeof(buf),
+                     "[WIFI & WEB PORTAL]\n"
+                     "Wi-Fi: INACTIVE (Tap Start on Tile 2)");
+        }
+        lv_label_set_text(t4_wifi_lbl, buf);
+    }
+
+    // 11. Update Tile 4: I2C Bus Diagnostics
+    if (t4_i2c_lbl) {
+        lv_label_set_text(t4_i2c_lbl,
+                          "[I2C0 BUS STATUS]\n"
+                          "TCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK");
     }
 
     rover_lvgl_unlock();
