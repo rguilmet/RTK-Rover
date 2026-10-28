@@ -1971,16 +1971,37 @@ void update_rover_ui(const RoverUIData_t *d)
 
     snprintf(buf, sizeof(buf), "+/-%s", acc_str);
     lv_label_set_text(hdr_m_acc_lbl, buf);
+    lv_obj_set_style_text_color(hdr_m_acc_lbl, fix_col, 0);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-    uint32_t rtcm_age_ms = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
-    if (rtcm_age_ms < 15000) {
-        snprintf(buf, sizeof(buf), "RTCM:%u.%us", (unsigned int)(rtcm_age_ms / 1000), (unsigned int)((rtcm_age_ms % 1000) / 100));
+    uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
+
+    // RTCM Diff Age & Color Logic:
+    // If receiver has an active differential solution (diff_age_s > 0), display receiver's actual diff age
+    if (d->diff_age_s > 0.05f && d->diff_age_s < 99.0f) {
+        snprintf(buf, sizeof(buf), "RTCM:%.1fs", d->diff_age_s);
         lv_label_set_text(hdr_m_rtcm_lbl, buf);
-        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x00FF88), 0);
+        if (d->diff_age_s <= 2.0f) {
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x00FF88), 0); // Fresh Green (<= 2.0s)
+        } else if (d->diff_age_s <= 5.0f) {
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFA500), 0); // Warning Orange (2.1 - 5.0s)
+        } else {
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Stale Red (> 5.0s)
+        }
+    } else if (d->diff_age_s >= 99.0f) {
+        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:>99s");
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0);
     } else {
-        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Wait");
-        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFF8800), 0);
+        // No differential fix active (Single / No Fix)
+        if (last_radio_rx_age < 5000) {
+            // Radio receiving packets, but no differential fix yet (syncing or waiting for 1005/1006)
+            lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Sync");
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFA500), 0); // Amber/Orange
+        } else {
+            // No radio packets arriving
+            lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Wait");
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Red
+        }
     }
 
     // Row 3: Dual-Antenna Heading Status & Metrics
@@ -2527,21 +2548,30 @@ void update_rover_ui(const RoverUIData_t *d)
                      alt_str,
                      d->e220_stats.msg_1005_count,
                      d->e220_stats.msg_msm_count);
+            if (d->diff_age_s <= 2.0f) {
+                lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0x00FF88), 0); // Fresh Green
+            } else if (d->diff_age_s <= 5.0f) {
+                lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0xFFA500), 0); // Warning Orange
+            } else {
+                lv_obj_set_style_text_color(t4_base_station_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Stale Red
+            }
         } else if (d->base_station_id > 0 || d->diff_age_s < 30.0f) {
             snprintf(buf, sizeof(buf),
                      "[BASE STATION] ID:#%u | Diff:%.1fs\n"
-                     "Pos: Waiting for RTCM 1005 ARP...\n"
+                     "Pos: Waiting for RTCM 1005/1006 ARP...\n"
                      "RTCM: 1005:%u MSM:%u",
                      d->base_station_id,
                      d->diff_age_s,
                      d->e220_stats.msg_1005_count,
                      d->e220_stats.msg_msm_count);
+            lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0xFFA500), 0);
         } else {
             snprintf(buf, sizeof(buf),
                      "[BASE STATION] Waiting for RTCM corrections...\n"
                      "Diff: --.-s | 1005:%u MSM:%u",
                      d->e220_stats.msg_1005_count,
                      d->e220_stats.msg_msm_count);
+            lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0x888888), 0);
         }
         lv_label_set_text(t4_base_station_lbl, buf);
     }
@@ -2572,7 +2602,7 @@ void update_rover_ui(const RoverUIData_t *d)
 
     if (t4_e220_lbl) {
         snprintf(buf, sizeof(buf),
-                 "[E220 LoRa IO41/42 @ %lu] [%s]\nAUX:%d M0:%u M1:%u | RX:%lu B | RTCM OK:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+                 "[E220 LoRa IO41/42 @ %lu] [%s]\nAUX:%d M0:%u M1:%u | RX:%lu B | OK:%lu Err:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
                  (unsigned long)current_settings.e220_uart_baud,
                  d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
                  d->e220_stats.aux_pin_high ? 1 : 0,
@@ -2580,10 +2610,16 @@ void update_rover_ui(const RoverUIData_t *d)
                  d->e220_stats.mode_m1,
                  (unsigned long)d->e220_stats.rx_bytes_total,
                  (unsigned long)d->e220_stats.rtcm_frames_ok,
+                 (unsigned long)d->e220_stats.rtcm_crc_errors,
                  d->e220_stats.last_msg_type,
                  d->e220_stats.msg_1005_count,
                  d->e220_stats.msg_msm_count);
         lv_label_set_text(t4_e220_lbl, buf);
+        if (d->e220_stats.rtcm_crc_errors > 0) {
+            lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFA500), 0); // Highlight in Orange on errors
+        } else {
+            lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0); // Normal yellow
+        }
     }
 
     if (t4_e220_cfg_lbl && d->e220_stats.config_valid) {

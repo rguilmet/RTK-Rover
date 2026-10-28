@@ -85,6 +85,8 @@ static void handle_gga_sentence(char *line)
 
     if (f[13] && f[13][0]) {
         gnss_state.diff_age_s = (float)atof(f[13]);
+    } else {
+        gnss_state.diff_age_s = 0.0f;
     }
     if (n > 14 && f[14] && f[14][0]) {
         gnss_state.base_station_id = (uint16_t)atoi(f[14]);

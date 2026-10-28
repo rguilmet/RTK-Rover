@@ -5,6 +5,27 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.39] - 2026-10-28
+
+### Added
+- **On-the-Fly RTCM CRC24Q Verification & Dropped Packet Detection (`src/e220_driver/e220_driver.cpp`, `src/rover_api.h`):**
+  - Integrated streaming 24-bit Qualcomm CRC (`CRC24Q`, polynomial `0x1864CFB`) verification across all incoming RTCM3 frames. Valid frames with matching CRC increment `rtcm_frames_ok`.
+  - Added mid-frame inter-byte timeout ($250\text{ ms}$) and CRC error detection to increment `rtcm_crc_errors` on dropped LoRa packets or corrupted frames.
+  - Added `Err:%lu` count to periodic `[TELEM]` diagnostic serial output.
+
+### Changed
+- **Coordinated Dynamic UI Color Coding (`src/lvgl_port/lvgl_port.c`):**
+  - **Precision Font Color Follows Fix Badge:** In Row 2, the `+/- %s` horizontal accuracy text font now dynamically tracks the Master Fix Badge color (`Green` on `RTK FIX`, `Orange` on `RTK FLT`, `Blue` on `DGPS`, `Amber` on `SINGLE`, `Red` on `NO FIX`), eliminating misleading green precision text during single-point fixes.
+  - **Dynamic RTCM Freshness Indicator:** In Row 2, `hdr_m_rtcm_lbl` now tracks true differential age (`diff_age_s`):
+    - $\le 2.0\text{s}$: Fresh **Green** (`#00FF88`).
+    - $2.1\text{s} – 5.0\text{s}$: Warning **Orange** (`#FFA500`).
+    - $> 5.0\text{s}$: Stale **Red** (`#FF4444`).
+    - Syncing / Waiting: Displays `RTCM:Sync` (Orange) or `RTCM:Wait` (Red).
+  - **Tile 4 E220 Packet Diagnostics:** Displays `OK:%lu Err:%lu`, highlighted in glowing Orange (`#FFA500`) whenever packet drops or CRC errors occur.
+  - **Tile 4 Base Station Freshness:** Base Station telemetry card now color-codes by differential age ($\le 2\text{s}$ green, $\le 5\text{s}$ orange, $> 5\text{s}$ red).
+- **Stale Differential Age Reset (`src/um982_driver/um982_driver.cpp`):**
+  - Explicitly resets `gnss_state.diff_age_s = 0.0f` when `$GNGGA` field 13 is empty (Single fix or lost differential), preventing stale differential ages from latching in memory or route logs.
+
 ## [v0.2.38] - 2026-10-28
 
 ### Changed

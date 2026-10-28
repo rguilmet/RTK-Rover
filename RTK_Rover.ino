@@ -204,7 +204,7 @@ void task_rover_core0(void *pvParameters)
                     else if (state.heading_source == HDG_SRC_HOLD) hdg_mode = "HLD";
                     else hdg_mode = state.heading_is_fixed ? "FIX" : "FLT";
                 }
-                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u)\n",
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u Err:%lu)\n",
                               (int)state.fix_type,
                               state.num_sats,
                               state.sats_in_view,
@@ -223,7 +223,8 @@ void task_rover_core0(void *pvParameters)
                               (unsigned long)state.e220_stats.rx_bytes_total,
                               (unsigned long)state.e220_stats.rtcm_frames_ok,
                               state.e220_stats.msg_1005_count,
-                              state.e220_stats.msg_msm_count);
+                              state.e220_stats.msg_msm_count,
+                              (unsigned long)state.e220_stats.rtcm_crc_errors);
             }
         }
 

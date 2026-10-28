@@ -17,9 +17,21 @@ typedef enum {
 } RtcmParseState_t;
 
 static RtcmParseState_t rtcm_state = RTCM_WAIT_PREAMBLE;
-static uint16_t rtcm_payload_len = 0;
-static uint16_t rtcm_bytes_read  = 0;
-static uint8_t  rtcm_hdr_buf[6]  = {0};
+static uint16_t rtcm_payload_len        = 0;
+static uint16_t rtcm_bytes_read         = 0;
+static uint8_t  rtcm_hdr_buf[6]         = {0};
+static uint32_t rtcm_crc_accum          = 0;
+static uint32_t rtcm_last_rx_byte_ms   = 0;
+
+static inline uint32_t rtcm_crc24q_step(uint32_t crc, uint8_t b)
+{
+    crc ^= ((uint32_t)b << 16);
+    for (int j = 0; j < 8; j++) {
+        crc <<= 1;
+        if (crc & 0x1000000) crc ^= 0x1864CFB;
+    }
+    return crc & 0xFFFFFF;
+}
 
 static bool e220_wait_aux_high(uint32_t timeout_ms)
 {
@@ -308,49 +320,69 @@ extern "C" void e220_run_powerup_selftest(void)
 
 static void feed_rtcm_sniffer(uint8_t b)
 {
+    rtcm_last_rx_byte_ms = millis();
+
     switch (rtcm_state) {
         case RTCM_WAIT_PREAMBLE:
             if (b == 0xD3) {
+                rtcm_crc_accum = rtcm_crc24q_step(0, 0xD3);
                 rtcm_state = RTCM_WAIT_LEN_H;
             }
             break;
 
         case RTCM_WAIT_LEN_H:
             if ((b & 0xFC) == 0x00) {
+                rtcm_crc_accum = rtcm_crc24q_step(rtcm_crc_accum, b);
                 rtcm_hdr_buf[0] = b;
                 rtcm_state = RTCM_WAIT_LEN_L;
-            } else if (b != 0xD3) {
+            } else if (b == 0xD3) {
+                e220_stats.rtcm_crc_errors++;
+                rtcm_crc_accum = rtcm_crc24q_step(0, 0xD3);
+                rtcm_state = RTCM_WAIT_LEN_H;
+            } else {
+                e220_stats.rtcm_crc_errors++;
                 rtcm_state = RTCM_WAIT_PREAMBLE;
             }
             break;
 
         case RTCM_WAIT_LEN_L:
+            rtcm_crc_accum = rtcm_crc24q_step(rtcm_crc_accum, b);
             rtcm_hdr_buf[1] = b;
             rtcm_payload_len = ((uint16_t)(rtcm_hdr_buf[0] & 0x03) << 8) | b;
             if (rtcm_payload_len > 0 && rtcm_payload_len <= 1023) {
                 rtcm_bytes_read = 0;
                 rtcm_state = RTCM_READ_PAYLOAD;
             } else {
+                e220_stats.rtcm_crc_errors++;
                 rtcm_state = RTCM_WAIT_PREAMBLE;
             }
             break;
 
         case RTCM_READ_PAYLOAD:
+            rtcm_crc_accum = rtcm_crc24q_step(rtcm_crc_accum, b);
             if (rtcm_bytes_read < 2) {
                 rtcm_hdr_buf[2 + rtcm_bytes_read] = b;
             }
             rtcm_bytes_read++;
             // Total frame after length is payload_len + 3 bytes CRC24Q
             if (rtcm_bytes_read >= rtcm_payload_len + 3) {
-                uint16_t msg_type = ((uint16_t)rtcm_hdr_buf[2] << 4) | ((rtcm_hdr_buf[3] >> 4) & 0x0F);
-                if (msg_type >= 1001 && msg_type <= 1300) {
-                    e220_stats.rtcm_frames_ok++;
-                    e220_stats.last_msg_type = msg_type;
-                    if (msg_type == 1005 || msg_type == 1006) {
-                        e220_stats.msg_1005_count++;
-                    } else if (msg_type >= 1071 && msg_type <= 1127) {
-                        e220_stats.msg_msm_count++;
+                // When entire frame + 3-byte CRC24Q is fed into polynomial division,
+                // remainder is exactly 0 for uncorrupted packets.
+                if (rtcm_crc_accum == 0) {
+                    uint16_t msg_type = ((uint16_t)rtcm_hdr_buf[2] << 4) | ((rtcm_hdr_buf[3] >> 4) & 0x0F);
+                    if (msg_type >= 1001 && msg_type <= 1300) {
+                        e220_stats.rtcm_frames_ok++;
+                        e220_stats.last_msg_type = msg_type;
+                        if (msg_type == 1005 || msg_type == 1006) {
+                            e220_stats.msg_1005_count++;
+                        } else if (msg_type >= 1071 && msg_type <= 1127) {
+                            e220_stats.msg_msm_count++;
+                        }
+                    } else {
+                        e220_stats.rtcm_crc_errors++;
                     }
+                } else {
+                    e220_stats.rtcm_crc_errors++;
                 }
                 rtcm_state = RTCM_WAIT_PREAMBLE;
             }
@@ -386,6 +418,12 @@ extern "C" void e220_poll_and_forward_rtcm(void)
             for (int i = 0; i < n; i++) {
                 feed_rtcm_sniffer(buf[i]);
             }
+        }
+    } else {
+        // Inter-byte timeout: If mid-frame and silence exceeds 250ms, mark dropped/truncated frame
+        if (rtcm_state != RTCM_WAIT_PREAMBLE && (millis() - rtcm_last_rx_byte_ms > 250)) {
+            e220_stats.rtcm_crc_errors++;
+            rtcm_state = RTCM_WAIT_PREAMBLE;
         }
     }
 }
