@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include <Wire.h>
+#include <sys/time.h>
+#include <time.h>
 #include "RtcDrv.hpp"
 #include "rtc_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
@@ -42,6 +44,25 @@ extern "C" void rtc_bsp_init(void)
     }
 }
 
+static void sync_system_clock(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second) {
+    if (year >= 2020 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        hour <= 23 && minute <= 59 && second <= 59) {
+        struct tm tm_buf;
+        memset(&tm_buf, 0, sizeof(tm_buf));
+        tm_buf.tm_year = year - 1900;
+        tm_buf.tm_mon  = month - 1;
+        tm_buf.tm_mday = day;
+        tm_buf.tm_hour = hour;
+        tm_buf.tm_min  = minute;
+        tm_buf.tm_sec  = second;
+        time_t epoch = mktime(&tm_buf);
+        if (epoch > 0) {
+            struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+            settimeofday(&tv, NULL);
+        }
+    }
+}
+
 extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
 {
     rtc.setDateTime(year, month, day, hour, minute, second);
@@ -52,6 +73,7 @@ extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8
     cached_rtc_time.minute = minute;
     cached_rtc_time.second = second;
     last_rtc_read_ms       = millis();
+    sync_system_clock(year, month, day, hour, minute, second);
 }
 
 extern "C" RtcDateTime_t i2c_rtc_get(void)
@@ -72,6 +94,12 @@ extern "C" RtcDateTime_t i2c_rtc_get(void)
             cached_rtc_time.minute = datetime.getMinute();
             cached_rtc_time.second = datetime.getSecond();
             cached_rtc_time.week   = datetime.getWeek();
+
+            // Sync system time if system clock is uninitialized (e.g. at boot)
+            time_t sys_now = time(NULL);
+            if (sys_now < 946684800) { // Jan 1, 2000
+                sync_system_clock(y, m, d, cached_rtc_time.hour, cached_rtc_time.minute, cached_rtc_time.second);
+            }
         }
     }
     return cached_rtc_time;
