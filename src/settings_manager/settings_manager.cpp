@@ -28,9 +28,9 @@ struct SystemSettings current_settings = {
     true,             // apply_lever_arm
     0.0f,             // pole_tilt_tare_pitch_deg
     0.0f,             // pole_tilt_tare_roll_deg
-    38400,            // e220_uart_baud (38400 baud paces UART input to prevent radio FIFO overflow)
+    19200,            // e220_uart_baud (19200 baud paces UART input to stay safely below 38.4k air throughput, preventing FIFO overflow)
     55,               // e220_channel (CH 55 = 905.125 MHz)
-    62.5f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
+    38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
     200,              // e220_subpacket_bytes (200, 128, 64, 32)
     false,            // e220_lbt_enable

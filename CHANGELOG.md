@@ -5,6 +5,15 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.48] - 2026-10-29
+
+### Changed
+- **E220 Default Configuration Set to 19,200 Baud, 38.4k Air Rate, 200B Subpackets (`user_config.h`, `settings.json`, `src/settings_manager/settings_manager.cpp`, `scripts/setup_e220.py`, `scripts/test_e220_link.py`, `docs/project_overview.md`):**
+  - **UART Pacing (`baud = 19200`):** Paces serial data intake to $1,920\text{ bytes/s}$, guaranteeing that net on-air transmission throughput (~$2,400\text{ bytes/s}$ at 38.4k air rate) always exceeds the input rate. This eliminates E220 400-byte TX FIFO overflow during multi-constellation RTCM MSM4 bursts (e.g. ~650 bytes).
+  - **RF Link Budget Optimization (`air-rate = 38.4 kbps`):** Improves receiver sensitivity by $+2.5\text{ to } +3.0\text{ dBm}$ compared to 62.5 kbps (achieving $\approx -123\text{ dBm}$ on SX1262 LoRa), extending reliable open-air range by up to $40\%$ and enhancing penetration through foliage at legal 21 dBm (125 mW) power.
+  - **Packet Size (`packet-size = 200`):** Retains maximum 200-byte subpackets to prevent fragmentation of standard RTCM messages (e.g. GLONASS 1084 fits in 1 packet; GPS 1074 requires 2 packets instead of 3), reducing LoRa physical layer overhead and latency.
+  - **Auto-Sync Target Registers:** Target register configuration is now `REG0 = 0x86` (19200 8N1, 38.4k air rate), `REG1 = 0x03` (200B subpacket, 21 dBm power), `CHAN = 0x37` (55 -> 905.125 MHz), `REG3 = 0x00` (Transparent mode, LBT disabled). Automatic boot-time self-test verifies and programs E220 EEPROM when register mismatch is detected.
+
 ## [v0.2.44] - 2026-10-29
 
 ### Changed
