@@ -298,10 +298,6 @@ static void handleRoot() {
         "  });"
         "  rows.forEach(function(r) { tbody.appendChild(r); });"
         "}"
-        "(function syncClock() {"
-        "  var d = new Date();"
-        "  fetch('/set_time?y=' + d.getFullYear() + '&m=' + (d.getMonth()+1) + '&d=' + d.getDate() + '&h=' + d.getHours() + '&min=' + d.getMinutes() + '&s=' + d.getSeconds()).catch(function(){});"
-        "})();"
         "</script></head><body><h1>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</h1>";
 
     auto upload_html = [](const char* fs_param, const char* title) -> String {
