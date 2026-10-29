@@ -223,7 +223,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=f"Configure E220 transceiver (v{__version__})")
     parser.add_argument("--interface", choices=['gpio', 'ftdi'], default='gpio', help="Hardware connection type (default: gpio)")
     parser.add_argument("--port", default="/dev/ttyAMA0", help="Serial port")
-    parser.add_argument("--baud", type=int, default=115200, help="Operational Baud (default: 115200)")
+    parser.add_argument("--baud", type=int, default=38400, help="Operational Baud (default: 38400)")
     parser.add_argument("--query", action="store_true", help="Read registers only")
     parser.add_argument("--reset-only", action="store_true")
     parser.add_argument("--freq", type=float, default=905.125, help="RF frequency in MHz (default: 905.125)")

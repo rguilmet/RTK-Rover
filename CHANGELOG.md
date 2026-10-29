@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.44] - 2026-10-29
+
+### Changed
+- **E220 Radio UART Baud Rate Aligned to 38,400 bps (`user_config.h`, `settings.json`, `src/settings_manager/settings_manager.cpp`, `scripts/setup_e220.py`, `scripts/test_e220_link.py`):**
+  - Updated default E220 UART communication speed to 38,400 baud (`REG0 = 0xA7`, bits `[7:5] = 0b101`, bits `[2:0] = 0b111` for 62.5 kbps air rate).
+  - Paces RTCM3 observation bursts entering the E220 transmitter from RTK-Base so the on-air transmission rate (62.5 kbps) exceeds the UART intake rate (38.4 kbps), completely preventing internal 400-byte FIFO buffer overflows and eliminating frame truncation on packets exceeding 200 bytes.
+  - Automatically verifies and re-programs E220 configuration to `REG0 = 0xA7` during rover boot self-test.
+
 ## [v0.2.42] - 2026-10-28
 
 ### Added

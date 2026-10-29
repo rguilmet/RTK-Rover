@@ -188,7 +188,7 @@ def main() -> int:
     )
     parser.add_argument("--port1", default="/dev/ttyAMA0", help="Transmitter E220 port (default: /dev/ttyAMA0)")
     parser.add_argument("--port2", default="/dev/ttyUSB0", help="Receiver E220 port (default: /dev/ttyUSB0)")
-    parser.add_argument("--baud", type=int, default=115200, help="Operational UART baud rate (default: 115200)")
+    parser.add_argument("--baud", type=int, default=38400, help="Operational UART baud rate (default: 38400)")
     parser.add_argument("--burst-size", type=int, default=2100, help="Burst payload size in bytes (default: 2100)")
     parser.add_argument("-v", "--version", action="version", version=f"{__app_name__} {__version__} ({__date__})")
     

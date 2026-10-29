@@ -28,7 +28,7 @@ struct SystemSettings current_settings = {
     true,             // apply_lever_arm
     0.0f,             // pole_tilt_tare_pitch_deg
     0.0f,             // pole_tilt_tare_roll_deg
-    115200,           // e220_uart_baud (115200 default matching Base Station & target config)
+    38400,            // e220_uart_baud (38400 baud paces UART input to prevent radio FIFO overflow)
     55,               // e220_channel (CH 55 = 905.125 MHz)
     62.5f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
