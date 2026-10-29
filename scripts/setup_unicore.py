@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Module: setup_unicore.py
-Description: Unified configuration wrapper for Unicore UM980 and UM982 GNSS receivers.
+Description: Backward-compatible alias for setup_um98x.py.
 Author: Roland L. Guilmet
 License: MIT
 """
 from __future__ import annotations
 import sys
-from setup_um980 import main
+from setup_um98x import main
 
 if __name__ == "__main__":
     sys.exit(main())
