@@ -31,6 +31,8 @@ public:
     void flushBuffer();
     const char* getCurrentFilename() const;
     uint32_t getBytesLogged() const;
+    void setTimestampEnabled(bool enabled);
+    bool isTimestampEnabled() const;
 };
 
 extern SerialLoggerClass SerialLogger;
@@ -45,6 +47,8 @@ void serial_logger_flush(void);
 const char* serial_logger_get_current_filename(void);
 uint32_t serial_logger_get_bytes_logged(void);
 int rover_printf(const char *format, ...);
+void serial_logger_set_timestamp_enabled(bool enabled);
+bool serial_logger_is_timestamp_enabled(void);
 
 #ifdef __cplusplus
 }
