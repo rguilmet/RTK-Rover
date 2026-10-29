@@ -1992,8 +1992,13 @@ void update_rover_ui(const RoverUIData_t *d)
         } else {
             lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Stale Red (> 5.0s)
         }
-    } else if (d->diff_age_s >= 99.0f) {
-        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:>99s");
+    } else if (d->diff_age_s >= 99.0f && d->diff_age_s < 999.0f) {
+        // Display real differential age even when stale (>99s) so user sees active count-up
+        snprintf(buf, sizeof(buf), "RTCM:%us", (unsigned int)d->diff_age_s);
+        lv_label_set_text(hdr_m_rtcm_lbl, buf);
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+    } else if (d->diff_age_s >= 999.0f) {
+        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:>999s");
         lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0);
     } else {
         // No differential fix active (Single / No Fix)

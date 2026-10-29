@@ -367,14 +367,17 @@ static void feed_rtcm_sniffer(uint8_t b)
             if (rtcm_bytes_read >= rtcm_payload_len + 3) {
                 uint16_t msg_type = ((uint16_t)rtcm_hdr_buf[2] << 4) | ((rtcm_hdr_buf[3] >> 4) & 0x0F);
                 if (msg_type >= 1001 && msg_type <= 1300) {
-                    e220_stats.rtcm_frames_ok++;
-                    e220_stats.last_msg_type = msg_type;
-                    if (msg_type == 1005 || msg_type == 1006) {
-                        e220_stats.msg_1005_count++;
-                    } else if (msg_type >= 1071 && msg_type <= 1130) {
-                        e220_stats.msg_msm_count++;
-                    }
-                    if (rtcm_crc_accum != 0) {
+                    if (rtcm_crc_accum == 0) {
+                        // Frame passed CRC24Q integrity check
+                        e220_stats.rtcm_frames_ok++;
+                        e220_stats.last_msg_type = msg_type;
+                        if (msg_type == 1005 || msg_type == 1006) {
+                            e220_stats.msg_1005_count++;
+                        } else if (msg_type >= 1071 && msg_type <= 1130) {
+                            e220_stats.msg_msm_count++;
+                        }
+                    } else {
+                        // Frame corrupted or truncated over the radio link
                         e220_stats.rtcm_crc_errors++;
                     }
                 } else {
