@@ -187,18 +187,18 @@ static String generate_dir_table_html(const char* title, const char* fs_param, c
 
     out += "<div class='sort-bar'>";
     out += "<span style='color:#94a3b8;font-size:12px;margin-right:4px;'>Quick Sort:</span>";
-    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 1, true, 'desc')\">⏱️ Newest First</button>";
-    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 1, true, 'asc')\">⏳ Oldest First</button>";
-    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 0, false, 'asc')\">🔤 Name (A-Z)</button>";
-    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 0, false, 'desc')\">🔤 Name (Z-A)</button>";
-    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 2, true, 'desc')\">📦 Largest First</button>";
+    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 1, true, 'desc')\">Newest First</button>";
+    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 1, true, 'asc')\">Oldest First</button>";
+    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 0, false, 'asc')\">Name (A-Z)</button>";
+    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 0, false, 'desc')\">Name (Z-A)</button>";
+    out += "<button type='button' class='btn-sort' onclick=\"sortTable('" + String(table_id) + "', 2, true, 'desc')\">Largest First</button>";
     out += "</div>";
 
     out += "<div class='tbl-wrap'><table id='" + String(table_id) + "'>";
     out += "<thead><tr>";
-    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 0, false)\" title=\"Click to sort by Filename\">File Name / Path <span class='sort-icon' id='" + String(table_id) + "_i0'>⇅</span></th>";
-    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 1, true)\" title=\"Click to sort by Date & Time\">Date &amp; Time <span class='sort-icon' id='" + String(table_id) + "_i1'>▼</span></th>";
-    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 2, true)\" title=\"Click to sort by Size\">Size <span class='sort-icon' id='" + String(table_id) + "_i2'>⇅</span></th>";
+    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 0, false)\" title=\"Click to sort by Filename\">File Name / Path <span class='sort-icon' id='" + String(table_id) + "_i0'></span></th>";
+    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 1, true)\" title=\"Click to sort by Date & Time\">Date &amp; Time <span class='sort-icon' id='" + String(table_id) + "_i1'> [v]</span></th>";
+    out += "<th onclick=\"toggleSort('" + String(table_id) + "', 2, true)\" title=\"Click to sort by Size\">Size <span class='sort-icon' id='" + String(table_id) + "_i2'></span></th>";
     out += "<th>Actions</th>";
     out += "</tr></thead><tbody>";
 
@@ -234,7 +234,7 @@ static String generate_dir_table_html(const char* title, const char* fs_param, c
 }
 
 static void handleRoot() {
-    String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><title>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</title><style>"
+    String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>RTK Rover Portal " + String(ROVER_FIRMWARE_VERSION) + "</title><style>"
         "body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:20px;background:#12181b;color:#e0e6ed;}"
         "h1{color:#00ffaa;margin-bottom:6px;}"
         "h2{color:#00d8ff;border-bottom:1px solid #334;padding-bottom:6px;margin-top:28px;}"
@@ -284,7 +284,7 @@ static void handleRoot() {
         "  tbl.setAttribute('data-dir-' + colIdx, dir);"
         "  for (var c = 0; c < 3; c++) {"
         "    var icon = document.getElementById(tableId + '_i' + c);"
-        "    if (icon) icon.innerText = (c === colIdx) ? (dir === 'asc' ? '▲' : '▼') : '⇅';"
+        "    if (icon) icon.innerText = (c === colIdx) ? (dir === 'asc' ? ' [^]' : ' [v]') : '';"
         "  }"
         "  rows.sort(function(a, b) {"
         "    var ca = a.cells[colIdx], cb = b.cells[colIdx];"
@@ -313,7 +313,7 @@ static void handleRoot() {
     html += generate_dir_table_html("Internal Flash (/ffat)", "ffat", "/ffat", "tbl_ffat");
 
     html += "</body></html>";
-    server.send(200, "text/html", html);
+    server.send(200, "text/html; charset=utf-8", html);
 }
 
 static void handleSetTime() {
@@ -391,7 +391,7 @@ static void handleView() {
     int slashIndex = path.lastIndexOf('/');
     String filename = (slashIndex >= 0) ? path.substring(slashIndex + 1) : path;
     
-    String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><title>View Image</title></head><body style='background:#12181b;color:white;text-align:center;font-family:sans-serif;padding:20px;'>";
+    String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>View Image</title></head><body style='background:#12181b;color:white;text-align:center;font-family:sans-serif;padding:20px;'>";
     html += "<h2 style='color:#00ffaa;'>" + filename + "</h2>";
     html += "<button onclick='dl()' style='padding:12px 24px;font-size:16px;background:#00d8ff;color:#000;font-weight:bold;border:none;border-radius:6px;cursor:pointer;'>Save Securely as PNG</button>";
     html += "<p style='color:#94a3b8;font-size:13px;margin-top:10px;margin-bottom:20px;'>Converts internal BMP to PNG via client browser to bypass HTTP download warnings.</p>";
@@ -404,7 +404,7 @@ static void handleView() {
     html += "a.href = c.toDataURL('image/png'); a.click();";
     html += "}</script></body></html>";
     
-    server.send(200, "text/html", html);
+    server.send(200, "text/html; charset=utf-8", html);
 }
 
 static void handleDelete() {

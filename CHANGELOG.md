@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.49] - 2026-10-29
+
+### Fixed
+- **Web Portal Sort Button UTF-8 Mojibake Elimination (`src/web_server/web_server.cpp`):**
+  - Removed all multi-byte Unicode emoji characters (`⏱️`, `⏳`, `🔤`, `📦`, `⇅`, `▲`, `▼`) from portal sort button labels and table column headers, strictly adhering to the project's pure ASCII requirement.
+  - Added explicit `<meta charset='utf-8'>` in HTML header and `Content-Type: text/html; charset=utf-8` in HTTP response headers to ensure clean cross-browser rendering without font-box or encoding artifacts.
+  - Replaced unicode sort arrows with clean ASCII indicators (` [v]`, ` [^]`).
+
 ## [v0.2.48] - 2026-10-29
 
 ### Changed
