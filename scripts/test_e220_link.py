@@ -15,7 +15,10 @@ import argparse
 import sys
 import time
 import os
-import serial
+try:
+    import serial
+except ImportError:
+    serial = None  # type: ignore
 
 __app_name__ = "test_e220_link"
 __version__ = "1.1.0"
@@ -134,6 +137,9 @@ def perform_burst_test(s1: serial.Serial, s2: serial.Serial, port1: str, port2: 
 
 
 def perform_test(port1: str, port2: str, baud: int, burst: int) -> int:
+    if serial is None:
+        print("[-] Error: 'pyserial' package is required. Install with: pip install pyserial", file=sys.stderr)
+        return 1
     print(f"=== {__app_name__} v{__version__} ===")
     print(f"[*] Opening {port1} and {port2} at {baud} baud...")
     try:

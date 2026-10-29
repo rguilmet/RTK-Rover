@@ -14,7 +14,10 @@ import argparse
 import sys
 import time
 from typing import Optional
-import serial
+try:
+    import serial
+except ImportError:
+    serial = None  # type: ignore
 
 try:
     import RPi.GPIO as GPIO
@@ -36,6 +39,8 @@ POWER_LEVELS_30D = {30: 0b00, 27: 0b01, 24: 0b10, 21: 0b11}
 class HardwareControllerBase:
     """Abstract base class for radio hardware manipulation."""
     def __init__(self, port: str, target_baud: int, timeout: float = 1.5):
+        if serial is None:
+            raise RuntimeError("'pyserial' package is required. Install with: pip install pyserial")
         self.port_name = port
         self.target_baud = target_baud
         self.timeout = timeout
