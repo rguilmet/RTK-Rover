@@ -24,6 +24,7 @@
 #include "src/codec_board/codec_init.h"
 #include "src/storage/route_logger.h"
 #include "src/storage/nmea_logger.h"
+#include "src/storage/rtcm_logger.h"
 #include "src/storage/serial_logger.h"
 #include "src/web_server/web_server.h"
 
@@ -464,6 +465,9 @@ void setup()
     if (current_settings.enable_nmea_logging) {
         nmea_logger_start();
     }
+    if (current_settings.enable_rtcm_logging) {
+        rtcm_logger_start();
+    }
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)
@@ -494,6 +498,11 @@ void loop()
     // Flush pending raw NMEA sentences to active storage medium
     if (nmea_logger_is_active()) {
         nmea_logger_flush();
+    }
+
+    // Flush pending raw RTCM packets to active storage medium
+    if (rtcm_logger_is_active()) {
+        rtcm_logger_flush();
     }
 
     // Flush pending serial monitor logs to active storage medium

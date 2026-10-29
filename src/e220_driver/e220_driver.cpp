@@ -2,6 +2,7 @@
 #include "../../user_config.h"
 #include "../um982_driver/um982_driver.h"
 #include "../settings_manager/settings_manager.h"
+#include "../storage/rtcm_logger.h"
 #include <Arduino.h>
 
 static E220LinkStats_t e220_stats = {};
@@ -411,6 +412,10 @@ extern "C" void e220_poll_and_forward_rtcm(void)
 
         // Forward raw RTCM bytes transparently to UM982 COM2
         um982_forward_rtcm_to_com2(buf, (size_t)n);
+
+        if (rtcm_logger_is_active()) {
+            rtcm_logger_feed(buf, (size_t)n);
+        }
 
         for (int i = 0; i < n; i++) {
             feed_rtcm_sniffer(buf[i]);

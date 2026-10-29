@@ -24,6 +24,7 @@
 #include "../waypoint_manager/waypoint_manager.h"
 #include "../storage/route_logger.h"
 #include "../storage/nmea_logger.h"
+#include "../storage/rtcm_logger.h"
 #include "../storage/serial_logger.h"
 #include "../web_server/web_server.h"
 
@@ -187,8 +188,8 @@ static const float kCardAngles[8] = {0.0f, 45.0f, 90.0f, 135.0f, 180.0f, 225.0f,
 // Tile 4: Hardware Diagnostics
 // =========================================================================
 static lv_obj_t *t4_title               = NULL;
-static lv_obj_t *btn_diag_serial        = NULL;
-static lv_obj_t *lbl_diag_serial        = NULL;
+static lv_obj_t *btn_diag_rtcm          = NULL;
+static lv_obj_t *lbl_diag_rtcm          = NULL;
 static lv_obj_t *btn_diag_imu           = NULL;
 static lv_obj_t *lbl_diag_imu           = NULL;
 static lv_obj_t *btn_diag_telem         = NULL;
@@ -665,13 +666,13 @@ static void update_all_control_buttons(void)
     }
 
     // 9. Diagnostic Logging Buttons on Tile 4 (Screen 5: Diagnostics)
-    if (btn_diag_serial && lbl_diag_serial) {
-        static int s_last_diag_serial = -1;
-        int cur = current_settings.enable_serial_logging ? 1 : 0;
-        if (cur != s_last_diag_serial) {
-            s_last_diag_serial = cur;
-            lv_label_set_text(lbl_diag_serial, cur ? "SERIAL: ON" : "SERIAL: OFF");
-            lv_obj_set_style_bg_color(btn_diag_serial, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+    if (btn_diag_rtcm && lbl_diag_rtcm) {
+        static int s_last_diag_rtcm = -1;
+        int cur = (current_settings.enable_rtcm_logging || rtcm_logger_is_active()) ? 1 : 0;
+        if (cur != s_last_diag_rtcm) {
+            s_last_diag_rtcm = cur;
+            lv_label_set_text(lbl_diag_rtcm, cur ? "RTCM LOG: ON" : "RTCM LOG: OFF");
+            lv_obj_set_style_bg_color(btn_diag_rtcm, cur ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
     if (btn_diag_imu && lbl_diag_imu) {
@@ -933,22 +934,22 @@ static void tare_level_btn_cb(lv_event_t *e)
     }
 }
 
-static void diag_serial_btn_cb(lv_event_t *e)
+static void diag_rtcm_btn_cb(lv_event_t *e)
 {
     (void)e;
-    current_settings.enable_serial_logging = !current_settings.enable_serial_logging;
+    current_settings.enable_rtcm_logging = !current_settings.enable_rtcm_logging;
     mark_settings_dirty();
-    if (current_settings.enable_serial_logging) {
-        serial_logger_start();
+    if (current_settings.enable_rtcm_logging) {
+        rtcm_logger_start();
         play_rover_beep(1800, 40);
     } else {
-        serial_logger_stop();
+        rtcm_logger_stop();
         play_rover_beep(1200, 30);
     }
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] Diag Serial Log clicked -> %s\n",
-                     current_settings.enable_serial_logging ? "ON" : "OFF");
+        rover_printf("[TOUCH BTN] Diag RTCM Log clicked -> %s\n",
+                     current_settings.enable_rtcm_logging ? "ON" : "OFF");
     }
 }
 
@@ -1725,16 +1726,16 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(t4_title, &lv_font_montserrat_16, 0);
     lv_obj_align(t4_title, LV_ALIGN_TOP_MID, 0, 4);
 
-    // Row 1: [ SERIAL: ON/OFF ]   [ IMU: ON/OFF ]
-    btn_diag_serial = lv_button_create(tile_test);
-    lv_obj_set_size(btn_diag_serial, 148, 26);
-    lv_obj_align(btn_diag_serial, LV_ALIGN_TOP_LEFT, 6, 26);
-    lv_obj_set_ext_click_area(btn_diag_serial, 4);
-    lv_obj_add_event_cb(btn_diag_serial, diag_serial_btn_cb, LV_EVENT_CLICKED, NULL);
-    lbl_diag_serial = lv_label_create(btn_diag_serial);
-    lv_label_set_text(lbl_diag_serial, "SERIAL: ON");
-    lv_obj_set_style_text_font(lbl_diag_serial, &lv_font_montserrat_12, 0);
-    lv_obj_center(lbl_diag_serial);
+    // Row 1: [ RTCM: ON/OFF ]   [ IMU: ON/OFF ]
+    btn_diag_rtcm = lv_button_create(tile_test);
+    lv_obj_set_size(btn_diag_rtcm, 148, 26);
+    lv_obj_align(btn_diag_rtcm, LV_ALIGN_TOP_LEFT, 6, 26);
+    lv_obj_set_ext_click_area(btn_diag_rtcm, 4);
+    lv_obj_add_event_cb(btn_diag_rtcm, diag_rtcm_btn_cb, LV_EVENT_CLICKED, NULL);
+    lbl_diag_rtcm = lv_label_create(btn_diag_rtcm);
+    lv_label_set_text(lbl_diag_rtcm, "RTCM LOG: OFF");
+    lv_obj_set_style_text_font(lbl_diag_rtcm, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_diag_rtcm);
 
     btn_diag_imu = lv_button_create(tile_test);
     lv_obj_set_size(btn_diag_imu, 148, 26);
