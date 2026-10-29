@@ -603,9 +603,11 @@ extern "C" void um982_driver_init(void)
                   digitalRead(ROVER_PIN_UM982_RXD1));
 
     Serial1.setRxBufferSize(4096);
+    Serial1.setTxBufferSize(1024);
     Serial1.begin(ROVER_UM982_COM1_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD0, ROVER_PIN_UM982_RXD0);
 
     Serial2.setRxBufferSize(1024);
+    Serial2.setTxBufferSize(4096);
     Serial2.begin(ROVER_UM982_COM2_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD1, ROVER_PIN_UM982_RXD1);
 
     um982_run_powerup_selftest();
