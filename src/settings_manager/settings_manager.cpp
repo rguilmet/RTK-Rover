@@ -1,4 +1,5 @@
 #include "settings_manager.h"
+#include "../../user_config.h"
 #include <ArduinoJson.h>
 #include <SD_MMC.h>
 #include <SD.h>
@@ -28,9 +29,10 @@ struct SystemSettings current_settings = {
     true,             // apply_lever_arm
     0.0f,             // pole_tilt_tare_pitch_deg
     0.0f,             // pole_tilt_tare_roll_deg
-    19200,            // e220_uart_baud (19200 baud paces UART input to stay safely below 38.4k air throughput, preventing FIFO overflow)
-    55,               // e220_channel (CH 55 = 905.125 MHz)
-    38.4f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
+    ROVER_E220_PROFILE_REV, // e220_profile_rev (Rev 2 = 115200 / CH 75 / 19.2k / 200B / 21dBm)
+    115200,           // e220_uart_baud (115200 8N1 matching Base Station e220_pacer and UM982 COM2)
+    75,               // e220_channel (CH 75 = 925.125 MHz, Rank #1 cleanest US ISM channel)
+    19.2f,            // e220_air_rate_kbps (2.4, 4.8, 9.6, 19.2, 38.4, 62.5)
     21,               // e220_tx_power_dbm (30, 27, 24, 21)
     200,              // e220_subpacket_bytes (200, 128, 64, 32)
     false,            // e220_lbt_enable
@@ -231,12 +233,35 @@ extern "C" void load_settings(void) {
     if (!doc["apply_lever_arm"].isNull()) current_settings.apply_lever_arm = doc["apply_lever_arm"];
     if (!doc["pole_tilt_tare_pitch_deg"].isNull()) current_settings.pole_tilt_tare_pitch_deg = doc["pole_tilt_tare_pitch_deg"];
     if (!doc["pole_tilt_tare_roll_deg"].isNull()) current_settings.pole_tilt_tare_roll_deg = doc["pole_tilt_tare_roll_deg"];
+    uint8_t loaded_e220_rev = 0;
+    if (!doc["e220_profile_rev"].isNull()) loaded_e220_rev = doc["e220_profile_rev"];
     if (!doc["e220_uart_baud"].isNull()) current_settings.e220_uart_baud = doc["e220_uart_baud"];
     if (!doc["e220_channel"].isNull()) current_settings.e220_channel = doc["e220_channel"];
     if (!doc["e220_air_rate_kbps"].isNull()) current_settings.e220_air_rate_kbps = doc["e220_air_rate_kbps"];
     if (!doc["e220_tx_power_dbm"].isNull()) current_settings.e220_tx_power_dbm = doc["e220_tx_power_dbm"];
     if (!doc["e220_subpacket_bytes"].isNull()) current_settings.e220_subpacket_bytes = doc["e220_subpacket_bytes"];
     if (!doc["e220_lbt_enable"].isNull()) current_settings.e220_lbt_enable = doc["e220_lbt_enable"];
+
+    bool migrate_e220_profile = (loaded_e220_rev < ROVER_E220_PROFILE_REV);
+    if (migrate_e220_profile) {
+        Serial.printf("[SETTINGS] Migrating E220 radio profile Rev %u -> Rev %u (115200 UART, CH %u / %.3f MHz, %.1fk Air, %uB, %udBm)\n",
+                      (unsigned int)loaded_e220_rev,
+                      (unsigned int)ROVER_E220_PROFILE_REV,
+                      (unsigned int)ROVER_E220_TARGET_CHAN,
+                      850.125f + (float)ROVER_E220_TARGET_CHAN,
+                      ROVER_E220_DEFAULT_AIR_RATE_KBPS,
+                      (unsigned int)ROVER_E220_DEFAULT_SUBPACKET_BYTES,
+                      (unsigned int)ROVER_E220_DEFAULT_TX_POWER_DBM);
+        current_settings.e220_profile_rev     = ROVER_E220_PROFILE_REV;
+        current_settings.e220_uart_baud       = ROVER_E220_TRANSPARENT_BAUD;
+        current_settings.e220_channel         = ROVER_E220_TARGET_CHAN;
+        current_settings.e220_air_rate_kbps   = ROVER_E220_DEFAULT_AIR_RATE_KBPS;
+        current_settings.e220_tx_power_dbm    = ROVER_E220_DEFAULT_TX_POWER_DBM;
+        current_settings.e220_subpacket_bytes = ROVER_E220_DEFAULT_SUBPACKET_BYTES;
+        current_settings.e220_lbt_enable      = false;
+    } else {
+        current_settings.e220_profile_rev = loaded_e220_rev;
+    }
     if (!doc["survey_avg_seconds"].isNull()) current_settings.survey_avg_seconds = doc["survey_avg_seconds"];
     if (!doc["default_label_prefix"].isNull()) strncpy(current_settings.default_label_prefix, doc["default_label_prefix"], sizeof(current_settings.default_label_prefix) - 1);
     if (!doc["active_waypoint_file"].isNull()) strncpy(current_settings.active_waypoint_file, doc["active_waypoint_file"], sizeof(current_settings.active_waypoint_file) - 1);
@@ -316,7 +341,7 @@ extern "C" void load_settings(void) {
     else if (!doc["log_touch_events"].isNull()) current_settings.enable_touch_logging = doc["log_touch_events"];
 
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
-    if (sd_card_mounted) {
+    if (sd_card_mounted && !migrate_e220_profile) {
         backup_file(FFat, "/settings.json", "/settings.json.bak");
         File ffat_file = FFat.open("/settings.json", "w");
         if (ffat_file) {
@@ -328,6 +353,10 @@ extern "C" void load_settings(void) {
     }
 
     if (fs_mux) xSemaphoreGive(fs_mux);
+
+    if (migrate_e220_profile) {
+        save_settings();
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -365,6 +394,7 @@ extern "C" void save_settings(void) {
     doc["apply_lever_arm"]           = current_settings.apply_lever_arm;
     doc["pole_tilt_tare_pitch_deg"]  = current_settings.pole_tilt_tare_pitch_deg;
     doc["pole_tilt_tare_roll_deg"]   = current_settings.pole_tilt_tare_roll_deg;
+    doc["e220_profile_rev"]          = current_settings.e220_profile_rev;
     doc["e220_uart_baud"]            = current_settings.e220_uart_baud;
     doc["e220_channel"]              = current_settings.e220_channel;
     doc["e220_air_rate_kbps"]        = current_settings.e220_air_rate_kbps;

@@ -4,6 +4,19 @@
 * **Hardware:** Waveshare ESP32-S3-Touch-LCD-3.5B (`320x480` Portrait QSPI `AXS15231B` display, Capacitive Touch `0x3B`, `AXP2101` PMIC `0x34`, `TCA9554` IO Expander `0x20`, `PCF85063` RTC `0x51`, `QMI8658` 6-DOF IMU `0x6B`, `ES8311` Audio Codec `0x18`), Holybro H-RTK Unicore UM982 Dual-Antenna RTK GNSS module, and Ebyte E220-900T30S 900MHz LoRa module.
 * **Firmware:** Dual-core FreeRTOS architecture (`Core 0` for real-time E220 $\rightarrow$ UM982 COM2 RTCM3 streaming, UM982 COM1 NMEA/`UNIHEADINGA`/`BASEINFOA` parsing, and 3D lever-arm kinematics with zero I2C access; `Core 1` for LVGL 9 rendering, exclusive `I2C_NUM_0` peripheral polling, queue-driven audio synthesis via `beepQueue`, screenshot generation, and storage).
 * **UI:** LVGL 9 (`320x480` Portrait) with a persistent 4-row Top Status Header Bar (Date/Time with `minutesOffsetToUTC`, SI/IMP badge, Wi-Fi badge, AXP2101 battery telemetry, Master Fix badge, Master SVs, accuracy, RTCM age, Slave Fix badge, Slave SVs, baseline length, true heading, and streamlined ground-tip coordinates in 14pt Montserrat) above 5 functional screens (Pin Seeker & Tactical Guidance, Field Survey Logger & Quick Settings, Multi-File CSV Browser, Dual-Antenna Compass/Bubble Level, and Hardware Diagnostics) navigated strictly via the persistent Bottom Screen Navigation Bar (`< Prev`, `X/5: Title`, `Next >`). Horizontal swipe gestures are disabled.
+* **Base Station Architecture (`pi4b-rtkbase`):**
+  - Raspberry Pi 4B running RTKBase with RTCM TCP service on port `5016` (`tcp://127.0.0.1:5016`).
+  - Stream explicitly filtered via `str2str` line: `"1006(5),1074,1084,1094,1230(10)"` producing ~625–650 Bytes/s.
+  - Python hardware pacer `e220_pacer.py v2.8.1` runs as `systemd` service (`e220-pacer.service`) with `TIOCEXCL` exclusive UART locking, startup Mode 3 EEPROM verification, Channel 75 ambient noise floor probing, source `CRC24Q` validation, `GPIO 22` hardware reset watchdog (`>1.5s` `AUX` LOW), and E220 Datasheet Section `5.6.2` two-regime `AUX` + silicon-calibrated Time-on-Air pacing (`35 ms` guard delay).
+* **E220-900T30S Radio Specifications (Base & Rover Aligned, Profile Rev 2):**
+  - Channel: `75` (`0x4B` = `925.125 MHz`, Rank `#1` cleanest US 902-928 MHz ISM channel in `test/e220-scan.csv` at `-96.23 dBm` avg, `+10.125 MHz` clear of `915.0 MHz` office Ecowitt weather station).
+  - UART: `115,200 baud, 8N1` (`REG0 = 0xE6`).
+  - Air Data Rate: `38.4 kbps` (`REG0 = 0xE6`). Restores `500 kHz` LoRa BW and `~37-45%` duty cycle so passive `32 MHz` `XTAL` on 1W `E220-900T30S` delivers `201..400B` two-subpacket RTCM frames atomically without thermal/carrier drift (`~ -123 dBm` sensitivity).
+  - Subpacket Size: `200 Bytes` (`REG1` bits `[7:6] = 0b00`, native `400-byte` buffer atomic framing).
+  - Mode 0 Live RSSI Register (`REG1` Bit 5 = `0x20`): Enabled (`REG1 = 0x23`), supporting `C0 C1 C2 C3 00 02` ambient noise + last-packet RSSI queries (dual `4-byte` `C1 00 <noise> <pkt>` and `5-byte` `C1 00 02 <noise> <pkt>` parser synchronized to post-`1094` inter-epoch quiet gap) without appending bytes to RX UART output (`REG3 = 0x00`).
+  - Transmission Power: `21 dBm` (125 mW close/medium-range testing, keep `>= 30-100 ft` separation to avoid `+14 dB` RX LNA saturation) / `30 dBm` (1 W long-range field production) (`REG1 = 0x23` / `0x20`).
+  - Transmission Mode: Transparent Mode 0 (M0=0, M1=0), LBT Disabled, Appended RSSI Byte Disabled (`REG3 = 0x00`).
+  - Full Target Register Profile: `ADDH=0x00 ADDL=0x00 REG0=0xE6 REG1=0x23 CHAN=0x4B REG3=0x00`.
 * **Constraints & Kinematics:**
   - **Shared Internal I2C0 Bus (Core 1 Exclusive):** All internal SMD peripherals share `I2C_NUM_0` on `GPIO 7` (SCL) and `GPIO 8` (SDA) at `400 kHz`, polled exclusively from **Core 1** (`Touch 0x3B` @ 30Hz, `QMI8658 0x6B` 12-byte atomic burst @ 10Hz independent of LVGL graphics mutex, `PCF85063 0x51` @ 1Hz cached, `AXP2101 0x34` @ 0.5Hz) protected by `i2c_bus_mutex` with automatic `i2c_master_bus_reset()` recovery.
   - **Portrait IMU Coordinate Frame & 6-DOF Telemetry:** Accelerometer $a_y$ drives horizontal roll ($b_x$), $a_x$ drives vertical pitch ($b_y$). Gyroscope measures angular rate at 64 LSB/(deg/s). Resting flat produces $(0.0^\circ, 0.0^\circ)$.
@@ -11,7 +24,6 @@
   - **Device-Relative UART Pin Labels:** All pin labels (`UM982_TXD0`, `UM982_RXD0`, `UM982_TXD1`, `UM982_RXD1`, `E220_TXD`, `E220_RXD`) are named relative to the external module (`<DEV>_TXD` = module output $\rightarrow$ ESP32 RX input; `<DEV>_RXD` = module input $\leftarrow$ ESP32 TX output).
   - **Dual-Antenna Lever-Arm & Pole Height Projection:** The UM982 reports the WGS84 position of the **Master Antenna**, while the survey pole centerline sits at the midpoint ($\frac{B}{2} = 0.2775\text{ m}$ for `0.555 m` spacing) between Master and Slave antennas at height `antenna_height_m` above the ground tip. `nav_engine` projects the Master position along the 3D `UNIHEADINGA` baseline vector (`heading`, `pitch`) to eliminate orbital offset when rotating the pole.
   - **Display Orientation Independence:** True heading comes strictly from the pole-mounted UM982 dual antennas, while the handheld Waveshare's `QMI8658` IMU tracks the enclosure gravity vector (`Held Flat`, `Viewing Angle`, `Clipped Vertically to Pole`) and supports bracket tilt taring for the 2D pole bubble level.
-  - **E220-900T30S Radio Spec:** Channel `55` (`0x37` = `905.125 MHz` to avoid weather sensors), `57600` 8N1 UART (`e220_uart_baud`, paced so 1,400B bursts don't overrun the 1,000B FIFO), `38.4k` Air Data Rate default (`REG0=0xC6`), `128-byte` packet (`REG1=0x43`), Level 3 `21 dBm` power (`REG1=0x43`), Transparent Mode, LBT Disabled (`REG3=0x00`).
 * **Code Style:** Strict C/C++ for firmware (`src/` modular subdirectories), pure Python for auxiliary scripts (`scripts/`). Maintain existing docstrings. Semantic versioning enforced (`ROVER_FIRMWARE_VERSION` in `user_config.h` for firmware).
 
 ---
@@ -25,31 +37,33 @@
 ---
 
 ## 3. HARD ROADBLOCKS & COMPULSIVE HALTS (WHAT NOT TO DO)
+* **NEVER** assume RTKBase port 5016 carries unfiltered raw receiver output. The stream is strictly filtered via `str2str` to `1006(5),1074,1084,1094,1230(10)` (~630–650 B/s). Do not confuse it with local raw `GNSS-1.rtcm3` files.
+* **NEVER** misinterpret E220 `AUX=1` as RF transmission complete! Per E220 Manual Section `5.6.2`, `AUX=1` means the 400-byte UART buffer emptied into the LLCC68 chip: `<200B` single-subpacket frames keep `AUX=1` throughout RF TX (must pace by calculated Time-on-Air + guard), while `201..400B` two-subpacket frames raise `AUX=1` the instant Subpacket 2 (`len - 200`) **starts** RF TX (must sleep `toa(len - 200) + guard` after `AUX` rising edge).
+* **NEVER** forward unverified raw bytes from E220 UART directly to `UM982 COM2` without passing the `rx_stage` `CRC24Q == 0` Gatekeeper; truncated head subpackets cause `UM982 COM2` to swallow subsequent valid `0xD3` preambles.
 * **NEVER** use single-precision `float` for WGS84 Latitude or Longitude storage or geodesic math (`float` has only ~24 bits of mantissa $\approx 1.5\text{ m}$ resolution at mid-latitudes, completely destroying centimeter-level RTK precision). Always use 64-bit `double` (`%.8f`).
 * **NEVER** wrap I2C sensor reads inside the LVGL graphics mutex `rover_lvgl_lock()`. Sensor polling runs on Core 1 independent of LVGL render frame times, protected by `i2c_bus_mutex`.
 * **NEVER** touch LVGL widget pointers from outside `lv_timer_handler()` without acquiring `rover_lvgl_lock()` and releasing via `rover_lvgl_unlock()`.
 * **NEVER** use `lv_label_set_text_fmt()` with floating-point specifiers (`%f`); because the global Arduino LVGL library compiles with `LV_USE_FLOAT = 0`, `lv_vsnprintf_inner` skips `%f` without advancing `va_arg(va, double)`, causing subsequent arguments to crash (`LoadProhibited`). Always format floats with standard C `snprintf(buf, sizeof(buf), ...)` followed by `lv_label_set_text()`.
 * **NEVER** execute filesystem operations (such as scanning `/survey_logged_pins.csv`) inside the 30 Hz UI rendering update loop. Dynamic identifiers must be evaluated only on dirty state changes and served from cached strings.
-* **NEVER** use non-ASCII Unicode characters (such as $\pm$, $\circ$, degree symbols, arrows) in UI strings; standard ASCII equivalents (`+/-`, `deg`, `->`) must be used to ensure font glyph compatibility.
+* **NEVER** use non-ASCII Unicode characters (such as $\pm$, $\circ$, degree symbols, arrows) in UI strings or web portals; standard ASCII equivalents (`+/-`, `deg`, `->`, `[v]`, `[^]`) must be used to ensure font glyph compatibility.
 * **NEVER** trigger waypoint logging from a short-press of the BOOT button (GPIO 0). Physical BOOT button is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
 
 ---
 
 ## 4. LOGISTICAL STATE & COMPLETED MILESTONES
-* **Completed (`v0.2.38`):**
-  - **Clean Prefix List & Unified Postfix:** Stripped trailing underscores from prefix list (`<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`). Unified all modes to the universal `base + "_L" + %03u` format with defensive trailing underscore sanitation.
-* **Completed (`v0.2.37`):**
-  - **Tile 2 Field Survey Redesign:** Integrated `<DERIVED>` prefix mode at dropdown index 0, eliminating separate Target Match switch. Added collision-free numbering via cached `/survey_logged_pins.csv` scanning. Expanded `WAYPOINT_LABEL_LEN` to 36 bytes with smart delimiter-aligned stem truncation. Added circular marquee on ID row and restructured rows vertically.
-* **Completed (`v0.2.36`):**
-  - **ANT2 Coordinates & Base Station Telemetry Delivery Fix:** Direct parsing of ANT2 lat/lon from `$GNGGAH` with dual-antenna geodetic projection fallback. Fixed base telemetry state copy and configured UM982 COM1 to push `BASEINFOA` at 1 Hz. Changed MicroSD storage label color to Electric Cyan (`#22D3EE`).
-* **Completed (`v0.2.35`):**
-  - **Full 6-DOF IMU Telemetry:** Implemented 12-byte atomic burst read on QMI8658 registers `0x35..0x40` capturing 3-axis Accelerometer (g) and 3-axis Gyroscope (dps). Inserted dedicated Base Station telemetry card in sky blue (`#38BDF8`). Auto-wrapped all diagnostic labels to 300 px width. Fixed preprocessor `"Serial" redefined` warning.
-* **Completed (`v0.2.34`):**
-  - **Pinned Diagnostic Top Deck:** Fixed firmware header in Montserrat 16 White. Pinned dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`) directly below header with static state change caching.
-* **Completed (`v0.2.24`):**
-  - **Screenshot Engine:** Long-press GPIO 0 ($\ge 1.5\text{ s}$) captures 24-bit uncompressed BMP screenshot directly to `/screenshots/screenshot_YYYYMMDD_HHMMSS.bmp` with audio beep confirmation.
-* **Completed (`v0.2.20`):**
-  - **Tactical Guidance Course-Up Canvas:** Rotating crossbar with green/amber antenna tips, green FOV wedge, LOS tracking vector, and 64-point breadcrumb trail.
-* **Completed (`v0.2.18`):**
-  - **Multi-File Waypoint Browser & Marquee:** Top bar file selector scanning `/waypoints.csv` and `/waypoints_*.csv` with circular marquee autoscroll and boot-time active file/index restoration.
-* **Current Status:** Firmware `v0.2.38` active, verified, documented, and fully production ready.
+* **Completed (`v0.2.49`):**
+  - **Web Portal UTF-8 / ASCII Sanitation:** Eliminated multi-byte emoji mojibake across sorting buttons and table headers. Added explicit UTF-8 meta tags and response headers.
+* **Completed (Oct 29 - E220 Radio Link Integration & Pacing):**
+  - **E220-900T30S Full Profile Alignment:** Synchronized Base and Rover to 115,200 baud, 19.2k air rate, 200B subpackets, CH 55 (905.125 MHz), 21 dBm, Transparent Mode (`REG0=0xE5, REG1=0x03, CHAN=0x37, REG3=0x00`).
+  - **`e220_pacer.py` (v1.2.0):** Developed closed-loop hardware pacing daemon on Raspberry Pi for RTKBase TCP stream with auto-config and post-write AUX falling/rising edge monitoring.
+  - **`set_e220_power.py` (v1.0.0):** Created live power level switching utility for Pi.
+  - **Link Diagnostics (`test/_013`, `_014`, `_015`):** Diagnosed Test 013 baud mismatch. Verified Test 014 100% byte conservation and decoded Msg 1006 and Msg 1084 with CRC Valid. Diagnosed dropped tail packets on multi-packet frames (>200B) due to missing post-write AUX wait, resolved in `e220_pacer.py` v1.2.0. Verified Test 015 base pacing with 2,961 packets, 109.0 ms exact air time pacing, 45.8% duty cycle, and zero warnings across 11.8 minutes.
+* **Completed (`v0.2.53` & `e220_pacer.py v2.7.0` - Oct 30):**
+  - **Forensic Diagnosis of `_018`..`_021-new-pacer`:** Proved binomial $p = 3.49\%$ subpacket reception rate across `1,291` RF subpackets (`96.5%` physical RF packet loss), discovered E220 Section `5.6.2` `AUX` FIFO-empty timing quirk (`500 ms` false timeouts on `<=200B`, Subpacket 2 air collision on `>200B`, and four `4.0 s` Base lockups), and proved `UM982 COM2` preamble-swallowing on truncated head subpackets (`31%` valid frame loss). Confirmed Base E220 on 5V rail with `100 uF + 0.1 uF` decoupling and `serial-getty@ttyAMA0.service` disabled (single PID on `/dev/ttyAMA0`).
+  - **Rover `v0.2.53`:** Implemented 1,536-byte Sliding-Window Store-and-Verify RTCM3 Gatekeeper (`CRC24Q == 0` before atomic `UM982 COM2` write; verified 13/13 frame recovery & 0 corrupt bytes on Test `_021` capture), `IO21` `AUX` edge-counter ISR, and non-blocking 5s Mode 0 `Noise/Pkt RSSI` (`dBm`) polling (`REG1 = 0x23`) displayed on Tile 4 and `[TELEM]`.
+  - **Base `e220_pacer.py v2.7.0`:** Implemented Section `5.6.2` two-regime pacing (`<=200B` ToA pacing + `201..400B` `AUX` rise + Subpacket 2 ToA + `35 ms` guard), `GPIO 22` hardware reset watchdog (`>1.5 s` `AUX` LOW), `TIOCEXCL` UART lock, source `CRC24Q` gate, and startup Channel 55 ambient RF noise probe.
+* **Completed (`v0.2.54` & `e220_pacer.py v2.8.1` - Oct 30):**
+  - **Spectrum Scan (`test/e220-scan.csv`) & Test `_022` + 16-Test Historical Audit:** Relocated Base antenna via 4-ft coax and scanned `CH 52..77`, identifying **`CH 75` (`925.125 MHz`)** as `#1` cleanest US ISM channel (`-96.23 dBm` avg, `-94 dBm` peak, `+10.125 MHz` clear of `915.0 MHz` Ecowitt). Decoded Test `_022` raw `rtcm-base_*.txt` Mode 0 RSSI bytes (`C1 00 A1 E3` = `-95 dBm` noise / `-29 dBm` packet; `C1 00 9E E0` = `-98 dBm` noise / `-32 dBm` packet), proving ultra-clean Rover self-noise, `4-byte` MCU RSSI reply format, and close-range indoor `+21 dBm` TX + `+14 dB` RX LNA front-end compression at `~5 m`. Audited all 16 historical wire-taps (`_005`..`_022`), proving native `400-byte` buffer atomic framing delivered `223` intact `> 200B` frames (`Fix: 4`) at `38.4k`/`62.5k` vs `0` across `8` consecutive `19.2k` tests (passive `32 MHz` `XTAL` thermal/carrier drift on 1W PA bursts).
+  - **Base `e220_pacer.py v2.8.1` & `e220-pacer.service`:** Restored `38.4 kbps` Air Data Rate (`REG0 = 0xE6`), migrated to `CH 75` (`925.125 MHz`, `CHAN = 0x4B`), calibrated `estimate_subpacket_air_s()` to measured `AUX_low` silicon timing (`148.1 ms` for `200B` @ `19.2k` -> `82.2 ms` for `200B` @ `38.4k`), and added dual `3/4-byte` ambient noise probe parsing.
+  - **Rover `v0.2.54`:** Added `ROVER_E220_PROFILE_REV = 2` one-time `/settings.json` auto-migration (`CH 75 / 38.4k` without overwriting Wi-Fi or geometry), dual `4-byte` / `5-byte` Mode 0 RSSI reply parser (`80 ms` timeout), and epoch-synchronized post-`1094` RSSI polling.
+* **Current Status:** Firmware `v0.2.54` & Pacer `v2.8.1` compiled and ready to deploy for Test `_023` (`>= 30-100+ ft` separation).

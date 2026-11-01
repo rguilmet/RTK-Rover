@@ -5,3 +5,7 @@ src/axs15231b/** linguist-vendored
 
 # Treat all C headers as C++ by default since this is an Arduino/PlatformIO project
 *.h linguist-language=C++
+
+# Enforce Unix LF line endings on Raspberry Pi shell scripts and systemd units
+*.sh text eol=lf
+*.service text eol=lf

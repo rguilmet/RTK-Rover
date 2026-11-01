@@ -1,0 +1,20 @@
+[Unit]
+Description=Ebyte E220 LoRa Hardware Pacing Driver for RTKBase
+After=network.target rtkbase.service
+Wants=network.target
+
+[Service]
+Type=simple
+# Running as root ensures uninterrupted access to /dev/ttyAMA0 and BCM GPIO lines:
+User=root
+WorkingDirectory=/tmp
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -u /usr/local/bin/e220_pacer.py --tcp-connect 127.0.0.1:5016 --port /dev/ttyAMA0 --auto-config --baud 115200 --air-rate 19.2 --packet-size 200 --channel 75 --power 21
+Restart=always
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

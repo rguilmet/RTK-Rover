@@ -205,7 +205,15 @@ void task_rover_core0(void *pvParameters)
                     else if (state.heading_source == HDG_SRC_HOLD) hdg_mode = "HLD";
                     else hdg_mode = state.heading_is_fixed ? "FIX" : "FLT";
                 }
-                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB TX:%luB NMEA:%lu | COM2 TX:%luB RX:%luB | E220 AUX:%d RX:%luB RTCM:%lu(1005:%u MSM:%u Err:%lu)\n",
+                char rssi_str[36];
+                if (state.e220_stats.rssi_valid) {
+                    snprintf(rssi_str, sizeof(rssi_str), "Noise:%ddBm Pkt:%ddBm",
+                             (int)state.e220_stats.ambient_noise_dbm,
+                             (int)state.e220_stats.last_pkt_rssi_dbm);
+                } else {
+                    snprintf(rssi_str, sizeof(rssi_str), "Noise:--dBm Pkt:--dBm");
+                }
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB NMEA:%lu | COM2 TX:%luB | E220 AUX:%d (Edges:%lu) %s RX:%luB Fwd:%luB OK:%lu (1006:%u 1074:%u 1084:%u 1094:%u 1230:%u) Err:%lu (Trunc:%lu) Orph:%luB\n",
                               (int)state.fix_type,
                               state.num_sats,
                               state.sats_in_view,
@@ -216,16 +224,22 @@ void task_rover_core0(void *pvParameters)
                               state.base_station_id,
                               state.diff_age_s,
                               (unsigned long)state.um982_stats.com1_rx_bytes,
-                              (unsigned long)state.um982_stats.com1_tx_bytes,
                               (unsigned long)state.um982_stats.nmea_sentences_ok,
                               (unsigned long)state.um982_stats.com2_tx_bytes,
-                              (unsigned long)state.um982_stats.com2_rx_bytes,
                               state.e220_stats.aux_pin_high ? 1 : 0,
+                              (unsigned long)state.e220_stats.aux_fall_count,
+                              rssi_str,
                               (unsigned long)state.e220_stats.rx_bytes_total,
+                              (unsigned long)state.e220_stats.rtcm_bytes_forwarded,
                               (unsigned long)state.e220_stats.rtcm_frames_ok,
                               state.e220_stats.msg_1005_count,
-                              state.e220_stats.msg_msm_count,
-                              (unsigned long)state.e220_stats.rtcm_crc_errors);
+                              state.e220_stats.msg_1074_count,
+                              state.e220_stats.msg_1084_count,
+                              state.e220_stats.msg_1094_count,
+                              state.e220_stats.msg_1230_count,
+                              (unsigned long)state.e220_stats.rtcm_crc_errors,
+                              (unsigned long)state.e220_stats.rtcm_trunc_drops,
+                              (unsigned long)state.e220_stats.rtcm_orphan_bytes);
             }
         }
 
@@ -377,7 +391,7 @@ void setup()
     }
 
     Serial.printf("\n====================================================\n");
-    Serial.printf("   RTK Rover %s — Power-Up Diagnostics\n", ROVER_FIRMWARE_VERSION);
+    Serial.printf("   RTK Rover %s -- Power-Up Diagnostics\n", ROVER_FIRMWARE_VERSION);
     Serial.printf("====================================================\n");
 
     // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard Peripherals
@@ -480,7 +494,7 @@ void setup()
     um982_driver_init();
 
     Serial.println("====================================================");
-    Serial.println("   Setup Complete — Launching FreeRTOS Tasks");
+    Serial.println("   Setup Complete -- Launching FreeRTOS Tasks");
     Serial.println("====================================================\n");
 
     // 7. Launch FreeRTOS Tasks

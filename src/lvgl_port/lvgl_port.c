@@ -1839,12 +1839,15 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
 
     // 7. E220 LoRa Info
-    char init_buf[128];
+    char init_buf[192];
     t4_e220_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_e220_lbl, 300);
     lv_label_set_long_mode(t4_e220_lbl, LV_LABEL_LONG_WRAP);
     snprintf(init_buf, sizeof(init_buf),
-             "[E220 LoRa IO41/42 @ %lu]\nAUX:1 M0:0 M1:0 | RX: 0 B | RTCM OK: 0\nLast Msg: -- | 1005: 0 | MSM: 0",
+             "[E220 LoRa IO41/42 @ %lu]\n"
+             "AUX:1 Edges:0 | Noise:--dBm Pkt:--dBm\n"
+             "RX:0B -> COM2:0B | OK:0 Err:0(0T)\n"
+             "1006:0 | 74:0 | 84:0 | 94:0 | Orph:0B",
              (unsigned long)current_settings.e220_uart_baud);
     lv_label_set_text(t4_e220_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
@@ -2610,19 +2613,36 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (t4_e220_lbl) {
+        char rssi_info[36];
+        if (d->e220_stats.rssi_valid) {
+            snprintf(rssi_info, sizeof(rssi_info), "Noise:%ddBm Pkt:%ddBm",
+                     (int)d->e220_stats.ambient_noise_dbm,
+                     (int)d->e220_stats.last_pkt_rssi_dbm);
+        } else {
+            snprintf(rssi_info, sizeof(rssi_info), "Noise:--dBm Pkt:--dBm");
+        }
         snprintf(buf, sizeof(buf),
-                 "[E220 LoRa IO41/42 @ %lu] [%s]\nAUX:%d M0:%u M1:%u | RX:%lu B | OK:%lu Err:%lu\nLast Msg:%u | 1005:%u | MSM:%u",
+                 "[E220 LoRa IO41/42 @ %lu] [%s]\n"
+                 "AUX:%d Edges:%lu | %s\n"
+                 "RX:%luB -> COM2:%luB | OK:%lu Err:%lu(%luT)\n"
+                 "1006:%u | 74:%u | 84:%u | 94:%u | 1230:%u\n"
+                 "Orphan:%luB",
                  (unsigned long)current_settings.e220_uart_baud,
                  d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
                  d->e220_stats.aux_pin_high ? 1 : 0,
-                 d->e220_stats.mode_m0,
-                 d->e220_stats.mode_m1,
+                 (unsigned long)d->e220_stats.aux_fall_count,
+                 rssi_info,
                  (unsigned long)d->e220_stats.rx_bytes_total,
+                 (unsigned long)d->e220_stats.rtcm_bytes_forwarded,
                  (unsigned long)d->e220_stats.rtcm_frames_ok,
                  (unsigned long)d->e220_stats.rtcm_crc_errors,
-                 d->e220_stats.last_msg_type,
+                 (unsigned long)d->e220_stats.rtcm_trunc_drops,
                  d->e220_stats.msg_1005_count,
-                 d->e220_stats.msg_msm_count);
+                 d->e220_stats.msg_1074_count,
+                 d->e220_stats.msg_1084_count,
+                 d->e220_stats.msg_1094_count,
+                 d->e220_stats.msg_1230_count,
+                 (unsigned long)d->e220_stats.rtcm_orphan_bytes);
         lv_label_set_text(t4_e220_lbl, buf);
         if (d->e220_stats.rtcm_crc_errors > 0) {
             lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFA500), 0); // Highlight in Orange on errors

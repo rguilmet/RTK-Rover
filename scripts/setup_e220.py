@@ -223,10 +223,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=f"Configure E220 transceiver (v{__version__})")
     parser.add_argument("--interface", choices=['gpio', 'ftdi'], default='gpio', help="Hardware connection type (default: gpio)")
     parser.add_argument("--port", default="/dev/ttyAMA0", help="Serial port")
-    parser.add_argument("--baud", type=int, default=19200, help="Operational Baud (default: 19200)")
+    parser.add_argument("--baud", type=int, default=115200, help="Operational Baud (default: 115200)")
     parser.add_argument("--query", action="store_true", help="Read registers only")
     parser.add_argument("--reset-only", action="store_true")
-    parser.add_argument("--freq", type=float, default=905.125, help="RF frequency in MHz (default: 905.125)")
+    parser.add_argument("--freq", type=float, default=925.125, help="RF frequency in MHz (default: 925.125 = CH 75)")
     parser.add_argument("--power", type=int, default=21, choices=[21, 24, 27, 30], help="TX power in dBm (default: 21)")
     parser.add_argument("--air-rate", type=float, default=38.4, choices=[2.4, 4.8, 9.6, 19.2, 38.4, 62.5], help="Air Data Rate in kbps (default: 38.4)")
     parser.add_argument("--packet-size", type=int, default=200, choices=[32, 64, 128, 200], help="Subpacket size in bytes (default: 200)")
@@ -263,7 +263,8 @@ def main() -> int:
 
         chan = int(round(args.freq - BASE_FREQ_MHZ))
         reg0 = (BAUD_RATES[args.baud] << 5) | (0b00 << 3) | AIR_DATA_RATES[args.air_rate]
-        reg1 = (SUBPACKET_SIZES[args.packet_size] << 6) | POWER_LEVELS_30D.get(args.power, 0b11)
+        # REG1 Bit 5 (0x20) = Enable Mode 0 Ambient Noise & Last Packet RSSI Register (C0 C1 C2 C3)
+        reg1 = (SUBPACKET_SIZES[args.packet_size] << 6) | 0x20 | POWER_LEVELS_30D.get(args.power, 0b11)
         
         # REG3 configuration: 0b00000000 strictly enforces Transparent Transmission Mode
         new_regs = bytes([existing_regs[0], existing_regs[1], reg0, reg1, chan, 0b00000000, existing_regs[6], existing_regs[7]])

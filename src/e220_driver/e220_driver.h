@@ -13,8 +13,9 @@ bool e220_read_config_registers(void);
 bool e220_write_default_config_registers(void);
 void e220_run_powerup_selftest(void);
 
-// Polls incoming E220 bytes, forwards immediately to UM982 COM2 (Serial2),
-// and parses RTCM3 (0xD3) frames for live diagnostic counts.
+// Polls incoming E220 bytes, stages and CRC24Q-verifies complete RTCM3 (0xD3)
+// frames before atomically forwarding to UM982 COM2 (Serial2), tracks AUX ISR
+// edges, and queries Mode 0 ambient/packet RSSI registers.
 void e220_poll_and_forward_rtcm(void);
 
 void e220_get_stats(E220LinkStats_t *stats_out);

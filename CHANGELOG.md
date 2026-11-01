@@ -5,11 +5,99 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.54] - 2026-10-30
+
+### Added
+- **One-Time `/settings.json` E220 Radio Profile Auto-Migration (`ROVER_E220_PROFILE_REV = 2`) (`user_config.h`, `settings.json`, `src/settings_manager/settings_manager.h`, `src/settings_manager/settings_manager.cpp`):**
+  - Added `e220_profile_rev` schema revisioning so existing SD card / `FFat` `/settings.json` files from `v0.2.53` (`CH 55 / 19.2 kbps`) automatically migrate once on first boot to Rev 2 (`115200 8N1`, `CH 75` = `925.125 MHz`, `38.4 kbps` Air, `200B` subpackets, `21 dBm` TX power) and persist cleanly to SD + `FFat` while preserving Wi-Fi credentials, antenna geometry, and subsequent user edits.
+- **Full-Band Spectrum Report & CSV Exporter (`scripts/scan_e220_channels.py v1.1.0`):**
+  - Upgraded passive Mode 0 RSSI scanner to report full per-channel statistics (`min`, `avg`, `median`, `p90`, `max`, `std` dBm, zone classification, and Ecowitt `915.0 MHz` offset) across all scanned channels and write plot-ready CSV files (`--csv`) with automatic `SUDO_UID`/`SUDO_GID` ownership restoration.
+
+### Changed
+- **Restored `38.4 kbps` Air Data Rate (`REG0 = 0xE6`) & Migrated RF Channel to `CH 75` (`925.125 MHz`) (`user_config.h`, `settings.json`, `scripts/e220_pacer.py v2.8.1`, `scripts/e220-pacer.service`, `scripts/setup_e220.py`):**
+  - **16-Test Wire-Tap Audit (`_005`..`_022`):** Proved the `E220-900T30S` native `400-byte` buffer delivered `223` intact `> 200 B` RTCM3 frames across `38.4 kbps` / `62.5 kbps` runs (`_007`, `_009`, `_010_desk-test` with `110/166` intact `> 200 B` frames and `Fix: 4`, `_011_field-test`), versus **`0`** intact `> 200 B` frames across `8` consecutive `19.2 kbps` runs (`_013`..`_022`). Because the `E220-900T30S` (`LLCC68` + 1W PA) uses a passive `32 MHz` crystal (`XTAL`, no `TCXO`), `38.4 kbps` (`500 kHz` LoRa BW, `~37-45%` air duty cycle vs `69%` at `19.2k`) restores `2x-4x` carrier/thermal drift tolerance while preserving native atomic `400-byte` framing (`~ -123 dBm` sensitivity).
+  - **Cleanest RF Channel Selection (`test/e220-scan.csv`):** After Base antenna relocation via 4-ft coax, migrated from `CH 55` (`905.125 MHz`) to **`CH 75` (`0x4B` = `925.125 MHz`)**, ranked `#1` cleanest US 902-928 MHz ISM channel (`-96.23 dBm` avg, `-94 dBm` peak, `+10.125 MHz` clear of `915.0 MHz` office Ecowitt weather telemetry).
+  - **Aligned Target EEPROM Profile (Base & Rover):** `ADDH=0x00 ADDL=0x00 REG0=0xE6 REG1=0x23 CHAN=0x4B(75) REG3=0x00`.
+
+### Fixed
+- **Dual `4-Byte` / `5-Byte` Mode 0 RSSI Parser & Inter-Epoch Synchronized Polling (`src/e220_driver/e220_driver.cpp`, `scripts/e220_pacer.py`):**
+  - Test `_022` raw wire-tap (`rtcm-base_2026-10-30_18-05-00-240.txt`) revealed the `E220-900T30S` MCU returns a `4-byte` Mode 0 RSSI reply (`0xC1 0x00 <noise> <pkt>`, omitting the `0x02` length byte; decoded `C1 00 A1 E3` = `-95 dBm` noise / `-29 dBm` packet and `C1 00 9E E0` = `-98 dBm` noise / `-32 dBm` packet, confirming ultra-clean Rover self-noise and close-range indoor `+21 dBm` TX + `+14 dB` RX LNA front-end compression at `~5 m`).
+  - Updated `e220_poll_and_forward_rtcm()` (`80 ms` reply timeout, `260 ms` truncation timeout) and `probe_ambient_noise()` to parse both `4-byte` and `5-byte` replies unambiguously, and synchronized Rover Mode 0 RSSI queries to the post-`1094` inter-epoch RF quiet gap (`30..350 ms` after `1094`, plus `2.5 s` boot probe and `10 s` idle fallback) to eliminate mid-burst RF query collisions.
+- **Hardware-Calibrated `E220-900T30S` Time-on-Air Model (`scripts/e220_pacer.py v2.8.1`):**
+  - Calibrated `estimate_subpacket_air_s()` directly against Test `_022` hardware `AUX_low` measurements (`165.0 ms` constant `t_uart + AUX_low` across `208..322 B` -> `148.1 ms` true `200 B` Time-on-Air @ `19.2k`; `~0.68` net coded efficiency -> `82.2 ms` for `200 B`, `65.0 ms` for `144 B`, `58.3 ms` for `122 B` @ `38.4k`).
+
+## [v0.2.53] - 2026-10-30
+
+### Added
+- **Rover Sliding-Window Store-and-Verify RTCM3 Gatekeeper (`src/e220_driver/e220_driver.cpp`, `src/rover_api.h`):**
+  - Replaced raw byte-by-byte passthrough to UM982 COM2 with a 1,536-byte sliding-window staging gatekeeper (`rx_stage`).
+  - Incoming E220 UART bytes are still recorded verbatim to `rtcm-base_*.txt` for raw forensic wire-tapping, while `um982_forward_rtcm_to_com2()` is called **atomically only after** a complete RTCM3 frame passes `0xD3` header validation and 24-bit `CRC24Q == 0`.
+  - Prevents truncated head subpackets (`200B` of a `>200B` frame) from poisoning UM982 COM2's hardware parser and swallowing subsequent valid preambles (which previously destroyed 31% of intact frames in Test `_021-new-pacer`).
+  - Performs 1-byte sliding resynchronization on CRC mismatches and 220 ms mid-frame truncation timeouts so intact frames arriving immediately behind a lost tail subpacket are rescued with zero loss.
+  - Added granular per-message-type counters (`1006`, `1074`, `1084`, `1094`, `1230`), verified forwarded byte counter (`rtcm_bytes_forwarded`), truncation counter (`rtcm_trunc_drops`), and stripped byte counter (`rtcm_orphan_bytes`).
+- **Rover Mode 0 AUX (`IO21`) Hardware Edge Counter ISR (`src/e220_driver/e220_driver.cpp`):**
+  - Added `IRAM_ATTR` GPIO `CHANGE` interrupt on `ROVER_PIN_E220_AUX` counting physical Mode 0 falling edges (`aux_fall_count`) and measuring `AUX` LOW pulse width in microseconds (`aux_last_low_us`), gated automatically during Mode 3 register access and local RSSI register reads.
+- **Live E220 Mode 0 Ambient Noise Floor & Last Packet RSSI (`user_config.h`, `src/e220_driver/e220_driver.cpp`, `src/lvgl_port/lvgl_port.c`, `RTK_Rover.ino`):**
+  - Enabled `REG1` Bit 5 (`0x20` -> target `REG1 = 0x23`) on both Base and Rover E220-900T30S transceivers (`REG3 = 0x00`, keeping RX UART payload 100% untouched without appended bytes).
+  - Non-blockingly polls `C0 C1 C2 C3 00 02` every 5 seconds when idle to report Channel 55 (`905.125 MHz`) **Ambient Noise Floor (`dBm`)** and **Last Packet RSSI (`dBm`)** on **Tile 4 (Hardware Diagnostics)** and in `[TELEM]` logs, with automatic zero-loss collision abort if a `0xD3` LoRa packet arrives simultaneously.
+
+### Fixed
+- **Base Station Datasheet Section 5.6.2 Two-Regime Pacer v2.7.0 (`scripts/e220_pacer.py`, `scripts/set_e220_power.py`):**
+  - **Eliminated False 500ms Single-Subpacket Stalls:** Per E220 Manual Section 5.6.2, `AUX=1` indicates the 400-byte UART buffer emptied into the LLCC68 chip (not RF completion); frames `<= 200B` transfer into an idle LLCC68 FIFO in `<0.5 ms` without holding `AUX` LOW. Replaced the 500 ms `AUX` fall wait on `<= 200B` frames with calibrated LoRa Time-on-Air + 35 ms guard pacing (~130 ms total instead of 695 ms, eliminating the 102-second TCP backlog drift observed in Test `_021`).
+  - **Eliminated Subpacket 2 Air Collisions on `201..400B` Frames:** On two-subpacket frames (`1074`, `1094`), `AUX` rises `HIGH` after ~109 ms the instant Subpacket 2 (`len - 200`) enters the LLCC68 FIFO and **begins** RF transmission. Added explicit `estimate_subpacket_air_s(len - 200) + guard_delay_s` wait after `AUX` rising edge so the next message never collides with Subpacket 2.
+  - **Hardware Watchdog Reset (`GPIO 22`):** Added automatic 50 ms active-LOW reset pulse on `RST` (`GPIO 22`) whenever `AUX` remains stuck `LOW` for `> 1.5 s` (recovering from the 4.0s radio lockups observed in Test `_021`).
+  - **Source RTCM3 `CRC24Q` Gate, Exclusive UART Lock & RF Noise Probe:** Added `TIOCEXCL` (`exclusive=True`) serial port locking, mandatory startup Mode 3 EEPROM verification (`REG1 = 0x23`, accepting `0xC0/0xC1` write acks), startup Channel 55 ambient noise floor probe (`C0 C1 C2 C3 00 01`), source `CRC24Q` validation (never transmitting non-RTCM or corrupt fragments), and stale TCP backlog shedding.
+- **Rover Fallback Config Alignment (`user_config.h`, `settings.json`, `src/settings_manager/settings_manager.cpp`):**
+  - Aligned fallback/default Rover E220 constants from legacy `57600 / 38.4k` to `115200 baud / 19.2 kbps / 200B / CH 55 / 21 dBm / REG1=0x23`.
+
+## [v0.2.52] - 2026-10-30
+
+### Fixed
+- **Base Station RTCM Hardware Pacer v1.4.1 (`scripts/e220_pacer.py`):**
+  - **AUX Falling Edge Window & Dwell Fallback:** Expanded post-write AUX falling edge poll window from 20 ms to 80 ms to cleanly accommodate the E220 internal UART idle overtime before keying transmission. Added automatic fallback air dwell time calculation (`calc_air_s = len * 8 / air_rate + 30ms`) in the event AUX does not assert LOW, guaranteeing that consecutive subpackets never collide in the E220 TX FIFO.
+  - **Unconditional Per-Frame Journal Logging:** Removed `if self.verbose:` gate on `[TX RTCM]` logs; systemd journal now displays real-time frame types, chunk breakdowns, and individual subpacket wait durations by default (with optional `-q`/`--quiet` flag).
+  - **Startup Version Banner:** Added unconditional startup banner outputting `e220_pacer v1.4.1`, hardware serial port, baud rate, RF channel, frequency (MHz), subpacket size, and guard delay.
+
+## [v0.2.51] - 2026-10-30
+
+### Added
+- **Base Station RTCM Frame-Aware Pacer v1.4.0 (`scripts/e220_pacer.py`):**
+  - Replaced blind 200-byte slicing with true **RTCM 3 Frame-Aware Packetization**:
+    - Complete RTCM frames under 200 bytes (Msg 1084 @ 129B, Msg 1006 @ 27B, Msg 1230 @ 18B) are transmitted as **single, complete, intact LoRa packets**. Zero frame fragmentation or splitting.
+    - RTCM frames exceeding 200 bytes (Msg 1074 @ ~229B, Msg 1094 @ ~283B) are dynamically split into $N = \lceil\text{len} / 200\rceil$ balanced subpackets (e.g. 115B + 114B, 142B + 141B). Neither subpacket reaches the 200-byte buffer limit, preventing internal module overflow.
+  - Increased default inter-packet guard delay to `45 ms` (`--guard-delay 0.045`), providing a generous 32 ms margin for the SX1262 receiver to drain its 128-byte UART FIFO, reset internal registers, and lock onto the next packet's preamble.
+  - Added per-frame transmission telemetry: `[TX RTCM] Type:1084 (129B) -> 1 pkt | Air+Wait: 61.2ms`.
+  - Added non-RTCM fallback: if non-RTCM bytes or an incomplete frame sits in the buffer for >150-300 ms, the pacer flushes immediately so non-RTCM streams are never stranded.
+
+### Fixed
+- **Rover RTCM Sniffer Cascade Recovery (`src/e220_driver/e220_driver.cpp`):**
+  - Reduced sniffer inter-byte recovery timeout from 3000 ms to **250 ms**: if a subpacket is lost over the air, the sniffer aborts the partial frame after 250 ms and resets to `RTCM_WAIT_PREAMBLE`, preventing subsequent valid epochs from having their `0xD3` preamble swallowed as payload bytes.
+  - Added clean 15 ms burst consolidation: UART reads arriving within 15 ms (such as 120B FIFO threshold + 80B remainder) are coalesced into a single `[E220 RX BURST] 200 B (gap: ...)` log entry.
+
+## [v0.2.50] - 2026-10-29
+
+### Added
+- **Base Station E220 Pacer v1.3.0 (`scripts/e220_pacer.py`):**
+  - Added mandatory `INTER_PACKET_GUARD_S = 0.025` (25 ms) inter-packet guard delay to allow the receiver E220 to drain its 200-byte UART output (17.36 ms @ 115,200 baud) and settle its SX1262 LoRa core into RX continuous mode before the next packet's 2ms preamble arrives.
+  - Immediate residual tail packet flushing (`if buffer: send_packet()`) eliminating inter-packet socket timeout stalling.
+- **Rover RTCM Sniffer & Burst Instrumentation (`src/e220_driver/e220_driver.cpp`):**
+  - Added real-time serial logging for RTCM frame status: `[RTCM OK]` with message type, payload length, and frame length, and `[RTCM CRC ERR]` with expected length and CRC value.
+  - Added burst arrival gap tracking: `[E220 RX BURST] %d B (gap: %lu ms)`.
+
 ## [v0.2.49] - 2026-10-29
+
+### Added
+- **Base Station E220 Hardware Pacer Daemon (`scripts/e220_pacer.py v1.2.0`, `scripts/e220-pacer.service`):**
+  - High-performance standalone Python hardware pacer running on Raspberry Pi 4B (`pi4b-rtkbase`) connecting RTKBase TCP stream (`127.0.0.1:5016`) to `/dev/ttyAMA0` @ 115,200 baud.
+  - Automatically verifies and programs E220-900T30S EEPROM registers (`REG0=0xE5, REG1=0x03, CHAN=0x37, REG3=0x00`) via `--auto-config`.
+  - Implements true closed-loop post-write AUX handshake: monitors physical AUX pin (BCM GPIO 27) for falling edge (RF transmit start) and rising edge (RF transmit complete over the air) plus 3ms guard delay, completely eliminating UART FIFO overflow and packet collision.
+  - 100% byte conservation verified across 389,094 bytes and 2,416 packets in Test 014.
+- **Dynamic Power Level Switching Utility (`scripts/set_e220_power.py v1.0.0`):**
+  - Interactive/CLI tool to switch transmission power levels (21, 24, 27, 30 dBm) safely while managing the systemd service.
 
 ### Fixed
 - **Web Portal Sort Button UTF-8 Mojibake Elimination (`src/web_server/web_server.cpp`):**
-  - Removed all multi-byte Unicode emoji characters (`⏱️`, `⏳`, `🔤`, `📦`, `⇅`, `▲`, `▼`) from portal sort button labels and table column headers, strictly adhering to the project's pure ASCII requirement.
+  - Removed all multi-byte Unicode emoji characters from portal sort button labels and table column headers, strictly adhering to the project's pure ASCII requirement.
   - Added explicit `<meta charset='utf-8'>` in HTML header and `Content-Type: text/html; charset=utf-8` in HTTP response headers to ensure clean cross-browser rendering without font-box or encoding artifacts.
   - Replaced unicode sort arrows with clean ASCII indicators (` [v]`, ` [^]`).
 
@@ -67,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Precision Font Color Follows Fix Badge:** In Row 2, the `+/- %s` horizontal accuracy text font now dynamically tracks the Master Fix Badge color (`Green` on `RTK FIX`, `Orange` on `RTK FLT`, `Blue` on `DGPS`, `Amber` on `SINGLE`, `Red` on `NO FIX`), eliminating misleading green precision text during single-point fixes.
   - **Dynamic RTCM Freshness Indicator:** In Row 2, `hdr_m_rtcm_lbl` now tracks true differential age (`diff_age_s`):
     - $\le 2.0\text{s}$: Fresh **Green** (`#00FF88`).
-    - $2.1\text{s} – 5.0\text{s}$: Warning **Orange** (`#FFA500`).
+    - $2.1\text{s} ??? 5.0\text{s}$: Warning **Orange** (`#FFA500`).
     - $> 5.0\text{s}$: Stale **Red** (`#FF4444`).
     - Syncing / Waiting: Displays `RTCM:Sync` (Orange) or `RTCM:Wait` (Red).
   - **Tile 4 E220 Packet Diagnostics:** Displays `OK:%lu Err:%lu`, highlighted in glowing Orange (`#FFA500`) whenever packet drops or CRC errors occur.
@@ -128,8 +216,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Full 6-DOF IMU Telemetry (`src/imu_bsp/imu_bsp.c`, `src/rover_api.h`, `RTK_Rover.ino`, `src/lvgl_port/lvgl_port.c`):**
   - **Single 12-Byte Atomic I2C Burst Read:** Expanded `imu_read()` from 6 bytes to 12 bytes starting at register `0x35` with address auto-increment. In one atomic bus transaction, reads Accelerometer X, Y, Z (`0x35..0x3A`) and Gyroscope X, Y, Z (`0x3B..0x40`) with zero additional I2C transactions or bus overhead.
   - **Calibrated Z-Axis & Gyroscope Units:** Accelerometer Z is converted at 8192 LSB/g (4g range); 3-axis Gyroscope (`gx`, `gy`, `gz`) is converted at 64 LSB/(deg/s) (512 dps full-scale range).
-  - **Tile 5 Diagnostics Display:** `t4_imu_lbl` now reports live `Pitch` & `Roll` (°), 3-axis `Acc(g): X, Y, Z`, 3-axis `Gyr(d/s): X, Y, Z`, calibrated tare offsets, and lever-arm compensation status.
-  - **Diagnostic IMU Serial Logging:** `[IMU]` and `[IMU POSE]` logs include live 3-axis acceleration (g) and angular velocity (°/s).
+  - **Tile 5 Diagnostics Display:** `t4_imu_lbl` now reports live `Pitch` & `Roll` (??), 3-axis `Acc(g): X, Y, Z`, 3-axis `Gyr(d/s): X, Y, Z`, calibrated tare offsets, and lever-arm compensation status.
+  - **Diagnostic IMU Serial Logging:** `[IMU]` and `[IMU POSE]` logs include live 3-axis acceleration (g) and angular velocity (??/s).
 - **Dedicated Base Station Telemetry Section (`src/lvgl_port/lvgl_port.c`):**
   - Inserted dedicated `[BASE STATION]` observer block directly beneath `[ANT1 MASTER]` and `[ANT2 SLAVE]` in sky blue (`#38BDF8`).
   - Displays Base Station ID (`#<id>`), RTCM differential age (`Diff: X.Xs`), exact WGS84 base coordinates (`Pos: Lat, Lon`, `Alt`) decoded from RTCM 1005 / UM982 `#BASEINFOA`, and RTCM message counters (1005 ARP and MSM).
@@ -198,7 +286,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Route recording toggle (`REC ON/OFF`): 1800 Hz, 40 ms on Start, 1200 Hz, 30 ms on Stop.
     - Waypoint table selection: 1500 Hz, 20 ms.
     - Survey Log Pin: 1750 Hz, 40 ms.
-    - Quick controls (Wi-Fi, NMEA, Serial Log, Brightness, Volume, Units, Tare): distinct 1400–1800 Hz tones.
+    - Quick controls (Wi-Fi, NMEA, Serial Log, Brightness, Volume, Units, Tare): distinct 1400???1800 Hz tones.
 - **Instrumented Real-Time Touch Diagnostics to Serial Monitor:**
   - Added `enable_touch_logging` setting to `RoverSettings_t` and `settings.json` (defaults to `true`).
   - Emits real-time diagnostic logs on touch transitions: `[TOUCH DOWN]`, `[TOUCH HELD]` (every 250 ms), and `[TOUCH UP]` reporting raw controller bytes (`buff[0..5]`), touch coordinates (`X, Y`), event flags, and active touch points.
@@ -446,7 +534,7 @@ otes) so surveyed pin files can be directly re-loaded as target navigation waypo
 - Removed the duplicate `SVs: xx/xx` readout from the Latitude line on Tile 0 (`t0_pos_lbl` in `src/lvgl_port/lvgl_port.c`), keeping `SV:xx/xx` in Row 2 of the persistent Top Header Bar (`hdr_sats_acc_lbl`).
 
 ### Fixed
-- Replaced the UTF-8 plus-minus character (`±` / `U+00B1`, which rendered as a missing-glyph box in LVGL's built-in ASCII `lv_font_montserrat_12` font) with standard ASCII `+/-` in `hdr_sats_acc_lbl` (`SV:xx/xx +/-1.8 cm`), and expanded `update_rover_ui()` format buffer to `256` bytes to silence `-Wformat-truncation=`.
+- Replaced the UTF-8 plus-minus character (`??` / `U+00B1`, which rendered as a missing-glyph box in LVGL's built-in ASCII `lv_font_montserrat_12` font) with standard ASCII `+/-` in `hdr_sats_acc_lbl` (`SV:xx/xx +/-1.8 cm`), and expanded `update_rover_ui()` format buffer to `256` bytes to silence `-Wformat-truncation=`.
 
 ## [v0.1.13] - 2026-10-24
 

@@ -51,17 +51,29 @@ typedef struct {
 // =========================================================================
 typedef struct {
     uint32_t rx_bytes_total;
+    uint32_t rtcm_bytes_forwarded; // Verified CRC24Q-valid bytes forwarded to UM982 COM2
     uint32_t rtcm_frames_ok;
-    uint32_t rtcm_crc_errors;
+    uint32_t rtcm_crc_errors;      // Total dropped frames (CRC mismatch + mid-frame truncation)
+    uint32_t rtcm_trunc_drops;     // Frames aborted due to missing tail subpacket (>220ms silence)
+    uint32_t rtcm_orphan_bytes;    // Non-preamble / orphan tail bytes stripped before UM982 COM2
+    uint32_t aux_fall_count;       // Mode 0 AUX (IO21) falling-edge interrupt counter
+    uint32_t aux_last_low_us;      // Most recent Mode 0 AUX LOW pulse width (microseconds)
     uint32_t last_rx_ms;
-    uint16_t last_msg_type;     // e.g. 1005, 1074, 1084, 1094, 1124
-    uint16_t msg_1005_count;    // Station ARP
-    uint16_t msg_msm_count;     // GPS/GLO/GAL/BDS MSM4/MSM7
+    uint16_t last_msg_type;        // e.g. 1006, 1074, 1084, 1094, 1230
+    uint16_t msg_1005_count;       // Station ARP (1005/1006)
+    uint16_t msg_msm_count;        // Total GPS/GLO/GAL/BDS MSM4/MSM7
+    uint16_t msg_1074_count;       // GPS MSM4
+    uint16_t msg_1084_count;       // GLONASS MSM4
+    uint16_t msg_1094_count;       // Galileo MSM4
+    uint16_t msg_1230_count;       // GLONASS Code-Phase Biases
+    bool     rssi_valid;           // True once C0 C1 C2 C3 RSSI registers read in Mode 0
+    int16_t  ambient_noise_dbm;    // Channel ambient noise floor in dBm (-(256 - raw))
+    int16_t  last_pkt_rssi_dbm;    // Last received LoRa packet RSSI in dBm (-(256 - raw))
     bool     aux_pin_high;
     uint8_t  mode_m0;
     uint8_t  mode_m1;
     bool     config_valid;
-    bool     config_matched;    // True if read registers match target settings.json
+    bool     config_matched;       // True if read registers match target settings.json
     uint8_t  cfg_addr_high;
     uint8_t  cfg_addr_low;
     uint8_t  cfg_reg0;
