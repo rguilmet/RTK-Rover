@@ -51,7 +51,7 @@ This retrospective captures the engineering and collaborative methodologies that
 
 ### 3.1. The Good
 * **Predictive Kinematics:** Deriving the 3D lever-arm projection mathematically before writing display code ensured that the ground-tip coordinates never orbited when rotating the pole.
-* **COGO Python Verification:** Building `reference/cogo_network_solver.py` allowed legal deed traverses to be solved and closed to $0.010\text{ ft}$ over $4,045\text{ ft}$, creating ground-truth control points (`PIN_DRIVEWAY_REF`, `PIN_TREE_BASE_REF`) that verified real-world RTK positioning to $1.9\text{ inches}$.
+* **COGO Python Verification:** Building `cogo_network_solver.py` allowed legal deed traverses to be solved and closed to $0.010\text{ ft}$ over $4,045\text{ ft}$, creating ground-truth control points (`PIN_DRIVEWAY_REF`, `PIN_TREE_BASE_REF`) that verified real-world RTK positioning to $1.9\text{ inches}$.
 * **Clean Architectural Refinement:** The progression of Tile 2 (Screen 2) from a complex dual-switch layout to a unified dropdown with `<DERIVED>`, clean names (`PIN`, `PIPE`, `MONUMENT`), and universal `_Lxxx` suffix was an exemplar of software simplification reducing user cognitive load.
 
 ### 3.2. The Bad
