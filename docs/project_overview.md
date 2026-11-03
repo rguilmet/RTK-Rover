@@ -1,7 +1,7 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v1.9.0`  
-**Last Updated:** October 30, 2026  
+**Document Version:** `v2.0.0`  
+**Last Updated:** November 3, 2026  
 **Firmware Target:** `v0.2.54`  
 **Python Ecosystem Target:** `v2.8.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
@@ -154,7 +154,7 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) — Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.2.38` in Montserrat 16 White) and dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
+  * **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.2.54` in Montserrat 16 White) and dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
   * **Scrollable Container:** Multi-line auto-wrapping across all telemetry blocks.
   * **Observers:** Storage status in Electric Cyan (`#22D3EE`), Antenna Master (ANT1) metrics, Antenna Slave (ANT2) metrics with live coordinates, dedicated Base Station card (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel, 3-axis Gyro), UM982 COM1/COM2 metrics, and E220 LoRa registers.
 
@@ -162,7 +162,7 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
-* **`cogo_solver.py` (v1.0.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
+* **`cogo_solver.py` (v1.1.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, AutoCAD DXF (with layer organization), and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
 * **`check_secrets.py` (v1.1.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
 * **`install_git_hooks.py` (v1.1.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.
 * **`kml_to_waypoints.py` (v1.0.0):** Ingests GIS or Google Earth KML files and extracts placemarks, linestrings, and polygon boundaries into the standardized 19-column rover CSV format.
