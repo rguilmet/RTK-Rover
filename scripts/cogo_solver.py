@@ -24,6 +24,7 @@ import csv
 import argparse
 import re
 import time
+import xml.sax.saxutils as saxutils
 from typing import Dict, List, Tuple, Any, Optional
 
 try:
@@ -33,7 +34,12 @@ except ImportError:
     HAS_EZDXF = False
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v1.2.0"
+
+
+def escape_xml(val: Any) -> str:
+    """Escape text for valid XML / KML / HTML output."""
+    return saxutils.escape(str(val)) if val is not None else ""
 
 # WGS84 Ellipsoidal Constants
 WGS84_A = 6378137.0  # Semi-major axis in meters
@@ -714,14 +720,17 @@ def export_rover_csv(solver: CadastralSolver, output_path: str):
 
 
 def export_kml(solver: CadastralSolver, output_path: str):
-    """Export solved parcels, boundary lines, and corner pins to Google Earth KML."""
+    """Export solved parcels, boundary lines, and corner pins to Google Earth and Google My Maps KML."""
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    proj_name = escape_xml(solver.project.get("name", "Cadastral Survey Network"))
+    proj_desc = escape_xml(solver.project.get("description", ""))
+
     kml_lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<kml xmlns="http://www.opengis.net/kml/2.2">',
         '  <Document>',
-        f'    <name>{solver.project.get("name", "Cadastral Survey Network")}</name>',
-        f'    <description>{solver.project.get("description", "")}</description>',
+        f'    <name>{proj_name}</name>',
+        f'    <description>{proj_desc}</description>',
         '    <!-- Styles -->',
         '    <Style id="anchorPin">',
         '      <IconStyle><color>ff0000ff</color><scale>1.2</scale>',
@@ -733,9 +742,12 @@ def export_kml(solver: CadastralSolver, output_path: str):
         '        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href></Icon>',
         '      </IconStyle>',
         '    </Style>',
-        '    <Style id="boundaryLine">',
+        '    <Style id="boundaryPoly">',
         '      <LineStyle><color>ff0000ff</color><width>3</width></LineStyle>',
         '      <PolyStyle><color>4d00ff00</color></PolyStyle>',
+        '    </Style>',
+        '    <Style id="boundaryLine">',
+        '      <LineStyle><color>ffffaa00</color><width>3</width></LineStyle>',
         '    </Style>'
     ]
 
@@ -745,10 +757,12 @@ def export_kml(solver: CadastralSolver, output_path: str):
         '      <name>Control Anchors</name>'
     ])
     for aid, anc in solver.anchors.items():
+        anc_name = escape_xml(anc.label)
+        anc_desc = escape_xml(f"{anc.monument} - {anc.notes}")
         kml_lines.extend([
             '      <Placemark>',
-            f'        <name>{anc.label}</name>',
-            f'        <description>{anc.monument} - {anc.notes}</description>',
+            f'        <name>{anc_name}</name>',
+            f'        <description>{anc_desc}</description>',
             '        <styleUrl>#anchorPin</styleUrl>',
             f'        <Point><coordinates>{anc.lon:.9f},{anc.lat:.9f},0</coordinates></Point>',
             '      </Placemark>'
@@ -758,34 +772,59 @@ def export_kml(solver: CadastralSolver, output_path: str):
     # Folder 2: Parcels (Boundary Polygons & Lines)
     kml_lines.extend([
         '    <Folder>',
-        '      <name>Parcels & Boundaries</name>'
+        '      <name>Parcels &amp; Boundaries</name>'
     ])
     for p_res in solver.parcels_results:
-        kml_lines.extend([
-            '      <Placemark>',
-            f'        <name>{p_res.name}</name>',
-            f'        <description>{p_res.book_page}</description>',
-            '        <styleUrl>#boundaryLine</styleUrl>',
-            '        <Polygon>',
-            '          <outerBoundaryIs><LinearRing><coordinates>'
-        ])
-        for pt in p_res.points:
-            kml_lines.append(f'            {pt.lon:.9f},{pt.lat:.9f},0')
-        # Close polygon ring
-        if p_res.points:
-            p0 = p_res.points[0]
-            kml_lines.append(f'            {p0.lon:.9f},{p0.lat:.9f},0')
-        kml_lines.extend([
-            '          </coordinates></LinearRing></outerBoundaryIs>',
-            '        </Polygon>',
-            '      </Placemark>'
-        ])
+        p_name = escape_xml(p_res.name)
+        p_desc = escape_xml(p_res.book_page)
+
+        # In OGC KML (and especially Google My Maps), a Polygon must have >= 3 distinct points.
+        # Degenerate 2-point traverses or open traverses MUST be exported as LineString.
+        uniq_coords = set((round(pt.lat, 8), round(pt.lon, 8)) for pt in p_res.points)
+        is_polygon = p_res.is_closed and len(uniq_coords) >= 3
+
+        if is_polygon:
+            kml_lines.extend([
+                '      <Placemark>',
+                f'        <name>{p_name}</name>',
+                f'        <description>{p_desc}</description>',
+                '        <styleUrl>#boundaryPoly</styleUrl>',
+                '        <Polygon>',
+                '          <outerBoundaryIs><LinearRing><coordinates>'
+            ])
+            for pt in p_res.points:
+                kml_lines.append(f'            {pt.lon:.9f},{pt.lat:.9f},0')
+            if p_res.points:
+                p0 = p_res.points[0]
+                kml_lines.append(f'            {p0.lon:.9f},{p0.lat:.9f},0')
+            kml_lines.extend([
+                '          </coordinates></LinearRing></outerBoundaryIs>',
+                '        </Polygon>',
+                '      </Placemark>'
+            ])
+        else:
+            kml_lines.extend([
+                '      <Placemark>',
+                f'        <name>{p_name}</name>',
+                f'        <description>{p_desc}</description>',
+                '        <styleUrl>#boundaryLine</styleUrl>',
+                '        <LineString>',
+                '          <tessellate>1</tessellate>',
+                '          <coordinates>'
+            ])
+            for pt in p_res.points:
+                kml_lines.append(f'            {pt.lon:.9f},{pt.lat:.9f},0')
+            kml_lines.extend([
+                '          </coordinates>',
+                '        </LineString>',
+                '      </Placemark>'
+            ])
     kml_lines.append('    </Folder>')
 
     # Folder 3: Corner Monuments
     kml_lines.extend([
         '    <Folder>',
-        '      <name>Survey Pins & Monuments</name>'
+        '      <name>Survey Pins &amp; Monuments</name>'
     ])
     seen_ids = set()
     for p_res in solver.parcels_results:
@@ -793,10 +832,12 @@ def export_kml(solver: CadastralSolver, output_path: str):
             if pt.point_id in seen_ids or pt.point_type == "RTK_FIX":
                 continue
             seen_ids.add(pt.point_id)
+            pt_name = escape_xml(pt.label)
+            pt_desc = escape_xml(f"{pt.monument} | {pt.notes}")
             kml_lines.extend([
                 '      <Placemark>',
-                f'        <name>{pt.label}</name>',
-                f'        <description>{pt.monument} | {pt.notes}</description>',
+                f'        <name>{pt_name}</name>',
+                f'        <description>{pt_desc}</description>',
                 '        <styleUrl>#deedPin</styleUrl>',
                 f'        <Point><coordinates>{pt.lon:.9f},{pt.lat:.9f},0</coordinates></Point>',
                 '      </Placemark>'
@@ -836,19 +877,29 @@ def export_geojson(solver: CadastralSolver, output_path: str):
         }
         features.append(feat)
 
-    # 2. Point features and Polygon features for parcels
+    # 2. Point features and Polygon/LineString features for parcels
     seen_pts = set()
     for p_res in solver.parcels_results:
-        # Polygon feature
         poly_coords = [[round(pt.lon, 9), round(pt.lat, 9)] for pt in p_res.points]
-        if poly_coords:
-            poly_coords.append(poly_coords[0])  # Close ring
-        feat_poly = {
-            "type": "Feature",
-            "geometry": {
+        uniq_coords = set((round(pt.lat, 8), round(pt.lon, 8)) for pt in p_res.points)
+        is_polygon = p_res.is_closed and len(uniq_coords) >= 3
+
+        if is_polygon:
+            if poly_coords:
+                poly_coords.append(poly_coords[0])  # Close ring
+            geometry = {
                 "type": "Polygon",
                 "coordinates": [poly_coords]
-            },
+            }
+        else:
+            geometry = {
+                "type": "LineString",
+                "coordinates": poly_coords
+            }
+
+        feat_poly = {
+            "type": "Feature",
+            "geometry": geometry,
             "properties": {
                 "parcel_id": p_res.parcel_id,
                 "name": p_res.name,
