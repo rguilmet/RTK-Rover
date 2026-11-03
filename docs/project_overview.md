@@ -14,6 +14,7 @@ This document serves as the master technical specification for the **RTK Rover**
 * **CRITICAL RULE:** All projects shall have a main Software version identifier as `v[Major].[Minor].[Patch]` and follow industry-standard SemVer rules and practices for bumping the version at EVERY file iteration.
 * **Why:** We do not reuse version numbers for each iteration. This allows us to distinctly identify in the AI context the files we are working on. The version string is defined as `ROVER_FIRMWARE_VERSION` in `user_config.h`.
 * **Pure ASCII Requirement:** All user-facing strings, labels, and terminal outputs strictly use standard ASCII characters. Extended Unicode symbols (such as $\pm$, $\circ$, arrows) are avoided in UI strings to guarantee compatibility with LVGL fonts and prevent missing glyph boxes.
+* **Sibling Repository Architecture & Code/Data Decoupling:** The project strictly enforces the separation of computational logic from domain data. Public `RTK_Rover` contains open-source firmware, drivers, kinematics, and schema-driven mathematical tools. All private land records, deed PDFs, personal surveyed coordinates, raw sensor captures, and personal radio configurations reside in an independent sibling repository (`RTK_Rover_Private`) under local Git version control.
 
 ---
 
@@ -161,6 +162,8 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
-* **`cogo_network_solver.py` (v1.0.0):** Multi-deed Coordinate Geometry (COGO) solver. Merges metes-and-bounds legal descriptions across multiple adjacent deeds, ties relative traverses to surveyed RTK ground pins (`PIN_DRIVEWAY_REF` and `PIN_TREE_BASE_REF`), calculates grid-to-true convergence rotation, verifies boundary closure (sub-inch misclosure over 4,045 ft), and computes true coordinates for intermediate line intersections, corners, and elusive legal anchors (e.g. `MONUMENT_STONE_EAST`).
+* **`cogo_solver.py` (v1.0.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, and text closure audits.
+* **`check_secrets.py` (v1.0.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
+* **`install_git_hooks.py` (v1.0.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.
 * **`kml_to_waypoints.py` (v1.0.0):** Ingests GIS or Google Earth KML files and extracts placemarks, linestrings, and polygon boundaries into the standardized 19-column rover CSV format.
 * **`validate_waypoints.py` (v1.2.0):** Validates CSV schema compliance, bounds, and computes traverse leg distances, bearings, and total closed perimeter.
