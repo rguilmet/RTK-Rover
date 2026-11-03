@@ -51,7 +51,7 @@
 * **NEVER** trigger waypoint logging from a short-press of the BOOT button (GPIO 0). Physical BOOT button is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
 * **NEVER** hardcode domain data, personal identifiers, specific coordinates, local absolute filesystem paths (`file:///C:/...`), or private configuration records directly into computational logic or algorithms. All tools must follow state-of-the-art software engineering practices: strict separation of Code (logic) and Data (schemas/CLI inputs).
 * **NEVER** commit, stage, or push personal identifiable information (PII), private amateur radio callsigns, private homestead coordinates, personal LAN hostnames, or private deed boundary solving data to the Git repository. Personal data must strictly remain in the sibling repository `RTK_Rover_Private` (or `reference/` which is `.gitignore`'d).
-* **NEVER** push commits to GitHub without executing the secrets audit scanner (`python reference/check_secrets.py`) and verifying zero violations. An automated Git `pre-push` hook enforces this check.
+* **NEVER** push commits to GitHub without executing the secrets audit scanner (`python scripts/check_secrets.py`) and verifying zero violations. An automated Git `pre-push` hook enforces this check.
 
 ---
 

@@ -8,13 +8,13 @@ import os
 import sys
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.0"
+__version__ = "v1.1.0"
 
 PRE_PUSH_HOOK_CONTENT = """#!/bin/sh
-# Git pre-push hook: Run reference/check_secrets.py before pushing to remote
-if [ -f "reference/check_secrets.py" ]; then
-    echo "[pre-push] Running local security and privacy scan..."
-    python reference/check_secrets.py
+# Git pre-push hook: Run scripts/check_secrets.py before pushing to remote
+if [ -f "scripts/check_secrets.py" ]; then
+    echo "[pre-push] Running security and privacy scan..."
+    python scripts/check_secrets.py
     RESULT=$?
     if [ $RESULT -ne 0 ]; then
         echo "[pre-push] Push REJECTED: Secrets or private data violations detected."

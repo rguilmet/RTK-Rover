@@ -68,7 +68,7 @@ Per the architectural decision, we are adopting **Option B: Dedicated Sibling Re
 ### Phase 1: Security Scanner Parameterization & Re-integration
 **Objective:** Restore `scripts/check_secrets.py` as a generic public tool while keeping personal detection signatures strictly local.
 
-- [ ] **1.1 Design Local Configuration Format (`.secrets.local`):**
+- [x] **1.1 Design Local Configuration Format (`.secrets.local`):**
   - Define a clean JSON/text format for user-specific search patterns in the repository root:
     ```json
     {
@@ -80,15 +80,15 @@ Per the architectural decision, we are adopting **Option B: Dedicated Sibling Re
       ]
     }
     ```
-- [ ] **1.2 Parameterize `scripts/check_secrets.py`:**
+- [x] **1.2 Parameterize `scripts/check_secrets.py`:**
   - Strip all hardcoded private strings from Python code.
-  - Retain generic security rules: AWS keys, GitHub PATs, private SSH keys, unredacted passwords in sample configs, and absolute Windows paths (`).
+  - Retain generic security rules: AWS keys, GitHub PATs, private SSH keys, unredacted passwords in sample configs, and absolute Windows paths.
   - Auto-detect `.secrets.local` in repository root. If present, load user-defined tokens into the active scan set.
-- [ ] **1.3 Git Pre-Push Hook Update:**
+- [x] **1.3 Git Pre-Push Hook Update:**
   - Add `.secrets.local` to `.gitignore`.
   - Update `.git/hooks/pre-push` to run `python scripts/check_secrets.py`.
   - Update `scripts/install_git_hooks.py` to deploy the unified hook.
-- [ ] **1.4 Documentation Sync:**
+- [x] **1.4 Documentation Sync:**
   - Verify synchronization across `GEMINI.md`, `hyper-context-anchor.md`, and `session_handoff.md`.
 
 ---
