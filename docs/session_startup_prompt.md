@@ -42,7 +42,7 @@ Please confirm you have read the documents, summarize your understanding, and be
 ### Key Technical Coordinates
 * **Working Directory:** `./`
 * **Sibling Target:** `../RTK_Rover_Private` (to be created in Phase 2)
-* **Firmware Version:** `v0.2.54` (`ROVER_E220_PROFILE_REV = 2`)
+* **Firmware Version:** `v0.2.55` (`ROVER_E220_PROFILE_REV = 2`)
 * **Base Station Software:** `e220_pacer.py v2.8.1` on `pi4b-rtkbase` (`tcp://127.0.0.1:5016` filtered to `1006(5),1074,1084,1094,1230(10)`)
 * **Radio Configuration:** Channel `75` (`925.125 MHz`), `115,200 baud`, `38.4 kbps` air data rate, `200B` subpackets, `21 dBm` (Level 3), Transparent Mode 0.
 

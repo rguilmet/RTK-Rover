@@ -2,7 +2,7 @@
 
 **Document Version:** `v2.0.0`  
 **Last Updated:** November 3, 2026  
-**Firmware Target:** `v0.2.54`  
+**Firmware Target:** `v0.2.55`  
 **Python Ecosystem Target:** `v2.8.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -154,7 +154,7 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) — Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.2.54` in Montserrat 16 White) and dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
+  * **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.2.55` in Montserrat 16 White) and dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
   * **Scrollable Container:** Multi-line auto-wrapping across all telemetry blocks.
   * **Observers:** Storage status in Electric Cyan (`#22D3EE`), Antenna Master (ANT1) metrics, Antenna Slave (ANT2) metrics with live coordinates, dedicated Base Station card (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel, 3-axis Gyro), UM982 COM1/COM2 metrics, and E220 LoRa registers.
 

@@ -23,7 +23,7 @@ This document outlines:
 ## 2. Immediate Next Steps
 
 ### 2.1 Outdoor RTK Fix & Distance Walk Test
-- **Status:** Ready immediately using deployed `RTK_Rover v0.2.54` and `e220_pacer.py v2.8.1`.
+- **Status:** Ready immediately using deployed `RTK_Rover v0.2.55` and `e220_pacer.py v2.8.1`.
 - **Objectives:**
   - Verify transition from `Fix: 5` (`RTK Float`) to `Fix: 4` (`RTK Fixed`) under open sky.
   - Verify dual-antenna baseline lock (`Hdg: FIX`) and baseline length stability (`55.5 cm ± 1.2 cm`).

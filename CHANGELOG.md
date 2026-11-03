@@ -5,6 +5,19 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.55] - 2026-11-01
+
+### Added
+- **Hardware AUX Edge Counter & Telemetry Enhancements (`RTK_Rover.ino`, `src/e220_driver/e220_driver.cpp`):**
+  - Integrated physical Mode 0 falling edge counter (`aux_fall_count`) and formatted RSSI noise/packet string (`Noise:%ddBm Pkt:%ddBm`) into live `[TELEM]` serial stream.
+  - Expanded RTCM message breakdown in telemetry reporting individual counts for `1006`, `1074`, `1084`, `1094`, and `1230`, alongside truncation drops (`rtcm_trunc_drops`) and orphan bytes (`rtcm_orphan_bytes`).
+- **Standardized ASCII Diagnostic Messaging (`RTK_Rover.ino`):**
+  - Cleaned boot and diagnostic banners to strict ASCII `--` separators to preserve serial integrity and eliminate encoding mismatches.
+
+### Changed
+- **Firmware Semantic Version Bump (`user_config.h`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` to `v0.2.55`.
+
 ## [v0.2.54] - 2026-10-30
 
 ### Added
