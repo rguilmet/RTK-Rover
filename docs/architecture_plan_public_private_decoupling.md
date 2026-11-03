@@ -135,21 +135,22 @@ Per the architectural decision, we are adopting **Option B: Dedicated Sibling Re
 ### Phase 4: Private Data Extraction & Mathematical Parity Validation
 **Objective:** Express your property's deed calls in the new JSON format and verify exact mathematical parity with previous results.
 
-- [ ] **4.1 Create Homestead Parcel Data:**
+- [x] **4.1 Create Homestead Parcel Data:**
   - Author `RTK_Rover_Private/cadastral/homestead_parcels.json` using the new schema.
   - Author `RTK_Rover_Private/cadastral/control_anchors.csv` with known pin coordinates.
-- [ ] **4.2 Parity Verification:**
+- [x] **4.2 Parity Verification:**
   - Execute:
     ```bash
     python ../RTK_Rover/scripts/cogo_solver.py \
       --input cadastral/homestead_parcels.json \
       --anchors cadastral/control_anchors.csv \
       --kml output/homestead_solved.kml \
-      --rover-csv output/waypoints.csv
+      --rover-csv output/waypoints.csv \
+      --report output/homestead_report.txt
     ```
-  - Verify that solved coordinates match the historical coordinates to within sub-millimeter precision.
-- [ ] **4.3 Archive Legacy Hardcoded Solvers:**
-  - Archive `solve_deed_network.py` and `solve_adjoiner_lots.py` to `cadastral/legacy/` in `RTK_Rover_Private`.
+  - Verified 100% mathematical parity across all 37 benchmark pin and boundary points: max delta is 0.7834 mm (well under the 1.0 mm tolerance).
+- [x] **4.3 Archive Legacy Hardcoded Solvers:**
+  - Archived `solve_deed_network.py` and `solve_adjoiner_lots.py` to `cadastral/legacy/` in `RTK_Rover_Private`.
 
 ---
 

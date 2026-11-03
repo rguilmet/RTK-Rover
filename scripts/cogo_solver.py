@@ -26,7 +26,7 @@ import re
 from typing import Dict, List, Tuple, Any, Optional
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.0"
+__version__ = "v1.0.1"
 
 # WGS84 Ellipsoidal Constants
 WGS84_A = 6378137.0  # Semi-major axis in meters
@@ -556,7 +556,6 @@ class CadastralSolver:
     def _resolve_pob(self, parcel_id: str, pob_def: Dict[str, Any]) -> SurveyPoint:
         """Resolve starting Point of Beginning coordinates."""
         point_id = pob_def.get("point_id", "POB")
-        label = pob_def.get("label", f"{parcel_id}_{point_id}")
         monument = pob_def.get("monument", "")
         notes = pob_def.get("notes", "")
 
@@ -566,13 +565,14 @@ class CadastralSolver:
             if anchor_id not in self.anchors:
                 raise KeyError(f"Anchor '{anchor_id}' referenced in parcel '{parcel_id}' POB not found.")
             anc = self.anchors[anchor_id]
+            label = pob_def.get("label", anc.label if anchor_id else point_id)
             lat, lon = anc.lat, anc.lon
             # Check for offset from anchor
             if "bearing" in pob_def and "distance" in pob_def:
                 off_brg = (parse_quadrant_bearing(pob_def["bearing"]) + self.grid_rotation_deg) % 360.0
                 off_dist_m = float(pob_def["distance"]) * self.unit_to_m
                 lat, lon = project_point(lat, lon, off_dist_m, off_brg)
-            return SurveyPoint(point_id, label, lat, lon, anc.elevation_m, monument, notes, "RTK_FIX", parcel_id)
+            return SurveyPoint(point_id, label, lat, lon, anc.elevation_m, monument or anc.monument, notes or anc.notes, "RTK_FIX", parcel_id)
 
         # B. Reference to existing point from previous parcel
         from_pt_ref = pob_def.get("from_point")
@@ -580,13 +580,14 @@ class CadastralSolver:
             base_pt = self._resolve_point(from_pt_ref)
             if not base_pt:
                 raise KeyError(f"Point '{from_pt_ref}' referenced in parcel '{parcel_id}' POB not found.")
+            label = pob_def.get("label", point_id if point_id != "POB" else base_pt.label)
             lat, lon = base_pt.lat, base_pt.lon
             # Check for offset from reference point
             if "bearing" in pob_def and "distance" in pob_def:
                 off_brg = (parse_quadrant_bearing(pob_def["bearing"]) + self.grid_rotation_deg) % 360.0
                 off_dist_m = float(pob_def["distance"]) * self.unit_to_m
                 lat, lon = project_point(lat, lon, off_dist_m, off_brg)
-            return SurveyPoint(point_id, label, lat, lon, base_pt.elevation_m, monument, notes, "DEED_CALC", parcel_id)
+            return SurveyPoint(point_id, label, lat, lon, base_pt.elevation_m, monument or base_pt.monument, notes or base_pt.notes, "DEED_CALC", parcel_id)
 
         raise ValueError(f"Parcel '{parcel_id}' POB must specify 'anchor_id' or 'from_point'.")
 
@@ -666,8 +667,9 @@ def export_rover_csv(solver: CadastralSolver, output_path: str):
             for pt in p_res.points:
                 # Deduplicate if already written
                 pt_key = f"{p_res.parcel_id}.{pt.point_id}"
-                if pt_key in seen_ids or (pt.point_type == "RTK_FIX" and pt.point_id in seen_ids):
+                if pt.point_id in seen_ids or pt_key in seen_ids or (pt.point_type == "RTK_FIX" and pt.point_id in seen_ids):
                     continue
+                seen_ids.add(pt.point_id)
                 seen_ids.add(pt_key)
 
                 fix_str = "RTK_FIX" if pt.point_type == "RTK_FIX" else (

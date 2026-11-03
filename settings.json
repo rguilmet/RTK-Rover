@@ -1,6 +1,6 @@
 {
-  "minutesOffsetToUTC": -240,
-  "timezone_label": "EDT",
+  "minutesOffsetToUTC": -300,
+  "timezone_label": "EST",
   "use_imperial_units": false,
   "antenna_height_m": 1.800,
   "antenna_spacing_m": 0.555,

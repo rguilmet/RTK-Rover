@@ -20,5 +20,6 @@ docs/session_handoff.md
 __pycache__/
 *.pyc
 *.bak
+output/
 .secrets.local
 
