@@ -93,7 +93,8 @@ Deed networks are defined in standard JSON conforming to [`docs/schemas/cadastra
 ```text
 usage: cogo_solver.py [-h] --input INPUT [--anchors ANCHORS]
                       [--rover-csv ROVER_CSV] [--kml KML]
-                      [--geojson GEOJSON] [--report REPORT]
+                      [--geojson GEOJSON] [--dxf DXF]
+                      [--report REPORT]
                       [--adjust {none,compass,bowditch}]
                       [--rotation ROTATION]
 ```
@@ -106,6 +107,7 @@ usage: cogo_solver.py [-h] --input INPUT [--anchors ANCHORS]
 | `--rover-csv` | Destination path for Rover 19-column `/waypoints.csv`. |
 | `--kml` | Destination path for Google Earth KML representation. |
 | `--geojson` | Destination path for RFC 7946 GeoJSON FeatureCollection. |
+| `--dxf` | Destination path for AutoCAD DXF CAD linework with layers. |
 | `--report` | Destination path for detailed ASCII traverse report (also printed to console). |
 | `--adjust` | Override balance adjustment rule (`none`, `compass`, `bowditch`). |
 | `--rotation` | Override grid-to-true rotation offset in degrees. |
@@ -123,6 +125,7 @@ python scripts/cogo_solver.py \
   --rover-csv output/waypoints.csv \
   --kml output/subdivision.kml \
   --geojson output/subdivision.geojson \
+  --dxf output/subdivision.dxf \
   --report output/closure_report.txt
 ```
 
@@ -138,5 +141,7 @@ python scripts/cogo_solver.py \
    Interactive visualization with translucent parcel polygons, line boundaries, and color-coded pushpins for pins and curvature centers.
 3. **GeoJSON (`output/subdivision.geojson`):**
    Standard spatial features compatible with QGIS, ArcGIS, Mapbox, and web GIS portals.
-4. **ASCII Survey Report (`output/closure_report.txt`):**
+4. **AutoCAD DXF (`output/subdivision.dxf`):**
+   CAD vector geometry in local ground survey coordinates with dedicated layers for control anchors, parcel boundaries, curve arcs, monument symbols, waypoint labels, and bearing/distance call annotations.
+5. **ASCII Survey Report (`output/closure_report.txt`):**
    Professional leg-by-leg closure metrics, misclosure vectors, and precision ratios.

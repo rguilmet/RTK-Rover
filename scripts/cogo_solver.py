@@ -23,10 +23,17 @@ import json
 import csv
 import argparse
 import re
+import time
 from typing import Dict, List, Tuple, Any, Optional
 
+try:
+    import ezdxf
+    HAS_EZDXF = True
+except ImportError:
+    HAS_EZDXF = False
+
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.1"
+__version__ = "v1.1.0"
 
 # WGS84 Ellipsoidal Constants
 WGS84_A = 6378137.0  # Semi-major axis in meters
@@ -196,7 +203,10 @@ class LegResult:
     """Represents a solved metes-and-bounds traverse call."""
     def __init__(self, call_index: int, call_type: str, raw_bearing: str,
                  applied_bearing_deg: float, distance_m: float, distance_user: float,
-                 from_point_id: str, to_point_id: str, monument: str, notes: str):
+                 from_point_id: str, to_point_id: str, monument: str, notes: str,
+                 center_lat: Optional[float] = None, center_lon: Optional[float] = None,
+                 radius_user: Optional[float] = None, delta_deg: Optional[float] = None,
+                 direction: Optional[str] = None):
         self.call_index = call_index
         self.call_type = call_type
         self.raw_bearing = raw_bearing
@@ -207,6 +217,11 @@ class LegResult:
         self.to_point_id = to_point_id
         self.monument = monument
         self.notes = notes
+        self.center_lat = center_lat
+        self.center_lon = center_lon
+        self.radius_user = radius_user
+        self.delta_deg = delta_deg
+        self.direction = direction
 
 
 class ParcelResult:
@@ -503,7 +518,12 @@ class CadastralSolver:
                     from_point_id=curr_pt_id,
                     to_point_id=to_pid,
                     monument=monument,
-                    notes=f"{notes} [Chord={chord_user:.2f}{self.units_name} @ {format_quadrant_bearing(chord_brg)}]"
+                    notes=f"{notes} [Chord={chord_user:.2f}{self.units_name} @ {format_quadrant_bearing(chord_brg)}]",
+                    center_lat=center_lat,
+                    center_lon=center_lon,
+                    radius_user=radius_user,
+                    delta_deg=delta_deg,
+                    direction=direction
                 )
                 res.legs.append(leg_obj)
             else:
@@ -875,6 +895,239 @@ def export_geojson(solver: CadastralSolver, output_path: str):
     print(f"[EXPORT] Wrote GeoJSON FeatureCollection: {output_path}")
 
 
+def export_dxf(solver: CadastralSolver, output_path: str):
+    """Export solved parcels, boundary lines, and corner pins to AutoCAD DXF."""
+    if not HAS_EZDXF:
+        print("[ERROR] 'ezdxf' package is required for DXF export. Install via: pip install ezdxf")
+        return
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    doc = ezdxf.new('R2010')
+    msp = doc.modelspace()
+
+    # Determine primary origin point (PIN_DRIVEWAY_REF or first anchor or first solved point)
+    origin_pt = None
+    if solver.anchors:
+        origin_pt = next(iter(solver.anchors.values()))
+    elif solver.parcels_results and solver.parcels_results[0].points:
+        origin_pt = solver.parcels_results[0].points[0]
+
+    if not origin_pt:
+        print("[ERROR] Cannot export DXF: No points available to establish local coordinate origin.")
+        return
+
+    lat0, lon0 = origin_pt.lat, origin_pt.lon
+
+    def to_local_xy(lat: float, lon: float) -> Tuple[float, float]:
+        if abs(lat - lat0) < 1e-11 and abs(lon - lon0) < 1e-11:
+            return 0.0, 0.0
+        dist_m, az_deg = compute_geodesic_segment(lat0, lon0, lat, lon)
+        dist_u = dist_m * solver.m_to_unit
+        az_rad = math.radians(az_deg)
+        return dist_u * math.sin(az_rad), dist_u * math.cos(az_rad)
+
+    # Standard CAD Layers & Colors
+    # Colors: 1=Red, 2=Yellow, 3=Green, 4=Cyan, 5=Blue, 6=Magenta, 7=White
+    doc.layers.add('CONTROL_ANCHORS', color=1)
+    doc.layers.add('SURVEY_MONUMENTS', color=7)
+    doc.layers.add('POINT_LABELS', color=2)
+    doc.layers.add('CALL_ANNOTATIONS', color=4)
+    doc.layers.add('TITLE_BLOCK', color=7)
+
+    parcel_colors = [3, 4, 6, 2, 5, 1]  # Green, Cyan, Magenta, Yellow, Blue, Red
+
+    # Track all coordinates for bounding box
+    all_x = []
+    all_y = []
+
+    # 1. Draw Control Anchors
+    seen_anchors = set()
+    for aid, anc in solver.anchors.items():
+        if aid in seen_anchors:
+            continue
+        seen_anchors.add(aid)
+        ax, ay = to_local_xy(anc.lat, anc.lon)
+        all_x.append(ax)
+        all_y.append(ay)
+
+        # Control symbol: Concentric circles + crosshair (Red)
+        msp.add_circle((ax, ay), radius=2.5, dxfattribs={'layer': 'CONTROL_ANCHORS', 'color': 1})
+        msp.add_circle((ax, ay), radius=0.8, dxfattribs={'layer': 'CONTROL_ANCHORS', 'color': 1})
+        msp.add_line((ax - 4.0, ay), (ax + 4.0, ay), dxfattribs={'layer': 'CONTROL_ANCHORS', 'color': 1})
+        msp.add_line((ax, ay - 4.0), (ax, ay + 4.0), dxfattribs={'layer': 'CONTROL_ANCHORS', 'color': 1})
+
+        # Label
+        lbl_txt = msp.add_text(f"{anc.label} (CTRL)", dxfattribs={'layer': 'POINT_LABELS', 'height': 2.5, 'color': 1})
+        lbl_txt.set_placement((ax + 3.0, ay + 3.0))
+
+    # 2. Draw Parcel Linework & Curves
+    for p_idx, p_res in enumerate(solver.parcels_results):
+        p_color = parcel_colors[p_idx % len(parcel_colors)]
+        layer_name = f"PARCEL_{p_res.parcel_id.upper()}"
+        if layer_name not in doc.layers:
+            doc.layers.add(layer_name, color=p_color)
+
+        for leg in p_res.legs:
+            p1 = solver.solved_points.get(leg.from_point_id)
+            p2 = solver.solved_points.get(leg.to_point_id)
+            if not p1 or not p2:
+                # Fallback to search in p_res.points
+                for pt in p_res.points:
+                    if pt.point_id == leg.from_point_id or pt.label == leg.from_point_id:
+                        p1 = pt
+                    if pt.point_id == leg.to_point_id or pt.label == leg.to_point_id:
+                        p2 = pt
+            if not p1 or not p2:
+                continue
+
+            x1, y1 = to_local_xy(p1.lat, p1.lon)
+            x2, y2 = to_local_xy(p2.lat, p2.lon)
+            all_x.extend([x1, x2])
+            all_y.extend([y1, y2])
+
+            if leg.call_type == "line":
+                msp.add_line((x1, y1), (x2, y2), dxfattribs={'layer': layer_name, 'color': p_color})
+
+                # Annotation along leg
+                mx = (x1 + x2) / 2.0
+                my = (y1 + y2) / 2.0
+                call_str = f"{leg.raw_bearing}  {leg.distance_user:.2f}'"
+                dx = x2 - x1
+                dy = y2 - y1
+                ang_deg = math.degrees(math.atan2(dy, dx))
+                if ang_deg > 90.0 or ang_deg < -90.0:
+                    ang_deg = (ang_deg + 180.0) % 360.0
+
+                txt = msp.add_text(call_str, dxfattribs={
+                    'layer': 'CALL_ANNOTATIONS',
+                    'height': 2.0,
+                    'color': 4,
+                    'rotation': ang_deg
+                })
+                line_len = math.hypot(dx, dy)
+                if line_len > 0:
+                    perp_x = -dy / line_len * 2.5
+                    perp_y = dx / line_len * 2.5
+                    txt.set_placement((mx + perp_x, my + perp_y))
+                else:
+                    txt.set_placement((mx + 1.5, my + 1.5))
+
+            elif leg.call_type == "curve":
+                # Curve call: draw smooth 24-segment polyline between p1 and p2
+                if leg.center_lat is not None and leg.center_lon is not None and leg.delta_deg:
+                    cx, cy = to_local_xy(leg.center_lat, leg.center_lon)
+                    all_x.append(cx)
+                    all_y.append(cy)
+
+                    # Mark center point with small crosshair
+                    msp.add_line((cx - 1.5, cy), (cx + 1.5, cy), dxfattribs={'layer': layer_name, 'color': p_color})
+                    msp.add_line((cx, cy - 1.5), (cx, cy + 1.5), dxfattribs={'layer': layer_name, 'color': p_color})
+
+                    a1 = math.degrees(math.atan2(y1 - cy, x1 - cx)) % 360.0
+                    is_cw = leg.direction in ["right", "cw"]
+                    arc_pts = []
+                    steps = 24
+                    sweep_deg = leg.delta_deg
+                    for s in range(steps + 1):
+                        frac = s / float(steps)
+                        if is_cw:
+                            ang_deg = (a1 - frac * sweep_deg) % 360.0
+                        else:
+                            ang_deg = (a1 + frac * sweep_deg) % 360.0
+                        rad = math.radians(ang_deg)
+                        r = leg.radius_user if leg.radius_user else math.hypot(x1 - cx, y1 - cy)
+                        px = cx + r * math.cos(rad)
+                        py = cy + r * math.sin(rad)
+                        arc_pts.append((px, py))
+                        all_x.append(px)
+                        all_y.append(py)
+
+                    msp.add_lwpolyline(arc_pts, dxfattribs={'layer': layer_name, 'color': p_color})
+
+                    mid_idx = len(arc_pts) // 2
+                    mid_px, mid_py = arc_pts[mid_idx]
+                    curve_str = f"R={leg.radius_user:.2f}'  Arc={leg.distance_user:.2f}'  Delta={leg.delta_deg:.2f} deg"
+                    c_txt = msp.add_text(curve_str, dxfattribs={'layer': 'CALL_ANNOTATIONS', 'height': 2.0, 'color': 4})
+                    c_txt.set_placement((mid_px + 2.5, mid_py + 2.5))
+                else:
+                    # Fallback straight chord line
+                    msp.add_line((x1, y1), (x2, y2), dxfattribs={'layer': layer_name, 'color': p_color})
+
+    # 3. Draw Solved Monuments & Point Markers
+    seen_points = set()
+    for p_res in solver.parcels_results:
+        for pt in p_res.points:
+            if pt.point_id in seen_points or pt.point_type == "RTK_FIX":
+                continue
+            seen_points.add(pt.point_id)
+            px, py = to_local_xy(pt.lat, pt.lon)
+            all_x.append(px)
+            all_y.append(py)
+
+            mon_desc = (pt.monument or "").upper()
+            lbl = pt.label
+
+            # Distinct Monument Symbols
+            if "PIPE" in mon_desc:
+                # Concentric double circle
+                msp.add_circle((px, py), radius=1.4, dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+                msp.add_circle((px, py), radius=0.7, dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+            elif "MONUMENT" in mon_desc or "STONE" in mon_desc:
+                # Square with internal diagonal 'X'
+                s = 1.2
+                sq_pts = [(px - s, py - s), (px + s, py - s), (px + s, py + s), (px - s, py + s), (px - s, py - s)]
+                msp.add_lwpolyline(sq_pts, dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+                msp.add_line((px - s, py - s), (px + s, py + s), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+                msp.add_line((px - s, py + s), (px + s, py - s), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+            elif "REBAR" in mon_desc or "PIN" in mon_desc or "ROD" in mon_desc:
+                # Circle with internal crosshair
+                msp.add_circle((px, py), radius=1.0, dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+                msp.add_line((px - 1.5, py), (px + 1.5, py), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+                msp.add_line((px, py - 1.5), (px, py + 1.5), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+            elif "CURVE_CENTER" in pt.point_type:
+                # Center cross
+                msp.add_line((px - 2.0, py), (px + 2.0, py), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 5})
+                msp.add_line((px, py - 2.0), (px, py + 2.0), dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 5})
+            else:
+                # Small circle for intermediate stations or division marks
+                msp.add_circle((px, py), radius=0.7, dxfattribs={'layer': 'SURVEY_MONUMENTS', 'color': 7})
+
+            # Point label
+            lbl_obj = msp.add_text(lbl, dxfattribs={'layer': 'POINT_LABELS', 'height': 2.2, 'color': 2})
+            lbl_obj.set_placement((px + 2.5, py + 2.5))
+
+    # 4. Title Block
+    if all_x and all_y:
+        min_x, max_x = min(all_x), max(all_x)
+        min_y, max_y = min(all_y), max(all_y)
+        tb_x = min_x
+        tb_y = max_y + 40.0
+
+        title_lines = [
+            f"{solver.project.get('name', 'CADASTRAL SURVEY NETWORK')}",
+            f"{solver.project.get('description', '')}",
+            f"Datum: {solver.project.get('datum', 'WGS84')} | Units: {solver.units_name} | Grid Rotation: {solver.grid_rotation_deg:+.4f} deg",
+            f"Local Ground Origin (0,0): {origin_pt.label} (Lat: {lat0:.9f}, Lon: {lon0:.9f})",
+            f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')} | Antigravity cogo_solver.py {__version__}"
+        ]
+
+        tb_w = max(max_x - min_x, 300.0)
+        tb_h = len(title_lines) * 8.0 + 8.0
+        tb_box = [(tb_x, tb_y - tb_h), (tb_x + tb_w, tb_y - tb_h),
+                  (tb_x + tb_w, tb_y), (tb_x, tb_y), (tb_x, tb_y - tb_h)]
+        msp.add_lwpolyline(tb_box, dxfattribs={'layer': 'TITLE_BLOCK', 'color': 7})
+
+        cur_y = tb_y - 6.0
+        for i, tl in enumerate(title_lines):
+            h = 4.0 if i == 0 else 2.5
+            t_obj = msp.add_text(tl, dxfattribs={'layer': 'TITLE_BLOCK', 'height': h, 'color': 7})
+            t_obj.set_placement((tb_x + 5.0, cur_y))
+            cur_y -= (6.5 if i == 0 else 5.0)
+
+    doc.saveas(output_path)
+    print(f"[EXPORT] Wrote AutoCAD DXF: {output_path}")
+
+
 def generate_closure_report(solver: CadastralSolver, output_path: Optional[str] = None) -> str:
     """Generate comprehensive human-readable ASCII survey traverse report."""
     lines = []
@@ -991,6 +1244,7 @@ def main():
     parser.add_argument("--rover-csv", type=str, default=None, help="Export path for Rover 19-column waypoints.csv")
     parser.add_argument("--kml", type=str, default=None, help="Export path for Google Earth KML")
     parser.add_argument("--geojson", type=str, default=None, help="Export path for GeoJSON FeatureCollection")
+    parser.add_argument("--dxf", type=str, default=None, help="Export path for AutoCAD DXF vector geometry")
     parser.add_argument("--report", type=str, default=None, help="Export path for text closure report")
     parser.add_argument("--adjust", choices=["none", "compass", "bowditch"], default=None,
                         help="Override traverse adjustment rule (e.g. 'compass')")
@@ -1033,6 +1287,8 @@ def main():
         export_kml(solver, args.kml)
     if args.geojson:
         export_geojson(solver, args.geojson)
+    if args.dxf:
+        export_dxf(solver, args.dxf)
 
     print("[DONE] Cadastral network successfully solved.")
 
