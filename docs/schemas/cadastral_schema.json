@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rguilmet/RTK-Rover/docs/schemas/cadastral_schema.json",
+  "title": "Cadastral Survey & Deed Network Schema",
+  "description": "Standard schema for defining multi-deed metes-and-bounds traverses, circular road curves, and ground truth RTK control ties.",
+  "type": "object",
+  "required": ["project", "parcels"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project or subdivision name"
+        },
+        "description": {
+          "type": "string",
+          "description": "General description or legal reference notes"
+        },
+        "datum": {
+          "type": "string",
+          "enum": ["WGS84", "NAD83"],
+          "default": "WGS84",
+          "description": "Reference geodetic datum"
+        },
+        "units": {
+          "type": "string",
+          "enum": ["feet", "us_survey_feet", "meters"],
+          "default": "feet",
+          "description": "Measurement units for distances and radii"
+        },
+        "grid_rotation_deg": {
+          "type": "number",
+          "description": "Optional fixed grid-to-true rotation offset in degrees. Auto-derived if calibration anchors are provided."
+        }
+      }
+    },
+    "control_anchors": {
+      "type": "array",
+      "description": "List of ground-truth surveyed control points (RTK GNSS observations)",
+      "items": {
+        "type": "object",
+        "required": ["id", "latitude", "longitude"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique anchor identifier (e.g. PIN_DRIVEWAY_REF)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label for waypoint export"
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90.0,
+            "maximum": 90.0,
+            "description": "WGS84 Latitude in decimal degrees (double precision)"
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180.0,
+            "maximum": 180.0,
+            "description": "WGS84 Longitude in decimal degrees (double precision)"
+          },
+          "elevation_m": {
+            "type": "number",
+            "description": "Orthometric or ellipsoidal elevation in meters"
+          },
+          "monument": {
+            "type": "string",
+            "description": "Physical monument description (e.g. 5/8in Rebar w/ Yellow Cap)"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Survey notes or stationing reference"
+          }
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "description": "Ground baseline configuration for auto-deriving grid convergence and true meridian rotation",
+      "required": ["anchor_from", "anchor_to", "deed_bearing"],
+      "properties": {
+        "anchor_from": {
+          "type": "string",
+          "description": "ID of start anchor point"
+        },
+        "anchor_to": {
+          "type": "string",
+          "description": "ID of end anchor point"
+        },
+        "deed_bearing": {
+          "type": "string",
+          "description": "Deed call bearing between anchors (e.g. 'N 55-47-13 W')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Explanation of baseline calibration reference"
+        }
+      }
+    },
+    "parcels": {
+      "type": "array",
+      "description": "List of parcels to solve in sequence",
+      "items": {
+        "type": "object",
+        "required": ["id", "pob", "calls"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique parcel identifier (e.g. lot_1, parcel_a)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable parcel name (e.g. Lot 1 - Homestead)"
+          },
+          "book_page": {
+            "type": "string",
+            "description": "Registry of deeds book and page reference"
+          },
+          "adjust": {
+            "type": "string",
+            "enum": ["none", "compass", "bowditch"],
+            "default": "none",
+            "description": "Closure adjustment rule (Compass/Bowditch rule balances traverse misclosure)"
+          },
+          "pob": {
+            "type": "object",
+            "description": "Point of Beginning specification",
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "description": "ID of a control anchor point to use as POB"
+              },
+              "from_point": {
+                "type": "string",
+                "description": "ID of a point from a previously solved parcel (e.g. lot_1.PIN_CORNER_4)"
+              },
+              "bearing": {
+                "type": "string",
+                "description": "Tie bearing from anchor/from_point to actual POB"
+              },
+              "distance": {
+                "type": "number",
+                "description": "Tie distance from anchor/from_point to actual POB"
+              },
+              "point_id": {
+                "type": "string",
+                "default": "POB",
+                "description": "Identifier assigned to the POB station"
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label for POB waypoint"
+              },
+              "monument": {
+                "type": "string",
+                "description": "Monument description at POB"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Additional notes for POB"
+              }
+            }
+          },
+          "calls": {
+            "type": "array",
+            "description": "Sequential metes-and-bounds boundary calls",
+            "items": {
+              "type": "object",
+              "required": ["to_point_id"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["line", "curve"],
+                  "default": "line",
+                  "description": "Type of boundary leg"
+                },
+                "bearing": {
+                  "type": "string",
+                  "description": "Quadrant bearing (e.g. 'N 35-38-56 E', 'S 55° 47\\' 13\" E') or decimal degrees"
+                },
+                "distance": {
+                  "type": "number",
+                  "description": "Linear length along call in project units"
+                },
+                "to_point_id": {
+                  "type": "string",
+                  "description": "Identifier for the target endpoint"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "Display label for waypoint export"
+                },
+                "monument": {
+                  "type": "string",
+                  "description": "Monument description at the endpoint (e.g. 1in Iron Pipe Found)"
+                },
+                "notes": {
+                  "type": "string",
+                  "description": "Historical deed or plan notes"
+                },
+                "stations": {
+                  "type": "array",
+                  "description": "Intermediate surveyed stations or monuments located along this call",
+                  "items": {
+                    "type": "object",
+                    "required": ["station", "point_id"],
+                    "properties": {
+                      "station": {
+                        "type": "number",
+                        "description": "Distance from start of this call to intermediate point"
+                      },
+                      "point_id": {
+                        "type": "string",
+                        "description": "Identifier for the intermediate point"
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "Display label for waypoint export"
+                      },
+                      "monument": {
+                        "type": "string",
+                        "description": "Monument description"
+                      },
+                      "notes": {
+                        "type": "string",
+                        "description": "Stationing notes"
+                      }
+                    }
+                  }
+                },
+                "radius": {
+                  "type": "number",
+                  "description": "Curve radius in project units"
+                },
+                "arc_length": {
+                  "type": "number",
+                  "description": "Length of circular arc in project units"
+                },
+                "delta_deg": {
+                  "type": "number",
+                  "description": "Central angle of curve in decimal degrees"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["left", "right", "cw", "ccw"],
+                  "description": "Curve deflection direction"
+                },
+                "tangent_in": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether curve enters tangentially from previous leg bearing"
+                },
+                "center_point_id": {
+                  "type": "string",
+                  "description": "Optional identifier to export the center of curvature point"
+                },
+                "mid_point_id": {
+                  "type": "string",
+                  "description": "Optional identifier to export the arc midpoint"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

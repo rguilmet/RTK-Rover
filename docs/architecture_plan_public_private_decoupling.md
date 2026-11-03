@@ -118,15 +118,15 @@ Per the architectural decision, we are adopting **Option B: Dedicated Sibling Re
 ### Phase 3: Cadastral Schema Definition & Generic COGO Engine
 **Objective:** Create standard JSON schema for deed traverses and develop the generic CLI solver in `RTK_Rover/scripts/cogo_solver.py`.
 
-- [ ] **3.1 Cadastral Schema Definition (`docs/schemas/cadastral_schema.json`):**
+- [x] **3.1 Cadastral Schema Definition (`docs/schemas/cadastral_schema.json`):**
   - JSON schema supporting parcel metadata, quadrant bearings (`"N 14-30-00 E"`), distances with units, monument descriptions, and control ties.
-- [ ] **3.2 Fictional Test Dataset (`examples/subdivision_demo.json`):**
+- [x] **3.2 Fictional Test Dataset (`examples/subdivision_demo.json`):**
   - Fictional 3-lot suburban/rural layout for tests and user reference.
-- [ ] **3.3 Generic COGO Engine (`scripts/cogo_solver.py`):**
+- [x] **3.3 Generic COGO Engine (`scripts/cogo_solver.py`):**
   - Forward geodesic projection, loop misclosure ratio calculation, Compass Rule (Bowditch) adjustment, and adjoiner common-line reconciliation.
   - Exporters: Google Earth KML, Rover `/waypoints.csv`, GeoJSON, and text closure reports.
   - Verified against `examples/subdivision_demo.json`.
-- [ ] **3.4 Documentation Sync:**
+- [x] **3.4 Documentation Sync:**
   - Author [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
   - Update [`README.md`](../README.md) and [`docs/project_overview.md`](project_overview.md).
 

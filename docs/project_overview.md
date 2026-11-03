@@ -162,8 +162,8 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
-* **`cogo_solver.py` (v1.0.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, and text closure audits.
-* **`check_secrets.py` (v1.0.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
-* **`install_git_hooks.py` (v1.0.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.
+* **`cogo_solver.py` (v1.0.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
+* **`check_secrets.py` (v1.1.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
+* **`install_git_hooks.py` (v1.1.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.
 * **`kml_to_waypoints.py` (v1.0.0):** Ingests GIS or Google Earth KML files and extracts placemarks, linestrings, and polygon boundaries into the standardized 19-column rover CSV format.
 * **`validate_waypoints.py` (v1.2.0):** Validates CSV schema compliance, bounds, and computes traverse leg distances, bearings, and total closed perimeter.

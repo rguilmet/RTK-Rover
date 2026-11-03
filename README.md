@@ -174,13 +174,15 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
 
 ---
 
-## 7. Waypoint & Survey Utilities (`scripts/`)
+## 7. Cadastral, Waypoint & Security Utilities (scripts/)
 
-Python command-line tools in `scripts/` automate waypoint generation, validation, and deed boundary network solving:
+Python command-line tools in scripts/ automate cadastral COGO network solving, waypoint generation, hardware pacing, and security verification:
 
-* **`cogo_network_solver.py`**: Multi-deed Coordinate Geometry (COGO) network solver. Solves relative legal deed calls (bearings, distances, easements, rights of way) across adjacent property deeds, anchors them to real-world RTK-surveyed ground control pins, derives the local grid-to-true rotation offset (State Plane West convergence), and computes intermediate boundary pins, T-junctions, and elusive legal anchors (e.g. Stone Monument) with sub-inch closure. Outputs standard 19-column `waypoints.csv`.
-* **`kml_to_waypoints.py`**: Converts Google Earth or GIS `.kml` boundary polygons, paths, and placemarks directly into the rover's 19-column `waypoints.csv` format with automatic label sanitization and multi-line description handling.
-* **`validate_waypoints.py`**: Checks syntax, column count, bounds, and computes leg-by-leg distances, bearings, and closed-loop perimeter for any waypoint CSV file.
+* **cogo_solver.py**: Generic schema-driven Cadastral Coordinate Geometry (COGO) & Traverse Engine. Solves metes-and-bounds deed descriptions, circular road curve geometry (PC, PT, center of curvature, arc midpoint), intermediate stationing, and ground-truth RTK control ties. Computes linear traverse misclosure, precision ratios ( : N$), and balances loops via Compass Rule (Bowditch Adjustment). Supports multi-parcel adjoiner boundary snapping. Exports Rover 19-column waypoints.csv, Google Earth KML, GeoJSON, and ASCII closure reports. See the [Cadastral COGO Solver Guide](docs/cogo_solver_guide.md).
+* **check_secrets.py**: Security and privacy verification engine. Scans Git tracked files and unpushed commits for exposed credentials, cryptographic keys, and absolute user paths. Dynamically loads local personal search tokens from an unversioned .secrets.local configuration.
+* **kml_to_waypoints.py**: Converts Google Earth or GIS .kml boundary polygons, paths, and placemarks directly into the rover's 19-column waypoints.csv format with automatic label sanitization and multi-line description handling.
+* **alidate_waypoints.py**: Checks syntax, column count, bounds, and computes leg-by-leg distances, bearings, and closed-loop perimeter for any waypoint CSV file.
+* **e220_pacer.py**: Base station hardware pacer daemon for RTKBase streams with silicon-calibrated Time-on-Air and Section 5.6.2 two-regime pacing.
 
 ---
 

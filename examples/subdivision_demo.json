@@ -1,0 +1,195 @@
+{
+  "project": {
+    "name": "Pine Ridge Subdivision Demonstration",
+    "description": "Fictional 3-lot reference dataset illustrating closed traverses, shared adjoiner boundaries, circular road curve geometry, and RTK control ties.",
+    "datum": "WGS84",
+    "units": "feet"
+  },
+  "control_anchors": [
+    {
+      "id": "CTRL_101",
+      "label": "CTRL_PIN_101_REF",
+      "latitude": 45.123456789,
+      "longitude": -69.123456789,
+      "elevation_m": 125.40,
+      "monument": "5/8in Rebar w/ Aluminum Cap 'PINERIDGE #101'",
+      "notes": "Primary RTK base station control anchor"
+    },
+    {
+      "id": "CTRL_102",
+      "label": "CTRL_PIN_102_REF",
+      "latitude": 45.123891234,
+      "longitude": -69.124231800,
+      "elevation_m": 126.15,
+      "monument": "5/8in Rebar w/ Aluminum Cap 'PINERIDGE #102'",
+      "notes": "Secondary azimuth calibration anchor (Station 250.00ft NW)"
+    }
+  ],
+  "calibration": {
+    "anchor_from": "CTRL_101",
+    "anchor_to": "CTRL_102",
+    "deed_bearing": "N 45-00-00 W",
+    "description": "True meridian grid convergence calibration baseline"
+  },
+  "parcels": [
+    {
+      "id": "lot_1",
+      "name": "Lot 1 - Meadow View (Closed Rectangular Traverse)",
+      "book_page": "Demo Plan BK 100 PG 1",
+      "adjust": "compass",
+      "pob": {
+        "anchor_id": "CTRL_101",
+        "point_id": "LOT1_POB",
+        "label": "PIN_LOT1_POB",
+        "monument": "5/8in Rebar Set w/ Plastic Cap 'PLS 9999'",
+        "notes": "Point of Beginning coincident with CTRL_101"
+      },
+      "calls": [
+        {
+          "type": "line",
+          "bearing": "N 45-00-00 E",
+          "distance": 250.00,
+          "to_point_id": "LOT1_PIN_NE",
+          "label": "PIN_LOT1_NE",
+          "monument": "5/8in Rebar Set w/ Plastic Cap 'PLS 9999'",
+          "notes": "Northeasterly line along rural range way"
+        },
+        {
+          "type": "line",
+          "bearing": "S 45-00-00 E",
+          "distance": 300.00,
+          "to_point_id": "LOT1_PIN_SE",
+          "label": "PIN_LOT1_SE",
+          "monument": "1in Iron Pipe Found",
+          "notes": "Easterly corner marked by stone wall intersection",
+          "stations": [
+            {
+              "station": 150.00,
+              "point_id": "LOT1_PIN_EAST_MID",
+              "label": "PIN_LOT1_EAST_MID",
+              "monument": "Drill hole in stone wall",
+              "notes": "Intermediate fence line post"
+            }
+          ]
+        },
+        {
+          "type": "line",
+          "bearing": "S 45-00-00 W",
+          "distance": 250.00,
+          "to_point_id": "LOT1_PIN_SW",
+          "label": "PIN_LOT1_SW",
+          "monument": "5/8in Rebar Set w/ Plastic Cap 'PLS 9999'",
+          "notes": "Southerly rear corner"
+        },
+        {
+          "type": "line",
+          "bearing": "N 45-00-00 W",
+          "distance": 300.00,
+          "to_point_id": "LOT1_POB",
+          "label": "PIN_LOT1_POB",
+          "monument": "5/8in Rebar Set w/ Plastic Cap 'PLS 9999'",
+          "notes": "Closing leg returning to POB"
+        }
+      ]
+    },
+    {
+      "id": "lot_2",
+      "name": "Lot 2 - Hillcrest (Adjoiner Lot Sharing Common Boundary)",
+      "book_page": "Demo Plan BK 100 PG 2",
+      "adjust": "none",
+      "pob": {
+        "from_point": "lot_1.LOT1_PIN_NE",
+        "point_id": "LOT2_POB",
+        "label": "PIN_LOT2_POB",
+        "monument": "Common Corner w/ Lot 1 NE",
+        "notes": "Starts at Lot 1 NE corner"
+      },
+      "calls": [
+        {
+          "type": "line",
+          "bearing": "N 45-00-00 E",
+          "distance": 200.00,
+          "to_point_id": "LOT2_PIN_NE",
+          "label": "PIN_LOT2_NE",
+          "monument": "1in Iron Pipe Found",
+          "notes": "Northerly extension along range way"
+        },
+        {
+          "type": "line",
+          "bearing": "S 45-00-00 E",
+          "distance": 300.00,
+          "to_point_id": "LOT2_PIN_SE",
+          "label": "PIN_LOT2_SE",
+          "monument": "5/8in Rebar Set",
+          "notes": "Easterly rear corner"
+        },
+        {
+          "type": "line",
+          "bearing": "S 45-00-00 W",
+          "distance": 200.00,
+          "to_point_id": "lot_1.LOT1_PIN_SE",
+          "label": "PIN_LOT1_SE",
+          "monument": "1in Iron Pipe Found (Lot 1 SE Corner)",
+          "notes": "Ties directly into Lot 1 SE corner"
+        },
+        {
+          "type": "line",
+          "bearing": "N 45-00-00 W",
+          "distance": 300.00,
+          "to_point_id": "LOT2_POB",
+          "label": "PIN_LOT2_POB",
+          "monument": "Common boundary with Lot 1",
+          "notes": "Reconciled shared boundary line"
+        }
+      ]
+    },
+    {
+      "id": "lot_3",
+      "name": "Lot 3 - Cul-de-Sac (Circular Road Curve Geometry)",
+      "book_page": "Demo Plan BK 100 PG 3",
+      "adjust": "none",
+      "pob": {
+        "from_point": "lot_1.LOT1_POB",
+        "bearing": "N 45-00-00 W",
+        "distance": 50.00,
+        "point_id": "LOT3_POB",
+        "label": "PIN_LOT3_POB",
+        "monument": "Capped Iron Rod on Road Sideline",
+        "notes": "Located across 50ft road right-of-way from Lot 1 POB"
+      },
+      "calls": [
+        {
+          "type": "line",
+          "bearing": "N 45-00-00 E",
+          "distance": 120.00,
+          "to_point_id": "LOT3_PC",
+          "label": "PIN_LOT3_PC",
+          "monument": "Point of Curvature (PC) Capped Iron Pin",
+          "notes": "Tangent entry into cul-de-sac curve"
+        },
+        {
+          "type": "curve",
+          "radius": 150.00,
+          "delta_deg": 60.00,
+          "direction": "left",
+          "tangent_in": true,
+          "center_point_id": "CULDESAC_CENTER",
+          "mid_point_id": "CULDESAC_ARC_MID",
+          "to_point_id": "LOT3_PT",
+          "label": "PIN_LOT3_PT",
+          "monument": "Point of Tangency (PT) Capped Iron Pin",
+          "notes": "150ft radius curve around cul-de-sac turnaround"
+        },
+        {
+          "type": "line",
+          "bearing": "N 15-00-00 W",
+          "distance": 150.00,
+          "to_point_id": "LOT3_PIN_NORTH",
+          "label": "PIN_LOT3_NORTH",
+          "monument": "Stone monument with drill hole",
+          "notes": "Back property line"
+        }
+      ]
+    }
+  ]
+}

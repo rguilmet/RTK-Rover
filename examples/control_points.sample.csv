@@ -1,0 +1,3 @@
+id,label,latitude,longitude,elevation_m,monument,notes
+CTRL_101,CTRL_PIN_101_REF,45.123456789,-69.123456789,125.40,5/8in Rebar w/ Aluminum Cap 'PINERIDGE #101',Primary RTK base station control anchor
+CTRL_102,CTRL_PIN_102_REF,45.123891234,-69.124231800,126.15,5/8in Rebar w/ Aluminum Cap 'PINERIDGE #102',Secondary azimuth calibration anchor (Station 250.00ft NW)
