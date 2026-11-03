@@ -96,21 +96,21 @@ Per the architectural decision, we are adopting **Option B: Dedicated Sibling Re
 ### Phase 2: Private Sibling Repository Setup & Migration
 **Objective:** Create `RTK_Rover_Private`, initialize local Git version control, migrate all sensitive assets out of `RTK_Rover/reference/`, and clean up the public repository.
 
-- [ ] **2.1 Initialize Sibling Repository:**
+- [x] **2.1 Initialize Sibling Repository:**
   - Create `../RTK_Rover_Private`.
   - Initialize local Git tracking: `git init`.
   - Configure `.gitignore` for OS artifacts (`Thumbs.db`, `.DS_Store`, `__pycache__`).
-- [ ] **2.2 Migrate Private Assets from `reference/`:**
+- [x] **2.2 Migrate Private Assets from `reference/`:**
   - Move deed PDFs into `RTK_Rover_Private/deeds/`.
   - Move `solve_deed_network.py` and `solve_adjoiner_lots.py` into `RTK_Rover_Private/cadastral/`.
   - Move private logs (`nmea_*.log`) into `RTK_Rover_Private/logs/`.
   - Move real waypoint CSVs (`waypoints-guilmet*.csv`, `waypoints-haslam.csv`, `waypoints-gray.csv`) into `RTK_Rover_Private/cadastral/`.
   - Initial Git commit in `RTK_Rover_Private` (`git commit -m "feat: initial commit of private survey records and solvers"`).
-- [ ] **2.3 Clean Up Public Repository (`RTK_Rover`):**
+- [x] **2.3 Clean Up Public Repository (`RTK_Rover`):**
   - Verify that all necessary files have been safely migrated to `RTK_Rover_Private`.
   - Remove unneeded remnants from `RTK_Rover/reference/`.
   - Remove `reference/check_secrets.py` (superseded by public parameterized `scripts/check_secrets.py`).
-- [ ] **2.4 Documentation Sync:**
+- [x] **2.4 Documentation Sync:**
   - Update `docs/session_handoff.md` with migration completion status and directory paths.
 
 ---
