@@ -24,7 +24,9 @@
   - **Device-Relative UART Pin Labels:** All pin labels (`UM982_TXD0`, `UM982_RXD0`, `UM982_TXD1`, `UM982_RXD1`, `E220_TXD`, `E220_RXD`) are named relative to the external module (`<DEV>_TXD` = module output $\rightarrow$ ESP32 RX input; `<DEV>_RXD` = module input $\leftarrow$ ESP32 TX output).
   - **Dual-Antenna Lever-Arm & Pole Height Projection:** The UM982 reports the WGS84 position of the **Master Antenna**, while the survey pole centerline sits at the midpoint ($\frac{B}{2} = 0.2775\text{ m}$ for `0.555 m` spacing) between Master and Slave antennas at height `antenna_height_m` above the ground tip. `nav_engine` projects the Master position along the 3D `UNIHEADINGA` baseline vector (`heading`, `pitch`) to eliminate orbital offset when rotating the pole.
   - **Display Orientation Independence:** True heading comes strictly from the pole-mounted UM982 dual antennas, while the handheld Waveshare's `QMI8658` IMU tracks the enclosure gravity vector (`Held Flat`, `Viewing Angle`, `Clipped Vertically to Pole`) and supports bracket tilt taring for the 2D pole bubble level.
-* **Code Style:** Strict C/C++ for firmware (`src/` modular subdirectories), pure Python for auxiliary scripts (`scripts/`). Maintain existing docstrings. Semantic versioning enforced (`ROVER_FIRMWARE_VERSION` in `user_config.h` for firmware).
+* **Code Style & Repository Architecture:**
+  - Strict C/C++ for firmware (`src/` modular subdirectories), pure Python for auxiliary scripts (`scripts/`). Maintain existing docstrings. Semantic versioning enforced (`ROVER_FIRMWARE_VERSION` in `user_config.h` for firmware).
+  - **Public Core vs. Private Sibling Repository:** Public `RTK_Rover` houses open-source firmware, generic mathematical tools (COGO solver, pacer, config utilities), schemas, and fictional sample data. Private `RTK_Rover_Private` houses real deed records, personal boundary JSON files, raw telemetry captures, and personal credentials under independent local Git version control.
 
 ---
 
@@ -47,7 +49,8 @@
 * **NEVER** execute filesystem operations (such as scanning `/survey_logged_pins.csv`) inside the 30 Hz UI rendering update loop. Dynamic identifiers must be evaluated only on dirty state changes and served from cached strings.
 * **NEVER** use non-ASCII Unicode characters (such as $\pm$, $\circ$, degree symbols, arrows) in UI strings or web portals; standard ASCII equivalents (`+/-`, `deg`, `->`, `[v]`, `[^]`) must be used to ensure font glyph compatibility.
 * **NEVER** trigger waypoint logging from a short-press of the BOOT button (GPIO 0). Physical BOOT button is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
-* **NEVER** commit, stage, or push personal identifiable information (PII), private amateur radio callsigns, private homestead coordinates, personal LAN hostnames, local Windows absolute file paths (`file:///C:/...`), or private deed boundary solving tools to the Git repository. Deed tools and parcel solvers must strictly remain in `reference/` (which is `.gitignore`'d).
+* **NEVER** hardcode domain data, personal identifiers, specific coordinates, local absolute filesystem paths (`file:///C:/...`), or private configuration records directly into computational logic or algorithms. All tools must follow state-of-the-art software engineering practices: strict separation of Code (logic) and Data (schemas/CLI inputs).
+* **NEVER** commit, stage, or push personal identifiable information (PII), private amateur radio callsigns, private homestead coordinates, personal LAN hostnames, or private deed boundary solving data to the Git repository. Personal data must strictly remain in the sibling repository `RTK_Rover_Private` (or `reference/` which is `.gitignore`'d).
 * **NEVER** push commits to GitHub without executing the secrets audit scanner (`python reference/check_secrets.py`) and verifying zero violations. An automated Git `pre-push` hook enforces this check.
 
 ---
