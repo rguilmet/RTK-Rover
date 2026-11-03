@@ -145,3 +145,49 @@ python scripts/cogo_solver.py \
    CAD vector geometry in local ground survey coordinates with dedicated layers for control anchors, parcel boundaries, curve arcs, monument symbols, waypoint labels, and bearing/distance call annotations.
 5. **ASCII Survey Report (`output/closure_report.txt`):**
    Professional leg-by-leg closure metrics, misclosure vectors, and precision ratios.
+
+---
+
+## 5. End-to-End Cadastral Ingestion & Survey Workflow
+
+The cadastral toolchain follows a three-stage pipeline that transitions from raw recorded legal instruments into field-ready RTK navigation waypoints and ground-calibrated CAD vector models:
+
+```mermaid
+flowchart TD
+    A["1. Registry Scanned Deeds (PDF)"] -->|"convert_deeds_to_markdown.py"| B["2. Clean Markdown Transcripts (reference/markdown/*.md)"]
+    B -->|"Engineer / Surveyor Modeling"| C["3. Standard Cadastral JSON (parcels.json)"]
+    D["Ground RTK Control Pins (control_anchors.csv)"] --> E["4. cogo_solver.py"]
+    C --> E
+    E --> F1["RTK Rover Navigation (waypoints.csv)"]
+    E --> F2["Google Earth GIS (homestead_solved.kml)"]
+    E --> F3["Ground AutoCAD DXF (homestead_network.dxf)"]
+    E --> F4["Survey Closure Audit (homestead_report.txt)"]
+```
+
+### Stage 1: Deed Ingestion & Transcription (`convert_deeds_to_markdown.py`)
+* **Input:** Scanned multi-page deed PDFs obtained from County Registries of Deeds.
+* **Process:** Employs `easyocr` and `pypdf` to extract high-fidelity text transcripts while isolating legal metes-and-bounds paragraphs.
+* **Outputs:**
+  * Clean Markdown transcripts (`reference/markdown/<deed>.md`) documenting Book, Page, Grantor/Grantee, Plan references, and verbatim legal calls.
+  * *(Preliminary Draft)* Uncalibrated relative CAD preview DXFs (`reference/dxf/<deed>.dxf`) plotted at local `(0, 0)` with artificial parcel displacement offsets to visually sanity-check whether raw OCR calls form closed loops.
+
+### Stage 2: Cadastral Network Modeling (`cadastral_schema.json`)
+* **Input:** Clean Markdown legal calls, recorded subdivision plans (e.g. Plan Books), and historical field evidence.
+* **Process:** The surveyor/engineer translates deed calls into structured JSON conforming to `docs/schemas/cadastral_schema.json`.
+* **Key Modeling Operations:**
+  * Define individual parcel boundaries, adjoiner property lines, road rights-of-way (ROWs), and utility/access easements.
+  * Connect common corners across parcels using `"from_point": "<parcel_id>.<point_id>"` to ensure unified boundary alignment.
+  * Model circular road curves, turnarounds, and cul-de-sacs with radius, arc length, central delta angle, and tangency flags.
+  * Resolve magnetic declination differences when older deed descriptions reference historical Magnetic North.
+
+### Stage 3: Ground-Calibrated Geodetic Solving (`cogo_solver.py`)
+* **Input:** Cadastral parcel JSON model + physical ground truth control anchors (`control_anchors.csv` from high-precision RTK GNSS observations).
+* **Process:**
+  * Derives baseline ground vector and computes grid-to-true rotation offset (grid convergence calibration).
+  * Executes direct and inverse WGS84 geodesic projections for all straight lines, curve arcs, and turnaround legs.
+  * Evaluates traverse closure precision and applies Bowditch / Compass Rule adjustments where requested.
+* **Deliverables:**
+  * **`waypoints.csv`:** 19-column CSV ready to load directly onto the RTK Rover SD card for field stakeout and navigation.
+  * **AutoCAD DXF (`--dxf`):** Authoritative CAD vector linework in local ground survey feet relative to origin anchor, organized across dedicated layers (`CONTROL_ANCHORS`, `SURVEY_MONUMENTS`, `POINT_LABELS`, `CALL_ANNOTATIONS`, `TITLE_BLOCK`, and dynamic `PARCEL_*` boundary layers).
+  * **Google Earth KML (`--kml`):** Translucent 3D boundary polygons, easement corridors, and color-coded monument pushpins.
+  * **Closure Report (`--report`):** Complete leg-by-leg legal survey audit detailing misclosure vectors and precision ratios.
