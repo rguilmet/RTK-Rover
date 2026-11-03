@@ -47,6 +47,8 @@
 * **NEVER** execute filesystem operations (such as scanning `/survey_logged_pins.csv`) inside the 30 Hz UI rendering update loop. Dynamic identifiers must be evaluated only on dirty state changes and served from cached strings.
 * **NEVER** use non-ASCII Unicode characters (such as $\pm$, $\circ$, degree symbols, arrows) in UI strings or web portals; standard ASCII equivalents (`+/-`, `deg`, `->`, `[v]`, `[^]`) must be used to ensure font glyph compatibility.
 * **NEVER** trigger waypoint logging from a short-press of the BOOT button (GPIO 0). Physical BOOT button is reserved exclusively for long-press ($\ge 1.5\text{ s}$) screenshots.
+* **NEVER** commit, stage, or push personal identifiable information (PII), private amateur radio callsigns, private homestead coordinates, personal LAN hostnames, local Windows absolute file paths (`file:///C:/...`), or private deed boundary solving tools to the Git repository. Deed tools and parcel solvers must strictly remain in `reference/` (which is `.gitignore`'d).
+* **NEVER** push commits to GitHub without executing the secrets audit scanner (`python reference/check_secrets.py`) and verifying zero violations. An automated Git `pre-push` hook enforces this check.
 
 ---
 
