@@ -158,8 +158,8 @@ static lv_obj_t *t1_bright_btn_lbl  = NULL;
 
 static lv_obj_t *t1_nmea_btn        = NULL;
 static lv_obj_t *t1_nmea_btn_lbl    = NULL;
-static lv_obj_t *t1_route_btn       = NULL;
-static lv_obj_t *t1_route_btn_lbl   = NULL;
+static lv_obj_t *t1_serial_btn      = NULL;
+static lv_obj_t *t1_serial_btn_lbl  = NULL;
 static lv_obj_t *t1_rtcm_btn        = NULL;
 static lv_obj_t *t1_rtcm_btn_lbl    = NULL;
 
@@ -608,6 +608,7 @@ static void update_all_control_buttons(void)
     static int s_last_aud_mode = -1;
     static int s_last_bright = -1;
     static int s_last_nmea = -1;
+    static int s_last_serial = -1;
     static int s_last_route = -1;
     static int s_last_rtcm = -1;
     static int s_last_telem = -1;
@@ -676,14 +677,20 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 2, Col 1: ROUTE: ON / ROUTE: OFF (Also updates Tile 0 t0_rec_btn)
+    // Row 2, Col 1: SERIAL: ON / SERIAL: OFF
+    int cur_serial = (serial_logger_is_active() || current_settings.enable_serial_logging) ? 1 : 0;
+    if (cur_serial != s_last_serial) {
+        s_last_serial = cur_serial;
+        if (t1_serial_btn && t1_serial_btn_lbl) {
+            lv_label_set_text(t1_serial_btn_lbl, cur_serial ? "SERIAL: ON" : "SERIAL: OFF");
+            lv_obj_set_style_bg_color(t1_serial_btn, cur_serial ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+
+    // Tile 0 Route REC Button (t0_rec_btn)
     int cur_route = route_logger_is_active() ? 1 : 0;
     if (cur_route != s_last_route) {
         s_last_route = cur_route;
-        if (t1_route_btn && t1_route_btn_lbl) {
-            lv_label_set_text(t1_route_btn_lbl, cur_route ? "ROUTE: ON" : "ROUTE: OFF");
-            lv_obj_set_style_bg_color(t1_route_btn, cur_route ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
-        }
         if (t0_rec_btn && t0_rec_btn_lbl) {
             lv_label_set_text(t0_rec_btn_lbl, cur_route ? "REC ON" : "REC OFF");
             lv_obj_set_style_bg_color(t0_rec_btn, cur_route ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
@@ -1582,7 +1589,7 @@ void create_rover_ui(void)
     lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
     lv_obj_set_style_radius(t0_rec_btn, 4, 0);
     lv_obj_set_ext_click_area(t0_rec_btn, 6);
-    lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_PRESSED, NULL);
     t0_rec_btn_lbl = lv_label_create(t0_rec_btn);
     lv_label_set_text(t0_rec_btn_lbl, "REC OFF");
     lv_obj_set_style_text_font(t0_rec_btn_lbl, &lv_font_montserrat_12, 0);
@@ -1685,9 +1692,9 @@ void create_rover_ui(void)
     t1_aud_btn    = create_grid_button(tile_survey, 1, 0, audio_mode_toggle_btn_cb, &t1_aud_btn_lbl);
     t1_bright_btn = create_grid_button(tile_survey, 2, 0, bright_toggle_btn_cb,     &t1_bright_btn_lbl);
 
-    // Row 2 (y=221): NMEA, ROUTE, RTCM
+    // Row 2 (y=221): NMEA, SERIAL, RTCM
     t1_nmea_btn   = create_grid_button(tile_survey, 0, 1, nmea_toggle_btn_cb,       &t1_nmea_btn_lbl);
-    t1_route_btn  = create_grid_button(tile_survey, 1, 1, route_toggle_btn_cb,      &t1_route_btn_lbl);
+    t1_serial_btn = create_grid_button(tile_survey, 1, 1, serial_log_toggle_btn_cb, &t1_serial_btn_lbl);
     t1_rtcm_btn   = create_grid_button(tile_survey, 2, 1, diag_rtcm_btn_cb,         &t1_rtcm_btn_lbl);
 
     // Row 3 (y=256): TELEM, IMU, TOUCH
