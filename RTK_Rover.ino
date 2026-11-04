@@ -372,6 +372,19 @@ void task_display_and_audio(void *pvParameters)
 
                 static uint32_t s_last_audio_ms = 0;
                 double d = ui_state.distance_to_target_m;
+                if (rover_get_tile0_nav_mode() == 1) {
+                    WaypointRecord_t wp_a, wp_b;
+                    int16_t idx_a = -1, idx_b = -1;
+                    waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+                    if (idx_a >= 0 && idx_b >= 0) {
+                        NavLineStakeout_t stakeout;
+                        nav_compute_line_stakeout(ui_state.tip_lat, ui_state.tip_lon,
+                                                  wp_a.latitude, wp_a.longitude,
+                                                  wp_b.latitude, wp_b.longitude,
+                                                  &stakeout);
+                        d = fabs(stakeout.offset_m);
+                    }
+                }
 
                 if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
                     if (d <= 2.0) {

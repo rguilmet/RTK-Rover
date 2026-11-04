@@ -35,6 +35,33 @@ void nav_compute_target_guidance(double tip_lat,
                                  float *d_north_m_out,
                                  float *d_east_m_out);
 
+// Phase 4: Line Stakeout (Station & Offset)
+typedef struct {
+    double station_m;         // Along-track distance from Point A (meters)
+    double offset_m;          // Perpendicular cross-track distance (meters, <0 Left, >0 Right)
+    double total_length_m;    // Total line distance from Point A to Point B (meters)
+    double remaining_m;       // Remaining distance along line to Point B (meters)
+    float  line_bearing_deg;  // Deed bearing from Point A to Point B (0..360 deg)
+    float  pct_complete;      // Progress along line (0..100%, can be <0 or >100)
+    bool   valid;             // True if points A and B are valid and non-coincident
+} NavLineStakeout_t;
+
+// Compute along-track station (m), cross-track offset (m), deed bearing, and remaining distance
+// for Rover tip relative to directed baseline Point A -> Point B.
+void nav_compute_line_stakeout(double tip_lat,
+                               double tip_lon,
+                               double lat_a,
+                               double lon_a,
+                               double lat_b,
+                               double lon_b,
+                               NavLineStakeout_t *result_out);
+
+// Format bearing as surveyor quadrant (e.g. "S 62°15'12\" E" or "N 45°00' E")
+void nav_format_quadrant_bearing(float bearing_deg, char *buf, size_t buf_len);
+
+// Format station in surveying stationing format (e.g. "Sta 4+20.5 ft" or "Sta 1+28.2 m")
+void nav_format_station(double station_m, char *buf, size_t buf_len);
+
 // Unit Formatting Helpers (SI vs Imperial based on current_settings.use_imperial_units)
 void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len);
 void nav_format_distance(double meters, char *buf, int buf_len);

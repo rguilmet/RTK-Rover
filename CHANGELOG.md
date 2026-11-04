@@ -5,6 +5,38 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.0] - 2026-11-04
+
+### Added
+- **Phase 4: Geodesic Line Stakeout Engine (`src/nav_engine/nav_engine.h`, `nav_engine.cpp`):**
+  - Added `NavLineStakeout_t` struct calculating along-track **Station** ($S$), perpendicular cross-track **Offset** ($O$, negative = Left, positive = Right), total line length ($L$), remaining distance, and progress percentage.
+  - Implemented `nav_compute_line_stakeout(...)` calculating high-precision projections on the WGS84 ellipsoid tangent plane.
+  - Implemented `nav_format_quadrant_bearing(...)` outputting standard cadastral quadrant bearing notation (e.g. `S 62°15'12.0" E` or `N 44°54'00.0" W`) with boundary rollover handling.
+  - Implemented `nav_format_station(...)` formatting stationing in standard surveying syntax (e.g. `Sta 4+20.5 ft` or `Sta 1+28.2 m`).
+- **Baseline Pair & Direction Management (`src/waypoint_manager/`):**
+  - Automated baseline pairing: by default Point B is active target (`Index`), and Point A is previous waypoint (`Index - 1`, with closed-loop wrap-around).
+  - Implemented `waypoint_line_stakeout_swap()` allowing instant reversal of Point A $\leftrightarrow$ Point B for walking lines in either direction.
+  - Implemented `waypoint_line_stakeout_set_points()` and `waypoint_line_stakeout_reset_auto()`.
+- **Tile 0 Interactive Mode Toggle & Line Stakeout UI (`src/lvgl_port/lvgl_port.c`):**
+  - Interactive Mode Selector: tapping `t0_mode_badge` toggles between `[POINT GUIDANCE]` (Cyan) and `[LINE STAKEOUT]` (Amber `#D97706`).
+  - Line Stakeout Canvas: draws the surveyed deed baseline ($A \rightarrow B$) down the vertical center axis (`t0_cross_v` in Electric Cyan), Point B marker at the top, and live Rover position ($x = 152 + \text{offset}$, $y = \text{station}$).
+  - Live On-Screen Deviation Cues: Rover marker turns bright green when on-line ($\le 2\text{ cm}$), amber when off-line with directional lateral guidance prompts (e.g. `1.4 ft LEFT ◄── (Move R)` vs `2.1 ft RIGHT (Move L) ──►`).
+  - Readouts below canvas display large Offset distance, Station progress (`Sta 4+20.5 ft (36.4%) | Rem: 733.7 ft`), and Deed Quadrant Bearing.
+  - Tapping `t0_target_lbl` in Line Stakeout mode instantly triggers `waypoint_line_stakeout_swap()` for one-tap baseline flipping.
+- **Line Stakeout Proximity Audio Integration (`RTK_Rover.ino`):**
+  - Connected `audio_nav_mode` (Geiger clicks & beeps) to track perpendicular line offset in Line Stakeout mode, providing progressive acoustic guidance into the deed line ($\le 2\text{ cm}$ solid confirmation tone).
+- **Test Harness (`scripts/test_line_stakeout.py`):**
+  - Unit tests verifying origin checks, midpoint calculations, positive right offset, negative left offset, and quadrant bearing formatting.
+
+### Changed
+- **Touch Responsiveness & Beep Timing Optimization (`src/lvgl_port/lvgl_port.c`, `src/waypoint_manager/`):**
+  - Moved `play_rover_beep()` to the first statement of `prev_wp_btn_cb`, `next_wp_btn_cb`, `prev_file_btn_cb`, `next_file_btn_cb`, and `wp_table_event_cb`, ensuring instant zero-latency acoustic feedback upon touch.
+  - Replaced blocking synchronous `save_settings()` inside `waypoint_file_select_*()` with asynchronous `mark_settings_dirty()`, completely eliminating the 100-200ms UI stall during waypoint file switching.
+  - Expanded touch target boundaries (`lv_obj_set_ext_click_area` increased from 8 to 12 px) on Tile 0 and Tile 2 selector buttons for effortless thumb tapping.
+  - Replaced deprecated `lv_obj_add_flag` calls with `lv_obj_set_clickable(..., true)`.
+- **Firmware Version Bump (`user_config.h`):**
+  - Bumped version to `v0.5.0`.
+
 ## [v0.4.0] - 2026-11-04
 
 ### Added

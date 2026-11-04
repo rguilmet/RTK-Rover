@@ -280,8 +280,9 @@ extern "C" void waypoint_file_select_next(void)
     strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
     current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
     current_settings.active_waypoint_index = 0;
-    save_settings();
+    mark_settings_dirty();
     g_active_waypoint_idx = 0;
+    waypoint_line_stakeout_reset_auto();
     waypoint_load_csv(current_settings.active_waypoint_file);
     refresh_waypoint_table_ui();
 }
@@ -293,8 +294,9 @@ extern "C" void waypoint_file_select_prev(void)
     strncpy(current_settings.active_waypoint_file, s_waypoint_files[s_active_file_idx], sizeof(current_settings.active_waypoint_file) - 1);
     current_settings.active_waypoint_file[sizeof(current_settings.active_waypoint_file) - 1] = '\0';
     current_settings.active_waypoint_index = 0;
-    save_settings();
+    mark_settings_dirty();
     g_active_waypoint_idx = 0;
+    waypoint_line_stakeout_reset_auto();
     waypoint_load_csv(current_settings.active_waypoint_file);
     refresh_waypoint_table_ui();
 }
@@ -372,6 +374,88 @@ extern "C" bool waypoint_get_active(WaypointRecord_t *wp_out)
         *wp_out = g_waypoints[g_active_waypoint_idx];
     }
     return true;
+}
+
+// Phase 4: Line Stakeout State & Helpers
+int16_t g_stakeout_pt_a_idx  = -1;
+int16_t g_stakeout_pt_b_idx  = -1;
+bool    g_stakeout_custom_pair = false;
+
+extern "C" bool waypoint_get_at(int16_t idx, WaypointRecord_t *wp_out)
+{
+    if (idx < 0 || idx >= g_waypoint_count) {
+        return false;
+    }
+    if (wp_out) {
+        *wp_out = g_waypoints[idx];
+    }
+    return true;
+}
+
+extern "C" void waypoint_line_stakeout_reset_auto(void)
+{
+    g_stakeout_custom_pair = false;
+    g_stakeout_pt_a_idx = -1;
+    g_stakeout_pt_b_idx = -1;
+}
+
+extern "C" void waypoint_line_stakeout_get_points(WaypointRecord_t *wp_a_out,
+                                                 WaypointRecord_t *wp_b_out,
+                                                 int16_t *idx_a_out,
+                                                 int16_t *idx_b_out)
+{
+    if (g_waypoint_count < 2) {
+        if (idx_a_out) *idx_a_out = -1;
+        if (idx_b_out) *idx_b_out = -1;
+        return;
+    }
+
+    int16_t a_idx = 0;
+    int16_t b_idx = 0;
+
+    if (g_stakeout_custom_pair && g_stakeout_pt_a_idx >= 0 && g_stakeout_pt_b_idx >= 0 &&
+        g_stakeout_pt_a_idx < g_waypoint_count && g_stakeout_pt_b_idx < g_waypoint_count) {
+        a_idx = g_stakeout_pt_a_idx;
+        b_idx = g_stakeout_pt_b_idx;
+    } else {
+        // Auto default: Point B is active target; Point A is previous index (closed loop wrap-around)
+        b_idx = g_active_waypoint_idx;
+        if (b_idx < 0 || b_idx >= g_waypoint_count) b_idx = 0;
+        a_idx = (b_idx - 1 + g_waypoint_count) % g_waypoint_count;
+        g_stakeout_pt_a_idx = a_idx;
+        g_stakeout_pt_b_idx = b_idx;
+    }
+
+    if (idx_a_out) *idx_a_out = a_idx;
+    if (idx_b_out) *idx_b_out = b_idx;
+    if (wp_a_out)  *wp_a_out  = g_waypoints[a_idx];
+    if (wp_b_out)  *wp_b_out  = g_waypoints[b_idx];
+}
+
+extern "C" void waypoint_line_stakeout_swap(void)
+{
+    if (g_waypoint_count < 2) return;
+    int16_t cur_a = 0, cur_b = 0;
+    waypoint_line_stakeout_get_points(NULL, NULL, &cur_a, &cur_b);
+    g_stakeout_pt_a_idx = cur_b;
+    g_stakeout_pt_b_idx = cur_a;
+    g_stakeout_custom_pair = true;
+    // Align active target to new destination (Point B)
+    g_active_waypoint_idx = cur_a;
+    current_settings.active_waypoint_index = g_active_waypoint_idx;
+    mark_settings_dirty();
+}
+
+extern "C" void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b)
+{
+    if (idx_a >= 0 && idx_a < g_waypoint_count && idx_b >= 0 && idx_b < g_waypoint_count) {
+        g_stakeout_pt_a_idx = idx_a;
+        g_stakeout_pt_b_idx = idx_b;
+        g_stakeout_custom_pair = true;
+        g_active_waypoint_idx = idx_b;
+        current_settings.active_waypoint_index = g_active_waypoint_idx;
+        mark_settings_dirty();
+    }
 }
 
 static void get_current_survey_stem(char *stem_out, size_t max_len)

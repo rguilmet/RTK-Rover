@@ -32,6 +32,20 @@ extern uint8_t  g_survey_prefix_idx;
 extern uint16_t g_survey_auto_num;
 extern uint8_t  g_survey_note_tag_idx;
 
+// Phase 4: Line Stakeout (Baseline A -> B)
+extern int16_t g_stakeout_pt_a_idx;
+extern int16_t g_stakeout_pt_b_idx;
+extern bool    g_stakeout_custom_pair;
+
+void waypoint_line_stakeout_get_points(WaypointRecord_t *wp_a_out,
+                                      WaypointRecord_t *wp_b_out,
+                                      int16_t *idx_a_out,
+                                      int16_t *idx_b_out);
+void waypoint_line_stakeout_swap(void);
+void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b);
+void waypoint_line_stakeout_reset_auto(void);
+bool waypoint_get_at(int16_t idx, WaypointRecord_t *wp_out);
+
 bool        waypoint_is_derived_mode(void);
 const char* waypoint_get_prefix_options(void);
 const char* waypoint_get_note_tag_options(void);

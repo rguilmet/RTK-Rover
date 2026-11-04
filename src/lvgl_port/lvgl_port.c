@@ -460,8 +460,72 @@ static void nav_next_screen_btn_cb(lv_event_t *e)
     }
 }
 
+static uint8_t s_tile0_nav_mode = 0; // 0 = Point Guidance, 1 = Line Stakeout
+
+uint8_t rover_get_tile0_nav_mode(void)
+{
+    return s_tile0_nav_mode;
+}
+
+static void update_t0_target_label(void);
+
+static void t0_mode_toggle_cb(lv_event_t *e)
+{
+    (void)e;
+    play_rover_beep(1600, 25);
+    s_tile0_nav_mode = (s_tile0_nav_mode == 0) ? 1 : 0;
+    update_t0_target_label();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Tile 0 Nav Mode -> %s\n",
+                     (s_tile0_nav_mode == 1) ? "LINE STAKEOUT" : "POINT GUIDANCE");
+    }
+}
+
+static void t0_target_lbl_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_tile0_nav_mode == 1) {
+        play_rover_beep(1700, 25);
+        waypoint_line_stakeout_swap();
+        update_t0_target_label();
+        if (current_settings.enable_touch_logging) {
+            rover_printf("[TOUCH BTN] Line Stakeout A<->B Swapped\n");
+        }
+    }
+}
+
 static void update_t0_target_label(void)
 {
+    if (s_tile0_nav_mode == 1) {
+        // Line Stakeout Mode
+        WaypointRecord_t wp_a, wp_b;
+        int16_t idx_a = -1, idx_b = -1;
+        waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+        if (t0_target_lbl && idx_a >= 0 && idx_b >= 0) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%s -> %s [SWAP]", wp_a.label, wp_b.label);
+            const char *cur = lv_label_get_text(t0_target_lbl);
+            if (!cur || strcmp(cur, buf) != 0) {
+                lv_label_set_text(t0_target_lbl, buf);
+            }
+        }
+        if (t0_notes_lbl && idx_a >= 0 && idx_b >= 0) {
+            NavLineStakeout_t stakeout;
+            nav_compute_line_stakeout(0, 0, wp_a.latitude, wp_a.longitude, wp_b.latitude, wp_b.longitude, &stakeout);
+            char qbrg[32];
+            nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
+            char len_str[24];
+            nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
+            char nbuf[64];
+            snprintf(nbuf, sizeof(nbuf), "Deed: %s | %s", qbrg, len_str);
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, nbuf) != 0) {
+                lv_label_set_text(t0_notes_lbl, nbuf);
+            }
+        }
+        return;
+    }
+
     WaypointRecord_t active_wp;
     if (t0_target_lbl && waypoint_get_active(&active_wp)) {
         char buf[64];
@@ -494,8 +558,8 @@ static void update_t0_target_label(void)
 static void prev_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
-    waypoint_select_prev();
     play_rover_beep(1500, 20);
+    waypoint_select_prev();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Waypoint '<' clicked -> Target idx: %d/%d\n",
@@ -506,8 +570,8 @@ static void prev_wp_btn_cb(lv_event_t *e)
 static void next_wp_btn_cb(lv_event_t *e)
 {
     (void)e;
-    waypoint_select_next();
     play_rover_beep(1500, 20);
+    waypoint_select_next();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Waypoint '>' clicked -> Target idx: %d/%d\n",
@@ -518,8 +582,8 @@ static void next_wp_btn_cb(lv_event_t *e)
 static void prev_file_btn_cb(lv_event_t *e)
 {
     (void)e;
-    waypoint_file_select_prev();
     play_rover_beep(1500, 20);
+    waypoint_file_select_prev();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '<' clicked -> %s\n", waypoint_file_get_active_name());
@@ -529,8 +593,8 @@ static void prev_file_btn_cb(lv_event_t *e)
 static void next_file_btn_cb(lv_event_t *e)
 {
     (void)e;
-    waypoint_file_select_next();
     play_rover_beep(1500, 20);
+    waypoint_file_select_next();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '>' clicked -> %s\n", waypoint_file_get_active_name());
@@ -971,8 +1035,8 @@ static void wp_table_event_cb(lv_event_t *e)
     uint32_t row = 0, col = 0;
     lv_table_get_selected_cell(table, &row, &col);
     if (row > 0 && (int16_t)(row - 1) < g_waypoint_count) {
-        waypoint_select_index((int16_t)(row - 1));
         play_rover_beep(1500, 20);
+        waypoint_select_index((int16_t)(row - 1));
         update_t0_target_label();
         switch_to_tile_index(0, LV_ANIM_ON);
         if (current_settings.enable_touch_logging) {
@@ -1292,7 +1356,7 @@ void create_rover_ui(void)
     lv_obj_t *btn_prev = lv_button_create(tile_guidance);
     lv_obj_set_size(btn_prev, 44, 28);
     lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 3);
-    lv_obj_set_ext_click_area(btn_prev, 8);
+    lv_obj_set_ext_click_area(btn_prev, 12);
     lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_prev = lv_label_create(btn_prev);
     lv_label_set_text(lbl_prev, LV_SYMBOL_LEFT);
@@ -1305,6 +1369,9 @@ void create_rover_ui(void)
     lv_label_set_long_mode(t0_target_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(t0_target_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_clickable(t0_target_lbl, true);
+    lv_obj_set_ext_click_area(t0_target_lbl, 8);
+    lv_obj_add_event_cb(t0_target_lbl, t0_target_lbl_cb, LV_EVENT_CLICKED, NULL);
 
     WaypointRecord_t init_wp;
     if (waypoint_get_active(&init_wp)) {
@@ -1319,7 +1386,7 @@ void create_rover_ui(void)
     lv_obj_t *btn_next = lv_button_create(tile_guidance);
     lv_obj_set_size(btn_next, 44, 28);
     lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 3);
-    lv_obj_set_ext_click_area(btn_next, 8);
+    lv_obj_set_ext_click_area(btn_next, 12);
     lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_next = lv_label_create(btn_next);
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
@@ -1361,6 +1428,9 @@ void create_rover_ui(void)
     lv_obj_set_style_pad_ver(t0_mode_badge, 2, 0);
     lv_obj_set_style_radius(t0_mode_badge, 4, 0);
     lv_obj_align(t0_mode_badge, LV_ALIGN_TOP_LEFT, 6, 6);
+    lv_obj_set_clickable(t0_mode_badge, true);
+    lv_obj_set_ext_click_area(t0_mode_badge, 8);
+    lv_obj_add_event_cb(t0_mode_badge, t0_mode_toggle_cb, LV_EVENT_CLICKED, NULL);
 
     // Telemetry HUD Readout (Heading & Pitch on top-left under Tactical Grid badge)
     t0_hdg_hud_lbl = lv_label_create(t0_nav_canvas);
@@ -1647,7 +1717,7 @@ void create_rover_ui(void)
     lv_obj_t *btn_file_prev = lv_button_create(tile_csv);
     lv_obj_set_size(btn_file_prev, 44, 28);
     lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 3);
-    lv_obj_set_ext_click_area(btn_file_prev, 8);
+    lv_obj_set_ext_click_area(btn_file_prev, 12);
     lv_obj_add_event_cb(btn_file_prev, prev_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fprev = lv_label_create(btn_file_prev);
     lv_label_set_text(lbl_fprev, LV_SYMBOL_LEFT);
@@ -1665,7 +1735,7 @@ void create_rover_ui(void)
     lv_obj_t *btn_file_next = lv_button_create(tile_csv);
     lv_obj_set_size(btn_file_next, 44, 28);
     lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 3);
-    lv_obj_set_ext_click_area(btn_file_next, 8);
+    lv_obj_set_ext_click_area(btn_file_next, 12);
     lv_obj_add_event_cb(btn_file_next, next_file_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl_fnext = lv_label_create(btn_file_next);
     lv_label_set_text(lbl_fnext, LV_SYMBOL_RIGHT);
@@ -2185,24 +2255,183 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (d->has_active_target) {
-        snprintf(buf, sizeof(buf), "%s (%d/%d)",
-                 d->target_label, d->active_target_idx + 1, d->total_targets);
-        if (t0_target_lbl) {
-            const char *cur_tgt = lv_label_get_text(t0_target_lbl);
-            if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
-                lv_label_set_text(t0_target_lbl, buf);
+        if (s_tile0_nav_mode == 0) {
+            snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                     d->target_label, d->active_target_idx + 1, d->total_targets);
+            if (t0_target_lbl) {
+                const char *cur_tgt = lv_label_get_text(t0_target_lbl);
+                if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
+                    lv_label_set_text(t0_target_lbl, buf);
+                }
             }
-        }
-        if (t0_notes_lbl) {
-            const char *new_notes = d->target_notes[0] ? d->target_notes : "---";
-            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-            if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
-                lv_label_set_text(t0_notes_lbl, new_notes);
+            if (t0_notes_lbl) {
+                const char *new_notes = d->target_notes[0] ? d->target_notes : "---";
+                const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+                if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
+                    lv_label_set_text(t0_notes_lbl, new_notes);
+                }
             }
+            if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, dist_str);
         }
-        if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, dist_str);
 
-        if (d->distance_to_target_m <= 1.5) {
+        if (s_tile0_nav_mode == 1) {
+            // =============================================================
+            // LINE STAKEOUT MODE (Station & Offset)
+            // =============================================================
+            WaypointRecord_t wp_a, wp_b;
+            int16_t idx_a = -1, idx_b = -1;
+            waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+
+            if (idx_a >= 0 && idx_b >= 0) {
+                NavLineStakeout_t stakeout;
+                nav_compute_line_stakeout(d->tip_lat, d->tip_lon,
+                                          wp_a.latitude, wp_a.longitude,
+                                          wp_b.latitude, wp_b.longitude,
+                                          &stakeout);
+
+                // Top Target Row: A -> B [SWAP]
+                snprintf(buf, sizeof(buf), "%s -> %s [SWAP]", wp_a.label, wp_b.label);
+                if (t0_target_lbl) {
+                    const char *cur_tgt = lv_label_get_text(t0_target_lbl);
+                    if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
+                        lv_label_set_text(t0_target_lbl, buf);
+                    }
+                }
+
+                char qbrg[32];
+                nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
+
+                char len_str[24];
+                nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
+
+                snprintf(buf, sizeof(buf), "Deed: %s | %s", qbrg, len_str);
+                if (t0_notes_lbl) {
+                    const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+                    if (!cur_notes || strcmp(cur_notes, buf) != 0) {
+                        lv_label_set_text(t0_notes_lbl, buf);
+                    }
+                }
+
+                // Mode badge in Amber
+                lv_label_set_text(t0_mode_badge, "LINE STAKEOUT");
+                lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0xD97706), 0);
+
+                // Scale label shows total line length
+                snprintf(buf, sizeof(buf), "Total: %s", len_str);
+                lv_label_set_text(t0_scale_lbl, buf);
+
+                // Hide coarse grid, track arrows, wedges, bullseye rings
+                lv_obj_set_hidden(t0_bullseye_ring1, true);
+                lv_obj_set_hidden(t0_bullseye_ring2, true);
+                lv_obj_set_hidden(t0_bullseye_center, true);
+                lv_obj_set_hidden(t0_cross_h, true);
+                for (int i = 0; i < T0_GRID_H_LINES; i++) {
+                    if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
+                }
+                for (int i = 0; i < T0_GRID_V_LINES; i++) {
+                    if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
+                }
+                lv_obj_set_hidden(t0_track_line, true);
+                lv_obj_set_hidden(t0_track_arrow, true);
+                lv_obj_set_hidden(t0_wedge_amber_l, true);
+                lv_obj_set_hidden(t0_wedge_amber_r, true);
+                lv_obj_set_hidden(t0_wedge_green_l, true);
+                lv_obj_set_hidden(t0_wedge_green_r, true);
+
+                // Show Centerline (Baseline A -> B)
+                lv_obj_set_hidden(t0_cross_v, false);
+                lv_obj_set_style_line_color(t0_cross_v, lv_color_hex(0x00D8FF), 0);
+                lv_obj_set_style_line_width(t0_cross_v, 2, 0);
+
+                // Canvas coordinates:
+                // Canvas size: 304 x 210, Center: (152, 105)
+                // Centerline is at x = 152.
+                // Cross-track pixel scaling: 60 px = 1.0 m (~18 px/ft)
+                float px_per_m = 60.0f;
+                int16_t off_px = (int16_t)(stakeout.offset_m * px_per_m);
+                if (off_px > 120) off_px = 120;
+                if (off_px < -120) off_px = -120;
+
+                // Along-line Station progress:
+                // Point A at bottom (y = 175), Point B at top (y = 35)
+                float pct = stakeout.pct_complete;
+                if (pct < 0.0f) pct = 0.0f;
+                if (pct > 100.0f) pct = 100.0f;
+                int16_t sta_py = 175 - (int16_t)((pct / 100.0f) * 140.0f);
+
+                // Target Point B marker fixed at top of line (152, 35)
+                lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 35 - 8);
+                lv_obj_set_hidden(t0_target_icon, false);
+
+                // Rover marker at (152 + off_px, sta_py)
+                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 + off_px - 8, sta_py - 8);
+                lv_obj_set_hidden(t0_rover_icon, false);
+
+                bool on_line = (fabs(stakeout.offset_m) <= 0.02); // 2 cm on-line threshold
+                if (on_line) {
+                    lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x00FF88), 0);
+                } else {
+                    lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0xF59E0B), 0);
+                }
+
+                // Heading beam on rover
+                if (d->heading_valid) {
+                    float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
+                    int16_t arrow_dx = (int16_t)(20.0f * sinf(hdg_rad));
+                    int16_t arrow_dy = (int16_t)(-20.0f * cosf(hdg_rad));
+                    static lv_point_precise_t line_beam_pts[2];
+                    line_beam_pts[0].x = 152 + off_px;
+                    line_beam_pts[0].y = sta_py;
+                    line_beam_pts[1].x = 152 + off_px + arrow_dx;
+                    line_beam_pts[1].y = sta_py + arrow_dy;
+                    lv_line_set_points(t0_beam_arrow, line_beam_pts, 2);
+                    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
+                    lv_obj_set_hidden(t0_beam_arrow, false);
+                } else {
+                    lv_obj_set_hidden(t0_beam_arrow, true);
+                }
+
+                // Large Offset Display (t0_dist_lbl)
+                char off_val_str[24];
+                nav_format_offset((float)fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
+                if (on_line) {
+                    snprintf(buf, sizeof(buf), "[OK] ON LINE! (%s)", off_val_str);
+                    if (t0_dist_lbl) {
+                        lv_label_set_text(t0_dist_lbl, buf);
+                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF88), 0);
+                    }
+                } else if (stakeout.offset_m < 0.0) {
+                    snprintf(buf, sizeof(buf), "%s LEFT ◄── (Move R)", off_val_str);
+                    if (t0_dist_lbl) {
+                        lv_label_set_text(t0_dist_lbl, buf);
+                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+                    }
+                } else {
+                    snprintf(buf, sizeof(buf), "%s RIGHT (Move L) ──►", off_val_str);
+                    if (t0_dist_lbl) {
+                        lv_label_set_text(t0_dist_lbl, buf);
+                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+                    }
+                }
+
+                // Steer Label: Station + Remaining
+                char sta_str[32];
+                nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
+                char rem_str[24];
+                nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
+                snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
+                if (t0_steer_lbl) {
+                    lv_label_set_text(t0_steer_lbl, buf);
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
+                }
+
+                // Offsets Label: Deed Bearing + True Heading
+                snprintf(buf, sizeof(buf), "Deed: %s (%.1f deg)", qbrg, stakeout.line_bearing_deg);
+                if (t0_offsets_lbl) {
+                    lv_label_set_text(t0_offsets_lbl, buf);
+                }
+            }
+        } else if (d->distance_to_target_m <= 1.5) {
             // -------------------------------------------------------------
             // Fine Stakeout Mode (< 1.5 m): Centimeter Bullseye Target
             // -------------------------------------------------------------
@@ -2387,8 +2616,10 @@ void update_rover_ui(const RoverUIData_t *d)
             lv_label_set_text(t0_steer_lbl, buf);
         }
 
-        snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
-        lv_label_set_text(t0_offsets_lbl, buf);
+        if (s_tile0_nav_mode == 0) {
+            snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
+            lv_label_set_text(t0_offsets_lbl, buf);
+        }
     } else {
         if (t0_target_lbl) {
             const char *cur_tgt = lv_label_get_text(t0_target_lbl);

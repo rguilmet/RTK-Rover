@@ -104,6 +104,132 @@ extern "C" void nav_compute_target_guidance(double tip_lat,
     if (d_east_m_out)       *d_east_m_out       = (float)d_east;
 }
 
+extern "C" void nav_compute_line_stakeout(double tip_lat,
+                                          double tip_lon,
+                                          double lat_a,
+                                          double lon_a,
+                                          double lat_b,
+                                          double lon_b,
+                                          NavLineStakeout_t *result_out)
+{
+    if (!result_out) return;
+
+    double lat_mid = (lat_a + lat_b) * 0.5 * DEG_TO_RAD;
+    double r_m = WGS84_A, r_n = WGS84_A;
+    wgs84_radii(lat_mid, &r_m, &r_n);
+
+    // Vector from Point A to Point B
+    double dlat_ab = (lat_b - lat_a) * DEG_TO_RAD;
+    double dlon_ab = (lon_b - lon_a) * DEG_TO_RAD;
+    double dn_ab = dlat_ab * r_m;
+    double de_ab = dlon_ab * r_n * cos(lat_mid);
+    double total_len = sqrt(dn_ab * dn_ab + de_ab * de_ab);
+
+    if (total_len < 0.001) {
+        // Coincident points or invalid line
+        result_out->valid           = false;
+        result_out->station_m       = 0.0;
+        result_out->offset_m        = 0.0;
+        result_out->total_length_m  = 0.0;
+        result_out->remaining_m     = 0.0;
+        result_out->line_bearing_deg= 0.0f;
+        result_out->pct_complete    = 0.0f;
+        return;
+    }
+
+    // Unit vector along line A -> B
+    double u_n = dn_ab / total_len;
+    double u_e = de_ab / total_len;
+
+    // Deed azimuth bearing (0..360 deg)
+    double brg = atan2(de_ab, dn_ab) * RAD_TO_DEG;
+    if (brg < 0.0) brg += 360.0;
+
+    // Vector from Point A to Rover Tip R
+    double dlat_ar = (tip_lat - lat_a) * DEG_TO_RAD;
+    double dlon_ar = (tip_lon - lon_a) * DEG_TO_RAD;
+    double dn_ar = dlat_ar * r_m;
+    double de_ar = dlon_ar * r_n * cos(lat_mid);
+
+    // Station: along-track projection onto line A -> B
+    double station = dn_ar * u_n + de_ar * u_e;
+
+    // Offset: perpendicular cross-track error (<0 = Left, >0 = Right)
+    double offset = de_ar * u_n - dn_ar * u_e;
+
+    // Remaining along-track distance to Point B
+    double remaining = total_len - station;
+
+    // Completion percentage
+    float pct = (float)((station / total_len) * 100.0);
+
+    result_out->valid           = true;
+    result_out->station_m       = station;
+    result_out->offset_m        = offset;
+    result_out->total_length_m  = total_len;
+    result_out->remaining_m     = remaining;
+    result_out->line_bearing_deg= (float)brg;
+    result_out->pct_complete    = pct;
+}
+
+extern "C" void nav_format_quadrant_bearing(float bearing_deg, char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return;
+    while (bearing_deg < 0.0f) bearing_deg += 360.0f;
+    while (bearing_deg >= 360.0f) bearing_deg -= 360.0f;
+
+    char ns = 'N';
+    char ew = 'E';
+    float angle = bearing_deg;
+
+    if (bearing_deg >= 0.0f && bearing_deg <= 90.0f) {
+        ns = 'N';
+        ew = 'E';
+        angle = bearing_deg;
+    } else if (bearing_deg > 90.0f && bearing_deg <= 180.0f) {
+        ns = 'S';
+        ew = 'E';
+        angle = 180.0f - bearing_deg;
+    } else if (bearing_deg > 180.0f && bearing_deg <= 270.0f) {
+        ns = 'S';
+        ew = 'W';
+        angle = bearing_deg - 180.0f;
+    } else {
+        ns = 'N';
+        ew = 'W';
+        angle = 360.0f - bearing_deg;
+    }
+
+    int deg = (int)angle;
+    float rem_min = (angle - (float)deg) * 60.0f;
+    int min = (int)rem_min;
+    float sec = (rem_min - (float)min) * 60.0f;
+    if (sec >= 59.95f) {
+        sec = 0.0f;
+        min++;
+        if (min >= 60) {
+            min = 0;
+            deg++;
+        }
+    }
+
+    snprintf(buf, buf_len, "%c %02d°%02d'%04.1f\" %c", ns, deg, min, sec, ew);
+}
+
+extern "C" void nav_format_station(double station_m, char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return;
+    double dist = current_settings.use_imperial_units ? (station_m * METERS_TO_FEET) : station_m;
+    const char *unit = current_settings.use_imperial_units ? "ft" : "m";
+
+    bool neg = (dist < 0.0);
+    double abs_d = fabs(dist);
+    int hundred = (int)(abs_d / 100.0);
+    double remainder = abs_d - (hundred * 100.0);
+
+    snprintf(buf, buf_len, "Sta %s%d+%04.1f %s", neg ? "-" : "", hundred, remainder, unit);
+}
+
 extern "C" void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len)
 {
     if (!buf || buf_len == 0) return;

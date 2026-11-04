@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.4.0`  
-**Firmware Version:** `v0.4.0`  
+**Document Version:** `v1.5.0`  
+**Firmware Version:** `v0.5.0`  
 **Last Updated:** November 4, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -170,6 +170,24 @@ When you close within $1.5\text{ m}$ of the target, the navigation engine automa
     * $D \le 0.02\text{ m}$ ($\le 2\text{ cm}$ / Bullseye Lock): Solid confirmation chime at $2400\text{ Hz}$.
   * **Beeps Mode (`AUD: BEEPS`):** Stepped pitch chimes closing from $5.0\text{ m}$ inward.
   * **Mute Mode (`AUD: MUTE`):** Silences navigation proximity audio while preserving button taps, survey logged tones, and screenshot double-beeps.
+
+### Phase 4: Line Stakeout Mode (Station & Offset)
+Tap the top-left mode badge (`TACTICAL GUIDANCE` / `LINE STAKEOUT`) on Tile 0 to toggle between **Point Guidance** and **Line Stakeout**:
+* **Baseline Definition ($A \rightarrow B$):** Directs the surveyor along the boundary line between Point A (Station $0+00$) and Point B (Target).
+  * **Auto-Pairing:** By default, Point B is the actively selected target (`Index`), and Point A is the preceding waypoint (`Index - 1`, wrapping around to close parcels).
+  * **One-Tap Swap (`[ <-> SWAP ]`):** Tap the target row label (`A -> B [SWAP]`) to reverse the line direction instantly. This enables walking backwards along a boundary line with Station counting up in your walking direction and Left/Right cues matching your eyes.
+* **Canvas Visualization:**
+  * **Centerline:** An Electric Cyan vertical baseline down the center axis ($x = 152$) represents the deed boundary.
+  * **Endpoint B:** Placed at the top of the line ($x = 152, y = 35$).
+  * **Live Rover Marker:** Placed at cross-track offset $x$ and along-track station $y$. Turns bright green when on the line ($\le 2\text{ cm}$), and amber with a heading beam when off-line.
+* **Large Readouts Below Canvas:**
+  * **Perpendicular Offset:** Displays signed cross-track error with bold directional arrows:
+    * `1.4 ft LEFT ◄── (Move R)`: You are left of the line; step right.
+    * `2.1 ft RIGHT (Move L) ──►`: You are right of the line; step left.
+    * `[OK] ON LINE! (0.01 m)`: You are within $\pm 2\text{ cm}$ of the deed line.
+  * **Stationing Progress:** Formatted in standard surveying stationing: `Sta 4+20.5 ft (36.4%) | Rem: 733.7 ft`.
+  * **Deed Bearing:** Formatted in surveying quadrant notation: `Deed: S 62°15'12.0" E (117.7 deg)`.
+* **Eyes-Free Line Audio Guidance:** In `AUD: GEIGER` mode, proximity audio tracks your perpendicular distance to the deed line. Clicks accelerate as you step toward the line, bursting into a solid $2,400\text{ Hz}$ confirmation tone when you stand within $2\text{ cm}$ of the line.
 
 ---
 

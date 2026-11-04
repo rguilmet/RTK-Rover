@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.4.0`  
+**Firmware Version:** `v0.5.0`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)
@@ -11,6 +11,10 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 ## 1. Overview & Key Capabilities
 
+* **Geodesic Line Stakeout & Cadastral Guidance (Phase 4):**
+  * Real-time along-track Station ($S$) and perpendicular cross-track Offset ($O$) navigation along boundary baselines ($A \rightarrow B$).
+  * Interactive Tile 0 mode toggle: `[POINT GUIDANCE]` (Centimeter Bullseye) $\leftrightarrow$ `[LINE STAKEOUT]` (Deed Vector with Left/Right guidance prompts and quadrant bearings e.g. `S 62°15'12" E`).
+  * One-tap baseline direction swap (`[ <-> SWAP ]`) and Geiger audio guidance tracking deed line proximity.
 * **Bi-Directional LoRa Protocol & Remote Air-Rate Switching (Phase 3):**
   * 39-byte packed binary uplink telemetry (`0xAA 0x55`, CRC16-CCITT) transmitted in the half-duplex quiet window ($t = 0.10\text{ s} \dots 0.45\text{ s}$ post-epoch, $\approx 30\text{ ms}$ airtime) every 5 seconds.
   * Base Station [`e220_pacer.py`](scripts/e220_pacer.py) outputs live telemetry to console, writes atomic JSON to `/run/rtk_rover_status.json` (`tmpfs` in RAM, zero SD wear), and appends to rolling daily CSV with 30-day auto-pruning, gzip compression, and 50MB hard FIFO cap.
