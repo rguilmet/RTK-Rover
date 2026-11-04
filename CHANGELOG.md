@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Instant Touch-Down Response on Navigation Buttons (`src/lvgl_port/lvgl_port.c`):**
   - Switched event bindings on Tile 0 `<` / `>` waypoint buttons, Tile 0 Route `REC` button (`t0_rec_btn`), Tile 2 `<` / `>` CSV file selector buttons, and bottom nav bar `< Prev` / `Next >` buttons from `LV_EVENT_CLICKED` to `LV_EVENT_PRESSED`. Acoustic beep and action now fire the exact millisecond finger contact occurs on the glass, eliminating perceived lag from finger hold/lift-off delay.
 - **Restored Serial ON/OFF Button & Streamlined Route Recording (`src/lvgl_port/lvgl_port.c`):**
-  - Restored USB CDC Serial Logging button (`t1_serial_btn`, `serial_log_toggle_btn_cb`) to Tile 1 (Row 2, Col 1), replacing redundant `ROUTE: ON/OFF` button with live status `SERIAL: ON` / `SERIAL: OFF`.
+  - Restored USB CDC Serial Logging button (`t1_serial_btn`, `serial_log_toggle_btn_cb`) to Tile 1 at Row 2, Col 0 (`SERIAL: ON` / `SERIAL: OFF`), swapping places with `NMEA: ON/OFF` (now Row 2, Col 1) and replacing the redundant `ROUTE: ON/OFF` button.
   - Route recording remains conveniently managed from Tile 0's bottom-right HUD button (`t0_rec_btn`, `REC ON` / `REC OFF`).
 - **Base Station Logging, Path & Unicode Cleanups (`scripts/e220_pacer.py`, `src/e220_driver/rover_telemetry.cpp`):**
   - Replaced unicode characters (`±` and `°`) with clean ASCII (`+/-` and ` deg`) in `e220_pacer.py` console output to avoid multi-byte UTF-8 Latin-1 rendering artifacts (`Â±`, `Â°`) in systemd journalctl.

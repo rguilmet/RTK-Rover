@@ -245,7 +245,7 @@ The bottom deck provides instantaneous touch control over hardware preferences i
 | Column 1 (Left) | Column 2 (Center) | Column 3 (Right) |
 | :--- | :--- | :--- |
 | **Row 1:** `VOL: 20%..100%` / `MUTE` | **Row 1:** `AUD: GEIGER / BEEPS / MUTE` | **Row 1:** `BRI: 20%..100%` |
-| **Row 2:** `NMEA: ON/OFF` | **Row 2:** `ROUTE: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
+| **Row 2:** `SERIAL: ON/OFF` | **Row 2:** `NMEA: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
 | **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
 | **Row 4:** `WIFI: ON/OFF` | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `LORA: 19.2k / 9.6k` |
 
@@ -253,8 +253,8 @@ The bottom deck provides instantaneous touch control over hardware preferences i
   * `VOL: xx%` / `VOL: MUTE`: Cycles master speaker output through 20%, 40%, 60%, 80%, 100%, and MUTE.
   * `AUD: GEIGER / BEEPS / MUTE`: Cycles proximity audio navigation modes (saved to `/settings.json`).
   * `BRI: xx%`: Cycles LCD backlight brightness through 20%, 40%, 60%, 80%, and 100%.
+  * `SERIAL: ON/OFF`: Toggles real-time USB CDC Serial logging output on/off.
   * `NMEA: ON/OFF`: Toggles raw UM982 NMEA logging to `/nmea/nmea_YYYYMMDD_HHMMSS.log`.
-  * `ROUTE: ON/OFF`: Toggles 1 Hz trajectory path logging to `/routes/route_YYYYMMDD_HHMMSS.csv`.
   * `RTCM: ON/OFF`: Toggles raw incoming RTCM3 differential stream logging to `/rtcm/`.
   * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic serial output.
   * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.

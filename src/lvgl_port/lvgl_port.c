@@ -667,23 +667,23 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 2, Col 0: NMEA: ON / NMEA: OFF
-    int cur_nmea = (nmea_logger_is_active() || current_settings.enable_nmea_logging) ? 1 : 0;
-    if (cur_nmea != s_last_nmea) {
-        s_last_nmea = cur_nmea;
-        if (t1_nmea_btn && t1_nmea_btn_lbl) {
-            lv_label_set_text(t1_nmea_btn_lbl, cur_nmea ? "NMEA: ON" : "NMEA: OFF");
-            lv_obj_set_style_bg_color(t1_nmea_btn, cur_nmea ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
-        }
-    }
-
-    // Row 2, Col 1: SERIAL: ON / SERIAL: OFF
+    // Row 2, Col 0: SERIAL: ON / SERIAL: OFF
     int cur_serial = (serial_logger_is_active() || current_settings.enable_serial_logging) ? 1 : 0;
     if (cur_serial != s_last_serial) {
         s_last_serial = cur_serial;
         if (t1_serial_btn && t1_serial_btn_lbl) {
             lv_label_set_text(t1_serial_btn_lbl, cur_serial ? "SERIAL: ON" : "SERIAL: OFF");
             lv_obj_set_style_bg_color(t1_serial_btn, cur_serial ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+        }
+    }
+
+    // Row 2, Col 1: NMEA: ON / NMEA: OFF
+    int cur_nmea = (nmea_logger_is_active() || current_settings.enable_nmea_logging) ? 1 : 0;
+    if (cur_nmea != s_last_nmea) {
+        s_last_nmea = cur_nmea;
+        if (t1_nmea_btn && t1_nmea_btn_lbl) {
+            lv_label_set_text(t1_nmea_btn_lbl, cur_nmea ? "NMEA: ON" : "NMEA: OFF");
+            lv_obj_set_style_bg_color(t1_nmea_btn, cur_nmea ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
@@ -1692,9 +1692,9 @@ void create_rover_ui(void)
     t1_aud_btn    = create_grid_button(tile_survey, 1, 0, audio_mode_toggle_btn_cb, &t1_aud_btn_lbl);
     t1_bright_btn = create_grid_button(tile_survey, 2, 0, bright_toggle_btn_cb,     &t1_bright_btn_lbl);
 
-    // Row 2 (y=221): NMEA, SERIAL, RTCM
-    t1_nmea_btn   = create_grid_button(tile_survey, 0, 1, nmea_toggle_btn_cb,       &t1_nmea_btn_lbl);
-    t1_serial_btn = create_grid_button(tile_survey, 1, 1, serial_log_toggle_btn_cb, &t1_serial_btn_lbl);
+    // Row 2 (y=221): SERIAL, NMEA, RTCM
+    t1_serial_btn = create_grid_button(tile_survey, 0, 1, serial_log_toggle_btn_cb, &t1_serial_btn_lbl);
+    t1_nmea_btn   = create_grid_button(tile_survey, 1, 1, nmea_toggle_btn_cb,       &t1_nmea_btn_lbl);
     t1_rtcm_btn   = create_grid_button(tile_survey, 2, 1, diag_rtcm_btn_cb,         &t1_rtcm_btn_lbl);
 
     // Row 3 (y=256): TELEM, IMU, TOUCH
