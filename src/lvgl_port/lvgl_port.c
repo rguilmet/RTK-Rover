@@ -1605,7 +1605,7 @@ void create_rover_ui(void)
     lv_obj_align(t1_sep, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_bg_color(t1_sep, lv_color_hex(0x283B47), 0);
     lv_obj_set_style_border_width(t1_sep, 0, 0);
-    lv_obj_remove_flag(t1_sep, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(t1_sep, false);
 
     // ---------------------------------------------------------------------
     // Quick Settings Controls (3x4 Grid of 94x27 Buttons)

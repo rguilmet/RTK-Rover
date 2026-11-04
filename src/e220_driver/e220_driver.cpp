@@ -50,7 +50,7 @@ static void IRAM_ATTR e220_aux_isr(void)
     int level = gpio_get_level((gpio_num_t)ROVER_PIN_E220_AUX);
     int64_t now_us = esp_timer_get_time();
     if (level == 0) {
-        isr_aux_fall_count++;
+        isr_aux_fall_count = isr_aux_fall_count + 1;
         isr_aux_fall_us = now_us;
     } else if (isr_aux_fall_us > 0) {
         int64_t dt = now_us - isr_aux_fall_us;
