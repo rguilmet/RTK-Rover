@@ -1,8 +1,8 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.0.0`  
-**Firmware Version:** `v0.2.38`  
-**Last Updated:** October 28, 2026  
+**Document Version:** `v1.4.0`  
+**Firmware Version:** `v0.4.0`  
+**Last Updated:** November 4, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
 ---
@@ -20,6 +20,7 @@
 10. [Wireless Web File Portal & Field Maintenance](#10-wireless-web-file-portal--field-maintenance)
 11. [Configuration Reference (`settings.json`)](#11-configuration-reference-settingsjson)
 12. [Troubleshooting & Field Diagnostics FAQ](#12-troubleshooting--field-diagnostics-faq)
+13. [Bi-Directional LoRa Protocol & Base Station Integration](#13-bi-directional-lora-protocol--base-station-integration)
 
 ---
 
@@ -93,7 +94,7 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
 ### Row 1: System Time, Power & Environment
 * **Date & Time:** Local calendar date (`YYYY-MM-DD`) and 24-hr time (`HH:MM:SS TZ`) computed from UTC using `minutesOffsetToUTC` and synchronized with GNSS atomic clocks.
 * **Units Badge:** `SI` (meters/centimeters) or `IMP` (feet/inches). Tap to toggle on Tile 1.
-* **Wi-Fi Badge:** `WIFI ON` (Electric Cyan) when web portal is active; `WIFI OFF` (Gray) when inactive.
+* **Wi-Fi Indicator:** Compact icon-only symbol (`LV_SYMBOL_WIFI`) freeing horizontal space for date/time. Colored Electric Cyan (`#22D3EE`) in station mode, Amber (`#FFCC00`) in AP mode, and Slate Gray (`#475569`) when inactive.
 * **Battery Telemetry:** Battery percentage (`0..100%`), charging indicator (`+`), and battery voltage (e.g. `4.12V`).
 
 ### Row 2: Master Antenna (ANT1 - Position) Metrics
@@ -105,6 +106,10 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
 * **Satellites:** Count of satellites used in fix vs. total in view (`SV: 28/34`).
 * **Horizontal Precision:** Estimated horizontal precision standard deviation (`+/- 0.015m` / `+/- 0.05ft`).
 * **RTCM Differential Age:** Age of incoming RTCM corrections in seconds (`RTCM: 1.0s`).
+* **LoRa Signal Strength:** Explicitly labeled `"LoRa: "` prefix (e.g. `LoRa: -85dB`) with multi-tier color coding:
+  * Green: Strong signal ($\ge -90\text{ dBm}$)
+  * Amber/Yellow: Moderate signal ($-91\text{ dBm} \dots -105\text{ dBm}$)
+  * Red: Weak fringe signal ($< -105\text{ dBm}$) or `-- dB` when link is idle.
 
 ### Row 3: Slave Antenna (ANT2 - Heading) Metrics
 * **Heading Fix Badge:**
@@ -156,7 +161,15 @@ When you close within $1.5\text{ m}$ of the target, the navigation engine automa
   ```
   Fwd: +0.03 m | Right: -0.01 m
   ```
-* **Audio Centimeter Lock Cue:** When the rover tip enters the inner $2\text{ cm}$ green ring under `RTK FIX`, the audio codec synthesizes a rapid high-pitch confirmation chirp.
+* **ES8311 Proximity Audio Engine:** When approaching a buried property pin or stone bound, the onboard ES8311 codec and physical speaker provide eyes-free acoustic guidance (toggled via `AUD` button on Tile 1):
+  * **Geiger Mode (`AUD: GEIGER`):** Synthesizes distance-proportional clicks that accelerate progressively as you close in on the target:
+    * $D > 2.0\text{ m}$: Mute / silent.
+    * $1.0\text{ m} < D \le 2.0\text{ m}$: Sparse clicks at $1\text{ Hz}$ ($800\text{ Hz}$ tone).
+    * $0.3\text{ m} < D \le 1.0\text{ m}$: Medium cadence chirps at $3 - 5\text{ Hz}$ ($1200\text{ Hz}$).
+    * $0.05\text{ m} < D \le 0.3\text{ m}$ ($2 - 12\text{ in}$): Rapid Geiger ticks at $8 - 15\text{ Hz}$ ($1800\text{ Hz}$).
+    * $D \le 0.02\text{ m}$ ($\le 2\text{ cm}$ / Bullseye Lock): Solid confirmation chime at $2400\text{ Hz}$.
+  * **Beeps Mode (`AUD: BEEPS`):** Stepped pitch chimes closing from $5.0\text{ m}$ inward.
+  * **Mute Mode (`AUD: MUTE`):** Silences navigation proximity audio while preserving button taps, survey logged tones, and screenshot double-beeps.
 
 ---
 
@@ -207,20 +220,31 @@ Tile 1 provides tools for recording high-precision RTK averaged ground control p
 
 ---
 
-### Quick Settings Controls (Bottom Deck)
+### Quick Settings Controls (Consolidated 3x4 Grid - 12 Buttons)
 
-The bottom deck provides instantaneous touch control over hardware preferences without leaving the survey screen:
-* **Row 1:**
-  * `NMEA: ON/OFF`: Toggles raw UM982 NMEA stream logging to `/nmea/nmea_YYYYMMDD_HHMMSS.log`.
-  * `Route: ON/OFF`: Toggles 1 Hz trajectory track logging to `/routes/route_YYYYMMDD_HHMMSS.csv`.
-* **Row 2:**
-  * `Bright: 20%..100%`: Cycles LCD backlight through 20%, 40%, 60%, 80%, and 100%.
-  * `Vol: MUTE..100%`: Cycles audio volume through `MUTE`, 20%, 40%, 60%, 80%, and 100%.
-* **Row 3:**
-  * `Wi-Fi: Start/Stop`: Powers on/off the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal.
-  * `Units: SI/IMP`: Toggles between Metric (meters, cm) and Imperial (feet, US survey inches).
-* **Row 4:**
-  * Displays Wi-Fi status and browser maintenance IP (e.g. `Wi-Fi IP: 192.168.1.145`).
+The bottom deck provides instantaneous touch control over hardware preferences in a clean 3-column by 4-row layout ($94 \times 27\text{ px}$ buttons with generous $8\text{ px}$ vertical and $9\text{ px}$ horizontal spacing):
+
+| Column 1 (Left) | Column 2 (Center) | Column 3 (Right) |
+| :--- | :--- | :--- |
+| **Row 1:** `VOL: 20%..100%` / `MUTE` | **Row 1:** `AUD: GEIGER / BEEPS / MUTE` | **Row 1:** `BRI: 20%..100%` |
+| **Row 2:** `NMEA: ON/OFF` | **Row 2:** `ROUTE: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
+| **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
+| **Row 4:** `WIFI: ON/OFF` | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `LORA: 19.2k / 9.6k` |
+
+* **Button Descriptions:**
+  * `VOL: xx%` / `VOL: MUTE`: Cycles master speaker output through 20%, 40%, 60%, 80%, 100%, and MUTE.
+  * `AUD: GEIGER / BEEPS / MUTE`: Cycles proximity audio navigation modes (saved to `/settings.json`).
+  * `BRI: xx%`: Cycles LCD backlight brightness through 20%, 40%, 60%, 80%, and 100%.
+  * `NMEA: ON/OFF`: Toggles raw UM982 NMEA logging to `/nmea/nmea_YYYYMMDD_HHMMSS.log`.
+  * `ROUTE: ON/OFF`: Toggles 1 Hz trajectory path logging to `/routes/route_YYYYMMDD_HHMMSS.csv`.
+  * `RTCM: ON/OFF`: Toggles raw incoming RTCM3 differential stream logging to `/rtcm/`.
+  * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic serial output.
+  * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.
+  * `TOUCH: ON/OFF`: Toggles touch coordinate serial debugging.
+  * `WIFI: ON/OFF`: Starts or stops the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal.
+  * `UNITS: IMP/SI`: Toggles between Imperial (feet/inches) and Metric (meters/centimeters).
+  * `LORA: 19.2k` / `LORA: 9.6k`: Toggles remote over-the-air LoRa air-rate switching between standard ($19.2\text{ kbps}$) and deep woods canopy mode ($9.6\text{ kbps}$). Shows amber `REQ: 9.6k` while negotiating with the Base Station.
+* **Row 5 (y=332):** Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
 
 ---
 
@@ -276,15 +300,17 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
 ![Tile 4: Hardware Diagnostics](docs/images/screenshot_tile4_diagnostics.png)
 *Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
 
-### Pinned Top Control Deck
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.2.38"` in Montserrat 16 White (`#FFFFFF`).
-* **Dual-Row Interactive Logging Controls:** 4 toggle buttons uncoupled from vertical scrolling:
-  * `SERIAL: ON/OFF`: Toggles general serial output monitor.
-  * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.
-  * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic heartbeat.
-  * `TOUCH: ON/OFF`: Toggles touch coordinate logging.
+### Pinned Top Control Deck & Elevated RF Survey Card
+* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.4.0"` in Montserrat 16 White (`#FFFFFF`).
+* **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
+  * Live ambient noise floor (`Noise: -102dBm`).
+  * Last received packet signal strength (`Pkt: -84dBm`).
+  * Mode 0 hardware `AUX` edge interrupt counter and pulse width (`Edges: N low: X.Xms`).
+  * RTCM3 frame counters: Station ARP (`1005`/`1006`), GPS MSM4 (`1074`), GLONASS MSM4 (`1084`), Galileo MSM4 (`1094`), and GLONASS Biases (`1230`).
+  * Frame error and mid-frame truncation drops (`Err: N Trunc: N`).
 
-### Scrollable Diagnostic Container (Auto-Wrapped 300px Blocks)
+### Expanded Scrollable Diagnostic Container (+57 px Viewport)
+With the logging buttons consolidated into the Tile 1 Quick Settings grid, the scrollable diagnostic container viewport is expanded from $231\text{ px}$ to **$288\text{ px}$** ($+57\text{ px}$ vertical space):
 * **Storage Status:** Displayed in Electric Cyan (`#22D3EE`): MicroSD mount state, card size, used space, free space, and internal FFat health.
 * **Antenna 1 (Master):** Fix state, SV used/view, HDOP, VDOP, horizontal accuracy, vertical accuracy, and differential age.
 * **Antenna 2 (Slave):** Heading fix, Slave SVs, Slave HDOP, measured baseline length, baseline pitch, and live ANT2 WGS84 coordinates (`Pos: Lat, Lon`, `Alt`).
@@ -296,7 +322,7 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
   * RTCM Message Counters (RTCM 1005 Station ARP frames and MSM multi-signal frames).
 * **6-DOF IMU Telemetry:** Pitch, Roll, 3-axis Accelerometer (`Acc(g): X, Y, Z`), 3-axis Gyroscope (`Gyr(d/s): X, Y, Z`), calibrated tare offsets, and kinematic lever-arm compensation status.
 * **UM982 COM1 / COM2 Metrics:** Active baud rates, byte throughput counters, sentence counts, and checksum error counters.
-* **E220 LoRa Configuration:** RF Channel, frequency (e.g. `905.125 MHz`), air data rate (`38.4 kbps`), transmit power (`21 dBm`), UART baud (`57600`), and hardware register dump.
+* **E220 LoRa Configuration & Hardware Wire Self-Test:** RF Channel, frequency (`925.125 MHz`), operating air data rate (`19.2 kbps` / `9.6 kbps`), transmit power (`21 dBm`), UART baud (`115200`), hardware register dump, and boot-time `M0`/`M1` pin continuity self-test (`M0:OK M1:OK`). Alerts in bold red if a jumper wire is loose or floating.
 
 ---
 
@@ -345,9 +371,10 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 | `apply_lever_arm` | Boolean | `true` | Enables 3D kinematic projection to pole centerline and ground tip. |
 | `pole_tilt_tare_pitch_deg` | Float | `0.0` | Recorded bracket pitch angle tare offset. |
 | `pole_tilt_tare_roll_deg` | Float | `0.0` | Recorded bracket roll angle tare offset. |
-| `e220_channel` | Integer | `55` | LoRa RF channel (`55` = $905.125\text{ MHz}$). |
-| `e220_uart_baud` | Integer | `57600` | Baud rate between ESP32 and E220 transceiver. |
-| `e220_air_rate_kbps` | Float | `38.4` | LoRa over-the-air data transmission rate. |
+| `e220_channel` | Integer | `75` | LoRa RF channel (`75` = $925.125\text{ MHz}$, clean US ISM band). |
+| `e220_uart_baud` | Integer | `115200` | Baud rate between ESP32 and E220 transceiver. |
+| `e220_air_rate_kbps` | Float | `19.2` | LoRa over-the-air data transmission rate (`19.2` or `9.6`). |
+| `audio_nav_mode` | Integer | `1` | Proximity navigation audio mode (`0` = Beeps, `1` = Geiger Clicks, `2` = Mute). |
 | `survey_avg_seconds` | Integer | `5` | Multi-epoch integration duration (`1`, `5`, `10`, or `30`). |
 | `default_label_prefix` | String | `"PIN"` | Default prefix when not in `<DERIVED>` mode. |
 | `active_waypoint_file` | String | `"/waypoints.csv"` | Active CSV waypoint file path. |
@@ -374,3 +401,33 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 
 ### Q5: How do I back up my survey data in the field?
 * Tap `Wi-Fi` on Tile 1, connect with your phone, open `http://<rover-ip>/`, tap `/survey_logged_pins.csv`, and save to your mobile device. You can also power down the rover and remove the MicroSD card to read it directly on a computer.
+
+---
+
+## 13. Bi-Directional LoRa Protocol & Base Station Integration
+
+The RTK Rover implements a bi-directional telemetry and remote control protocol operating over the Ebyte E220 900 MHz LoRa link.
+
+### 13.1 Half-Duplex Quiet-Window Interleaving
+* The Base Station broadcasts RTCM3 corrections in a burst at the beginning of each 1-second UTC epoch ($t = 0.00\text{ s} \dots 0.45\text{ s}$).
+* The Rover transmits an uplink telemetry frame strictly within the post-epoch quiet window ($t = 0.10\text{ s} \dots 0.45\text{ s}$) every 5 seconds.
+* At $19.2\text{ kbps}$, the 39-byte frame consumes only $\approx 30\text{ ms}$ Time-on-Air ($<1\%$ duty cycle), leaving hundreds of milliseconds of guard margin before the next base epoch.
+
+### 13.2 39-Byte Uplink Telemetry Frame
+* **Sync Preamble:** `0xAA 0x55` (distinct from RTCM3 `0xD3` to prevent false-framing).
+* **Payload:** Sub-millimeter ground-tip coordinates (`tip_lat`, `tip_lon`, `tip_height_m`), horizontal accuracy (`h_acc_mm`), fix quality, Master/Slave satellite counts, True Heading centidegrees, battery percentage and millivolts, Rover packet RSSI, live ambient noise floor, and sequence counter.
+* **Integrity:** Protected by a 16-bit CRC16-CCITT checksum.
+
+### 13.3 Touchscreen Remote Air-Rate Switching
+* **Field Problem:** Deep timber or dense foliage can cause fringe RF packet loss at $19.2\text{ kbps}$. Switching down to $9.6\text{ kbps}$ adds $+3.5\text{ dB}$ of link margin.
+* **Procedure:** Tap the `LORA: 19.2k` button on Tile 1. The button displays amber `REQ: 9.6k`.
+* **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
+* **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
+
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.0.0)
+* **Real-Time Terminal Output:** Displays live Rover telemetry lines on reception.
+* **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs for instant zero-overhead dashboard querying.
+* **Rolling Daily CSV Log (`~/rover_logs/rover_YYYY-MM-DD.csv`):**
+  * Auto-prunes files older than 30 days (`--log-retention-days 30`).
+  * Caps maximum log directory footprint at $50\text{ MB}$ (`--max-log-mb 50`).
+  * Compresses completed logs with `gzip` at midnight (`rover_YYYY-MM-DD.csv.gz`).
