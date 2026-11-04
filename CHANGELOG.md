@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Tile 1 Control Button Grid Consolidation ($3\times 4$ Grid - 12 Buttons):**
-  - Consolidated runtime controls into a unified 3-column by 4-row grid of $96\times 26\text{ px}$ buttons on Tile 1 (Screen 2: Survey & Settings):
-    - Row 1: `VOL: [xx%]` / `VOL: [MUTE]`, `AUD: [GEIGER]` / `AUD: [BEEPS]` / `AUD: [MUTE]`, `BRI: [xx%]`
-    - Row 2: `NMEA [ON/OFF]`, `ROUTE [ON/OFF]`, `RTCM [ON/OFF]`
-    - Row 3: `TELEM [ON/OFF]`, `IMU [ON/OFF]`, `TOUCH [ON/OFF]`
-    - Row 4: `WIFI [ON/OFF]`, `UNITS [IMP/SI]`, `LORA [19.2k]`
-  - Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`) cleanly below Row 4 at $y=308$.
+  - Consolidated runtime controls into a unified 3-column by 4-row grid of $94\times 27\text{ px}$ buttons with generous $8\text{ px}$ vertical and $9\text{ px}$ horizontal white space on Tile 1 (Screen 2: Survey & Settings):
+    - Row 1: `VOL: xx%` / `VOL: MUTE`, `AUD: GEIGER` / `AUD: BEEPS` / `AUD: MUTE`, `BRI: xx%`
+    - Row 2: `NMEA: ON/OFF`, `ROUTE: ON/OFF`, `RTCM: ON/OFF`
+    - Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
+    - Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k`
+  - Removed unneeded square brackets (`[` and `]`) from button text to eliminate text crowding.
+  - Re-spaced upper survey elements to give the logged pin status message an $8\text{ px}$ clean separation below the `LOG PIN NOW` button.
+  - Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`) below Row 4 at $y=332$.
   - Kept Tile 3 `TARE` / `RST` button on Screen 4 (Compass & Level) untouched.
 - **Proximity Audio Synthesis Engine (`RTK_Rover.ino`, `src/settings_manager`):**
   - Added `audio_nav_mode` (`AUDIO_NAV_BEEPS = 0`, `AUDIO_NAV_GEIGER = 1`, `AUDIO_NAV_MUTE = 2`) persisted across power cycles in `/settings.json`.

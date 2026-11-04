@@ -552,7 +552,7 @@ static void update_all_control_buttons(void)
     static int s_last_units = -1;
     static int s_last_tare = -1;
 
-    // Row 1, Col 0: VOL: [80%] / VOL: [MUTE]
+    // Row 1, Col 0: VOL: 80% / VOL: MUTE
     int cur_vol = (int)current_settings.volume;
     int cur_muted = current_settings.is_muted ? 1 : 0;
     if (cur_vol != s_last_vol || cur_muted != s_last_muted) {
@@ -561,62 +561,62 @@ static void update_all_control_buttons(void)
         if (t1_vol_btn && t1_vol_btn_lbl) {
             char v_buf[32];
             if (current_settings.volume == 0 || current_settings.is_muted) {
-                snprintf(v_buf, sizeof(v_buf), "VOL: [MUTE]");
+                snprintf(v_buf, sizeof(v_buf), "VOL: MUTE");
                 lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x555555), 0);
             } else {
-                snprintf(v_buf, sizeof(v_buf), "VOL: [%u%%]", current_settings.volume);
+                snprintf(v_buf, sizeof(v_buf), "VOL: %u%%", current_settings.volume);
                 lv_obj_set_style_bg_color(t1_vol_btn, lv_color_hex(0x2F3B4C), 0);
             }
             lv_label_set_text(t1_vol_btn_lbl, v_buf);
         }
     }
 
-    // Row 1, Col 1: AUD: [GEIGER] / AUD: [BEEPS] / AUD: [MUTE]
+    // Row 1, Col 1: AUD: GEIGER / AUD: BEEPS / AUD: MUTE
     int cur_aud = (int)current_settings.audio_nav_mode;
     if (cur_aud != s_last_aud_mode) {
         s_last_aud_mode = cur_aud;
         if (t1_aud_btn && t1_aud_btn_lbl) {
             if (cur_aud == AUDIO_NAV_GEIGER) {
-                lv_label_set_text(t1_aud_btn_lbl, "AUD: [GEIGER]");
+                lv_label_set_text(t1_aud_btn_lbl, "AUD: GEIGER");
                 lv_obj_set_style_bg_color(t1_aud_btn, COLOR_BTN_ACTIVE_GREEN, 0);
             } else if (cur_aud == AUDIO_NAV_MUTE) {
-                lv_label_set_text(t1_aud_btn_lbl, "AUD: [MUTE]");
+                lv_label_set_text(t1_aud_btn_lbl, "AUD: MUTE");
                 lv_obj_set_style_bg_color(t1_aud_btn, lv_color_hex(0x555555), 0);
             } else {
-                lv_label_set_text(t1_aud_btn_lbl, "AUD: [BEEPS]");
+                lv_label_set_text(t1_aud_btn_lbl, "AUD: BEEPS");
                 lv_obj_set_style_bg_color(t1_aud_btn, lv_color_hex(0x2563EB), 0);
             }
         }
     }
 
-    // Row 1, Col 2: BRI: [100%]
+    // Row 1, Col 2: BRI: 100%
     int cur_bright = (int)current_settings.brightness;
     if (cur_bright != s_last_bright) {
         s_last_bright = cur_bright;
         if (t1_bright_btn && t1_bright_btn_lbl) {
             char b_buf[32];
-            snprintf(b_buf, sizeof(b_buf), "BRI: [%u%%]", current_settings.brightness);
+            snprintf(b_buf, sizeof(b_buf), "BRI: %u%%", current_settings.brightness);
             lv_label_set_text(t1_bright_btn_lbl, b_buf);
             lv_obj_set_style_bg_color(t1_bright_btn, lv_color_hex(0x2F3B4C), 0);
         }
     }
 
-    // Row 2, Col 0: NMEA [ON] / NMEA [OFF]
+    // Row 2, Col 0: NMEA: ON / NMEA: OFF
     int cur_nmea = (nmea_logger_is_active() || current_settings.enable_nmea_logging) ? 1 : 0;
     if (cur_nmea != s_last_nmea) {
         s_last_nmea = cur_nmea;
         if (t1_nmea_btn && t1_nmea_btn_lbl) {
-            lv_label_set_text(t1_nmea_btn_lbl, cur_nmea ? "NMEA [ON]" : "NMEA [OFF]");
+            lv_label_set_text(t1_nmea_btn_lbl, cur_nmea ? "NMEA: ON" : "NMEA: OFF");
             lv_obj_set_style_bg_color(t1_nmea_btn, cur_nmea ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 2, Col 1: ROUTE [ON] / ROUTE [OFF] (Also updates Tile 0 t0_rec_btn)
+    // Row 2, Col 1: ROUTE: ON / ROUTE: OFF (Also updates Tile 0 t0_rec_btn)
     int cur_route = route_logger_is_active() ? 1 : 0;
     if (cur_route != s_last_route) {
         s_last_route = cur_route;
         if (t1_route_btn && t1_route_btn_lbl) {
-            lv_label_set_text(t1_route_btn_lbl, cur_route ? "ROUTE [ON]" : "ROUTE [OFF]");
+            lv_label_set_text(t1_route_btn_lbl, cur_route ? "ROUTE: ON" : "ROUTE: OFF");
             lv_obj_set_style_bg_color(t1_route_btn, cur_route ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
         if (t0_rec_btn && t0_rec_btn_lbl) {
@@ -625,70 +625,70 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 2, Col 2: RTCM [ON] / RTCM [OFF]
+    // Row 2, Col 2: RTCM: ON / RTCM: OFF
     int cur_rtcm = (current_settings.enable_rtcm_logging || rtcm_logger_is_active()) ? 1 : 0;
     if (cur_rtcm != s_last_rtcm) {
         s_last_rtcm = cur_rtcm;
         if (t1_rtcm_btn && t1_rtcm_btn_lbl) {
-            lv_label_set_text(t1_rtcm_btn_lbl, cur_rtcm ? "RTCM [ON]" : "RTCM [OFF]");
+            lv_label_set_text(t1_rtcm_btn_lbl, cur_rtcm ? "RTCM: ON" : "RTCM: OFF");
             lv_obj_set_style_bg_color(t1_rtcm_btn, cur_rtcm ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 3, Col 0: TELEM [ON] / TELEM [OFF]
+    // Row 3, Col 0: TELEM: ON / TELEM: OFF
     int cur_telem = current_settings.enable_telemetry_logging ? 1 : 0;
     if (cur_telem != s_last_telem) {
         s_last_telem = cur_telem;
         if (t1_telem_btn && t1_telem_btn_lbl) {
-            lv_label_set_text(t1_telem_btn_lbl, cur_telem ? "TELEM [ON]" : "TELEM [OFF]");
+            lv_label_set_text(t1_telem_btn_lbl, cur_telem ? "TELEM: ON" : "TELEM: OFF");
             lv_obj_set_style_bg_color(t1_telem_btn, cur_telem ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 3, Col 1: IMU [ON] / IMU [OFF]
+    // Row 3, Col 1: IMU: ON / IMU: OFF
     int cur_imu = current_settings.enable_imu_logging ? 1 : 0;
     if (cur_imu != s_last_imu) {
         s_last_imu = cur_imu;
         if (t1_imu_btn && t1_imu_btn_lbl) {
-            lv_label_set_text(t1_imu_btn_lbl, cur_imu ? "IMU [ON]" : "IMU [OFF]");
+            lv_label_set_text(t1_imu_btn_lbl, cur_imu ? "IMU: ON" : "IMU: OFF");
             lv_obj_set_style_bg_color(t1_imu_btn, cur_imu ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 3, Col 2: TOUCH [ON] / TOUCH [OFF]
+    // Row 3, Col 2: TOUCH: ON / TOUCH: OFF
     int cur_touch = current_settings.enable_touch_logging ? 1 : 0;
     if (cur_touch != s_last_touch) {
         s_last_touch = cur_touch;
         if (t1_touch_btn && t1_touch_btn_lbl) {
-            lv_label_set_text(t1_touch_btn_lbl, cur_touch ? "TOUCH [ON]" : "TOUCH [OFF]");
+            lv_label_set_text(t1_touch_btn_lbl, cur_touch ? "TOUCH: ON" : "TOUCH: OFF");
             lv_obj_set_style_bg_color(t1_touch_btn, cur_touch ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 4, Col 0: WIFI [ON] / WIFI [OFF]
+    // Row 4, Col 0: WIFI: ON / WIFI: OFF
     int cur_wifi = is_wifi_active() ? 1 : 0;
     if (cur_wifi != s_last_wifi) {
         s_last_wifi = cur_wifi;
         if (t1_wifi_btn && t1_wifi_btn_lbl) {
-            lv_label_set_text(t1_wifi_btn_lbl, cur_wifi ? "WIFI [ON]" : "WIFI [OFF]");
+            lv_label_set_text(t1_wifi_btn_lbl, cur_wifi ? "WIFI: ON" : "WIFI: OFF");
             lv_obj_set_style_bg_color(t1_wifi_btn, cur_wifi ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
         }
     }
 
-    // Row 4, Col 1: UNITS [IMP] / UNITS [SI]
+    // Row 4, Col 1: UNITS: IMP / UNITS: SI
     int cur_units = current_settings.use_imperial_units ? 1 : 0;
     if (cur_units != s_last_units) {
         s_last_units = cur_units;
         if (t1_unit_btn && t1_unit_btn_lbl) {
             if (!current_settings.use_imperial_units) {
-                lv_label_set_text(t1_unit_btn_lbl, "UNITS [SI]");
+                lv_label_set_text(t1_unit_btn_lbl, "UNITS: SI");
                 lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_SI_TEAL, 0);
                 if (hdr_units_lbl) {
                     lv_label_set_text(hdr_units_lbl, "SI");
                     lv_obj_set_style_text_color(hdr_units_lbl, COLOR_UNIT_SI_TEAL, 0);
                 }
             } else {
-                lv_label_set_text(t1_unit_btn_lbl, "UNITS [IMP]");
+                lv_label_set_text(t1_unit_btn_lbl, "UNITS: IMP");
                 lv_obj_set_style_bg_color(t1_unit_btn, COLOR_UNIT_IMP_AMBER, 0);
                 if (hdr_units_lbl) {
                     lv_label_set_text(hdr_units_lbl, "IMP");
@@ -698,10 +698,10 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 4, Col 2: LORA [19.2k]
+    // Row 4, Col 2: LORA: 19.2k
     if (t1_lora_btn && t1_lora_btn_lbl) {
         char l_buf[32];
-        snprintf(l_buf, sizeof(l_buf), "LORA [%.1fk]", current_settings.e220_air_rate_kbps);
+        snprintf(l_buf, sizeof(l_buf), "LORA: %.1fk", current_settings.e220_air_rate_kbps);
         lv_label_set_text(t1_lora_btn_lbl, l_buf);
         lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0x2F3B4C), 0);
     }
@@ -1078,10 +1078,10 @@ void refresh_waypoint_table_ui(void)
 
 static lv_obj_t* create_grid_button(lv_obj_t *parent, int col, int row, lv_event_cb_t cb, lv_obj_t **out_lbl)
 {
-    int x = (col == 0) ? 10 : (col == 1 ? 112 : 214);
-    int y = 184 + (row * 30);
+    int x = (col == 0) ? 10 : (col == 1 ? 113 : 216);
+    int y = 186 + (row * 35);
     lv_obj_t *btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 96, 26);
+    lv_obj_set_size(btn, 94, 27);
     lv_obj_align(btn, LV_ALIGN_TOP_LEFT, x, y);
     lv_obj_set_style_pad_all(btn, 0, 0);
     lv_obj_set_ext_click_area(btn, 3);
@@ -1525,92 +1525,92 @@ void create_rover_ui(void)
     // =====================================================================
     // TILE 1: Field Survey / Waypoint Logger & Quick Settings
     // =====================================================================
-    // Row 1 (y=8): Location ID Prefix Dropdown (145x30) & Averaging Duration Button (145x30)
+    // Row 1 (y=6): Location ID Prefix Dropdown (145x28) & Averaging Duration Button (145x28)
     t1_prefix_dd = lv_dropdown_create(tile_survey);
     lv_dropdown_set_options(t1_prefix_dd, waypoint_get_prefix_options());
     lv_dropdown_set_selected(t1_prefix_dd, g_survey_prefix_idx);
-    lv_obj_set_size(t1_prefix_dd, 145, 30);
-    lv_obj_align(t1_prefix_dd, LV_ALIGN_TOP_LEFT, 10, 8);
+    lv_obj_set_size(t1_prefix_dd, 145, 28);
+    lv_obj_align(t1_prefix_dd, LV_ALIGN_TOP_LEFT, 10, 6);
     lv_obj_add_event_cb(t1_prefix_dd, prefix_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     lv_obj_t *btn_avg = lv_button_create(tile_survey);
-    lv_obj_set_size(btn_avg, 145, 30);
-    lv_obj_align(btn_avg, LV_ALIGN_TOP_RIGHT, -10, 8);
+    lv_obj_set_size(btn_avg, 145, 28);
+    lv_obj_align(btn_avg, LV_ALIGN_TOP_RIGHT, -10, 6);
     lv_obj_add_event_cb(btn_avg, avg_dur_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_avg_btn_lbl = lv_label_create(btn_avg);
     lv_label_set_text_fmt(t1_avg_btn_lbl, "Avg: %us", current_settings.survey_avg_seconds);
     lv_obj_center(t1_avg_btn_lbl);
 
-    // Row 2 (y=44): Quick Note Tag Dropdown (300x30)
+    // Row 2 (y=38): Quick Note Tag Dropdown (300x28)
     t1_note_dd = lv_dropdown_create(tile_survey);
     lv_dropdown_set_options(t1_note_dd, waypoint_get_note_tag_options());
     lv_dropdown_set_selected(t1_note_dd, g_survey_note_tag_idx);
-    lv_obj_set_size(t1_note_dd, 300, 30);
-    lv_obj_align(t1_note_dd, LV_ALIGN_TOP_MID, 0, 44);
+    lv_obj_set_size(t1_note_dd, 300, 28);
+    lv_obj_align(t1_note_dd, LV_ALIGN_TOP_MID, 0, 38);
     lv_obj_add_event_cb(t1_note_dd, note_dd_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    // Row 3 (y=82): ID Label (300px wide, Montserrat 14, scrolling marquee)
+    // Row 3 (y=70): ID Label (300px wide, Montserrat 14, scrolling marquee)
     t1_next_lbl = lv_label_create(tile_survey);
     lv_obj_set_width(t1_next_lbl, 300);
     lv_label_set_long_mode(t1_next_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_label_set_text(t1_next_lbl, "ID: Acquiring...");
     lv_obj_set_style_text_color(t1_next_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t1_next_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t1_next_lbl, LV_ALIGN_TOP_LEFT, 10, 82);
+    lv_obj_align(t1_next_lbl, LV_ALIGN_TOP_LEFT, 10, 70);
 
-    // Row 4 (y=108): Multi-epoch progress bar (300x8)
+    // Row 4 (y=92): Multi-epoch progress bar (300x6)
     t1_prog_bar = lv_bar_create(tile_survey);
-    lv_obj_set_size(t1_prog_bar, 300, 8);
-    lv_obj_align(t1_prog_bar, LV_ALIGN_TOP_MID, 0, 108);
+    lv_obj_set_size(t1_prog_bar, 300, 6);
+    lv_obj_align(t1_prog_bar, LV_ALIGN_TOP_MID, 0, 92);
     lv_bar_set_range(t1_prog_bar, 0, 100);
     lv_bar_set_value(t1_prog_bar, 0, LV_ANIM_OFF);
 
-    // Row 5 (y=124): Large LOG PIN NOW Button (300x40)
+    // Row 5 (y=104): Large LOG PIN NOW Button (300x36)
     t1_log_btn = lv_button_create(tile_survey);
-    lv_obj_set_size(t1_log_btn, 300, 40);
-    lv_obj_align(t1_log_btn, LV_ALIGN_TOP_MID, 0, 124);
+    lv_obj_set_size(t1_log_btn, 300, 36);
+    lv_obj_align(t1_log_btn, LV_ALIGN_TOP_MID, 0, 104);
     lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
     lv_obj_add_event_cb(t1_log_btn, log_pin_btn_cb, LV_EVENT_CLICKED, NULL);
     t1_log_btn_lbl = lv_label_create(t1_log_btn);
     lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
     lv_obj_center(t1_log_btn_lbl);
 
-    // Row 6 (y=160): Status & Logged File Info
+    // Row 6 (y=148): Status & Logged File Info
     t1_status_lbl = lv_label_create(tile_survey);
     lv_obj_set_width(t1_status_lbl, 300);
     lv_label_set_text(t1_status_lbl, "Logged: None | /survey_logged_pins.csv");
     lv_obj_set_style_text_color(t1_status_lbl, lv_color_hex(0x99A3B0), 0);
     lv_obj_set_style_text_font(t1_status_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(t1_status_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(t1_status_lbl, LV_ALIGN_TOP_MID, 0, 160);
+    lv_obj_align(t1_status_lbl, LV_ALIGN_TOP_MID, 0, 148);
 
-    // Row 7 (y=179): Horizontal Divider separating Field Survey from Quick Settings
+    // Row 7 (y=170): Horizontal Divider separating Field Survey from Quick Settings
     lv_obj_t *t1_sep = lv_obj_create(tile_survey);
     lv_obj_set_size(t1_sep, 308, 1);
-    lv_obj_align(t1_sep, LV_ALIGN_TOP_MID, 0, 179);
+    lv_obj_align(t1_sep, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_bg_color(t1_sep, lv_color_hex(0x283B47), 0);
     lv_obj_set_style_border_width(t1_sep, 0, 0);
     lv_obj_remove_flag(t1_sep, LV_OBJ_FLAG_SCROLLABLE);
 
     // ---------------------------------------------------------------------
-    // Quick Settings Controls (3x4 Grid of 96x26 Buttons)
+    // Quick Settings Controls (3x4 Grid of 94x27 Buttons)
     // ---------------------------------------------------------------------
-    // Row 1 (y=184): VOL, AUD, BRI
+    // Row 1 (y=186): VOL, AUD, BRI
     t1_vol_btn    = create_grid_button(tile_survey, 0, 0, vol_toggle_btn_cb,        &t1_vol_btn_lbl);
     t1_aud_btn    = create_grid_button(tile_survey, 1, 0, audio_mode_toggle_btn_cb, &t1_aud_btn_lbl);
     t1_bright_btn = create_grid_button(tile_survey, 2, 0, bright_toggle_btn_cb,     &t1_bright_btn_lbl);
 
-    // Row 2 (y=214): NMEA, ROUTE, RTCM
+    // Row 2 (y=221): NMEA, ROUTE, RTCM
     t1_nmea_btn   = create_grid_button(tile_survey, 0, 1, nmea_toggle_btn_cb,       &t1_nmea_btn_lbl);
     t1_route_btn  = create_grid_button(tile_survey, 1, 1, route_toggle_btn_cb,      &t1_route_btn_lbl);
     t1_rtcm_btn   = create_grid_button(tile_survey, 2, 1, diag_rtcm_btn_cb,         &t1_rtcm_btn_lbl);
 
-    // Row 3 (y=244): TELEM, IMU, TOUCH
+    // Row 3 (y=256): TELEM, IMU, TOUCH
     t1_telem_btn  = create_grid_button(tile_survey, 0, 2, diag_telem_btn_cb,        &t1_telem_btn_lbl);
     t1_imu_btn    = create_grid_button(tile_survey, 1, 2, diag_imu_btn_cb,          &t1_imu_btn_lbl);
     t1_touch_btn  = create_grid_button(tile_survey, 2, 2, diag_touch_btn_cb,        &t1_touch_btn_lbl);
 
-    // Row 4 (y=274): WIFI, UNITS, LORA
+    // Row 4 (y=291): WIFI, UNITS, LORA
     t1_wifi_btn   = create_grid_button(tile_survey, 0, 3, wifi_toggle_btn_cb,        &t1_wifi_btn_lbl);
     t1_unit_btn   = create_grid_button(tile_survey, 1, 3, unit_toggle_btn_cb,        &t1_unit_btn_lbl);
     t1_lora_btn   = create_grid_button(tile_survey, 2, 3, lora_rate_btn_cb,          &t1_lora_btn_lbl);
@@ -1621,7 +1621,7 @@ void create_rover_ui(void)
     lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_set_style_text_font(t1_wifi_status_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(t1_wifi_status_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(t1_wifi_status_lbl, LV_ALIGN_TOP_MID, 0, 308);
+    lv_obj_align(t1_wifi_status_lbl, LV_ALIGN_TOP_MID, 0, 332);
 
     update_all_control_buttons();
 

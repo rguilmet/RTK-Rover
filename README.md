@@ -25,10 +25,10 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
   * Universal collision-free `_Lxxx` numbering scanning `/survey_logged_pins.csv` with zero UI loop disk I/O latency.
   * Multi-epoch averaging (`1s`, `5s`, `10s`, `30s`), visual progress bar, large `[LOG PIN NOW]` button, and circular marquee ID label.
   * **Consolidated $3\times 4$ Quick Settings Grid (12 Buttons):**
-    * Row 1: `VOL: [xx%]` / `VOL: [MUTE]`, `AUD: [GEIGER / BEEPS / MUTE]`, `BRI: [xx%]`
-    * Row 2: `NMEA [ON/OFF]`, `ROUTE [ON/OFF]`, `RTCM [ON/OFF]`
-    * Row 3: `TELEM [ON/OFF]`, `IMU [ON/OFF]`, `TOUCH [ON/OFF]`
-    * Row 4: `WIFI [ON/OFF]`, `UNITS [IMP/SI]`, `LORA [19.2k]`
+    * Row 1: `VOL: xx%` / `VOL: MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: xx%`
+    * Row 2: `NMEA: ON/OFF`, `ROUTE: ON/OFF`, `RTCM: ON/OFF`
+    * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
+    * Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k`
   * Centered Wi-Fi status banner below grid (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
 * **Multi-File Waypoint Browser & Selector (Tile 2):**
   * Multi-file CSV selector scanning `/waypoints.csv` and all `/waypoints_*.csv` on MicroSD card or internal flash.
