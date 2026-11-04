@@ -20,6 +20,7 @@ docs/session_handoff.md
 __pycache__/
 *.pyc
 *.bak
+*.xlsx
 output/
 .secrets.local
 

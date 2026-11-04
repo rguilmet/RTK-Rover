@@ -243,6 +243,6 @@ The following two scripts are currently tracked in Git and contain personal boun
 | **3** | **Header Bar Modernization** | src/lvgl_port/lvgl_port.c | **DONE** | Icon-only Wi-Fi + 'LoRa: -xxxdB' in v0.2.58. |
 | **4** | **Tile 4 Message Breakdown & Meter** | src/lvgl_port/lvgl_port.c | **DONE** | Pinned survey card & RTCM audit in v0.2.56/v0.2.57. |
 | **5** | **M0/M1 Continuity Self-Test** | src/e220_driver/e220_driver.cpp | **DONE** | Dynamic mode-pulse self-test implemented in v0.2.58. |
-| **6** | **ES8311 Proximity Audio ('Geiger')** | src/codec_board/ & audio task | **PLANNED** | Phase 2: progressive proximity sound for pin hunting. |
+| **6** | **ES8311 Proximity Audio & Grid Consolidation** | src/lvgl_port/ & audio task | **DONE** | Phase 2: 3x4 Button Grid, +57px Viewport, & Geiger Sound in v0.3.0. |
 | **7** | **Bi-Directional Telemetry & Air Rate**| e220_pacer.py & driver | **PLANNED** | Phase 3: 39B quiet-window uplink + 9.6k woods mode. |
 | **8** | **Line Stakeout & Boundary Overlay** | src/gui_tile0_nav/ | **PLANNED** | Phase 4: Option A Tile 0 Station & Offset + vector map. |

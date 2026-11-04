@@ -360,6 +360,87 @@ void task_display_and_audio(void *pvParameters)
             ui_state.vbus_present      = pwr.vbus_good;
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
+
+            // 7. Proximity Audio Synthesis (Geiger Counter or Standard Beeps)
+            if (current_settings.audio_nav_mode != AUDIO_NAV_MUTE &&
+                !current_settings.is_muted && current_settings.volume > 0 &&
+                ui_state.has_active_target &&
+                (ui_state.fix_type == GNSS_FIX_RTK_FIXED || ui_state.fix_type == GNSS_FIX_RTK_FLOAT || ui_state.fix_type == GNSS_FIX_DGPS) &&
+                ui_state.distance_to_target_m > 0.0) {
+
+                static uint32_t s_last_audio_ms = 0;
+                double d = ui_state.distance_to_target_m;
+
+                if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
+                    if (d <= 2.0) {
+                        uint32_t interval_ms = 1000;
+                        uint16_t freq_hz = 900;
+                        uint16_t dur_ms = 15;
+
+                        if (d <= 0.02) {          // Bullseye (<= 2cm / 0.8 in)
+                            interval_ms = 80;
+                            freq_hz     = 2400;
+                            dur_ms      = 35;
+                        } else if (d <= 0.10) {   // 2 .. 10 cm
+                            interval_ms = 90;
+                            freq_hz     = 2000;
+                            dur_ms      = 10;
+                        } else if (d <= 0.30) {   // 10 .. 30 cm
+                            interval_ms = 160;
+                            freq_hz     = 1750;
+                            dur_ms      = 12;
+                        } else if (d <= 0.70) {   // 30 .. 70 cm
+                            interval_ms = 320;
+                            freq_hz     = 1400;
+                            dur_ms      = 15;
+                        } else if (d <= 1.20) {   // 70 .. 120 cm
+                            interval_ms = 600;
+                            freq_hz     = 1100;
+                            dur_ms      = 18;
+                        } else {                  // 1.2 .. 2.0 m
+                            interval_ms = 1000;
+                            freq_hz     = 900;
+                            dur_ms      = 20;
+                        }
+
+                        uint32_t now_ms = millis();
+                        if (now_ms - s_last_audio_ms >= interval_ms) {
+                            s_last_audio_ms = now_ms;
+                            play_rover_beep(freq_hz, dur_ms);
+                        }
+                    }
+                } else if (current_settings.audio_nav_mode == AUDIO_NAV_BEEPS) {
+                    if (d <= 5.0) {
+                        uint32_t interval_ms = 1200;
+                        uint16_t freq_hz = 1200;
+                        uint16_t dur_ms = 50;
+
+                        if (d <= 0.10) {          // Very close (<= 10 cm)
+                            interval_ms = 200;
+                            freq_hz     = 2000;
+                            dur_ms      = 40;
+                        } else if (d <= 0.50) {   // 10 .. 50 cm
+                            interval_ms = 400;
+                            freq_hz     = 1600;
+                            dur_ms      = 45;
+                        } else if (d <= 2.0) {    // 0.5 .. 2.0 m
+                            interval_ms = 800;
+                            freq_hz     = 1400;
+                            dur_ms      = 50;
+                        } else {                  // 2.0 .. 5.0 m
+                            interval_ms = 1500;
+                            freq_hz     = 1200;
+                            dur_ms      = 50;
+                        }
+
+                        uint32_t now_ms = millis();
+                        if (now_ms - s_last_audio_ms >= interval_ms) {
+                            s_last_audio_ms = now_ms;
+                            play_rover_beep(freq_hz, dur_ms);
+                        }
+                    }
+                }
+            }
         }
     }
 }

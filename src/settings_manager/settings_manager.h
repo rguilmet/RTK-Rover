@@ -9,6 +9,10 @@
 #include <FS.h>
 #endif
 
+#define AUDIO_NAV_BEEPS  0
+#define AUDIO_NAV_GEIGER 1
+#define AUDIO_NAV_MUTE   2
+
 struct SystemSettings {
     int16_t  minutesOffsetToUTC;
     char     timezone_label[16];
@@ -33,6 +37,7 @@ struct SystemSettings {
     uint8_t  brightness;
     uint8_t  volume;
     bool     is_muted;
+    uint8_t  audio_nav_mode;
     char     wifi_ssid[33];
     char     wifi_password[65];
     bool     enable_serial_logging;

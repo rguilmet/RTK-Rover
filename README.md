@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.2.58`  
+**Firmware Version:** `v0.3.0`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)
@@ -14,29 +14,37 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 * **Dual-Antenna Moving-Baseline RTK Kinematics:** Powered by the Holybro H-RTK Unicore UM982. Phase centers for Master (Position) and Slave (Heading) are spaced at `55.5 cm` along a rigid crossbar. Kinematic algorithms project coordinates to the exact pole centerline midpoint and down to the ground tip (`1.80 m`), completely eliminating position orbit when rotating the pole.
 * **Dual-Mode Hybrid Navigation Engine (Tile 0):**
   * **Coarse Tactical Grid ($> 1.5\text{ m}$):** Dynamic Course-Up grid with antenna crossbar beam arrow, line-of-sight tracking vector, turn prompts, dynamic auto-scaling, and a 64-point on-screen breadcrumb trail.
-  * **Fine Bullseye Stakeout ($\le 1.5\text{ m}$):** Seamlessly transitions into a centimeter bullseye with $1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings, providing real-time North/East and Forward/Right offsets with audio lock cues.
+  * **Fine Bullseye Stakeout ($\le 1.5\text{ m}$):** Seamlessly transitions into a centimeter bullseye with $1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings, providing real-time North/East and Forward/Right offsets with distance-proportional audio Geiger clicks.
 * **4-Row Persistent Top Status Header Bar:**
-  * **Row 1:** Local calendar date, 24-hr time with timezone offset, SI/Imperial unit badge, Wi-Fi status badge, battery percentage, and voltage.
-  * **Row 2 (Master Antenna ANT1):** RTK Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`), Satellites used/in-view, horizontal accuracy estimate ($+/-\text{cm}$), and RTCM differential age.
+  * **Row 1:** Local calendar date, 24-hr time with timezone offset, SI/Imperial unit badge, icon-only Wi-Fi indicator, battery percentage, and voltage.
+  * **Row 2 (Master Antenna ANT1):** RTK Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`), Satellites used/in-view, horizontal accuracy estimate ($+/-\text{cm}$), RTCM differential age, and `"LoRa: "` signal strength with multi-tier color coding.
   * **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`), Slave satellites, measured baseline length ($55.5\text{ cm}$), baseline pitch ($^\circ$), and true heading ($^\circ$).
   * **Row 4:** Streamlined ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt font.
-* **Field Survey Logger & Quick Settings (Tile 1):**
+* **Field Survey Logger & Consolidated Quick Settings (Tile 1):**
   * Integrated `<DERIVED>` prefix mode and clean prefixes (`PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`).
   * Universal collision-free `_Lxxx` numbering scanning `/survey_logged_pins.csv` with zero UI loop disk I/O latency.
   * Multi-epoch averaging (`1s`, `5s`, `10s`, `30s`), visual progress bar, large `[LOG PIN NOW]` button, and circular marquee ID label.
-  * On-screen Quick Settings: NMEA/Route logging toggles, 20% stepped Brightness and Volume, Wi-Fi web portal toggle, and Units (`SI / IMP`).
+  * **Consolidated $3\times 4$ Quick Settings Grid (12 Buttons):**
+    * Row 1: `VOL: [xx%]` / `VOL: [MUTE]`, `AUD: [GEIGER / BEEPS / MUTE]`, `BRI: [xx%]`
+    * Row 2: `NMEA [ON/OFF]`, `ROUTE [ON/OFF]`, `RTCM [ON/OFF]`
+    * Row 3: `TELEM [ON/OFF]`, `IMU [ON/OFF]`, `TOUCH [ON/OFF]`
+    * Row 4: `WIFI [ON/OFF]`, `UNITS [IMP/SI]`, `LORA [19.2k]`
+  * Centered Wi-Fi status banner below grid (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
 * **Multi-File Waypoint Browser & Selector (Tile 2):**
   * Multi-file CSV selector scanning `/waypoints.csv` and all `/waypoints_*.csv` on MicroSD card or internal flash.
   * Dynamic circular marquee autoscroll for long waypoint labels and filenames.
   * Remembers and restores the active waypoint file and selected target index across power cycles and reboots.
 * **2D Pole Plumb Bubble Level & Course-Up Compass (Tile 3):**
   * Enlarged 224px diameter spirit bubble level with dynamic Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping heading oriented at 12 o'clock.
-  * Compact **Tare** (`TARE` / `RST`) button to zero the level when the display is clipped to an angled pole bracket.
+  * Dedicated **Tare** (`TARE` / `RST`) button to zero the level when the display is clipped to an angled pole bracket.
   * Numerical True Heading in prominent 24pt font, baseline pitch, and live pole tilt angles.
 * **Dedicated Hardware Diagnostics & Live Observers (Tile 4):**
-  * Pinned top deck with firmware version header and 4 interactive logging toggle buttons (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
-  * Full multi-line auto-wrapping across all telemetry blocks.
-  * Observers for Storage, ANT1 Master, ANT2 Slave (with live coordinates), dedicated Base Station telemetry (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel g, 3-axis Gyro dps), UM982 COM1/COM2 metrics, and E220 LoRa configuration registers.
+  * Pinned top deck with firmware version header and calibrated linear LoRa RF survey card (`[-110 dBm .. -25 dBm]`).
+  * Expanded $+57\text{ px}$ vertical scrollable viewport with full multi-line auto-wrapping.
+  * Live observers for Storage, ANT1 Master, ANT2 Slave (with live coordinates), dedicated Base Station telemetry (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel g, 3-axis Gyro dps), UM982 COM1/COM2 metrics, and E220 LoRa hardware pin self-test (`M0:OK M1:OK`).
+* **ES8311 Proximity Audio Synthesis Engine:**
+  * Distance-proportional Geiger click frequency synthesis for hands-free pin recovery without taking eyes off the ground.
+  * Configurable audio navigation modes (`GEIGER`, `BEEPS`, `MUTE`) while strictly preserving button feedback, screenshot chimes, and survey pin logging sounds.
 * **Dedicated Hardware Screenshot Engine:**
   * Long-press physical BOOT button (GPIO 0) for $\ge 1.5\text{ s}$ to capture a full 24-bit uncompressed BMP screenshot directly to `/screenshots/screenshot_YYYYMMDD_HHMMSS.bmp`.
 * **Wi-Fi Web File Portal:**

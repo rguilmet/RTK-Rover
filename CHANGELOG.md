@@ -5,6 +5,30 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] - 2026-11-04
+
+### Added
+- **Tile 1 Control Button Grid Consolidation ($3\times 4$ Grid - 12 Buttons):**
+  - Consolidated runtime controls into a unified 3-column by 4-row grid of $96\times 26\text{ px}$ buttons on Tile 1 (Screen 2: Survey & Settings):
+    - Row 1: `VOL: [xx%]` / `VOL: [MUTE]`, `AUD: [GEIGER]` / `AUD: [BEEPS]` / `AUD: [MUTE]`, `BRI: [xx%]`
+    - Row 2: `NMEA [ON/OFF]`, `ROUTE [ON/OFF]`, `RTCM [ON/OFF]`
+    - Row 3: `TELEM [ON/OFF]`, `IMU [ON/OFF]`, `TOUCH [ON/OFF]`
+    - Row 4: `WIFI [ON/OFF]`, `UNITS [IMP/SI]`, `LORA [19.2k]`
+  - Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`) cleanly below Row 4 at $y=308$.
+  - Kept Tile 3 `TARE` / `RST` button on Screen 4 (Compass & Level) untouched.
+- **Proximity Audio Synthesis Engine (`RTK_Rover.ino`, `src/settings_manager`):**
+  - Added `audio_nav_mode` (`AUDIO_NAV_BEEPS = 0`, `AUDIO_NAV_GEIGER = 1`, `AUDIO_NAV_MUTE = 2`) persisted across power cycles in `/settings.json`.
+  - Implemented proximity Geiger click synthesis for eyes-free stakeout: synthesizes distance-proportional audio pulses accelerating from $1\text{ Hz}$ at $2.0\text{ m}$ down to $80\text{ ms}$ interval at $2400\text{ Hz}$ lock chime at $\le 2\text{ cm}$.
+  - Supports standard stepped beeps (`AUDIO_NAV_BEEPS`) from $5.0\text{ m}$ in, and full proximity navigation silence (`AUDIO_NAV_MUTE`).
+  - Completely preserves button press clicks, screenshot chimes, and survey pin logged tones independently of navigation audio mode.
+
+### Changed
+- **Tile 4 Diagnostics Viewport Expansion (+57 px):**
+  - Relocated `RTCM`, `IMU`, `TELEM`, and `TOUCH` logging buttons from Tile 4 to Tile 1.
+  - Elevated the pinned LoRa RF Survey card up to $y=26$ and expanded the scrollable diagnostics viewport (`t4_scroll_cont`) from $231\text{ px}$ to $288\text{ px}$ ($+57\text{ px}$ vertical space).
+- **Firmware Version Bump (`user_config.h`, `README.md`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` to `v0.3.0`.
+
 ## [v0.2.58] - 2026-11-04
 
 ### Added

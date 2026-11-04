@@ -43,6 +43,7 @@ struct SystemSettings current_settings = {
     80,               // brightness (%)
     40,               // volume (%)
     false,            // is_muted
+    AUDIO_NAV_BEEPS,  // audio_nav_mode (0=BEEPS, 1=GEIGER, 2=MUTE)
     "Your_SSID",      // wifi_ssid
     "Your_PASSWORD",  // wifi_password
     true,             // enable_serial_logging (master switch for serial monitor output)
@@ -269,6 +270,7 @@ extern "C" void load_settings(void) {
     if (!doc["brightness"].isNull()) current_settings.brightness = doc["brightness"];
     if (!doc["volume"].isNull()) current_settings.volume = doc["volume"];
     if (!doc["is_muted"].isNull()) current_settings.is_muted = doc["is_muted"];
+    if (!doc["audio_nav_mode"].isNull()) current_settings.audio_nav_mode = doc["audio_nav_mode"];
 
     // Robust WiFi SSID loading with trim and key aliases
     const char *raw_ssid = NULL;
@@ -408,6 +410,7 @@ extern "C" void save_settings(void) {
     doc["brightness"]                = current_settings.brightness;
     doc["volume"]                    = current_settings.volume;
     doc["is_muted"]                  = current_settings.is_muted;
+    doc["audio_nav_mode"]            = current_settings.audio_nav_mode;
     doc["wifi_ssid"]                 = current_settings.wifi_ssid;
     doc["wifi_password"]             = current_settings.wifi_password;
     doc["enable_serial_logging"]     = current_settings.enable_serial_logging;
