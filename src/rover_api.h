@@ -82,6 +82,10 @@ typedef struct {
     uint8_t  cfg_reg3;
     bool     m0_wire_ok;           // Boot-time hardware continuity test: M0 line
     bool     m1_wire_ok;           // Boot-time hardware continuity test: M1 line
+    uint32_t uplink_packets_sent;  // 39-byte uplink telemetry frames sent to Base
+    uint32_t uplink_rate_switches; // Successful air-rate switches completed
+    bool     rate_switch_pending;  // True while waiting for Base ACK / switch delay
+    float    active_air_rate_kbps; // Current operating air rate (e.g. 19.2, 9.6)
 } E220LinkStats_t;
 
 // =========================================================================

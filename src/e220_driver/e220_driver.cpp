@@ -1,4 +1,5 @@
 #include "e220_driver.h"
+#include "rover_telemetry.h"
 #include "../../user_config.h"
 #include "../um982_driver/um982_driver.h"
 #include "../settings_manager/settings_manager.h"
@@ -11,6 +12,25 @@
 static E220LinkStats_t e220_stats = {};
 static volatile bool pending_cfg_read  = false;
 static volatile bool pending_cfg_write = false;
+
+// =========================================================================
+// Bi-Directional Uplink Telemetry & Remote Air-Rate Switching State
+// =========================================================================
+static RoverUIData_t     s_latest_telemetry_state = {};
+static bool              s_has_telemetry_state    = false;
+static uint32_t          s_last_uplink_tx_ms      = 0;
+static uint8_t           s_uplink_seq             = 0;
+
+static volatile bool     s_rate_switch_requested  = false;
+static float             s_requested_rate_kbps    = 0.0f;
+static uint16_t          s_rate_switch_req_id     = 0;
+static uint32_t          s_rate_switch_req_tx_ms  = 0;
+static bool              s_rate_switch_ack_received = false;
+static uint32_t          s_rate_switch_exec_ms    = 0;
+static float             s_active_air_rate        = 19.2f;
+static float             s_fallback_air_rate      = 19.2f;
+static uint32_t          s_last_valid_rtcm_ms     = 0;
+static bool              s_switched_requires_watchdog = false;
 
 // =========================================================================
 // Mode 0 AUX (IO21) Hardware Edge Counter ISR
@@ -157,6 +177,11 @@ extern "C" void e220_driver_init(void)
 
     attachInterrupt(digitalPinToInterrupt(ROVER_PIN_E220_AUX), e220_aux_isr, CHANGE);
     e220_stats.aux_pin_high = (digitalRead(ROVER_PIN_E220_AUX) == HIGH);
+
+    s_active_air_rate = (current_settings.e220_air_rate_kbps > 0.0f) ? current_settings.e220_air_rate_kbps : 19.2f;
+    s_fallback_air_rate = 19.2f;
+    e220_stats.active_air_rate_kbps = s_active_air_rate;
+    e220_stats.rate_switch_pending = false;
 }
 
 extern "C" void request_e220_config_read(void)
@@ -455,16 +480,61 @@ static void e220_shift_stage_one_byte(void)
 static void e220_process_rx_stage(void)
 {
     while (rx_stage_len > 0) {
+        // 0. Intercept Downlink Telemetry / Control Frames (0xAA 0x55)
+        if (rx_stage_len >= 2 && rx_stage[0] == ROVER_TELEM_SYNC0 && rx_stage[1] == ROVER_TELEM_SYNC1) {
+            if (rx_stage_len < 4) {
+                break; // Wait for message ID and payload length
+            }
+            uint8_t msg_id = rx_stage[2];
+            uint8_t plen   = rx_stage[3];
+            size_t tot_len = (size_t)plen + 6U;
+            if (rx_stage_len < tot_len) {
+                break; // Wait for complete frame
+            }
+
+            if (msg_id == ROVER_MSG_ID_ACK_RATE_SWITCH && tot_len == ROVER_ACK_SWITCH_FRAME_LEN) {
+                RoverRateSwitchAck_t ack;
+                if (rover_parse_rate_switch_ack(rx_stage, tot_len, &ack)) {
+                    Serial.printf("[E220 LORA RX ACK] Rate switch confirmed! (Req #%u Status:%u Delay:%ums)\n",
+                                  ack.req_id, ack.status, ack.switch_delay_ms);
+                    if (ack.status == 0 && ack.req_id == s_rate_switch_req_id) {
+                        s_rate_switch_ack_received = true;
+                        s_rate_switch_exec_ms = millis() + ack.switch_delay_ms;
+                    } else {
+                        s_rate_switch_requested = false;
+                        e220_stats.rate_switch_pending = false;
+                    }
+                }
+            }
+
+            // Consume frame from rx_stage
+            if (rx_stage_len > tot_len) {
+                memmove(rx_stage, rx_stage + tot_len, rx_stage_len - tot_len);
+                rx_stage_len -= tot_len;
+            } else {
+                rx_stage_len = 0;
+            }
+            continue;
+        }
+
         // 1. Strip any leading non-0xD3 orphan bytes before UM982 COM2 ever sees them
         if (rx_stage[0] != 0xD3) {
-            size_t d3_pos = 1;
-            while (d3_pos < rx_stage_len && rx_stage[d3_pos] != 0xD3) {
-                d3_pos++;
+            size_t sync_pos = 1;
+            while (sync_pos < rx_stage_len) {
+                if (rx_stage[sync_pos] == 0xD3) {
+                    break;
+                }
+                if (sync_pos + 1 < rx_stage_len &&
+                    rx_stage[sync_pos] == ROVER_TELEM_SYNC0 &&
+                    rx_stage[sync_pos + 1] == ROVER_TELEM_SYNC1) {
+                    break;
+                }
+                sync_pos++;
             }
-            e220_stats.rtcm_orphan_bytes += (uint32_t)d3_pos;
-            if (d3_pos < rx_stage_len) {
-                memmove(rx_stage, rx_stage + d3_pos, rx_stage_len - d3_pos);
-                rx_stage_len -= d3_pos;
+            e220_stats.rtcm_orphan_bytes += (uint32_t)sync_pos;
+            if (sync_pos < rx_stage_len) {
+                memmove(rx_stage, rx_stage + sync_pos, rx_stage_len - sync_pos);
+                rx_stage_len -= sync_pos;
             } else {
                 rx_stage_len = 0;
                 break;
@@ -514,6 +584,7 @@ static void e220_process_rx_stage(void)
             um982_forward_rtcm_to_com2(rx_stage, total_len);
 
             rtcm_in_resync = false;
+            s_last_valid_rtcm_ms = millis();
             e220_stats.rtcm_frames_ok++;
             e220_stats.rtcm_bytes_forwarded += (uint32_t)total_len;
             e220_stats.last_msg_type = msg_type;
@@ -798,8 +869,152 @@ extern "C" void e220_poll_and_forward_rtcm(void)
         }
     }
 
+    // 6. Bi-Directional LoRa Uplink & Air-Rate Negotiation Scheduler
+    // Transmits in the half-duplex quiet window (>= 100ms after RTCM burst end / 1094,
+    // or when link is idle, provided AUX is HIGH and no RSSI query is in flight).
+    if (!rssi_query_active &&
+        rx_stage_len == 0 &&
+        burst_bytes == 0 &&
+        digitalRead(ROVER_PIN_E220_AUX) == HIGH &&
+        Serial0.available() == 0) {
+
+        bool in_quiet_window = false;
+        if (last_1094_rx_ms > 0 && (now - last_1094_rx_ms >= 100U) && (now - last_1094_rx_ms <= 450U)) {
+            in_quiet_window = true;
+        } else if (last_burst_end_ms > 0 && (now - last_burst_end_ms >= 100U) && (now - last_burst_end_ms <= 450U)) {
+            in_quiet_window = true;
+        } else if (e220_stats.last_rx_ms == 0 || (now - e220_stats.last_rx_ms >= 3000U)) {
+            in_quiet_window = true; // Idle link
+        }
+
+        // A. Priority 1: Transmit Pending Air-Rate Switch Request
+        if (s_rate_switch_requested && !s_rate_switch_ack_received && in_quiet_window) {
+            if (now - s_rate_switch_req_tx_ms >= 1000U) {
+                uint8_t air_code = ROVER_AIR_CODE_19_2K;
+                if (s_requested_rate_kbps < 3.0f)       air_code = ROVER_AIR_CODE_2_4K;
+                else if (s_requested_rate_kbps < 7.0f)  air_code = ROVER_AIR_CODE_4_8K;
+                else if (s_requested_rate_kbps < 14.0f) air_code = ROVER_AIR_CODE_9_6K;
+                else if (s_requested_rate_kbps < 28.0f) air_code = ROVER_AIR_CODE_19_2K;
+                else if (s_requested_rate_kbps < 50.0f) air_code = ROVER_AIR_CODE_38_4K;
+                else                                    air_code = ROVER_AIR_CODE_62_5K;
+
+                uint8_t chan = (current_settings.e220_channel <= 83) ? current_settings.e220_channel : ROVER_E220_TARGET_CHAN;
+                uint8_t tx_buf[ROVER_CMD_SWITCH_FRAME_LEN];
+                size_t n = rover_build_rate_switch_req(tx_buf, sizeof(tx_buf), air_code, chan, s_rate_switch_req_id);
+                if (n > 0) {
+                    e220_suppress_aux_isr = true;
+                    Serial0.write(tx_buf, n);
+                    Serial0.flush();
+                    e220_wait_aux_high(250);
+                    e220_suppress_aux_isr = false;
+                    s_rate_switch_req_tx_ms = now;
+                    s_last_uplink_tx_ms     = now;
+                    Serial.printf("[E220 LORA TX] Sent Rate Switch Req #%u -> air_code 0x%02X (%.1fk)\n",
+                                  s_rate_switch_req_id, air_code, s_requested_rate_kbps);
+                }
+            }
+        }
+        // B. Priority 2: Periodic Uplink Telemetry (Every 5 seconds)
+        else if (s_has_telemetry_state &&
+                 !s_rate_switch_requested &&
+                 in_quiet_window &&
+                 (now - s_last_uplink_tx_ms >= 5000U)) {
+
+            uint8_t tx_buf[ROVER_TELEM_FRAME_LEN];
+            size_t n = rover_build_telemetry_packet(tx_buf, sizeof(tx_buf), &s_latest_telemetry_state, s_uplink_seq);
+            if (n > 0) {
+                e220_suppress_aux_isr = true;
+                Serial0.write(tx_buf, n);
+                Serial0.flush();
+                e220_wait_aux_high(250);
+                e220_suppress_aux_isr = false;
+                s_last_uplink_tx_ms = now;
+                s_uplink_seq++;
+                e220_stats.uplink_packets_sent++;
+                if (current_settings.enable_serial_logging) {
+                    Serial.printf("[E220 LORA TX #%u] Uplink 39B (Fix:%d Tip:%.7f,%.7f,%.2fm Bat:%u%%)\n",
+                                  s_uplink_seq,
+                                  s_latest_telemetry_state.fix_type,
+                                  s_latest_telemetry_state.tip_lat,
+                                  s_latest_telemetry_state.tip_lon,
+                                  s_latest_telemetry_state.tip_height_m,
+                                  s_latest_telemetry_state.battery_percent);
+                }
+            }
+        }
+    }
+
+    // 7. Execute Scheduled Air-Rate Reconfiguration after ACK delay
+    if (s_rate_switch_ack_received && (now >= s_rate_switch_exec_ms)) {
+        s_rate_switch_ack_received = false;
+        s_rate_switch_requested    = false;
+        e220_stats.rate_switch_pending = false;
+
+        Serial.printf("[E220 LORA SWITCH] Reconfiguring E220 registers to %.1f kbps...\n", s_requested_rate_kbps);
+        current_settings.e220_air_rate_kbps = s_requested_rate_kbps;
+        e220_write_default_config_registers();
+        s_active_air_rate = s_requested_rate_kbps;
+        e220_stats.active_air_rate_kbps = s_active_air_rate;
+        e220_stats.uplink_rate_switches++;
+        s_switched_requires_watchdog = true;
+        s_last_valid_rtcm_ms = now;
+        mark_settings_dirty();
+    }
+
+    // 8. 60-Second Watchdog Rollback Guard
+    if (s_switched_requires_watchdog) {
+        if (e220_stats.rtcm_frames_ok > 0 && (now - e220_stats.last_rx_ms < 5000U)) {
+            // Received valid RTCM at the new air-rate -> switch confirmed!
+            s_switched_requires_watchdog = false;
+            Serial.println("[E220 LORA] Link verified at new air-rate! Watchdog disarmed.");
+        } else if (now - s_last_valid_rtcm_ms > 60000U) {
+            s_switched_requires_watchdog = false;
+            Serial.println("[E220 LORA WATCHDOG] 60s silence -> Rolling back to 19.2k fallback!");
+            current_settings.e220_air_rate_kbps = s_fallback_air_rate;
+            e220_write_default_config_registers();
+            s_active_air_rate = s_fallback_air_rate;
+            e220_stats.active_air_rate_kbps = s_fallback_air_rate;
+            mark_settings_dirty();
+        }
+    }
+
     e220_stats.aux_fall_count  = isr_aux_fall_count;
     e220_stats.aux_last_low_us = isr_aux_last_low_us;
+}
+
+extern "C" void e220_feed_telemetry_state(const RoverUIData_t *state)
+{
+    if (state) {
+        s_latest_telemetry_state = *state;
+        s_has_telemetry_state    = true;
+    }
+}
+
+extern "C" bool e220_request_air_rate_switch(float target_rate_kbps)
+{
+    if (s_rate_switch_requested || e220_stats.rate_switch_pending) {
+        return false;
+    }
+    s_requested_rate_kbps      = target_rate_kbps;
+    s_rate_switch_req_id++;
+    if (s_rate_switch_req_id == 0) s_rate_switch_req_id = 1;
+    s_rate_switch_requested    = true;
+    s_rate_switch_ack_received = false;
+    s_rate_switch_req_tx_ms    = 0;
+    e220_stats.rate_switch_pending = true;
+    Serial.printf("[E220 LORA] Queued air-rate switch request -> %.1fk (Req #%u)\n",
+                  target_rate_kbps, s_rate_switch_req_id);
+    return true;
+}
+
+extern "C" bool e220_is_rate_switch_pending(void)
+{
+    return e220_stats.rate_switch_pending;
+}
+
+extern "C" float e220_get_active_air_rate(void)
+{
+    return s_active_air_rate;
 }
 
 extern "C" void e220_get_stats(E220LinkStats_t *stats_out)

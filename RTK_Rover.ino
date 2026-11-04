@@ -190,6 +190,8 @@ void task_rover_core0(void *pvParameters)
                                              &state.survey_epochs_collected,
                                              state.last_logged_label);
 
+            e220_feed_telemetry_state(&state);
+
             if (roverStateQueue) {
                 xQueueOverwrite(roverStateQueue, &state);
             }

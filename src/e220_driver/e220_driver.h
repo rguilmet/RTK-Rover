@@ -20,6 +20,18 @@ void e220_poll_and_forward_rtcm(void);
 
 void e220_get_stats(E220LinkStats_t *stats_out);
 
+// Feeds latest fused rover state snapshot for uplink telemetry packing
+void e220_feed_telemetry_state(const RoverUIData_t *state);
+
+// Initiates over-the-air negotiation to change LoRa air-rate (e.g. 9.6 or 19.2)
+bool e220_request_air_rate_switch(float target_rate_kbps);
+
+// Checks if an air-rate switch negotiation is actively in progress
+bool e220_is_rate_switch_pending(void);
+
+// Returns current operating air-rate (kbps)
+float e220_get_active_air_rate(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -5,6 +5,30 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.0] - 2026-11-04
+
+### Added
+- **Bi-Directional LoRa Protocol Engine (`src/e220_driver/rover_telemetry.h`, `rover_telemetry.cpp`):**
+  - Implemented 39-byte packed binary uplink telemetry frame (`0xAA 0x55` sync, msg ID `0x01`, CRC16-CCITT) carrying sub-millimeter ground-tip position (`tip_lat`, `tip_lon`, `tip_height_m`), accuracy (`h_acc_mm`), fix quality, dual-antenna satellites (`sats_master`, `sats_slave`), True Heading centidegrees, battery %, voltage mV, Rover packet RSSI, and ambient noise floor.
+  - Interleaves uplink transmissions strictly in the half-duplex quiet window ($t = 0.10\text{ s} \dots 0.45\text{ s}$ post-epoch, $\approx 30\text{ ms}$ airtime @ 19.2k, $<1\%$ duty cycle) every 5 seconds.
+  - Intercepts downstream control frames (such as `0xAA 0x55 0x82` ACK) before UM982 COM2, avoiding false-framing and preserving RTCM stream purity.
+- **Dynamic In-Process Air-Rate Switching (`src/lvgl_port/lvgl_port.c`, `src/e220_driver/`):**
+  - Connected Tile 1 `LORA` button to initiate over-the-air air-rate negotiations (`19.2k` $\leftrightarrow$ `9.6k` deep timber mode).
+  - Tapping the button updates text to amber `REQ: xx.xk`, transmits 10-byte `CMD_REQ_RADIO_SWITCH`, receives 11-byte `ACK_RADIO_SWITCH`, and coordinates simultaneous Mode 3 EEPROM reconfiguration on both Rover and Base.
+  - Armed 60-second watchdog rollback to `19.2k` fallback if communication drops after switching.
+- **Base Station Telemetry Receiver & Pacer v3.0.0 (`scripts/e220_pacer.py`):**
+  - Added quiet-window uplink receiver polling E220 UART for `0xAA 0x55` frames.
+  - Emits real-time live console status lines (`[ROVER TEL #seq] Fix: RTK_FIX...`).
+  - Writes atomic telemetry state to `/run/rtk_rover_status.json` (`tmpfs` in RAM, zero SD card wear).
+  - Rolling daily CSV log (`~/rover_logs/rover_YYYY-MM-DD.csv`) with automatic midnight rollover, standard library gzip compression of yesterday's log, 30-day retention pruning, and 50MB hard FIFO directory ceiling.
+  - Handles dynamic in-process EEPROM reconfiguration on request with zero systemd restarts and zero admin credentials.
+- **Unit Verification Suite (`scripts/test_rover_telemetry.py`):**
+  - Unit tests verifying 39B telemetry packing, 10B switch request, 11B ack, CRC16-CCITT, JSON output, CSV logging, rollover, and gzip compression.
+
+### Changed
+- **Firmware Version Bump (`user_config.h`, `README.md`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` to `v0.4.0`.
+
 ## [v0.3.0] - 2026-11-04
 
 ### Added

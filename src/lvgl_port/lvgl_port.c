@@ -27,6 +27,7 @@
 #include "../storage/rtcm_logger.h"
 #include "../storage/serial_logger.h"
 #include "../web_server/web_server.h"
+#include "../e220_driver/e220_driver.h"
 
 static const char *TAG = "lvgl_port";
 static SemaphoreHandle_t lvgl_mux = NULL;
@@ -698,12 +699,18 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 4, Col 2: LORA: 19.2k
+    // Row 4, Col 2: LORA: 19.2k / REQ: 9.6k
     if (t1_lora_btn && t1_lora_btn_lbl) {
         char l_buf[32];
-        snprintf(l_buf, sizeof(l_buf), "LORA: %.1fk", current_settings.e220_air_rate_kbps);
-        lv_label_set_text(t1_lora_btn_lbl, l_buf);
-        lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0x2F3B4C), 0);
+        if (e220_is_rate_switch_pending()) {
+            snprintf(l_buf, sizeof(l_buf), "REQ: %.1fk", current_settings.e220_air_rate_kbps);
+            lv_label_set_text(t1_lora_btn_lbl, l_buf);
+            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0xD97706), 0); // Amber
+        } else {
+            snprintf(l_buf, sizeof(l_buf), "LORA: %.1fk", e220_get_active_air_rate());
+            lv_label_set_text(t1_lora_btn_lbl, l_buf);
+            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0x2F3B4C), 0);
+        }
     }
 
     // Compact Tare / Reset Tare Button on Tile 3
@@ -795,11 +802,19 @@ static void audio_mode_toggle_btn_cb(lv_event_t *e)
 static void lora_rate_btn_cb(lv_event_t *e)
 {
     (void)e;
-    play_rover_beep(1400, 25);
-    if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] LoRa Rate clicked -> %.1fk (Fixed)\n",
-                     current_settings.e220_air_rate_kbps);
+    if (e220_is_rate_switch_pending()) {
+        play_rover_beep(600, 40); // Busy tone
+        return;
     }
+    float cur_rate = e220_get_active_air_rate();
+    float next_rate = (cur_rate >= 19.0f && cur_rate <= 20.0f) ? 9.6f : 19.2f;
+
+    play_rover_beep(1600, 35);
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] LoRa Rate clicked -> Requesting %.1fk\n", next_rate);
+    }
+    e220_request_air_rate_switch(next_rate);
+    update_all_control_buttons();
 }
 
 static void unit_toggle_btn_cb(lv_event_t *e)

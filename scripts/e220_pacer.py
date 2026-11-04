@@ -33,10 +33,14 @@ from __future__ import annotations
 
 import argparse
 import errno
+import gzip
+import json
 import os
 import select
+import shutil
 import signal
 import socket
+import struct
 import sys
 import time
 from typing import Optional
@@ -64,8 +68,8 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "2.8.2"
-__date__ = "2026-10-31"
+__version__ = "3.0.0"
+__date__ = "2026-11-04"
 
 # Force unbuffered output so systemd journalctl displays entries in real time
 if hasattr(sys.stdout, "reconfigure"):
@@ -122,6 +126,41 @@ def rtcm_crc24q(data: bytes) -> int:
     return crc
 
 
+# =============================================================================
+# Bi-Directional LoRa Protocol Definitions (0xAA 0x55 Framing)
+# =============================================================================
+ROVER_SYNC = b"\xAA\x55"
+MSG_ID_TELEMETRY = 0x01
+MSG_ID_REQ_SWITCH = 0x02
+MSG_ID_ACK_SWITCH = 0x82
+
+# 39-Byte Uplink Telemetry Frame Format:
+# sync(2s), mid(B), plen(B), lat(d), lon(d), height(f), h_acc_mm(H), fix(B),
+# sats_m(B), sats_s(B), hdg_cdeg(H), bat_pct(B), bat_mv(H), rssi(b), noise(b), seq(B), crc(H)
+FMT_TELEMETRY = "<2sBBddfHBBBHBHbbBH"
+
+# 10-Byte Remote Air-Rate Switch Request Format:
+# sync(2s), mid(B), plen(B), target_code(B), target_chan(B), req_id(H), crc(H)
+FMT_REQ_SWITCH = "<2sBBBBHH"
+
+# 11-Byte Remote Air-Rate Switch Acknowledge Format:
+# sync(2s), mid(B), plen(B), req_id(H), status(B), delay_ms(H), crc(H)
+FMT_ACK_SWITCH = "<2sBBHBHH"
+
+
+def crc16_ccitt(data: bytes) -> int:
+    """Standard CRC16-CCITT (False: poly 0x1021, init 0xFFFF, no final XOR)."""
+    crc = 0xFFFF
+    for b in data:
+        crc ^= (b << 8)
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
+
+
 class E220Pacer:
     def __init__(
         self,
@@ -139,6 +178,11 @@ class E220Pacer:
         channel: int = 75,
         verbose: bool = False,
         quiet: bool = False,
+        log_dir: str = "~/rover_logs",
+        log_retention_days: int = 30,
+        max_log_mb: int = 50,
+        compress_logs: bool = True,
+        no_csv: bool = False,
     ):
         self.port_name = port
         self.baud = baud
@@ -157,6 +201,26 @@ class E220Pacer:
         self.ser: Optional[serial.Serial] = None
         self.gpio_available = GPIO is not None
         self.rssi_reg_enabled = False
+
+        # Bi-Directional LoRa Uplink State
+        self.uplink_buf = bytearray()
+        self.last_rover_telemetry: dict = {}
+        self.last_rover_rx_time = 0.0
+        self.uplink_packets_received = 0
+        self.uplink_crc_errors = 0
+        self.rate_switch_count = 0
+        self.watchdog_rate_revert_time = 0.0
+        self.fallback_air_rate = 19.2
+        self.active_air_rate = air_rate_kbps
+
+        # Log Retention & Storage
+        self.log_dir = os.path.expanduser(log_dir)
+        self.log_retention_days = log_retention_days
+        self.max_log_mb = max_log_mb
+        self.compress_logs = compress_logs
+        self.enable_csv = not no_csv
+        self.current_log_date = ""
+        self.current_log_file = None
 
         # Telemetry counters
         self.total_bytes_in = 0
@@ -426,6 +490,11 @@ class E220Pacer:
             self.ser.close()
         if self.gpio_available:
             GPIO.cleanup()
+        if self.current_log_file:
+            try:
+                self.current_log_file.close()
+            except Exception:
+                pass
         print("[HW] Hardware cleaned up.", flush=True)
 
     def wait_aux(self, timeout: float = AUX_RISE_WATCHDOG_S) -> bool:
@@ -627,6 +696,280 @@ class E220Pacer:
                     flush=True,
                 )
 
+    def _write_atomic_json(self, data: dict) -> None:
+        """Writes live rover telemetry atomically to RAM tmpfs (/run or /tmp) with zero SD card wear."""
+        for target_dir in ("/run", "/tmp"):
+            path = os.path.join(target_dir, "rtk_rover_status.json")
+            tmp_path = path + ".tmp"
+            try:
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                os.replace(tmp_path, path)
+                break
+            except (OSError, PermissionError):
+                continue
+
+    def _write_csv_record(self, data: dict) -> None:
+        """Appends telemetry to daily CSV with rollover, gzip compression of yesterday's log, and retention pruning."""
+        if not self.enable_csv:
+            return
+        today_str = time.strftime("%Y-%m-%d")
+        if today_str != self.current_log_date:
+            if self.current_log_file:
+                try:
+                    self.current_log_file.close()
+                except Exception:
+                    pass
+                if self.compress_logs and self.current_log_date:
+                    self._compress_log(self.current_log_date)
+            self._prune_old_logs()
+            self.current_log_date = today_str
+            os.makedirs(self.log_dir, exist_ok=True)
+            csv_path = os.path.join(self.log_dir, f"rover_{today_str}.csv")
+            file_exists = os.path.exists(csv_path) and os.path.getsize(csv_path) > 0
+            self.current_log_file = open(csv_path, "a", encoding="utf-8", buffering=1)
+            if not file_exists:
+                headers = [
+                    "timestamp_utc", "seq", "fix_type", "fix_name",
+                    "latitude", "longitude", "height_m", "h_acc_mm",
+                    "sats_master", "sats_slave", "heading_deg",
+                    "battery_pct", "battery_mv",
+                    "rover_rssi_dbm", "rover_noise_dbm",
+                    "air_rate_kbps", "channel"
+                ]
+                self.current_log_file.write(",".join(headers) + "\n")
+
+        row = [
+            data["timestamp_utc"],
+            str(data["seq"]),
+            str(data["fix_type"]),
+            data["fix_name"],
+            f"{data['latitude']:.8f}",
+            f"{data['longitude']:.8f}",
+            f"{data['height_m']:.3f}",
+            str(data["h_acc_mm"]),
+            str(data["sats_master"]),
+            str(data["sats_slave"]),
+            f"{data['heading_deg']:.2f}",
+            str(data["battery_pct"]),
+            str(data["battery_mv"]),
+            str(data["rover_rssi_dbm"]),
+            str(data["rover_noise_dbm"]),
+            f"{data['base_air_rate_kbps']:.1f}",
+            str(data["channel"])
+        ]
+        if self.current_log_file:
+            self.current_log_file.write(",".join(row) + "\n")
+
+    def _prune_old_logs(self) -> None:
+        """Enforces retention policy (deletes files older than N days) and max total directory size (FIFO cap)."""
+        if not os.path.exists(self.log_dir):
+            return
+        now = time.time()
+        cutoff_s = self.log_retention_days * 86400.0
+        files = []
+        for fname in os.listdir(self.log_dir):
+            if fname.startswith("rover_") and (fname.endswith(".csv") or fname.endswith(".csv.gz")):
+                fpath = os.path.join(self.log_dir, fname)
+                try:
+                    mtime = os.path.getmtime(fpath)
+                    sz = os.path.getsize(fpath)
+                    files.append((fpath, mtime, sz))
+                    if (now - mtime) > cutoff_s:
+                        os.remove(fpath)
+                        print(f"[LOG RETENTION] Pruned expired log (> {self.log_retention_days}d): {fname}", flush=True)
+                except OSError:
+                    pass
+
+        if self.max_log_mb > 0:
+            total_sz = sum(sz for p, _, sz in files if os.path.exists(p))
+            max_bytes = self.max_log_mb * 1024 * 1024
+            if total_sz > max_bytes:
+                files.sort(key=lambda x: x[1])
+                for fpath, _, sz in files:
+                    if total_sz <= max_bytes:
+                        break
+                    try:
+                        if os.path.exists(fpath):
+                            os.remove(fpath)
+                            total_sz -= sz
+                            print(f"[LOG CEILING] Pruned oldest log to keep total < {self.max_log_mb}MB: {os.path.basename(fpath)}", flush=True)
+                    except OSError:
+                        pass
+
+    def _compress_log(self, date_str: str) -> None:
+        """Compresses closed daily CSV using standard library gzip."""
+        raw_path = os.path.join(self.log_dir, f"rover_{date_str}.csv")
+        gz_path = raw_path + ".gz"
+        if os.path.exists(raw_path) and not os.path.exists(gz_path):
+            try:
+                with open(raw_path, "rb") as f_in, gzip.open(gz_path, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                os.remove(raw_path)
+                print(f"[LOG GZIP] Compressed {os.path.basename(raw_path)} -> {os.path.basename(gz_path)}", flush=True)
+            except Exception as e:
+                print(f"[WARN] Failed to compress {raw_path}: {e}", flush=True)
+
+    def reconfigure_air_rate(self, new_air_rate: float) -> bool:
+        """Dynamically reconfigures Base E220 EEPROM to new air-rate in Mode 3 without restarting service."""
+        if not self.gpio_available or serial is None:
+            return False
+        old_rate = self.air_rate_kbps
+        self.air_rate_kbps = new_air_rate
+        prev_auto = self.auto_config
+        self.auto_config = True
+
+        if self.ser and self.ser.is_open:
+            self._safe_flush(self.ser)
+            self.wait_aux(1.0)
+            self.ser.close()
+
+        ok = self.inspect_and_configure_eeprom()
+        self.auto_config = prev_auto
+        self._open_operational_uart()
+        if ok:
+            print(f"[RECONFIG] Base E220 air-rate switched {old_rate}k -> {new_air_rate}k successfully!", flush=True)
+        else:
+            print(f"[RECONFIG] Base E220 air-rate switch to {new_air_rate}k failed!", flush=True)
+        return ok
+
+    def _check_watchdog_revert(self) -> None:
+        """Rolls back to 19.2k fallback if 60 seconds elapse after an air-rate switch without rover traffic."""
+        if self.watchdog_rate_revert_time > 0:
+            now = time.monotonic()
+            if self.last_rover_rx_time > (self.watchdog_rate_revert_time - 60.0):
+                self.watchdog_rate_revert_time = 0.0
+                print("[LORA WATCHDOG] Verified uplink at new air-rate! Rollback watchdog disarmed.", flush=True)
+            elif now >= self.watchdog_rate_revert_time:
+                self.watchdog_rate_revert_time = 0.0
+                print(f"[LORA WATCHDOG] 60s silence after rate switch! Reverting to {self.fallback_air_rate}k fallback...", flush=True)
+                self.reconfigure_air_rate(self.fallback_air_rate)
+
+    def _handle_telemetry_packet(self, cand: bytes) -> None:
+        self.uplink_packets_received += 1
+        (sync, mid, plen, lat, lon, height, h_acc_mm, fix_type, sats_m, sats_s,
+         hdg_cdeg, bat_pct, bat_mv, r_rssi, r_noise, seq, crc) = struct.unpack(FMT_TELEMETRY, cand)
+
+        fix_names = {0: "NONE", 1: "SINGLE", 2: "DGPS", 3: "PPS", 4: "RTK_FIX", 5: "RTK_FLOAT", 6: "DR"}
+        fix_str = fix_names.get(fix_type, f"TYPE_{fix_type}")
+        hdg_deg = hdg_cdeg / 100.0
+
+        print(
+            f"[ROVER TEL #{seq:03d}] Fix:{fix_str} ({sats_m}/{sats_s} sats, ±{h_acc_mm/10.0:.1f}cm) | "
+            f"Hdg:{hdg_deg:5.1f}° | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
+            f"RSSI:{r_rssi}dBm (Noise:{r_noise}dBm) | Pos:{lat:.7f}, {lon:.7f}, {height:.2f}m",
+            flush=True,
+        )
+
+        status_data = {
+            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "seq": seq,
+            "fix_type": fix_type,
+            "fix_name": fix_str,
+            "latitude": round(lat, 8),
+            "longitude": round(lon, 8),
+            "height_m": round(height, 3),
+            "h_acc_mm": h_acc_mm,
+            "sats_master": sats_m,
+            "sats_slave": sats_s,
+            "heading_deg": round(hdg_deg, 2),
+            "battery_pct": bat_pct,
+            "battery_mv": bat_mv,
+            "rover_rssi_dbm": r_rssi,
+            "rover_noise_dbm": r_noise,
+            "base_air_rate_kbps": self.air_rate_kbps,
+            "channel": self.channel,
+        }
+        self.last_rover_telemetry = status_data
+        self._write_atomic_json(status_data)
+        self._write_csv_record(status_data)
+
+    def _handle_rate_switch_request(self, cand: bytes) -> None:
+        (sync, mid, plen, target_code, target_chan, req_id, crc) = struct.unpack(FMT_REQ_SWITCH, cand)
+        code_to_air = {0x02: 2.4, 0x03: 4.8, 0x04: 9.6, 0x05: 19.2, 0x06: 38.4, 0x07: 62.5}
+        target_rate = code_to_air.get(target_code, 19.2)
+
+        print(
+            f"[LORA SWITCH] Received switch request from Rover: {self.air_rate_kbps}k -> {target_rate}k "
+            f"(Req #{req_id}, CH{target_chan})",
+            flush=True,
+        )
+
+        # Build ACK frame: sync(2), msg_id=0x82(1), plen=5(1), req_id(2), status=0(1), delay=400ms(2), crc(2) = 11B
+        ack_body = struct.pack(FMT_ACK_SWITCH, ROVER_SYNC, MSG_ID_ACK_SWITCH, 5, req_id, 0, 400, 0)
+        ack_crc = crc16_ccitt(ack_body[:-2])
+        ack_frame = ack_body[:-2] + struct.pack("<H", ack_crc)
+
+        # Transmit ACK back to Rover
+        if self.ser and self.ser.is_open:
+            self.ser.write(ack_frame)
+            self._safe_flush(self.ser)
+            self.wait_aux(0.2)
+            print(f"[LORA SWITCH] Sent ACK to Rover (Req #{req_id}, delay 400ms)", flush=True)
+
+        time.sleep(0.400)
+        ok = self.reconfigure_air_rate(target_rate)
+        if ok:
+            self.rate_switch_count += 1
+            self.watchdog_rate_revert_time = time.monotonic() + 60.0
+            print(f"[LORA SWITCH] Reconfigured Base E220 to {target_rate}k! Rollback watchdog armed (60s).", flush=True)
+        else:
+            print(f"[ERROR] Failed to reconfigure Base E220 to {target_rate}k!", flush=True)
+
+    def poll_uplink(self) -> None:
+        """Polls Base E220 serial port for 0xAA 0x55 uplink telemetry or rate switch commands from Rover."""
+        if not self.ser or not self.ser.is_open:
+            return
+
+        try:
+            avail = self.ser.in_waiting
+        except Exception:
+            return
+
+        if avail > 0:
+            try:
+                raw = self.ser.read(avail)
+                if raw:
+                    self.uplink_buf.extend(raw)
+            except Exception:
+                return
+
+        while len(self.uplink_buf) >= 2:
+            if self.uplink_buf[0] != 0xAA or self.uplink_buf[1] != 0x55:
+                idx = self.uplink_buf.find(ROVER_SYNC)
+                if idx == -1:
+                    self.uplink_buf.clear()
+                    break
+                del self.uplink_buf[:idx]
+                if len(self.uplink_buf) < 2:
+                    break
+
+            if len(self.uplink_buf) < 4:
+                break
+
+            msg_id = self.uplink_buf[2]
+            plen = self.uplink_buf[3]
+            tot_len = plen + 6
+            if len(self.uplink_buf) < tot_len:
+                break
+
+            cand = bytes(self.uplink_buf[:tot_len])
+            calc_crc = crc16_ccitt(cand[:-2])
+            pkt_crc = cand[-2] | (cand[-1] << 8)
+
+            if calc_crc != pkt_crc:
+                self.uplink_crc_errors += 1
+                del self.uplink_buf[:1]
+                continue
+
+            del self.uplink_buf[:tot_len]
+            self.last_rover_rx_time = time.monotonic()
+
+            if msg_id == MSG_ID_TELEMETRY and tot_len == 39:
+                self._handle_telemetry_packet(cand)
+            elif msg_id == MSG_ID_REQ_SWITCH and tot_len == 10:
+                self._handle_rate_switch_request(cand)
+
     def process_stream(self, read_fn) -> None:
         """Main loop: consumes RTKBase stream, verifies RTCM3 CRC24Q, and paces intact frames to E220."""
         buffer = bytearray()
@@ -634,6 +977,10 @@ class E220Pacer:
         last_rx_data_time = time.monotonic()
 
         while running:
+            # Poll half-duplex quiet-window for Rover telemetry and commands
+            self.poll_uplink()
+            self._check_watchdog_revert()
+
             data = read_fn()
             now = time.monotonic()
             if data:
@@ -710,10 +1057,12 @@ class E220Pacer:
                 duty_pct = min(100.0, (self.total_wait_time_s / dt) * 100.0)
                 t_str = time.strftime("%H:%M:%S")
                 frames_summary = ", ".join(f"{t}:{c}" for t, c in sorted(self.rtcm_stats.items())) or "None"
+                uplink_str = f"Uplink:[{self.uplink_packets_received} pkts, {self.rate_switch_count} sw]"
                 print(
                     f"[{t_str}] [PACER HEARTBEAT] In:{self.total_bytes_in}B ({rate_in:.1f}B/s) | "
                     f"Out:{self.total_bytes_out}B ({rate_out:.1f}B/s) | "
                     f"Duty:{duty_pct:.1f}% | RTCM:[{frames_summary}] | "
+                    f"{uplink_str} | "
                     f"Frames:{self.total_packets_sent} (Subpkts:{self.total_subpackets_sent} "
                     f"Rst:{self.watchdog_resets} SrcErr:{self.src_crc_errors})",
                     flush=True,
@@ -901,6 +1250,11 @@ def main() -> int:
     parser.add_argument("--pin-rst", type=int, default=DEFAULT_PIN_RST, help="BCM GPIO pin for E220 RESET")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose pacing logs")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress [TX RTCM] logs")
+    parser.add_argument("--log-dir", default="~/rover_logs", help="Directory for daily rolling CSV rover logs")
+    parser.add_argument("--log-retention-days", type=int, default=30, help="Days to retain daily CSV logs before auto-pruning")
+    parser.add_argument("--max-log-mb", type=int, default=50, help="Maximum total megabytes for rover log directory")
+    parser.add_argument("--no-compress", action="store_true", help="Disable automatic gzip compression of yesterday's CSV")
+    parser.add_argument("--no-csv", action="store_true", help="Disable CSV disk logging (RAM JSON only)")
 
     args = parser.parse_args()
     freq_mhz = 850.125 + args.channel
@@ -927,6 +1281,11 @@ def main() -> int:
         channel=args.channel,
         verbose=args.verbose,
         quiet=args.quiet,
+        log_dir=args.log_dir,
+        log_retention_days=args.log_retention_days,
+        max_log_mb=args.max_log_mb,
+        compress_logs=not args.no_compress,
+        no_csv=args.no_csv,
     )
 
     if args.tcp_connect:
