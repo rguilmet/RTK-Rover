@@ -236,12 +236,13 @@ The following two scripts are currently tracked in Git and contain personal boun
 
 ## 8. Summary Action Table
 
-| Priority | Task | Target Component | Notes |
-| :---: | :--- | :--- | :--- |
-| **1** | **Outdoor Walk & RTK Fix Test** | Field Test | Verify open-sky `Fix: 4`, heading lock, and range margin. |
-| **2** | **Privacy Scrub for Public GitHub** | `scripts/solve_*.py`, `docs/*.md` | Sanitize deed coordinates & local file paths before public release. |
-| **3** | **Header Bar Modernization** | `src/lvgl_port/lvgl_port.c` | Replace `WIFI OFF` text with icon; add 4-bar LoRa RSSI meter. |
-| **4** | **Tile 4 Message Breakdown** | `src/lvgl_port/lvgl_port.c` | Display counts for `1006`, `1074`, `1084`, `1094`, `1230`. |
-| **5** | **`M0`/`M1` Continuity Self-Test** | `src/e220_driver/e220_driver.cpp` | Boot-time `AUX` pulse check on mode transitions (`v0.2.55`). |
-| **6** | **Bi-Directional Telemetry** | `e220_pacer.py` & `e220_driver.cpp`| Interleave Rover battery/fix status into Base quiet window. |
-| **7** | **BeiDou Evaluation** | RTKBase & UM982 | Evaluate 4-constellation airtime budget with satellite elevation mask. |
+| Priority | Task | Target Component | Status | Notes |
+| :---: | :--- | :--- | :---: | :--- |
+| **1** | **Outdoor Walk & RTK Fix Test** | Field Test | **DONE** | Test _026 verified 100% RTK Fix to 352m. |
+| **2** | **Privacy Scrub for Public GitHub** | scripts/check_secrets.py | **DONE** | Pre-push hook passing 100% clean. |
+| **3** | **Header Bar Modernization** | src/lvgl_port/lvgl_port.c | **DONE** | Icon-only Wi-Fi + 'LoRa: -xxxdB' in v0.2.58. |
+| **4** | **Tile 4 Message Breakdown & Meter** | src/lvgl_port/lvgl_port.c | **DONE** | Pinned survey card & RTCM audit in v0.2.56/v0.2.57. |
+| **5** | **M0/M1 Continuity Self-Test** | src/e220_driver/e220_driver.cpp | **DONE** | Dynamic mode-pulse self-test implemented in v0.2.58. |
+| **6** | **ES8311 Proximity Audio ('Geiger')** | src/codec_board/ & audio task | **PLANNED** | Phase 2: progressive proximity sound for pin hunting. |
+| **7** | **Bi-Directional Telemetry & Air Rate**| e220_pacer.py & driver | **PLANNED** | Phase 3: 39B quiet-window uplink + 9.6k woods mode. |
+| **8** | **Line Stakeout & Boundary Overlay** | src/gui_tile0_nav/ | **PLANNED** | Phase 4: Option A Tile 0 Station & Offset + vector map. |

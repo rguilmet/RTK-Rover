@@ -379,6 +379,43 @@ extern "C" bool e220_read_config_registers(void)
     return ok;
 }
 
+static bool e220_verify_pin_continuity(uint8_t pin, const char *pin_name)
+{
+    // Start with E220 in Mode 3 (M0=1, M1=1) and ensure AUX is steady HIGH
+    digitalWrite(ROVER_PIN_E220_M0, HIGH);
+    digitalWrite(ROVER_PIN_E220_M1, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(40));
+    if (!e220_wait_aux_high(300)) {
+        Serial.printf("[E220 TEST] %s continuity check skipped (AUX stuck LOW)\n", pin_name);
+        return false;
+    }
+
+    // Pull the tested pin LOW (transition from Mode 3 to Mode 1 or Mode 2)
+    digitalWrite(pin, LOW);
+
+    // Per E220 manual Section 5.2.4, switching modes causes AUX to pulse LOW for 2..15ms.
+    // If the wire is intact, E220 detects the transition and pulls AUX LOW.
+    // If the wire is open/floating, E220's weak internal pullup keeps the pin HIGH (no mode change).
+    bool saw_low = false;
+    uint32_t start = millis();
+    while (millis() - start < 40) {
+        if (digitalRead(ROVER_PIN_E220_AUX) == LOW) {
+            saw_low = true;
+            break;
+        }
+        delayMicroseconds(250);
+    }
+
+    // Restore pin to HIGH (return to Mode 3)
+    digitalWrite(pin, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(30));
+    e220_wait_aux_high(300);
+
+    Serial.printf("[E220 TEST] %s Continuity: %s (AUX pulse=%s)\n",
+                  pin_name, saw_low ? "PASS (OK)" : "FAIL (OPEN/FLOAT)", saw_low ? "DETECTED" : "MISSING");
+    return saw_low;
+}
+
 extern "C" void e220_run_powerup_selftest(void)
 {
     Serial.println("\n--- [E220-900T30S Power-Up Self-Test (UART0: RX=IO41, TX=IO42)] ---");
@@ -388,6 +425,11 @@ extern "C" void e220_run_powerup_selftest(void)
                   digitalRead(ROVER_PIN_E220_M1),
                   digitalRead(ROVER_PIN_E220_RST));
 
+    // 1. Hardware Wire Continuity Self-Test via Mode-Switch AUX Pulses
+    e220_stats.m0_wire_ok = e220_verify_pin_continuity(ROVER_PIN_E220_M0, "M0 (IO39)");
+    e220_stats.m1_wire_ok = e220_verify_pin_continuity(ROVER_PIN_E220_M1, "M1 (IO40)");
+
+    // 2. Read Configuration Registers in Mode 3
     if (e220_read_config_registers()) {
         if (!e220_stats.config_matched) {
             Serial.println("[E220 TEST] Register mismatch vs settings.json -> Auto-programming target E220 config...");

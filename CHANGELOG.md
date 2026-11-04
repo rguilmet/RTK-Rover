@@ -5,6 +5,21 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.58] - 2026-11-04
+
+### Added
+- **Boot-Time Hardware Pin Continuity Self-Test (`src/e220_driver/e220_driver.cpp`, `src/rover_api.h`):**
+  - Integrated dynamic `M0` (IO39) and `M1` (IO40) continuity verification into `e220_run_powerup_selftest()`: toggles mode lines and confirms physical E220 $2..15\text{ ms}$ `AUX` mode-switch falling pulses.
+  - Added `m0_wire_ok` and `m1_wire_ok` telemetry fields to `E220LinkStats_t` and surfaced `M0:OK M1:OK` (or red alert on open/floating wire) in Tile 4 Item 7 (`t4_e220_lbl`).
+
+### Changed
+- **Header Row 1 Wi-Fi Indicator Simplification (`src/lvgl_port/lvgl_port.c`):**
+  - Replaced verbose text `LV_SYMBOL_WIFI " ON"` and `LV_SYMBOL_WIFI " OFF"` with icon-only `LV_SYMBOL_WIFI`, styled in Electric Cyan (`#22D3EE`) when active and Dim Slate (`#475569`) when off, freeing horizontal space for header date, time, and battery voltage.
+- **Header Row 2 LoRa Signal Strength Prefix (`src/lvgl_port/lvgl_port.c`):**
+  - Added explicit `"LoRa: "` prefix to Row 2 signal strength (`"LoRa: -85dB"`, `"LoRa: -- dB"`) with synchronized 6-tier color ladder.
+- **Firmware Version Bump (`user_config.h`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` to `v0.2.58`.
+
 ## [v0.2.57] - 2026-11-04
 
 ### Changed

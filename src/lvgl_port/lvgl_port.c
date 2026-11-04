@@ -1063,13 +1063,13 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
     lv_obj_set_style_text_color(hdr_units_lbl, current_settings.use_imperial_units ? COLOR_UNIT_IMP_AMBER : COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -120, 2);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -92, 2);
 
     hdr_wifi_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " OFF");
-    lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x64748B), 0);
+    lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);
     lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -74, 2);
+    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -70, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");
@@ -1105,7 +1105,7 @@ void create_rover_ui(void)
     lv_obj_align(hdr_m_acc_lbl, LV_ALIGN_TOP_LEFT, 146, 19);
 
     hdr_m_rtcm_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_m_rtcm_lbl, "-- dB");
+    lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: -- dB");
     lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
     lv_obj_set_style_text_font(hdr_m_rtcm_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(hdr_m_rtcm_lbl, LV_ALIGN_TOP_RIGHT, -4, 19);
@@ -1994,14 +1994,13 @@ void update_rover_ui(const RoverUIData_t *d)
              d->battery_voltage);
     lv_label_set_text(hdr_batt_lbl, buf);
 
-    // Wi-Fi Status Badge in Row 1
+    // Wi-Fi Status Badge in Row 1 (Icon only)
     if (hdr_wifi_lbl) {
+        lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
         if (is_wifi_active()) {
-            lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " ON");
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x00FF88), 0);
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x22D3EE), 0); // Cyan
         } else {
-            lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI " OFF");
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x64748B), 0);
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0); // Dim slate
         }
     }
 
@@ -2054,14 +2053,14 @@ void update_rover_ui(const RoverUIData_t *d)
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
 
-    // Header Row 2: LoRa Signal Strength (Numeric "-104dB" or "-- dB")
+    // Header Row 2: LoRa Signal Strength (Numeric "LoRa: -104dB" or "LoRa: -- dB")
     if (d->e220_stats.rssi_valid && d->e220_stats.rx_bytes_total > 0) {
         bool is_stale = (last_radio_rx_age > 4000);
-        snprintf(buf, sizeof(buf), "%ddB", (int)d->e220_stats.last_pkt_rssi_dbm);
+        snprintf(buf, sizeof(buf), "LoRa: %ddB", (int)d->e220_stats.last_pkt_rssi_dbm);
         lv_label_set_text(hdr_m_rtcm_lbl, buf);
         lv_obj_set_style_text_color(hdr_m_rtcm_lbl, get_lora_rssi_color(d->e220_stats.last_pkt_rssi_dbm, is_stale), 0);
     } else {
-        lv_label_set_text(hdr_m_rtcm_lbl, "-- dB");
+        lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: -- dB");
         lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
     }
 
@@ -2728,9 +2727,11 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (t4_e220_lbl) {
+        const char *m0_str = d->e220_stats.m0_wire_ok ? "OK" : "ERR";
+        const char *m1_str = d->e220_stats.m1_wire_ok ? "OK" : "ERR";
         snprintf(buf, sizeof(buf),
                  "[E220 LoRa Hardware IO41/42] [%s]\n"
-                 "AUX:%d (Edges:%lu) | Regs: OK\n"
+                 "AUX:%d (Edges:%lu) | M0:%s M1:%s\n"
                  "Throughput: RX:%lu B -> COM2:%lu B\n"
                  "Integrity: OK:%lu | CRC Err:%lu | Trunc:%lu | Orph:%lu B\n"
                  "[RTCM3 Message Audit]\n"
@@ -2740,6 +2741,8 @@ void update_rover_ui(const RoverUIData_t *d)
                  d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
                  d->e220_stats.aux_pin_high ? 1 : 0,
                  (unsigned long)d->e220_stats.aux_fall_count,
+                 m0_str,
+                 m1_str,
                  (unsigned long)d->e220_stats.rx_bytes_total,
                  (unsigned long)d->e220_stats.rtcm_bytes_forwarded,
                  (unsigned long)d->e220_stats.rtcm_frames_ok,
@@ -2752,7 +2755,9 @@ void update_rover_ui(const RoverUIData_t *d)
                  d->e220_stats.msg_1094_count,
                  d->e220_stats.msg_1230_count);
         lv_label_set_text(t4_e220_lbl, buf);
-        if (d->e220_stats.rtcm_crc_errors > 0 || d->e220_stats.rtcm_trunc_drops > 0) {
+        if (!d->e220_stats.m0_wire_ok || !d->e220_stats.m1_wire_ok) {
+            lv_obj_set_style_text_color(t4_e220_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Pin wire error
+        } else if (d->e220_stats.rtcm_crc_errors > 0 || d->e220_stats.rtcm_trunc_drops > 0) {
             lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFA500), 0); // Highlight in Orange on errors
         } else {
             lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0); // Normal yellow

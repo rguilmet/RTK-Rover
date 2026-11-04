@@ -80,6 +80,8 @@ typedef struct {
     uint8_t  cfg_reg1;
     uint8_t  cfg_channel;
     uint8_t  cfg_reg3;
+    bool     m0_wire_ok;           // Boot-time hardware continuity test: M0 line
+    bool     m1_wire_ok;           // Boot-time hardware continuity test: M1 line
 } E220LinkStats_t;
 
 // =========================================================================
