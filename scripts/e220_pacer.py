@@ -209,12 +209,19 @@ class E220Pacer:
         self.uplink_packets_received = 0
         self.uplink_crc_errors = 0
         self.rate_switch_count = 0
+        self.watchdog_rate_switch_time = 0.0
         self.watchdog_rate_revert_time = 0.0
         self.fallback_air_rate = 19.2
         self.active_air_rate = air_rate_kbps
 
         # Log Retention & Storage
-        self.log_dir = os.path.expanduser(log_dir)
+        resolved_log_dir = os.path.expanduser(log_dir)
+        if resolved_log_dir.startswith("/root") or resolved_log_dir == "/root":
+            if os.path.isdir("/home/pi"):
+                resolved_log_dir = "/home/pi/rover_logs"
+            elif os.environ.get("SUDO_USER") and os.path.isdir(f"/home/{os.environ.get('SUDO_USER')}"):
+                resolved_log_dir = f"/home/{os.environ.get('SUDO_USER')}/rover_logs"
+        self.log_dir = resolved_log_dir
         self.log_retention_days = log_retention_days
         self.max_log_mb = max_log_mb
         self.compress_logs = compress_logs
@@ -458,6 +465,7 @@ class E220Pacer:
 
     def setup_hardware(self) -> None:
         print(f"[INIT] {__app_name__} v{__version__} ({__date__}) initializing hardware...", flush=True)
+        print(f"[LOG] Daily CSV logging directory: {self.log_dir}", flush=True)
 
         if self.gpio_available:
             GPIO.setwarnings(False)
@@ -725,10 +733,18 @@ class E220Pacer:
             self._prune_old_logs()
             self.current_log_date = today_str
             os.makedirs(self.log_dir, exist_ok=True)
+            try:
+                os.chmod(self.log_dir, 0o777)
+            except OSError:
+                pass
             csv_path = os.path.join(self.log_dir, f"rover_{today_str}.csv")
             file_exists = os.path.exists(csv_path) and os.path.getsize(csv_path) > 0
             self.current_log_file = open(csv_path, "a", encoding="utf-8", buffering=1)
             if not file_exists:
+                try:
+                    os.chmod(csv_path, 0o666)
+                except OSError:
+                    pass
                 headers = [
                     "timestamp_utc", "seq", "fix_type", "fix_name",
                     "latitude", "longitude", "height_m", "h_acc_mm",
@@ -837,7 +853,7 @@ class E220Pacer:
         """Rolls back to 19.2k fallback if 60 seconds elapse after an air-rate switch without rover traffic."""
         if self.watchdog_rate_revert_time > 0:
             now = time.monotonic()
-            if self.last_rover_rx_time > (self.watchdog_rate_revert_time - 60.0):
+            if self.last_rover_rx_time > self.watchdog_rate_switch_time:
                 self.watchdog_rate_revert_time = 0.0
                 print("[LORA WATCHDOG] Verified uplink at new air-rate! Rollback watchdog disarmed.", flush=True)
             elif now >= self.watchdog_rate_revert_time:
@@ -854,9 +870,15 @@ class E220Pacer:
         fix_str = fix_names.get(fix_type, f"TYPE_{fix_type}")
         hdg_deg = hdg_cdeg / 100.0
 
+        # High 2 bits of sats_s: bit 6 = heading_valid, bit 7 = heading_is_fixed
+        sats_s_clean = sats_s & 0x3F
+        hdg_valid = bool(sats_s & 0x40)
+        hdg_fixed = bool(sats_s & 0x80)
+        hdg_tag = "FIX" if hdg_fixed else ("VAL" if hdg_valid else "NONE")
+
         print(
-            f"[ROVER TEL #{seq:03d}] Fix:{fix_str} ({sats_m}/{sats_s} sats, ±{h_acc_mm/10.0:.1f}cm) | "
-            f"Hdg:{hdg_deg:5.1f}° | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
+            f"[ROVER TEL #{seq:03d}] Fix:{fix_str} (Sats:{sats_m}M/{sats_s_clean}S, +/-{h_acc_mm/10.0:.1f}cm) | "
+            f"Hdg:{hdg_deg:5.1f} deg [{hdg_tag}] | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
             f"RSSI:{r_rssi}dBm (Noise:{r_noise}dBm) | Pos:{lat:.7f}, {lon:.7f}, {height:.2f}m",
             flush=True,
         )
@@ -871,8 +893,10 @@ class E220Pacer:
             "height_m": round(height, 3),
             "h_acc_mm": h_acc_mm,
             "sats_master": sats_m,
-            "sats_slave": sats_s,
+            "sats_slave": sats_s_clean,
             "heading_deg": round(hdg_deg, 2),
+            "heading_valid": hdg_valid,
+            "heading_fixed": hdg_fixed,
             "battery_pct": bat_pct,
             "battery_mv": bat_mv,
             "rover_rssi_dbm": r_rssi,
@@ -911,7 +935,8 @@ class E220Pacer:
         ok = self.reconfigure_air_rate(target_rate)
         if ok:
             self.rate_switch_count += 1
-            self.watchdog_rate_revert_time = time.monotonic() + 60.0
+            self.watchdog_rate_switch_time = time.monotonic()
+            self.watchdog_rate_revert_time = self.watchdog_rate_switch_time + 60.0
             print(f"[LORA SWITCH] Reconfigured Base E220 to {target_rate}k! Rollback watchdog armed (60s).", flush=True)
         else:
             print(f"[ERROR] Failed to reconfigure Base E220 to {target_rate}k!", flush=True)
@@ -1041,6 +1066,24 @@ class E220Pacer:
 
                 del buffer[:total_frame_len]
                 self.send_rtcm_frame(frame, msg_type)
+
+                # Poll uplink and watchdog immediately after each frame transmission
+                self.poll_uplink()
+                self._check_watchdog_revert()
+
+                # End of MSM constellation epoch: enforce guaranteed 200ms half-duplex uplink quiet window
+                if msg_type in (1094, 1124) or (msg_type == 1084 and self.rtcm_stats.get(1094, 0) == 0):
+                    quiet_deadline = time.monotonic() + 0.200
+                    while running and time.monotonic() < quiet_deadline:
+                        self.poll_uplink()
+                        self._check_watchdog_revert()
+                        time.sleep(0.010)
+
+                    # Shed backlog at lower air rates to keep differential age fresh
+                    if len(buffer) > 600 and self.air_rate_kbps <= 9.6:
+                        self._shed_stale_backlog(buffer)
+
+                    break  # Yield to outer loop for heartbeat reporting and fresh socket reads
 
                 # Poll socket opportunistically between frames so TCP buffer stays fresh
                 more = read_fn()

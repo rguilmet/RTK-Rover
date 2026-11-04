@@ -25,6 +25,7 @@ static volatile bool     s_rate_switch_requested  = false;
 static float             s_requested_rate_kbps    = 0.0f;
 static uint16_t          s_rate_switch_req_id     = 0;
 static uint32_t          s_rate_switch_req_tx_ms  = 0;
+static uint32_t          s_rate_switch_req_start_ms = 0;
 static bool              s_rate_switch_ack_received = false;
 static uint32_t          s_rate_switch_exec_ms    = 0;
 static float             s_active_air_rate        = 19.2f;
@@ -888,8 +889,14 @@ extern "C" void e220_poll_and_forward_rtcm(void)
         }
 
         // A. Priority 1: Transmit Pending Air-Rate Switch Request
-        if (s_rate_switch_requested && !s_rate_switch_ack_received && in_quiet_window) {
-            if (now - s_rate_switch_req_tx_ms >= 1000U) {
+        if (s_rate_switch_requested && !s_rate_switch_ack_received) {
+            if (s_rate_switch_req_start_ms > 0 && (now - s_rate_switch_req_start_ms > 6000U)) {
+                // Request timeout after 6 seconds of no ACK -> abort and clear pending flag
+                Serial.printf("[E220 LORA] Air-rate switch request to %.1fk timed out (no ACK) -> Aborting.\n", s_requested_rate_kbps);
+                s_rate_switch_requested        = false;
+                e220_stats.rate_switch_pending = false;
+                s_rate_switch_req_start_ms     = 0;
+            } else if (in_quiet_window && (now - s_rate_switch_req_tx_ms >= 1000U)) {
                 uint8_t air_code = ROVER_AIR_CODE_19_2K;
                 if (s_requested_rate_kbps < 3.0f)       air_code = ROVER_AIR_CODE_2_4K;
                 else if (s_requested_rate_kbps < 7.0f)  air_code = ROVER_AIR_CODE_4_8K;
@@ -974,6 +981,8 @@ extern "C" void e220_poll_and_forward_rtcm(void)
             e220_write_default_config_registers();
             s_active_air_rate = s_fallback_air_rate;
             e220_stats.active_air_rate_kbps = s_fallback_air_rate;
+            s_rate_switch_requested = false;
+            e220_stats.rate_switch_pending = false;
             mark_settings_dirty();
         }
     }
@@ -1001,6 +1010,7 @@ extern "C" bool e220_request_air_rate_switch(float target_rate_kbps)
     s_rate_switch_requested    = true;
     s_rate_switch_ack_received = false;
     s_rate_switch_req_tx_ms    = 0;
+    s_rate_switch_req_start_ms = millis();
     e220_stats.rate_switch_pending = true;
     Serial.printf("[E220 LORA] Queued air-rate switch request -> %.1fk (Req #%u)\n",
                   target_rate_kbps, s_rate_switch_req_id);
@@ -1015,6 +1025,11 @@ extern "C" bool e220_is_rate_switch_pending(void)
 extern "C" float e220_get_active_air_rate(void)
 {
     return s_active_air_rate;
+}
+
+extern "C" float e220_get_requested_air_rate(void)
+{
+    return s_requested_rate_kbps;
 }
 
 extern "C" void e220_get_stats(E220LinkStats_t *stats_out)

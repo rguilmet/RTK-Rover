@@ -5,6 +5,21 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.1] - 2026-11-04
+
+### Fixed
+- **Bi-Directional Air-Rate Switch & Pacer Starvation Fix (`scripts/e220_pacer.py`, `src/e220_driver/e220_driver.cpp`, `src/lvgl_port/lvgl_port.c`):**
+  - **Pacer Inner-Loop Starvation Resolved:** Fixed critical bug in `scripts/e220_pacer.py` where continuous incoming TCP RTCM frames at slower air-rates (e.g. 9.6 kbps) trapped execution in `while len(buffer) >= 3:`, entirely starving `poll_uplink()`, watchdog revert checks, and heartbeat logging.
+  - **Enforced Half-Duplex Quiet Window at Lower Rates:** After sending the terminal MSM frame of each epoch (Type 1094 / 1124), `e220_pacer.py` now enforces a guaranteed 200 ms quiet window while actively polling for rover uplink commands and telemetry, and sheds accumulated stale backlog frames when operating $\le 9.6\text{ kbps}$ so the radio never saturates at 100% duty cycle.
+  - **Watchdog Timestamp Disarm Fix:** Corrected `_check_watchdog_revert()` in `e220_pacer.py` to compare rover reception timestamps strictly against the switch execution timestamp (`watchdog_rate_switch_time`).
+  - **Rover Switch Request Timeout & UI Label Fix:** Added a 6-second timeout to `e220_poll_and_forward_rtcm()` in `src/e220_driver/e220_driver.cpp` so pending requests auto-abort if no ACK is received; fixed `update_all_control_buttons()` in `src/lvgl_port/lvgl_port.c` via new `e220_get_requested_air_rate()` so the button correctly displays the requested target rate (e.g., `REQ: 19.2k` instead of `REQ: 9.6k`).
+- **Instant Touch-Down Response on Navigation Buttons (`src/lvgl_port/lvgl_port.c`):**
+  - Switched event bindings on Tile 0 `<` / `>` waypoint buttons, Tile 2 `<` / `>` CSV file selector buttons, and bottom nav bar `< Prev` / `Next >` buttons from `LV_EVENT_CLICKED` to `LV_EVENT_PRESSED`. Acoustic beep and action now fire the exact millisecond finger contact occurs on the glass, eliminating perceived lag from finger hold/lift-off delay.
+- **Base Station Logging, Path & Unicode Cleanups (`scripts/e220_pacer.py`, `src/e220_driver/rover_telemetry.cpp`):**
+  - Replaced unicode characters (`±` and `°`) with clean ASCII (`+/-` and ` deg`) in `e220_pacer.py` console output to avoid multi-byte UTF-8 Latin-1 rendering artifacts (`Â±`, `Â°`) in systemd journalctl.
+  - Fixed log directory resolution under systemd so root execution defaults to `/home/pi/rover_logs` (or sudo user home) with 0777 directory and 0666 file permissions.
+  - Embedded `heading_valid` (bit 6) and `heading_is_fixed` (bit 7) flags into the telemetry `sats_slave` byte, enabling Base pacer to display and log Slave antenna sat count (`Sats:21M/10S`) and heading status (`[FIX]`, `[VAL]`, `[NONE]`).
+
 ## [v0.5.0] - 2026-11-04
 
 ### Added

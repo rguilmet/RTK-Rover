@@ -32,6 +32,9 @@ bool e220_is_rate_switch_pending(void);
 // Returns current operating air-rate (kbps)
 float e220_get_active_air_rate(void);
 
+// Returns target air-rate requested during pending negotiation (kbps)
+float e220_get_requested_air_rate(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -441,9 +441,9 @@ static void tv_changed_event_cb(lv_event_t *e)
 static void nav_prev_screen_btn_cb(lv_event_t *e)
 {
     (void)e;
+    play_rover_beep(1200, 20);
     uint8_t next_idx = (active_tile_col == 0) ? 4 : (active_tile_col - 1);
     switch_to_tile_index(next_idx, LV_ANIM_ON);
-    play_rover_beep(1200, 20);
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] '< Prev' screen clicked -> Tile %u (%s)\n", next_idx + 1, kScreenTitles[next_idx]);
     }
@@ -452,9 +452,9 @@ static void nav_prev_screen_btn_cb(lv_event_t *e)
 static void nav_next_screen_btn_cb(lv_event_t *e)
 {
     (void)e;
+    play_rover_beep(1200, 20);
     uint8_t next_idx = (active_tile_col + 1) % 5;
     switch_to_tile_index(next_idx, LV_ANIM_ON);
-    play_rover_beep(1200, 20);
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] 'Next >' screen clicked -> Tile %u (%s)\n", next_idx + 1, kScreenTitles[next_idx]);
     }
@@ -767,7 +767,7 @@ static void update_all_control_buttons(void)
     if (t1_lora_btn && t1_lora_btn_lbl) {
         char l_buf[32];
         if (e220_is_rate_switch_pending()) {
-            snprintf(l_buf, sizeof(l_buf), "REQ: %.1fk", current_settings.e220_air_rate_kbps);
+            snprintf(l_buf, sizeof(l_buf), "REQ: %.1fk", e220_get_requested_air_rate());
             lv_label_set_text(t1_lora_btn_lbl, l_buf);
             lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0xD97706), 0); // Amber
         } else {
@@ -1309,7 +1309,7 @@ void create_rover_ui(void)
     lv_obj_align(btn_scr_prev, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_scr_prev, lv_color_hex(0x2F3B4C), 0);
     lv_obj_set_ext_click_area(btn_scr_prev, 6);
-    lv_obj_add_event_cb(btn_scr_prev, nav_prev_screen_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_scr_prev, nav_prev_screen_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_scr_prev = lv_label_create(btn_scr_prev);
     lv_label_set_text(lbl_scr_prev, LV_SYMBOL_LEFT " Prev");
     lv_obj_set_style_text_font(lbl_scr_prev, &lv_font_montserrat_12, 0);
@@ -1326,7 +1326,7 @@ void create_rover_ui(void)
     lv_obj_align(btn_scr_next, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_scr_next, lv_color_hex(0x2F3B4C), 0);
     lv_obj_set_ext_click_area(btn_scr_next, 6);
-    lv_obj_add_event_cb(btn_scr_next, nav_next_screen_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_scr_next, nav_next_screen_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_scr_next = lv_label_create(btn_scr_next);
     lv_label_set_text(lbl_scr_next, "Next " LV_SYMBOL_RIGHT);
     lv_obj_set_style_text_font(lbl_scr_next, &lv_font_montserrat_12, 0);
@@ -1357,7 +1357,7 @@ void create_rover_ui(void)
     lv_obj_set_size(btn_prev, 44, 28);
     lv_obj_align(btn_prev, LV_ALIGN_TOP_LEFT, 6, 3);
     lv_obj_set_ext_click_area(btn_prev, 12);
-    lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_prev, prev_wp_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_prev = lv_label_create(btn_prev);
     lv_label_set_text(lbl_prev, LV_SYMBOL_LEFT);
     lv_obj_center(lbl_prev);
@@ -1371,7 +1371,7 @@ void create_rover_ui(void)
     lv_obj_align(t0_target_lbl, LV_ALIGN_TOP_MID, 0, 6);
     lv_obj_set_clickable(t0_target_lbl, true);
     lv_obj_set_ext_click_area(t0_target_lbl, 8);
-    lv_obj_add_event_cb(t0_target_lbl, t0_target_lbl_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(t0_target_lbl, t0_target_lbl_cb, LV_EVENT_PRESSED, NULL);
 
     WaypointRecord_t init_wp;
     if (waypoint_get_active(&init_wp)) {
@@ -1387,7 +1387,7 @@ void create_rover_ui(void)
     lv_obj_set_size(btn_next, 44, 28);
     lv_obj_align(btn_next, LV_ALIGN_TOP_RIGHT, -6, 3);
     lv_obj_set_ext_click_area(btn_next, 12);
-    lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_next, next_wp_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_next = lv_label_create(btn_next);
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_next);
@@ -1430,7 +1430,7 @@ void create_rover_ui(void)
     lv_obj_align(t0_mode_badge, LV_ALIGN_TOP_LEFT, 6, 6);
     lv_obj_set_clickable(t0_mode_badge, true);
     lv_obj_set_ext_click_area(t0_mode_badge, 8);
-    lv_obj_add_event_cb(t0_mode_badge, t0_mode_toggle_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(t0_mode_badge, t0_mode_toggle_cb, LV_EVENT_PRESSED, NULL);
 
     // Telemetry HUD Readout (Heading & Pitch on top-left under Tactical Grid badge)
     t0_hdg_hud_lbl = lv_label_create(t0_nav_canvas);
@@ -1718,7 +1718,7 @@ void create_rover_ui(void)
     lv_obj_set_size(btn_file_prev, 44, 28);
     lv_obj_align(btn_file_prev, LV_ALIGN_TOP_LEFT, 6, 3);
     lv_obj_set_ext_click_area(btn_file_prev, 12);
-    lv_obj_add_event_cb(btn_file_prev, prev_file_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_file_prev, prev_file_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_fprev = lv_label_create(btn_file_prev);
     lv_label_set_text(lbl_fprev, LV_SYMBOL_LEFT);
     lv_obj_center(lbl_fprev);
@@ -1736,7 +1736,7 @@ void create_rover_ui(void)
     lv_obj_set_size(btn_file_next, 44, 28);
     lv_obj_align(btn_file_next, LV_ALIGN_TOP_RIGHT, -6, 3);
     lv_obj_set_ext_click_area(btn_file_next, 12);
-    lv_obj_add_event_cb(btn_file_next, next_file_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_file_next, next_file_btn_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl_fnext = lv_label_create(btn_file_next);
     lv_label_set_text(lbl_fnext, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_fnext);

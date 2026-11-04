@@ -47,7 +47,10 @@ size_t rover_build_telemetry_packet(uint8_t *out_buf,
 
     pkt.fix_type    = (uint8_t)state->fix_type;
     pkt.sats_master = state->num_sats;
-    pkt.sats_slave  = state->slave_num_sats;
+    uint8_t slave_sats = (state->slave_num_sats & 0x3FU);
+    if (state->heading_valid)    slave_sats |= 0x40U;
+    if (state->heading_is_fixed) slave_sats |= 0x80U;
+    pkt.sats_slave  = slave_sats;
 
     // True heading in centidegrees (0.00° - 360.00° -> 0..36000)
     float hdg = state->true_heading_deg;
