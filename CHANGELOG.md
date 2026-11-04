@@ -5,6 +5,26 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.57] - 2026-11-04
+
+### Changed
+- **Calibrated Linear LoRa RF Meter Scale (`src/lvgl_port/lvgl_port.c`):**
+  - Re-calibrated the Tile 4 live meter bar from `[-125 dBm .. -65 dBm]` to real-world operational bounds `[-110 dBm .. -25 dBm]` ($85\text{ dB}$ span), eliminating top-end saturation in the yard and deadband cutoff below ambient noise floor.
+- **Multi-Tier Color Ladder for LoRa Signal Strength (`src/lvgl_port/lvgl_port.c`):**
+  - Refined `get_lora_rssi_color()` with distinct color bands: Electric Cyan (`>= -45 dBm`, proximity/antenna test), Emerald Green (`-45 .. -70 dBm`, optimal solid field), Lime Green (`-70 .. -85 dBm`, nominal working field), Amber Yellow (`-85 .. -98 dBm`, fair / approaching fringe), Safety Orange (`-98 .. -106 dBm`, low margin / approaching noise floor), and Crimson Red (`< -106 dBm` or stale, critical/cutoff).
+  - Synchronized color coding across Tile 4 meter bar, Tile 4 RSSI text, and Persistent Header Row 2.
+- **Firmware Version Bump (`user_config.h`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` to `v0.2.57`.
+
+## [v0.2.56] - 2026-11-04
+
+### Added
+- **Pinned LoRa RF Survey Card on Tile 4 (`src/lvgl_port/lvgl_port.c`):**
+  - Added fixed $296\times 6\text{ px}$ signal strength bar (`lv_bar`), bold RSSI readout, ambient noise floor with SNR margin (`(+X dB)`), packet age in seconds, frame counter, drop counter, and RF channel/rate banner.
+  - Simplified Persistent Header Row 2 to color-coded numeric signal strength (e.g. `"-104dB"` / `"-- dB"`).
+- **Accelerated E220 Mode 0 Register Polling (`src/e220_driver/e220_driver.cpp`):**
+  - Increased register query frequency to $900\text{ ms}$ during active reception and $2000\text{ ms}$ idle.
+
 ## [v0.2.55] - 2026-11-01
 
 ### Added

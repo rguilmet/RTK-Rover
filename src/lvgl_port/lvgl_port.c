@@ -1957,14 +1957,18 @@ void create_rover_ui(void)
 
 static inline lv_color_t get_lora_rssi_color(int16_t rssi_dbm, bool is_stale)
 {
-    if (is_stale || rssi_dbm < -120) {
-        return lv_palette_main(LV_PALETTE_RED); // Critical / Out of lock (< -120 dBm)
-    } else if (rssi_dbm <= -113) {
-        return lv_color_hex(0xFFA500);          // Orange: Fringe (-113 .. -120 dBm)
-    } else if (rssi_dbm <= -95) {
-        return lv_color_hex(0xFFCC00);          // Yellow: Fair/Usable (-95 .. -112 dBm)
+    if (is_stale || rssi_dbm < -106) {
+        return lv_palette_main(LV_PALETTE_RED); // Critical / Out of lock (< -106 dBm or stale)
+    } else if (rssi_dbm < -98) {
+        return lv_color_hex(0xF97316);          // Safety Orange: Fringe / Low Margin (-106 .. -99 dBm)
+    } else if (rssi_dbm < -85) {
+        return lv_color_hex(0xFBBF24);          // Amber Yellow: Fair Working (-98 .. -86 dBm)
+    } else if (rssi_dbm < -70) {
+        return lv_color_hex(0x84CC16);          // Lime Green: Nominal Working Field (-85 .. -71 dBm)
+    } else if (rssi_dbm < -45) {
+        return lv_color_hex(0x10B981);          // Emerald Green: Optimal Solid Field (-70 .. -46 dBm)
     } else {
-        return lv_color_hex(0x00FF88);          // Green: Excellent (> -95 dBm)
+        return lv_color_hex(0x00E5FF);          // Electric Cyan: Near-Field / Proximity (>= -45 dBm)
     }
 }
 
@@ -2489,9 +2493,9 @@ void update_rover_ui(const RoverUIData_t *d)
         int16_t pkt_rssi = d->e220_stats.last_pkt_rssi_dbm;
         int16_t noise_floor = d->e220_stats.ambient_noise_dbm;
 
-        // Row 1: Meter Bar (Scale: -125 dBm = 0%, -65 dBm = 100%)
+        // Row 1: Meter Bar (Scale: -110 dBm = 0%, -25 dBm = 100%, Span = 85 dB)
         if (is_fresh) {
-            int pct = ((int)pkt_rssi + 125) * 100 / 60;
+            int pct = ((int)pkt_rssi + 110) * 100 / 85;
             if (pct < 0) pct = 0;
             if (pct > 100) pct = 100;
             lv_bar_set_value(t4_rf_bar, pct, LV_ANIM_OFF);
