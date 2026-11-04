@@ -68,7 +68,7 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 __date__ = "2026-11-04"
 
 # Force unbuffered output so systemd journalctl displays entries in real time

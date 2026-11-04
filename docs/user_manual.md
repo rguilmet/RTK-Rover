@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.5.0`  
-**Firmware Version:** `v0.5.0`  
+**Document Version:** `v1.5.1`  
+**Firmware Version:** `v0.5.1`  
 **Last Updated:** November 4, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -442,7 +442,7 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 * **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
 * **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
 
-### 13.4 Base Station Pacer (`e220_pacer.py` v3.0.0)
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.1.0)
 * **Real-Time Terminal Output:** Displays live Rover telemetry lines on reception.
 * **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs for instant zero-overhead dashboard querying.
 * **Rolling Daily CSV Log (`~/rover_logs/rover_YYYY-MM-DD.csv`):**

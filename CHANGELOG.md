@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced unicode characters (`±` and `°`) with clean ASCII (`+/-` and ` deg`) in `e220_pacer.py` console output to avoid multi-byte UTF-8 Latin-1 rendering artifacts (`Â±`, `Â°`) in systemd journalctl.
   - Fixed log directory resolution under systemd so root execution defaults to `/home/pi/rover_logs` (or sudo user home) with 0777 directory and 0666 file permissions.
   - Embedded `heading_valid` (bit 6) and `heading_is_fixed` (bit 7) flags into the telemetry `sats_slave` byte, enabling Base pacer to display and log Slave antenna sat count (`Sats:21M/10S`) and heading status (`[FIX]`, `[VAL]`, `[NONE]`).
+- **Semantic Versioning Bumps (`user_config.h`, `scripts/e220_pacer.py`):**
+  - Bumped `scripts/e220_pacer.py` to `v3.1.0`.
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.5.1`.
 
 ## [v0.5.0] - 2026-11-04
 
