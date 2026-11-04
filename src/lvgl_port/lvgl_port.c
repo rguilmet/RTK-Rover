@@ -196,6 +196,12 @@ static lv_obj_t *btn_diag_telem         = NULL;
 static lv_obj_t *lbl_diag_telem         = NULL;
 static lv_obj_t *btn_diag_touch         = NULL;
 static lv_obj_t *lbl_diag_touch         = NULL;
+static lv_obj_t *t4_rf_card             = NULL;
+static lv_obj_t *t4_rf_bar              = NULL;
+static lv_obj_t *t4_rf_rssi_lbl         = NULL;
+static lv_obj_t *t4_rf_noise_lbl        = NULL;
+static lv_obj_t *t4_rf_health_lbl       = NULL;
+static lv_obj_t *t4_rf_chan_lbl         = NULL;
 static lv_obj_t *t4_scroll_cont         = NULL;
 static lv_obj_t *t4_storage_status_lbl  = NULL;
 static lv_obj_t *t4_ant_master_lbl      = NULL;
@@ -1099,8 +1105,8 @@ void create_rover_ui(void)
     lv_obj_align(hdr_m_acc_lbl, LV_ALIGN_TOP_LEFT, 146, 19);
 
     hdr_m_rtcm_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_m_rtcm_lbl, "RTCM: --");
-    lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFAA00), 0);
+    lv_label_set_text(hdr_m_rtcm_lbl, "-- dB");
+    lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
     lv_obj_set_style_text_font(hdr_m_rtcm_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(hdr_m_rtcm_lbl, LV_ALIGN_TOP_RIGHT, -4, 19);
 
@@ -1768,18 +1774,66 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(lbl_diag_touch, &lv_font_montserrat_12, 0);
     lv_obj_center(lbl_diag_touch);
 
+    // 2. Pinned LoRa RF Survey Card (Always visible, non-scrolling)
+    t4_rf_card = lv_obj_create(tile_test);
+    lv_obj_set_size(t4_rf_card, 308, 54);
+    lv_obj_align(t4_rf_card, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_color(t4_rf_card, lv_color_hex(0x1A202C), 0);
+    lv_obj_set_style_border_color(t4_rf_card, lv_color_hex(0x2D3748), 0);
+    lv_obj_set_style_border_width(t4_rf_card, 1, 0);
+    lv_obj_set_style_radius(t4_rf_card, 4, 0);
+    lv_obj_set_style_pad_all(t4_rf_card, 0, 0);
+    lv_obj_set_scrollbar_mode(t4_rf_card, LV_SCROLLBAR_MODE_OFF);
+
+    // Row 1: Meter Bar across top of card (296 x 6 px)
+    t4_rf_bar = lv_bar_create(t4_rf_card);
+    lv_obj_set_size(t4_rf_bar, 296, 6);
+    lv_obj_align(t4_rf_bar, LV_ALIGN_TOP_MID, 0, 5);
+    lv_bar_set_range(t4_rf_bar, 0, 100);
+    lv_bar_set_value(t4_rf_bar, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(t4_rf_bar, lv_color_hex(0x283B47), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(t4_rf_bar, lv_color_hex(0x00FF88), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(t4_rf_bar, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(t4_rf_bar, 2, LV_PART_INDICATOR);
+
+    // Row 2: Live Metrics (RSSI bold left, Noise/Margin right)
+    t4_rf_rssi_lbl = lv_label_create(t4_rf_card);
+    lv_label_set_text(t4_rf_rssi_lbl, "LoRa: -- dBm");
+    lv_obj_set_style_text_color(t4_rf_rssi_lbl, lv_color_hex(0x64748B), 0);
+    lv_obj_set_style_text_font(t4_rf_rssi_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_align(t4_rf_rssi_lbl, LV_ALIGN_TOP_LEFT, 6, 16);
+
+    t4_rf_noise_lbl = lv_label_create(t4_rf_card);
+    lv_label_set_text(t4_rf_noise_lbl, "Noise: -- dBm");
+    lv_obj_set_style_text_color(t4_rf_noise_lbl, lv_color_hex(0x94A3B8), 0);
+    lv_obj_set_style_text_font(t4_rf_noise_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_rf_noise_lbl, LV_ALIGN_TOP_RIGHT, -6, 18);
+
+    // Row 3: Health & Channel (Age/OK left, Channel/Air right)
+    t4_rf_health_lbl = lv_label_create(t4_rf_card);
+    lv_label_set_text(t4_rf_health_lbl, "Age: -- | OK: 0 (0 drop)");
+    lv_obj_set_style_text_color(t4_rf_health_lbl, lv_color_hex(0xCBD5E1), 0);
+    lv_obj_set_style_text_font(t4_rf_health_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_rf_health_lbl, LV_ALIGN_TOP_LEFT, 6, 35);
+
+    t4_rf_chan_lbl = lv_label_create(t4_rf_card);
+    lv_label_set_text(t4_rf_chan_lbl, "CH-- (19.2k)");
+    lv_obj_set_style_text_color(t4_rf_chan_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(t4_rf_chan_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t4_rf_chan_lbl, LV_ALIGN_TOP_RIGHT, -6, 35);
+
     // Subtle divider line
     lv_obj_t *t4_sep = lv_obj_create(tile_test);
     lv_obj_set_size(t4_sep, 308, 1);
-    lv_obj_align(t4_sep, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_align(t4_sep, LV_ALIGN_TOP_MID, 0, 141);
     lv_obj_set_style_bg_color(t4_sep, lv_color_hex(0x283B47), 0);
     lv_obj_set_style_border_width(t4_sep, 0, 0);
     lv_obj_set_scrollbar_mode(t4_sep, LV_SCROLLBAR_MODE_OFF);
 
-    // 2. Scrollable Viewport for Diagnostic Telemetry
+    // 3. Scrollable Viewport for Diagnostic Telemetry (320 x 231 px)
     t4_scroll_cont = lv_obj_create(tile_test);
-    lv_obj_set_size(t4_scroll_cont, 320, 374 - 87);
-    lv_obj_align(t4_scroll_cont, LV_ALIGN_TOP_MID, 0, 87);
+    lv_obj_set_size(t4_scroll_cont, 320, 374 - 143);
+    lv_obj_align(t4_scroll_cont, LV_ALIGN_TOP_MID, 0, 143);
     lv_obj_set_style_bg_opa(t4_scroll_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(t4_scroll_cont, 0, 0);
     lv_obj_set_style_radius(t4_scroll_cont, 0, 0);
@@ -1844,10 +1898,10 @@ void create_rover_ui(void)
     lv_obj_set_width(t4_e220_lbl, 300);
     lv_label_set_long_mode(t4_e220_lbl, LV_LABEL_LONG_WRAP);
     snprintf(init_buf, sizeof(init_buf),
-             "[E220 LoRa IO41/42 @ %lu]\n"
-             "AUX:1 Edges:0 | Noise:--dBm Pkt:--dBm\n"
-             "RX:0B -> COM2:0B | OK:0 Err:0(0T)\n"
-             "1006:0 | 74:0 | 84:0 | 94:0 | Orph:0B",
+             "[E220 LoRa Hardware IO41/42 @ %lu]\n"
+             "AUX:1 Edges:0 | Regs:--\n"
+             "RX:0B -> COM2:0B | OK:0 Err:0\n"
+             "1006:0 | 74:0 | 84:0 | 94:0 | 1230:0",
              (unsigned long)current_settings.e220_uart_baud);
     lv_label_set_text(t4_e220_lbl, init_buf);
     lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0);
@@ -1899,6 +1953,19 @@ void create_rover_ui(void)
     lv_label_set_text(t4_i2c_lbl, "[I2C0 BUS STATUS]\nTCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK");
     lv_obj_set_style_text_color(t4_i2c_lbl, lv_color_hex(0x2DD4BF), 0);
     lv_obj_set_style_text_font(t4_i2c_lbl, &lv_font_montserrat_12, 0);
+}
+
+static inline lv_color_t get_lora_rssi_color(int16_t rssi_dbm, bool is_stale)
+{
+    if (is_stale || rssi_dbm < -120) {
+        return lv_palette_main(LV_PALETTE_RED); // Critical / Out of lock (< -120 dBm)
+    } else if (rssi_dbm <= -113) {
+        return lv_color_hex(0xFFA500);          // Orange: Fringe (-113 .. -120 dBm)
+    } else if (rssi_dbm <= -95) {
+        return lv_color_hex(0xFFCC00);          // Yellow: Fair/Usable (-95 .. -112 dBm)
+    } else {
+        return lv_color_hex(0x00FF88);          // Green: Excellent (> -95 dBm)
+    }
 }
 
 void update_rover_ui(const RoverUIData_t *d)
@@ -1983,37 +2050,15 @@ void update_rover_ui(const RoverUIData_t *d)
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
 
-    // RTCM Diff Age & Color Logic:
-    // If receiver has an active differential solution (diff_age_s > 0), display receiver's actual diff age
-    if (d->diff_age_s > 0.05f && d->diff_age_s < 99.0f) {
-        snprintf(buf, sizeof(buf), "RTCM:%.1fs", d->diff_age_s);
+    // Header Row 2: LoRa Signal Strength (Numeric "-104dB" or "-- dB")
+    if (d->e220_stats.rssi_valid && d->e220_stats.rx_bytes_total > 0) {
+        bool is_stale = (last_radio_rx_age > 4000);
+        snprintf(buf, sizeof(buf), "%ddB", (int)d->e220_stats.last_pkt_rssi_dbm);
         lv_label_set_text(hdr_m_rtcm_lbl, buf);
-        if (d->diff_age_s <= 2.0f) {
-            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x00FF88), 0); // Fresh Green (<= 2.0s)
-        } else if (d->diff_age_s <= 5.0f) {
-            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFA500), 0); // Warning Orange (2.1 - 5.0s)
-        } else {
-            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Stale Red (> 5.0s)
-        }
-    } else if (d->diff_age_s >= 99.0f && d->diff_age_s < 999.0f) {
-        // Display real differential age even when stale (>99s) so user sees active count-up
-        snprintf(buf, sizeof(buf), "RTCM:%us", (unsigned int)d->diff_age_s);
-        lv_label_set_text(hdr_m_rtcm_lbl, buf);
-        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0);
-    } else if (d->diff_age_s >= 999.0f) {
-        lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:>999s");
-        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, get_lora_rssi_color(d->e220_stats.last_pkt_rssi_dbm, is_stale), 0);
     } else {
-        // No differential fix active (Single / No Fix)
-        if (last_radio_rx_age < 5000) {
-            // Radio receiving packets, but no differential fix yet (syncing or waiting for 1005/1006)
-            lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Sync");
-            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0xFFA500), 0); // Amber/Orange
-        } else {
-            // No radio packets arriving
-            lv_label_set_text(hdr_m_rtcm_lbl, "RTCM:Wait");
-            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_palette_main(LV_PALETTE_RED), 0); // Red
-        }
+        lv_label_set_text(hdr_m_rtcm_lbl, "-- dB");
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
     }
 
     // Row 3: Dual-Antenna Heading Status & Metrics
@@ -2437,7 +2482,73 @@ void update_rover_ui(const RoverUIData_t *d)
              d->pole_bubble_x_deg, d->pole_bubble_y_deg);
     lv_label_set_text(t3_tilt_lbl, buf);
 
-    // 5. Update Tile 4: Hardware Diagnostics Status
+    // 5. Update Tile 4: Pinned LoRa RF Survey Card & Hardware Diagnostics Status
+    if (t4_rf_card && t4_rf_bar && t4_rf_rssi_lbl) {
+        float rx_age_s = (d->e220_stats.last_rx_ms > 0) ? (float)(now_ms - d->e220_stats.last_rx_ms) / 1000.0f : 999.0f;
+        bool is_fresh = (d->e220_stats.rssi_valid && rx_age_s <= 4.0f && d->e220_stats.rx_bytes_total > 0);
+        int16_t pkt_rssi = d->e220_stats.last_pkt_rssi_dbm;
+        int16_t noise_floor = d->e220_stats.ambient_noise_dbm;
+
+        // Row 1: Meter Bar (Scale: -125 dBm = 0%, -65 dBm = 100%)
+        if (is_fresh) {
+            int pct = ((int)pkt_rssi + 125) * 100 / 60;
+            if (pct < 0) pct = 0;
+            if (pct > 100) pct = 100;
+            lv_bar_set_value(t4_rf_bar, pct, LV_ANIM_OFF);
+            lv_obj_set_style_bg_color(t4_rf_bar, get_lora_rssi_color(pkt_rssi, false), LV_PART_INDICATOR);
+        } else {
+            lv_bar_set_value(t4_rf_bar, 0, LV_ANIM_OFF);
+            lv_obj_set_style_bg_color(t4_rf_bar, lv_color_hex(0x475569), LV_PART_INDICATOR);
+        }
+
+        // Row 2: Live Metrics (RSSI bold left, Noise/Margin right)
+        if (is_fresh) {
+            snprintf(buf, sizeof(buf), "LoRa: %d dBm", (int)pkt_rssi);
+            lv_label_set_text(t4_rf_rssi_lbl, buf);
+            lv_obj_set_style_text_color(t4_rf_rssi_lbl, get_lora_rssi_color(pkt_rssi, false), 0);
+        } else if (d->e220_stats.rx_bytes_total > 0 && d->e220_stats.rssi_valid) {
+            snprintf(buf, sizeof(buf), "LoRa: %d dBm*", (int)pkt_rssi);
+            lv_label_set_text(t4_rf_rssi_lbl, buf);
+            lv_obj_set_style_text_color(t4_rf_rssi_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+        } else {
+            lv_label_set_text(t4_rf_rssi_lbl, "LoRa: No Signal");
+            lv_obj_set_style_text_color(t4_rf_rssi_lbl, lv_color_hex(0x64748B), 0);
+        }
+
+        if (d->e220_stats.rssi_valid) {
+            int margin = (int)pkt_rssi - (int)noise_floor;
+            if (is_fresh) {
+                snprintf(buf, sizeof(buf), "Noise: %d dBm (%+d dB)", (int)noise_floor, margin);
+            } else {
+                snprintf(buf, sizeof(buf), "Noise: %d dBm (--)", (int)noise_floor);
+            }
+            lv_label_set_text(t4_rf_noise_lbl, buf);
+        } else {
+            lv_label_set_text(t4_rf_noise_lbl, "Noise: -- dBm");
+        }
+
+        // Row 3: Health & Channel
+        uint32_t drops = d->e220_stats.rtcm_crc_errors + d->e220_stats.rtcm_trunc_drops;
+        if (rx_age_s < 99.0f) {
+            snprintf(buf, sizeof(buf), "Age: %.1fs | OK: %lu (%lu drop)",
+                     rx_age_s, (unsigned long)d->e220_stats.rtcm_frames_ok, (unsigned long)drops);
+        } else {
+            snprintf(buf, sizeof(buf), "Age: >99s | OK: %lu (%lu drop)",
+                     (unsigned long)d->e220_stats.rtcm_frames_ok, (unsigned long)drops);
+        }
+        lv_label_set_text(t4_rf_health_lbl, buf);
+        if (drops > 0) {
+            lv_obj_set_style_text_color(t4_rf_health_lbl, lv_color_hex(0xFFA500), 0);
+        } else {
+            lv_obj_set_style_text_color(t4_rf_health_lbl, lv_color_hex(0xCBD5E1), 0);
+        }
+
+        snprintf(buf, sizeof(buf), "CH%u (%.1fk)",
+                 d->e220_stats.cfg_channel,
+                 current_settings.e220_air_rate_kbps);
+        lv_label_set_text(t4_rf_chan_lbl, buf);
+    }
+
     if (t4_storage_status_lbl) {
         extern bool sd_card_mounted;
         if (sd_card_mounted) {
@@ -2613,38 +2724,31 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     if (t4_e220_lbl) {
-        char rssi_info[36];
-        if (d->e220_stats.rssi_valid) {
-            snprintf(rssi_info, sizeof(rssi_info), "Noise:%ddBm Pkt:%ddBm",
-                     (int)d->e220_stats.ambient_noise_dbm,
-                     (int)d->e220_stats.last_pkt_rssi_dbm);
-        } else {
-            snprintf(rssi_info, sizeof(rssi_info), "Noise:--dBm Pkt:--dBm");
-        }
         snprintf(buf, sizeof(buf),
-                 "[E220 LoRa IO41/42 @ %lu] [%s]\n"
-                 "AUX:%d Edges:%lu | %s\n"
-                 "RX:%luB -> COM2:%luB | OK:%lu Err:%lu(%luT)\n"
-                 "1006:%u | 74:%u | 84:%u | 94:%u | 1230:%u\n"
-                 "Orphan:%luB",
-                 (unsigned long)current_settings.e220_uart_baud,
+                 "[E220 LoRa Hardware IO41/42] [%s]\n"
+                 "AUX:%d (Edges:%lu) | Regs: OK\n"
+                 "Throughput: RX:%lu B -> COM2:%lu B\n"
+                 "Integrity: OK:%lu | CRC Err:%lu | Trunc:%lu | Orph:%lu B\n"
+                 "[RTCM3 Message Audit]\n"
+                 "1006 (Base ARP): %u | 1074 (GPS): %u\n"
+                 "1084 (GLO): %u | 1094 (GAL): %u\n"
+                 "1230 (Biases): %u",
                  d->e220_stats.config_valid ? (d->e220_stats.config_matched ? "CFG OK" : "CFG DIFF") : "NO RSP",
                  d->e220_stats.aux_pin_high ? 1 : 0,
                  (unsigned long)d->e220_stats.aux_fall_count,
-                 rssi_info,
                  (unsigned long)d->e220_stats.rx_bytes_total,
                  (unsigned long)d->e220_stats.rtcm_bytes_forwarded,
                  (unsigned long)d->e220_stats.rtcm_frames_ok,
                  (unsigned long)d->e220_stats.rtcm_crc_errors,
                  (unsigned long)d->e220_stats.rtcm_trunc_drops,
+                 (unsigned long)d->e220_stats.rtcm_orphan_bytes,
                  d->e220_stats.msg_1005_count,
                  d->e220_stats.msg_1074_count,
                  d->e220_stats.msg_1084_count,
                  d->e220_stats.msg_1094_count,
-                 d->e220_stats.msg_1230_count,
-                 (unsigned long)d->e220_stats.rtcm_orphan_bytes);
+                 d->e220_stats.msg_1230_count);
         lv_label_set_text(t4_e220_lbl, buf);
-        if (d->e220_stats.rtcm_crc_errors > 0) {
+        if (d->e220_stats.rtcm_crc_errors > 0 || d->e220_stats.rtcm_trunc_drops > 0) {
             lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFA500), 0); // Highlight in Orange on errors
         } else {
             lv_obj_set_style_text_color(t4_e220_lbl, lv_color_hex(0xFFCC00), 0); // Normal yellow

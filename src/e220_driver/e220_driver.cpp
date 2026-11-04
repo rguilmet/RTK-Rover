@@ -61,8 +61,8 @@ static bool     rtcm_in_resync       = false;
 // idle). Parses both 4-byte (C1 00 <noise> <pkt>) and 5-byte
 // (C1 00 02 <noise> <pkt>) E220-900T30S replies (requires REG1 Bit 5 = 0x20).
 // =========================================================================
-#define E220_RSSI_POLL_INTERVAL_MS  5000U
-#define E220_RSSI_IDLE_POLL_MS      10000U
+#define E220_RSSI_POLL_INTERVAL_MS  900U
+#define E220_RSSI_IDLE_POLL_MS      2000U
 #define E220_RSSI_REPLY_TIMEOUT_MS  80U
 
 static bool     rssi_query_active    = false;
