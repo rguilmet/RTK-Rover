@@ -68,13 +68,18 @@ static void IRAM_ATTR e220_aux_isr(void)
 // and forwards ONLY verified complete RTCM3 frames atomically to UM982 COM2.
 // =========================================================================
 #define RTCM_STAGE_CAPACITY      1536U
-#define RTCM_TRUNC_TIMEOUT_MS    260U
 
 static uint8_t  rx_stage[RTCM_STAGE_CAPACITY];
 static size_t   rx_stage_len         = 0;
 static uint32_t last_stage_rx_ms     = 0;
 static uint32_t last_1094_rx_ms      = 0;
 static bool     rtcm_in_resync       = false;
+
+static inline uint32_t e220_get_trunc_timeout_ms(void) {
+    if (s_active_air_rate <= 4.8f)  return 1200U;
+    if (s_active_air_rate <= 9.6f)  return 650U;
+    return 280U; // 19.2k, 38.4k, 62.5k
+}
 
 // =========================================================================
 // Non-Blocking Mode 0 Live RSSI / Ambient Noise Register Poll State
@@ -795,10 +800,11 @@ extern "C" void e220_poll_and_forward_rtcm(void)
         e220_flush_burst_log(burst_last_byte_ms);
     }
 
-    // 4. Mid-frame truncation timeout: if tail subpacket did not arrive within 260 ms,
+    // 4. Mid-frame truncation timeout: if tail subpacket did not arrive within rate-adaptive timeout,
     //    quarantine the broken head (never forward to UM982 COM2) and rescan remaining bytes
     //    so any smaller valid frame sitting behind it in rx_stage is rescued.
-    if (rx_stage_len > 0 && (now - last_stage_rx_ms > RTCM_TRUNC_TIMEOUT_MS)) {
+    uint32_t cur_trunc_timeout_ms = e220_get_trunc_timeout_ms();
+    if (rx_stage_len > 0 && (now - last_stage_rx_ms > cur_trunc_timeout_ms)) {
         bool logged_trunc = false;
         while (rx_stage_len > 0) {
             if (!logged_trunc && !rtcm_in_resync) {
@@ -816,7 +822,7 @@ extern "C" void e220_poll_and_forward_rtcm(void)
                                   msg_type,
                                   (unsigned int)rx_stage_len,
                                   (unsigned int)(payload_len + 6U),
-                                  (unsigned int)RTCM_TRUNC_TIMEOUT_MS,
+                                  (unsigned int)cur_trunc_timeout_ms,
                                   (unsigned long)e220_stats.rtcm_frames_ok,
                                   (unsigned long)e220_stats.rtcm_crc_errors,
                                   (unsigned long)e220_stats.rtcm_trunc_drops);

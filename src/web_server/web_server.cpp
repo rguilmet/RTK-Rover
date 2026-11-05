@@ -423,6 +423,7 @@ static void handleDelete() {
 }
 
 static File uploadFile;
+static File uploadMirrorFile;
 static void handleUpload() {
     HTTPUpload& upload = server.upload();
     String fs_type = server.hasArg("fs") ? server.arg("fs") : "ffat";
@@ -432,16 +433,24 @@ static void handleUpload() {
         String filename = upload.filename;
         if (!filename.startsWith("/")) filename = "/" + filename;
         uploadFile = target_fs->open(filename, "w");
+        if (upload.filename.endsWith("settings.json") && sd_card_mounted) {
+            fs::FS* other_fs = (target_fs == &FFat) ? get_target_fs("sd") : &FFat;
+            if (other_fs) {
+                uploadMirrorFile = other_fs->open(filename, "w");
+            }
+        }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (uploadFile) uploadFile.write(upload.buf, upload.currentSize);
+        if (uploadMirrorFile) uploadMirrorFile.write(upload.buf, upload.currentSize);
     } else if (upload.status == UPLOAD_FILE_END) {
         if (uploadFile) uploadFile.close();
+        if (uploadMirrorFile) uploadMirrorFile.close();
         if (upload.filename.endsWith("waypoints.csv")) {
             waypoint_load_csv(current_settings.active_waypoint_file);
             Serial.println("[WEB] Reloaded waypoints.csv after upload!");
         } else if (upload.filename.endsWith("settings.json")) {
             load_settings();
-            Serial.println("[WEB] Reloaded settings.json after upload!");
+            Serial.println("[WEB] Reloaded settings.json after dual-FS sync upload!");
         }
     }
 }

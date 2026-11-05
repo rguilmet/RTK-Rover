@@ -135,6 +135,32 @@ static lv_obj_t *t0_grid_v[T0_GRID_V_LINES] = {0};
 static lv_obj_t *t0_dist_lbl        = NULL;
 static lv_obj_t *t0_steer_lbl       = NULL;
 static lv_obj_t *t0_offsets_lbl     = NULL;
+static lv_obj_t *t0_extra_lbl       = NULL;
+
+// Line Stakeout HUD & Canvas Overlays
+static lv_obj_t *t0_line_baseline   = NULL;
+static lv_obj_t *t0_line_tie        = NULL;
+static lv_obj_t *t0_line_arrow      = NULL;
+static lv_obj_t *t0_line_pt_a       = NULL;
+static lv_obj_t *t0_line_lbl_a      = NULL;
+static lv_obj_t *t0_line_lbl_b      = NULL;
+
+// Mode 2 Map View HUD Controls & Layers
+static lv_obj_t *t0_map_btn_zin     = NULL;
+static lv_obj_t *t0_map_btn_zout    = NULL;
+static lv_obj_t *t0_map_btn_fit     = NULL;
+static lv_obj_t *t0_map_btn_ctr     = NULL;
+static lv_obj_t *t0_map_boundary    = NULL;
+static lv_obj_t *t0_map_trail       = NULL;
+#define T0_MAP_MAX_PINS 32
+static lv_obj_t *t0_map_pins[T0_MAP_MAX_PINS] = {0};
+
+// Map View State
+static double s_map_center_lat      = 0.0;
+static double s_map_center_lon      = 0.0;
+static float  s_map_m_per_px        = 0.5f;
+static bool   s_map_auto_fit        = true;
+static bool   s_map_center_rover    = false;
 
 // =========================================================================
 // Tile 1: Field Survey / Waypoint Logger & Quick Settings
@@ -460,7 +486,7 @@ static void nav_next_screen_btn_cb(lv_event_t *e)
     }
 }
 
-static uint8_t s_tile0_nav_mode = 0; // 0 = Point Guidance, 1 = Line Stakeout
+static uint8_t s_tile0_nav_mode = 0; // 0 = Tactical Guidance, 1 = Line Stakeout, 2 = Map View
 
 uint8_t rover_get_tile0_nav_mode(void)
 {
@@ -469,15 +495,99 @@ uint8_t rover_get_tile0_nav_mode(void)
 
 static void update_t0_target_label(void);
 
+static void t0_map_zoom_in_cb(lv_event_t *e) {
+    (void)e;
+    play_rover_beep(1800, 20);
+    s_map_auto_fit = false;
+    s_map_m_per_px *= 0.70f;
+    if (s_map_m_per_px < 0.05f) s_map_m_per_px = 0.05f;
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Map Zoom In -> %.2f m/px\n", s_map_m_per_px);
+    }
+}
+
+static void t0_map_zoom_out_cb(lv_event_t *e) {
+    (void)e;
+    play_rover_beep(1400, 20);
+    s_map_auto_fit = false;
+    s_map_m_per_px *= 1.40f;
+    if (s_map_m_per_px > 30.0f) s_map_m_per_px = 30.0f;
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Map Zoom Out -> %.2f m/px\n", s_map_m_per_px);
+    }
+}
+
+static void t0_map_fit_cb(lv_event_t *e) {
+    (void)e;
+    play_rover_beep(1600, 20);
+    s_map_auto_fit = true;
+    s_map_center_rover = false;
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Map Auto-Fit Bounding Box\n");
+    }
+}
+
+static void t0_map_center_rover_cb(lv_event_t *e) {
+    (void)e;
+    play_rover_beep(1600, 20);
+    s_map_auto_fit = false;
+    s_map_center_rover = true;
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] Map Center On Rover\n");
+    }
+}
+
+static void t0_canvas_drag_cb(lv_event_t *e) {
+    if (s_tile0_nav_mode != 2) return;
+    lv_event_code_t code = lv_event_get_code(e);
+    static lv_point_t last_pt = {0, 0};
+    static bool dragging = false;
+
+    if (code == LV_EVENT_PRESSED) {
+        lv_indev_t *indev = lv_indev_active();
+        if (indev) {
+            lv_indev_get_point(indev, &last_pt);
+            dragging = true;
+        }
+    } else if (code == LV_EVENT_PRESSING) {
+        lv_indev_t *indev = lv_indev_active();
+        if (indev && dragging) {
+            lv_point_t cur_pt;
+            lv_indev_get_point(indev, &cur_pt);
+            int16_t dx = cur_pt.x - last_pt.x;
+            int16_t dy = cur_pt.y - last_pt.y;
+            if (abs(dx) > 1 || abs(dy) > 1) {
+                s_map_auto_fit = false;
+                s_map_center_rover = false;
+                float de_m = -(float)dx * s_map_m_per_px;
+                float dn_m =  (float)dy * s_map_m_per_px;
+                double lat_rad = s_map_center_lat * (M_PI / 180.0);
+                double cos_lat = cos(lat_rad);
+                if (fabs(cos_lat) < 0.01) cos_lat = 0.01;
+                s_map_center_lat += (double)dn_m / 111132.95;
+                s_map_center_lon += (double)de_m / (111132.95 * cos_lat);
+                last_pt = cur_pt;
+            }
+        }
+    } else if (code == LV_EVENT_RELEASED) {
+        dragging = false;
+    }
+}
+
 static void t0_mode_toggle_cb(lv_event_t *e)
 {
     (void)e;
     play_rover_beep(1600, 25);
-    s_tile0_nav_mode = (s_tile0_nav_mode == 0) ? 1 : 0;
+    s_tile0_nav_mode = (s_tile0_nav_mode + 1) % 3;
+    if (s_tile0_nav_mode == 2) {
+        s_map_auto_fit = true;
+        s_map_center_rover = false;
+    }
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Tile 0 Nav Mode -> %s\n",
-                     (s_tile0_nav_mode == 1) ? "LINE STAKEOUT" : "POINT GUIDANCE");
+                     (s_tile0_nav_mode == 1) ? "LINE STAKEOUT" :
+                     (s_tile0_nav_mode == 2) ? "MAP VIEW" : "POINT GUIDANCE");
     }
 }
 
@@ -521,6 +631,38 @@ static void update_t0_target_label(void)
             const char *cur_notes = lv_label_get_text(t0_notes_lbl);
             if (!cur_notes || strcmp(cur_notes, nbuf) != 0) {
                 lv_label_set_text(t0_notes_lbl, nbuf);
+            }
+        }
+        return;
+    }
+
+    if (s_tile0_nav_mode == 2) {
+        // Mode 2: Map View
+        WaypointRecord_t active_wp;
+        if (t0_target_lbl && waypoint_get_active(&active_wp)) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                     active_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
+            const char *cur = lv_label_get_text(t0_target_lbl);
+            if (!cur || strcmp(cur, buf) != 0) {
+                lv_label_set_text(t0_target_lbl, buf);
+            }
+        } else if (t0_target_lbl) {
+            const char *cur = lv_label_get_text(t0_target_lbl);
+            if (!cur || strcmp(cur, "No Target (0/0)") != 0) {
+                lv_label_set_text(t0_target_lbl, "No Target (0/0)");
+            }
+        }
+        if (t0_notes_lbl && waypoint_get_active(&active_wp)) {
+            const char *new_notes = active_wp.notes[0] ? active_wp.notes : "Touch Map to Pan | Zoom with Buttons";
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
+                lv_label_set_text(t0_notes_lbl, new_notes);
+            }
+        } else if (t0_notes_lbl) {
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, "Touch Map to Pan | Zoom with Buttons") != 0) {
+                lv_label_set_text(t0_notes_lbl, "Touch Map to Pan | Zoom with Buttons");
             }
         }
         return;
@@ -1179,6 +1321,25 @@ static lv_obj_t* create_grid_button(lv_obj_t *parent, int col, int row, lv_event
     return btn;
 }
 
+static lv_obj_t* create_map_hud_btn(lv_obj_t *parent, const char *txt, int16_t y_pos, lv_event_cb_t cb)
+{
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_set_size(btn, 36, 26);
+    lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -6, y_pos);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1E293B), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x334155), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_radius(btn, 4, 0);
+    lv_obj_set_ext_click_area(btn, 4);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, txt);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl);
+    lv_obj_set_hidden(btn, true);
+    return btn;
+}
+
 void create_rover_ui(void)
 {
     lv_obj_t *scr = lv_screen_active();
@@ -1423,6 +1584,8 @@ void create_rover_ui(void)
     lv_obj_set_scrollbar_mode(t0_nav_canvas, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scrollable(t0_nav_canvas, false);
     lv_obj_set_style_pad_all(t0_nav_canvas, 0, 0);
+    lv_obj_set_clickable(t0_nav_canvas, true);
+    lv_obj_add_event_cb(t0_nav_canvas, t0_canvas_drag_cb, LV_EVENT_ALL, NULL);
 
     // Mode badge & scale
     t0_mode_badge = lv_label_create(t0_nav_canvas);
@@ -1595,24 +1758,100 @@ void create_rover_ui(void)
     lv_obj_set_style_text_font(t0_rec_btn_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(t0_rec_btn_lbl);
 
+    // Line Stakeout baseline, direction arrow, tie line, and point markers
+    t0_line_baseline = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_line_baseline, lv_color_hex(0x00D8FF), 0);
+    lv_obj_set_style_line_width(t0_line_baseline, 2, 0);
+    static const lv_point_precise_t pts_baseline[2] = {{152, 185}, {152, 35}};
+    lv_line_set_points(t0_line_baseline, pts_baseline, 2);
+    lv_obj_set_hidden(t0_line_baseline, true);
+
+    t0_line_arrow = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_line_arrow, lv_color_hex(0x00D8FF), 0);
+    lv_obj_set_style_line_width(t0_line_arrow, 3, 0);
+    static const lv_point_precise_t pts_line_arrow[3] = {{146, 47}, {152, 35}, {158, 47}};
+    lv_line_set_points(t0_line_arrow, pts_line_arrow, 3);
+    lv_obj_set_hidden(t0_line_arrow, true);
+
+    t0_line_tie = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_line_tie, lv_color_hex(0xF59E0B), 0);
+    lv_obj_set_style_line_width(t0_line_tie, 2, 0);
+    lv_obj_set_hidden(t0_line_tie, true);
+
+    t0_line_pt_a = lv_obj_create(t0_nav_canvas);
+    lv_obj_set_size(t0_line_pt_a, 12, 12);
+    lv_obj_set_style_radius(t0_line_pt_a, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(t0_line_pt_a, lv_color_hex(0xF59E0B), 0);
+    lv_obj_set_style_border_color(t0_line_pt_a, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_border_width(t0_line_pt_a, 2, 0);
+    lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, 152 - 6, 185 - 6);
+    lv_obj_set_hidden(t0_line_pt_a, true);
+
+    t0_line_lbl_a = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_line_lbl_a, "A");
+    lv_obj_set_style_text_font(t0_line_lbl_a, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_line_lbl_a, lv_color_hex(0xF59E0B), 0);
+    lv_obj_align(t0_line_lbl_a, LV_ALIGN_TOP_LEFT, 162, 178);
+    lv_obj_set_hidden(t0_line_lbl_a, true);
+
+    t0_line_lbl_b = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_line_lbl_b, "B");
+    lv_obj_set_style_text_font(t0_line_lbl_b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_line_lbl_b, lv_color_hex(0x00FF88), 0);
+    lv_obj_align(t0_line_lbl_b, LV_ALIGN_TOP_LEFT, 162, 28);
+    lv_obj_set_hidden(t0_line_lbl_b, true);
+
+    // Mode 2 Map View Layers & HUD Controls
+    t0_map_boundary = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_map_boundary, lv_color_hex(0x0284C7), 0);
+    lv_obj_set_style_line_width(t0_map_boundary, 2, 0);
+    lv_obj_set_hidden(t0_map_boundary, true);
+
+    t0_map_trail = lv_line_create(t0_nav_canvas);
+    lv_obj_set_style_line_color(t0_map_trail, lv_color_hex(0x475569), 0);
+    lv_obj_set_style_line_width(t0_map_trail, 1, 0);
+    lv_obj_set_hidden(t0_map_trail, true);
+
+    for (int i = 0; i < T0_MAP_MAX_PINS; i++) {
+        t0_map_pins[i] = lv_obj_create(t0_nav_canvas);
+        lv_obj_set_size(t0_map_pins[i], 8, 8);
+        lv_obj_set_style_radius(t0_map_pins[i], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(t0_map_pins[i], lv_color_hex(0xFBBF24), 0);
+        lv_obj_set_style_border_color(t0_map_pins[i], lv_color_hex(0x000000), 0);
+        lv_obj_set_style_border_width(t0_map_pins[i], 1, 0);
+        lv_obj_set_hidden(t0_map_pins[i], true);
+    }
+
+    t0_map_btn_zin  = create_map_hud_btn(t0_nav_canvas, "+",   48, t0_map_zoom_in_cb);
+    t0_map_btn_zout = create_map_hud_btn(t0_nav_canvas, "-",   78, t0_map_zoom_out_cb);
+    t0_map_btn_fit  = create_map_hud_btn(t0_nav_canvas, "FIT", 108, t0_map_fit_cb);
+    t0_map_btn_ctr  = create_map_hud_btn(t0_nav_canvas, "CTR", 138, t0_map_center_rover_cb);
+
     // Readout section below canvas (compacted to fit inside 374px tileview)
     t0_dist_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_dist_lbl, "0.00 m");
     lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 268);
+    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 266);
 
     t0_steer_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_steer_lbl, "Acquiring Position...");
     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t0_steer_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 300);
+    lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 292);
 
     t0_offsets_lbl = lv_label_create(tile_guidance);
     lv_label_set_text(t0_offsets_lbl, "dN: +0.0 cm   dE: +0.0 cm");
     lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
-    lv_obj_set_style_text_font(t0_offsets_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 324);
+    lv_obj_set_style_text_font(t0_offsets_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 314);
+
+    t0_extra_lbl = lv_label_create(tile_guidance);
+    lv_label_set_text(t0_extra_lbl, "");
+    lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
+    lv_obj_set_style_text_font(t0_extra_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(t0_extra_lbl, LV_ALIGN_TOP_MID, 0, 334);
+    lv_obj_set_hidden(t0_extra_lbl, true);
 
     // =====================================================================
     // TILE 1: Field Survey / Waypoint Logger & Quick Settings
@@ -2261,184 +2500,510 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
-    if (d->has_active_target) {
-        if (s_tile0_nav_mode == 0) {
-            snprintf(buf, sizeof(buf), "%s (%d/%d)",
-                     d->target_label, d->active_target_idx + 1, d->total_targets);
+    if (s_tile0_nav_mode == 1) {
+        // =============================================================
+        // MODE 1: LINE STAKEOUT MODE (Station & Offset)
+        // =============================================================
+        WaypointRecord_t wp_a, wp_b;
+        int16_t idx_a = -1, idx_b = -1;
+        waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+
+        // Hide Mode 0 overlays
+        lv_obj_set_hidden(t0_bullseye_ring1, true);
+        lv_obj_set_hidden(t0_bullseye_ring2, true);
+        lv_obj_set_hidden(t0_bullseye_center, true);
+        lv_obj_set_hidden(t0_cross_h, true);
+        lv_obj_set_hidden(t0_cross_v, true);
+        for (int i = 0; i < T0_GRID_H_LINES; i++) {
+            if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
+        }
+        for (int i = 0; i < T0_GRID_V_LINES; i++) {
+            if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
+        }
+        lv_obj_set_hidden(t0_track_line, true);
+        lv_obj_set_hidden(t0_track_arrow, true);
+        lv_obj_set_hidden(t0_wedge_amber_l, true);
+        lv_obj_set_hidden(t0_wedge_amber_r, true);
+        lv_obj_set_hidden(t0_wedge_green_l, true);
+        lv_obj_set_hidden(t0_wedge_green_r, true);
+
+        // Hide Mode 2 Map View overlays & HUD buttons
+        lv_obj_set_hidden(t0_map_boundary, true);
+        lv_obj_set_hidden(t0_map_trail, true);
+        for (int i = 0; i < T0_MAP_MAX_PINS; i++) {
+            if (t0_map_pins[i]) lv_obj_set_hidden(t0_map_pins[i], true);
+        }
+        lv_obj_set_hidden(t0_map_btn_zin, true);
+        lv_obj_set_hidden(t0_map_btn_zout, true);
+        lv_obj_set_hidden(t0_map_btn_fit, true);
+        lv_obj_set_hidden(t0_map_btn_ctr, true);
+
+        // Show Line Stakeout baseline & point markers
+        lv_obj_set_hidden(t0_line_baseline, false);
+        lv_obj_set_hidden(t0_line_arrow, false);
+        lv_obj_set_hidden(t0_line_pt_a, false);
+        lv_obj_set_hidden(t0_line_lbl_a, false);
+        lv_obj_set_hidden(t0_line_lbl_b, false);
+
+        // Mode badge in Amber
+        lv_label_set_text(t0_mode_badge, "LINE STAKEOUT");
+        lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0xD97706), 0);
+
+        if (idx_a >= 0 && idx_b >= 0) {
+            NavLineStakeout_t stakeout;
+            nav_compute_line_stakeout(d->tip_lat, d->tip_lon,
+                                      wp_a.latitude, wp_a.longitude,
+                                      wp_b.latitude, wp_b.longitude,
+                                      &stakeout);
+
+            // Top Target Row: A -> B [SWAP]
+            snprintf(buf, sizeof(buf), "%s -> %s [SWAP]", wp_a.label, wp_b.label);
             if (t0_target_lbl) {
                 const char *cur_tgt = lv_label_get_text(t0_target_lbl);
                 if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
                     lv_label_set_text(t0_target_lbl, buf);
                 }
             }
+
+            char qbrg[32];
+            nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
+
+            char len_str[24];
+            nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
+
+            snprintf(buf, sizeof(buf), "Deed: %s | %s", qbrg, len_str);
             if (t0_notes_lbl) {
-                const char *new_notes = d->target_notes[0] ? d->target_notes : "---";
                 const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-                if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
-                    lv_label_set_text(t0_notes_lbl, new_notes);
+                if (!cur_notes || strcmp(cur_notes, buf) != 0) {
+                    lv_label_set_text(t0_notes_lbl, buf);
                 }
             }
-            if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, dist_str);
+
+            // Scale label shows total line length
+            snprintf(buf, sizeof(buf), "Total: %s", len_str);
+            lv_label_set_text(t0_scale_lbl, buf);
+
+            // Labels on canvas for Point A and Point B
+            snprintf(buf, sizeof(buf), "A: %s", wp_a.label);
+            lv_label_set_text(t0_line_lbl_a, buf);
+            snprintf(buf, sizeof(buf), "B: %s", wp_b.label);
+            lv_label_set_text(t0_line_lbl_b, buf);
+
+            // Canvas coordinates:
+            // Canvas size: 304 x 210, Center: (152, 105)
+            // Centerline is at x = 152. Baseline runs from Point A (152, 185) to Point B (152, 35) (150 px).
+            // Cross-track pixel scaling: 60 px = 1.0 m (~18 px/ft)
+            float px_per_m = 60.0f;
+            int16_t off_px = (int16_t)(stakeout.offset_m * px_per_m);
+            if (off_px > 120) off_px = 120;
+            if (off_px < -120) off_px = -120;
+
+            // Along-line Station progress:
+            // Point A at bottom (y = 185), Point B at top (y = 35)
+            float pct = stakeout.pct_complete;
+            if (pct < 0.0f) pct = 0.0f;
+            if (pct > 100.0f) pct = 100.0f;
+            int16_t sta_py = 185 - (int16_t)((pct / 100.0f) * 150.0f);
+            if (sta_py < 20) sta_py = 20;
+            if (sta_py > 195) sta_py = 195;
+
+            // Target Point B marker fixed at top of line (152, 35)
+            lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 35 - 8);
+            lv_obj_set_hidden(t0_target_icon, false);
+
+            // Point A marker fixed at bottom of line (152, 185)
+            lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, 152 - 6, 185 - 6);
+            lv_obj_set_hidden(t0_line_pt_a, false);
+
+            // Rover marker at (152 + off_px, sta_py)
+            lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 + off_px - 8, sta_py - 8);
+            lv_obj_set_hidden(t0_rover_icon, false);
+
+            bool on_line = (fabs(stakeout.offset_m) <= 0.02); // 2 cm on-line threshold
+            if (on_line) {
+                lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x00FF88), 0);
+            } else {
+                lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0xF59E0B), 0);
+            }
+
+            // Perpendicular tie line connecting Rover (152 + off_px, sta_py) to Baseline (152, sta_py)
+            if (abs(off_px) > 1) {
+                static lv_point_precise_t tie_pts[2];
+                tie_pts[0].x = 152 + off_px;
+                tie_pts[0].y = sta_py;
+                tie_pts[1].x = 152;
+                tie_pts[1].y = sta_py;
+                lv_line_set_points(t0_line_tie, tie_pts, 2);
+                lv_obj_set_style_line_color(t0_line_tie, on_line ? lv_color_hex(0x00FF88) : lv_color_hex(0xF59E0B), 0);
+                lv_obj_set_hidden(t0_line_tie, false);
+            } else {
+                lv_obj_set_hidden(t0_line_tie, true);
+            }
+
+            // Heading beam on rover
+            if (d->heading_valid) {
+                float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
+                int16_t arrow_dx = (int16_t)(20.0f * sinf(hdg_rad));
+                int16_t arrow_dy = (int16_t)(-20.0f * cosf(hdg_rad));
+                static lv_point_precise_t line_beam_pts[2];
+                line_beam_pts[0].x = 152 + off_px;
+                line_beam_pts[0].y = sta_py;
+                line_beam_pts[1].x = 152 + off_px + arrow_dx;
+                line_beam_pts[1].y = sta_py + arrow_dy;
+                lv_line_set_points(t0_beam_arrow, line_beam_pts, 2);
+                lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
+                lv_obj_set_hidden(t0_beam_arrow, false);
+            } else {
+                lv_obj_set_hidden(t0_beam_arrow, true);
+            }
+
+            // Row 1: Large Offset Display (t0_dist_lbl in Montserrat 20)
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+            char off_val_str[24];
+            nav_format_offset((float)fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
+            if (on_line) {
+                snprintf(buf, sizeof(buf), "[OK] ON LINE (%s)", off_val_str);
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF88), 0);
+            } else if (stakeout.offset_m < 0.0) {
+                snprintf(buf, sizeof(buf), "%s LEFT", off_val_str);
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "%s RIGHT", off_val_str);
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+            }
+            if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, buf);
+
+            // Row 2: Lateral Steer Action Prompt (t0_steer_lbl in Montserrat 14)
+            if (on_line) {
+                snprintf(buf, sizeof(buf), "[OK] ON LINE - PROCEED ON BEARING");
+                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
+            } else if (stakeout.offset_m < 0.0) {
+                snprintf(buf, sizeof(buf), "MOVE RIGHT TO LINE >>>");
+                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "<<< MOVE LEFT TO LINE");
+                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+            }
+            if (t0_steer_lbl) lv_label_set_text(t0_steer_lbl, buf);
+
+            // Row 3: Longitudinal Progress (t0_offsets_lbl in Montserrat 12)
+            char sta_str[32];
+            nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
+            char rem_str[24];
+            nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
+            snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
+            if (t0_offsets_lbl) {
+                lv_label_set_text(t0_offsets_lbl, buf);
+                lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
+            }
+
+            // Row 4: Deed Bearing & Angle (t0_extra_lbl in Montserrat 12)
+            snprintf(buf, sizeof(buf), "Deed: %s (%.1f deg)", qbrg, stakeout.line_bearing_deg);
+            if (t0_extra_lbl) {
+                lv_label_set_text(t0_extra_lbl, buf);
+                lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
+                lv_obj_set_hidden(t0_extra_lbl, false);
+            }
+        } else {
+            // Need at least 2 points to define baseline
+            if (t0_dist_lbl) {
+                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+                lv_label_set_text(t0_dist_lbl, "Need >= 2 Waypoints");
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xEF4444), 0);
+            }
+            if (t0_steer_lbl) {
+                lv_label_set_text(t0_steer_lbl, "Select Points in Tile 3 CSV Browser");
+                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x94A3B8), 0);
+            }
+            if (t0_offsets_lbl) lv_label_set_text(t0_offsets_lbl, "Line Stakeout requires A and B");
+            if (t0_extra_lbl) lv_obj_set_hidden(t0_extra_lbl, true);
+            lv_obj_set_hidden(t0_line_baseline, true);
+            lv_obj_set_hidden(t0_line_arrow, true);
+            lv_obj_set_hidden(t0_line_tie, true);
+            lv_obj_set_hidden(t0_line_pt_a, true);
+            lv_obj_set_hidden(t0_line_lbl_a, true);
+            lv_obj_set_hidden(t0_line_lbl_b, true);
+            lv_obj_set_hidden(t0_target_icon, true);
+            lv_obj_set_hidden(t0_beam_arrow, true);
+        }
+    } else if (s_tile0_nav_mode == 2) {
+        // =============================================================
+        // MODE 2: MAP VIEW (Geodetic Canvas with Zoom & Pan)
+        // =============================================================
+        // Hide Mode 0 overlays
+        lv_obj_set_hidden(t0_bullseye_ring1, true);
+        lv_obj_set_hidden(t0_bullseye_ring2, true);
+        lv_obj_set_hidden(t0_bullseye_center, true);
+        lv_obj_set_hidden(t0_cross_h, true);
+        lv_obj_set_hidden(t0_cross_v, true);
+        for (int i = 0; i < T0_GRID_H_LINES; i++) {
+            if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
+        }
+        for (int i = 0; i < T0_GRID_V_LINES; i++) {
+            if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
+        }
+        lv_obj_set_hidden(t0_track_line, true);
+        lv_obj_set_hidden(t0_track_arrow, true);
+        lv_obj_set_hidden(t0_wedge_amber_l, true);
+        lv_obj_set_hidden(t0_wedge_amber_r, true);
+        lv_obj_set_hidden(t0_wedge_green_l, true);
+        lv_obj_set_hidden(t0_wedge_green_r, true);
+
+        // Hide Mode 1 Line Stakeout overlays
+        lv_obj_set_hidden(t0_line_baseline, true);
+        lv_obj_set_hidden(t0_line_arrow, true);
+        lv_obj_set_hidden(t0_line_tie, true);
+        lv_obj_set_hidden(t0_line_pt_a, true);
+        lv_obj_set_hidden(t0_line_lbl_a, true);
+        lv_obj_set_hidden(t0_line_lbl_b, true);
+
+        // Show Map HUD zoom/pan controls
+        lv_obj_set_hidden(t0_map_btn_zin, false);
+        lv_obj_set_hidden(t0_map_btn_zout, false);
+        lv_obj_set_hidden(t0_map_btn_fit, false);
+        lv_obj_set_hidden(t0_map_btn_ctr, false);
+
+        // Mode badge in Emerald Green
+        lv_label_set_text(t0_mode_badge, "MAP VIEW");
+        lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x10B981), 0);
+
+        // Scale label shows visible window width & meters/px
+        float win_w_m = 304.0f * s_map_m_per_px;
+        snprintf(buf, sizeof(buf), "Win: %.0fm (%.2fm/px)", win_w_m, s_map_m_per_px);
+        lv_label_set_text(t0_scale_lbl, buf);
+
+        // Top Target Row
+        if (d->has_active_target) {
+            snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                     d->target_label, d->active_target_idx + 1, d->total_targets);
+            if (t0_target_lbl) lv_label_set_text(t0_target_lbl, buf);
+            if (t0_notes_lbl) {
+                const char *new_notes = d->target_notes[0] ? d->target_notes : "Touch Map to Pan | Zoom with Buttons";
+                lv_label_set_text(t0_notes_lbl, new_notes);
+            }
+        } else {
+            if (t0_target_lbl) lv_label_set_text(t0_target_lbl, "No Target (0/0)");
+            if (t0_notes_lbl) lv_label_set_text(t0_notes_lbl, "Touch Map to Pan | Zoom with Buttons");
         }
 
-        if (s_tile0_nav_mode == 1) {
-            // =============================================================
-            // LINE STAKEOUT MODE (Station & Offset)
-            // =============================================================
-            WaypointRecord_t wp_a, wp_b;
-            int16_t idx_a = -1, idx_b = -1;
-            waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+        // Auto-Fit Bounding Box calculation
+        if (s_map_auto_fit) {
+            double min_lat = d->tip_lat, max_lat = d->tip_lat;
+            double min_lon = d->tip_lon, max_lon = d->tip_lon;
+            if (fabs(min_lat) < 0.0001 && g_waypoint_count > 0) {
+                min_lat = max_lat = g_waypoints[0].latitude;
+                min_lon = max_lon = g_waypoints[0].longitude;
+            }
+            for (int i = 0; i < g_waypoint_count; i++) {
+                if (g_waypoints[i].latitude < min_lat) min_lat = g_waypoints[i].latitude;
+                if (g_waypoints[i].latitude > max_lat) max_lat = g_waypoints[i].latitude;
+                if (g_waypoints[i].longitude < min_lon) min_lon = g_waypoints[i].longitude;
+                if (g_waypoints[i].longitude > max_lon) max_lon = g_waypoints[i].longitude;
+            }
+            s_map_center_lat = (min_lat + max_lat) * 0.5;
+            s_map_center_lon = (min_lon + max_lon) * 0.5;
+            double dlat_m = (max_lat - min_lat) * 111132.95;
+            double dlon_m = (max_lon - min_lon) * 111132.95 * cos(s_map_center_lat * (M_PI / 180.0));
+            float sx = (float)dlon_m / 240.0f;
+            float sy = (float)dlat_m / 160.0f;
+            float fit_scale = (sx > sy) ? sx : sy;
+            if (fit_scale < 0.15f) fit_scale = 0.15f;
+            if (fit_scale > 25.0f) fit_scale = 25.0f;
+            s_map_m_per_px = fit_scale;
+        } else if (s_map_center_rover && fabs(d->tip_lat) > 0.0001) {
+            s_map_center_lat = d->tip_lat;
+            s_map_center_lon = d->tip_lon;
+        }
 
-            if (idx_a >= 0 && idx_b >= 0) {
-                NavLineStakeout_t stakeout;
-                nav_compute_line_stakeout(d->tip_lat, d->tip_lon,
-                                          wp_a.latitude, wp_a.longitude,
-                                          wp_b.latitude, wp_b.longitude,
-                                          &stakeout);
+        // Equirectangular local projection parameters
+        double lat_rad = s_map_center_lat * (M_PI / 180.0);
+        double cos_lat = cos(lat_rad);
+        if (fabs(cos_lat) < 0.01) cos_lat = 0.01;
 
-                // Top Target Row: A -> B [SWAP]
-                snprintf(buf, sizeof(buf), "%s -> %s [SWAP]", wp_a.label, wp_b.label);
-                if (t0_target_lbl) {
-                    const char *cur_tgt = lv_label_get_text(t0_target_lbl);
-                    if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
-                        lv_label_set_text(t0_target_lbl, buf);
-                    }
-                }
+        // Render Waypoint Boundary Polyline & Pins
+        static lv_point_precise_t s_bnd_pts[MAX_WAYPOINTS + 2];
+        int bnd_cnt = 0;
+        for (int i = 0; i < g_waypoint_count && i < MAX_WAYPOINTS; i++) {
+            double dN = (g_waypoints[i].latitude - s_map_center_lat) * 111132.95;
+            double dE = (g_waypoints[i].longitude - s_map_center_lon) * 111132.95 * cos_lat;
+            int16_t sx = 152 + (int16_t)roundf((float)dE / s_map_m_per_px);
+            int16_t sy = 105 - (int16_t)roundf((float)dN / s_map_m_per_px);
+            s_bnd_pts[bnd_cnt].x = sx;
+            s_bnd_pts[bnd_cnt].y = sy;
+            bnd_cnt++;
 
-                char qbrg[32];
-                nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
-
-                char len_str[24];
-                nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
-
-                snprintf(buf, sizeof(buf), "Deed: %s | %s", qbrg, len_str);
-                if (t0_notes_lbl) {
-                    const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-                    if (!cur_notes || strcmp(cur_notes, buf) != 0) {
-                        lv_label_set_text(t0_notes_lbl, buf);
-                    }
-                }
-
-                // Mode badge in Amber
-                lv_label_set_text(t0_mode_badge, "LINE STAKEOUT");
-                lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0xD97706), 0);
-
-                // Scale label shows total line length
-                snprintf(buf, sizeof(buf), "Total: %s", len_str);
-                lv_label_set_text(t0_scale_lbl, buf);
-
-                // Hide coarse grid, track arrows, wedges, bullseye rings
-                lv_obj_set_hidden(t0_bullseye_ring1, true);
-                lv_obj_set_hidden(t0_bullseye_ring2, true);
-                lv_obj_set_hidden(t0_bullseye_center, true);
-                lv_obj_set_hidden(t0_cross_h, true);
-                for (int i = 0; i < T0_GRID_H_LINES; i++) {
-                    if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
-                }
-                for (int i = 0; i < T0_GRID_V_LINES; i++) {
-                    if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
-                }
-                lv_obj_set_hidden(t0_track_line, true);
-                lv_obj_set_hidden(t0_track_arrow, true);
-                lv_obj_set_hidden(t0_wedge_amber_l, true);
-                lv_obj_set_hidden(t0_wedge_amber_r, true);
-                lv_obj_set_hidden(t0_wedge_green_l, true);
-                lv_obj_set_hidden(t0_wedge_green_r, true);
-
-                // Show Centerline (Baseline A -> B)
-                lv_obj_set_hidden(t0_cross_v, false);
-                lv_obj_set_style_line_color(t0_cross_v, lv_color_hex(0x00D8FF), 0);
-                lv_obj_set_style_line_width(t0_cross_v, 2, 0);
-
-                // Canvas coordinates:
-                // Canvas size: 304 x 210, Center: (152, 105)
-                // Centerline is at x = 152.
-                // Cross-track pixel scaling: 60 px = 1.0 m (~18 px/ft)
-                float px_per_m = 60.0f;
-                int16_t off_px = (int16_t)(stakeout.offset_m * px_per_m);
-                if (off_px > 120) off_px = 120;
-                if (off_px < -120) off_px = -120;
-
-                // Along-line Station progress:
-                // Point A at bottom (y = 175), Point B at top (y = 35)
-                float pct = stakeout.pct_complete;
-                if (pct < 0.0f) pct = 0.0f;
-                if (pct > 100.0f) pct = 100.0f;
-                int16_t sta_py = 175 - (int16_t)((pct / 100.0f) * 140.0f);
-
-                // Target Point B marker fixed at top of line (152, 35)
-                lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 35 - 8);
-                lv_obj_set_hidden(t0_target_icon, false);
-
-                // Rover marker at (152 + off_px, sta_py)
-                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 + off_px - 8, sta_py - 8);
-                lv_obj_set_hidden(t0_rover_icon, false);
-
-                bool on_line = (fabs(stakeout.offset_m) <= 0.02); // 2 cm on-line threshold
-                if (on_line) {
-                    lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x00FF88), 0);
+            if (i < T0_MAP_MAX_PINS) {
+                if (i == g_active_waypoint_idx) {
+                    lv_obj_set_hidden(t0_map_pins[i], true);
+                    lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, sx - 8, sy - 8);
+                    lv_obj_set_hidden(t0_target_icon, false);
                 } else {
-                    lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0xF59E0B), 0);
-                }
-
-                // Heading beam on rover
-                if (d->heading_valid) {
-                    float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
-                    int16_t arrow_dx = (int16_t)(20.0f * sinf(hdg_rad));
-                    int16_t arrow_dy = (int16_t)(-20.0f * cosf(hdg_rad));
-                    static lv_point_precise_t line_beam_pts[2];
-                    line_beam_pts[0].x = 152 + off_px;
-                    line_beam_pts[0].y = sta_py;
-                    line_beam_pts[1].x = 152 + off_px + arrow_dx;
-                    line_beam_pts[1].y = sta_py + arrow_dy;
-                    lv_line_set_points(t0_beam_arrow, line_beam_pts, 2);
-                    lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
-                    lv_obj_set_hidden(t0_beam_arrow, false);
-                } else {
-                    lv_obj_set_hidden(t0_beam_arrow, true);
-                }
-
-                // Large Offset Display (t0_dist_lbl)
-                char off_val_str[24];
-                nav_format_offset((float)fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
-                if (on_line) {
-                    snprintf(buf, sizeof(buf), "[OK] ON LINE! (%s)", off_val_str);
-                    if (t0_dist_lbl) {
-                        lv_label_set_text(t0_dist_lbl, buf);
-                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF88), 0);
+                    if (sx >= -5 && sx <= 309 && sy >= -5 && sy <= 215) {
+                        lv_obj_align(t0_map_pins[i], LV_ALIGN_TOP_LEFT, sx - 4, sy - 4);
+                        lv_obj_set_hidden(t0_map_pins[i], false);
+                    } else {
+                        lv_obj_set_hidden(t0_map_pins[i], true);
                     }
-                } else if (stakeout.offset_m < 0.0) {
-                    snprintf(buf, sizeof(buf), "%s LEFT ◄── (Move R)", off_val_str);
-                    if (t0_dist_lbl) {
-                        lv_label_set_text(t0_dist_lbl, buf);
-                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
-                    }
-                } else {
-                    snprintf(buf, sizeof(buf), "%s RIGHT (Move L) ──►", off_val_str);
-                    if (t0_dist_lbl) {
-                        lv_label_set_text(t0_dist_lbl, buf);
-                        lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
-                    }
-                }
-
-                // Steer Label: Station + Remaining
-                char sta_str[32];
-                nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
-                char rem_str[24];
-                nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
-                snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
-                if (t0_steer_lbl) {
-                    lv_label_set_text(t0_steer_lbl, buf);
-                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
-                }
-
-                // Offsets Label: Deed Bearing + True Heading
-                snprintf(buf, sizeof(buf), "Deed: %s (%.1f deg)", qbrg, stakeout.line_bearing_deg);
-                if (t0_offsets_lbl) {
-                    lv_label_set_text(t0_offsets_lbl, buf);
                 }
             }
-        } else if (d->distance_to_target_m <= 1.5) {
+        }
+        for (int i = g_waypoint_count; i < T0_MAP_MAX_PINS; i++) {
+            if (t0_map_pins[i]) lv_obj_set_hidden(t0_map_pins[i], true);
+        }
+        if (g_waypoint_count == 0) {
+            lv_obj_set_hidden(t0_target_icon, true);
+        }
+
+        if (bnd_cnt >= 2) {
+            if (bnd_cnt >= 3) {
+                s_bnd_pts[bnd_cnt] = s_bnd_pts[0];
+                bnd_cnt++;
+            }
+            lv_line_set_points(t0_map_boundary, s_bnd_pts, bnd_cnt);
+            lv_obj_set_hidden(t0_map_boundary, false);
+        } else {
+            lv_obj_set_hidden(t0_map_boundary, true);
+        }
+
+        // Render Breadcrumb Trail Polyline
+        int bc_count = nav_breadcrumb_get_count();
+        if (bc_count > 1) {
+            static lv_point_precise_t s_trail_pts[NAV_BREADCRUMB_CAPACITY];
+            int trail_cnt = 0;
+            for (int i = 0; i < bc_count && i < NAV_BREADCRUMB_CAPACITY; i++) {
+                NavBreadcrumb_t bc_pt;
+                if (nav_breadcrumb_get_point(i, &bc_pt)) {
+                    double dN = (bc_pt.lat - s_map_center_lat) * 111132.95;
+                    double dE = (bc_pt.lon - s_map_center_lon) * 111132.95 * cos_lat;
+                    s_trail_pts[trail_cnt].x = 152 + (int16_t)roundf((float)dE / s_map_m_per_px);
+                    s_trail_pts[trail_cnt].y = 105 - (int16_t)roundf((float)dN / s_map_m_per_px);
+                    trail_cnt++;
+                }
+            }
+            if (trail_cnt > 1) {
+                lv_line_set_points(t0_map_trail, s_trail_pts, trail_cnt);
+                lv_obj_set_hidden(t0_map_trail, false);
+            } else {
+                lv_obj_set_hidden(t0_map_trail, true);
+            }
+        } else {
+            lv_obj_set_hidden(t0_map_trail, true);
+        }
+
+        // Render Live Rover Position & Heading Arrow
+        double r_dN = (d->tip_lat - s_map_center_lat) * 111132.95;
+        double r_dE = (d->tip_lon - s_map_center_lon) * 111132.95 * cos_lat;
+        int16_t r_sx = 152 + (int16_t)roundf((float)r_dE / s_map_m_per_px);
+        int16_t r_sy = 105 - (int16_t)roundf((float)r_dN / s_map_m_per_px);
+        lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, r_sx - 8, r_sy - 8);
+        lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
+        lv_obj_set_hidden(t0_rover_icon, false);
+
+        if (d->heading_valid) {
+            float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
+            int16_t arrow_dx = (int16_t)(18.0f * sinf(hdg_rad));
+            int16_t arrow_dy = (int16_t)(-18.0f * cosf(hdg_rad));
+            static lv_point_precise_t r_beam_pts[2];
+            r_beam_pts[0].x = r_sx;
+            r_beam_pts[0].y = r_sy;
+            r_beam_pts[1].x = r_sx + arrow_dx;
+            r_beam_pts[1].y = r_sy + arrow_dy;
+            lv_line_set_points(t0_beam_arrow, r_beam_pts, 2);
+            lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_hidden(t0_beam_arrow, false);
+        } else {
+            lv_obj_set_hidden(t0_beam_arrow, true);
+        }
+
+        // Row 1: Distance & Bearing to Target (t0_dist_lbl in Montserrat 20)
+        lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+        if (d->has_active_target) {
+            snprintf(buf, sizeof(buf), "%s @ %05.1f deg", dist_str, d->bearing_to_target_deg);
+        } else {
+            snprintf(buf, sizeof(buf), "--- m @ --- deg");
+        }
+        if (t0_dist_lbl) {
+            lv_label_set_text(t0_dist_lbl, buf);
+            lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
+        }
+
+        // Row 2: Target Name / Status (t0_steer_lbl in Montserrat 14)
+        if (d->has_active_target) {
+            snprintf(buf, sizeof(buf), "TGT: %s (%d/%d)",
+                     d->target_label, d->active_target_idx + 1, d->total_targets);
+        } else {
+            snprintf(buf, sizeof(buf), "No Target Active");
+        }
+        if (t0_steer_lbl) {
+            lv_label_set_text(t0_steer_lbl, buf);
+            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
+        }
+
+        // Row 3: Map Center Coordinates (t0_offsets_lbl in Montserrat 12)
+        snprintf(buf, sizeof(buf), "Map Ctr: %.5f, %.5f", s_map_center_lat, s_map_center_lon);
+        if (t0_offsets_lbl) {
+            lv_label_set_text(t0_offsets_lbl, buf);
+            lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
+        }
+
+        // Row 4: Scale & Waypoint Count (t0_extra_lbl in Montserrat 12)
+        snprintf(buf, sizeof(buf), "Scale: %.2f m/px | Pts: %d", s_map_m_per_px, g_waypoint_count);
+        if (t0_extra_lbl) {
+            lv_label_set_text(t0_extra_lbl, buf);
+            lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
+            lv_obj_set_hidden(t0_extra_lbl, false);
+        }
+    } else if (d->has_active_target) {
+        // =============================================================
+        // MODE 0: TACTICAL GUIDANCE (Course-Up Director or Bullseye)
+        // =============================================================
+        // Hide Line Stakeout overlays
+        lv_obj_set_hidden(t0_line_baseline, true);
+        lv_obj_set_hidden(t0_line_arrow, true);
+        lv_obj_set_hidden(t0_line_tie, true);
+        lv_obj_set_hidden(t0_line_pt_a, true);
+        lv_obj_set_hidden(t0_line_lbl_a, true);
+        lv_obj_set_hidden(t0_line_lbl_b, true);
+
+        // Hide Mode 2 Map View overlays & HUD buttons
+        lv_obj_set_hidden(t0_map_boundary, true);
+        lv_obj_set_hidden(t0_map_trail, true);
+        for (int i = 0; i < T0_MAP_MAX_PINS; i++) {
+            if (t0_map_pins[i]) lv_obj_set_hidden(t0_map_pins[i], true);
+        }
+        lv_obj_set_hidden(t0_map_btn_zin, true);
+        lv_obj_set_hidden(t0_map_btn_zout, true);
+        lv_obj_set_hidden(t0_map_btn_fit, true);
+        lv_obj_set_hidden(t0_map_btn_ctr, true);
+
+        // Hide Row 4 extra label in Mode 0
+        if (t0_extra_lbl) lv_obj_set_hidden(t0_extra_lbl, true);
+
+        // Target & Notes Row
+        snprintf(buf, sizeof(buf), "%s (%d/%d)",
+                 d->target_label, d->active_target_idx + 1, d->total_targets);
+        if (t0_target_lbl) {
+            const char *cur_tgt = lv_label_get_text(t0_target_lbl);
+            if (!cur_tgt || strcmp(cur_tgt, buf) != 0) {
+                lv_label_set_text(t0_target_lbl, buf);
+            }
+        }
+        if (t0_notes_lbl) {
+            const char *new_notes = d->target_notes[0] ? d->target_notes : "---";
+            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
+            if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
+                lv_label_set_text(t0_notes_lbl, new_notes);
+            }
+        }
+
+        // Row 1: Target Distance in Montserrat 24
+        lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
+        if (t0_dist_lbl) {
+            lv_label_set_text(t0_dist_lbl, dist_str);
+            lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
+        }
+
+        if (d->distance_to_target_m <= 1.5) {
             // -------------------------------------------------------------
             // Fine Stakeout Mode (< 1.5 m): Centimeter Bullseye Target
             // -------------------------------------------------------------
@@ -2477,6 +3042,7 @@ void update_rover_ui(const RoverUIData_t *d)
             if (r_px > 80) r_px = 80; else if (r_px < -80) r_px = -80;
             if (r_py > 80) r_py = 80; else if (r_py < -80) r_py = -80;
             lv_obj_align(t0_rover_icon, LV_ALIGN_CENTER, r_px, r_py);
+            lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
             lv_obj_set_hidden(t0_rover_icon, false);
 
             // Antenna beam vector
@@ -2508,7 +3074,7 @@ void update_rover_ui(const RoverUIData_t *d)
                 snprintf(buf, sizeof(buf), "Stakeout: Align Tip to Crosshair");
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
             }
-            lv_label_set_text(t0_steer_lbl, buf);
+            if (t0_steer_lbl) lv_label_set_text(t0_steer_lbl, buf);
         } else {
             // -------------------------------------------------------------
             // Stage 1 Tactical Guidance Mode (> 1.5 m): Course-Up Director
@@ -2542,6 +3108,7 @@ void update_rover_ui(const RoverUIData_t *d)
             int16_t rover_x = 152;
             int16_t rover_y = 170;
             lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, rover_x - 8, rover_y - 8);
+            lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
             lv_obj_set_hidden(t0_rover_icon, false);
 
             // Target Pin fixed at top center (152, 58)
@@ -2620,14 +3187,16 @@ void update_rover_ui(const RoverUIData_t *d)
                 snprintf(buf, sizeof(buf), "Brg: %.1f deg | Acquiring Heading...", d->bearing_to_target_deg);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
             }
-            lv_label_set_text(t0_steer_lbl, buf);
+            if (t0_steer_lbl) lv_label_set_text(t0_steer_lbl, buf);
         }
 
-        if (s_tile0_nav_mode == 0) {
-            snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
+        snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
+        if (t0_offsets_lbl) {
             lv_label_set_text(t0_offsets_lbl, buf);
+            lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
         }
     } else {
+        // Mode 0: No target active
         if (t0_target_lbl) {
             const char *cur_tgt = lv_label_get_text(t0_target_lbl);
             if (!cur_tgt || strcmp(cur_tgt, "No Target (0/0)") != 0) {
@@ -2640,8 +3209,12 @@ void update_rover_ui(const RoverUIData_t *d)
                 lv_label_set_text(t0_notes_lbl, "---");
             }
         }
-        if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, "---");
+        if (t0_dist_lbl) {
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
+            lv_label_set_text(t0_dist_lbl, "---");
+        }
         if (t0_offsets_lbl) lv_label_set_text(t0_offsets_lbl, "dN: ---   dE: ---");
+        if (t0_extra_lbl) lv_obj_set_hidden(t0_extra_lbl, true);
         lv_label_set_text(t0_mode_badge, "NO TARGET");
         lv_obj_set_style_bg_color(t0_mode_badge, lv_palette_main(LV_PALETTE_GREY), 0);
         lv_label_set_text(t0_scale_lbl, "Range: ---");
@@ -2668,9 +3241,30 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_obj_set_hidden(t0_wedge_green_l, true);
         lv_obj_set_hidden(t0_wedge_green_r, true);
         lv_obj_set_hidden(t0_target_icon, true);
+
+        // Hide Line Stakeout overlays
+        lv_obj_set_hidden(t0_line_baseline, true);
+        lv_obj_set_hidden(t0_line_arrow, true);
+        lv_obj_set_hidden(t0_line_tie, true);
+        lv_obj_set_hidden(t0_line_pt_a, true);
+        lv_obj_set_hidden(t0_line_lbl_a, true);
+        lv_obj_set_hidden(t0_line_lbl_b, true);
+
+        // Hide Mode 2 Map View overlays & HUD buttons
+        lv_obj_set_hidden(t0_map_boundary, true);
+        lv_obj_set_hidden(t0_map_trail, true);
+        for (int i = 0; i < T0_MAP_MAX_PINS; i++) {
+            if (t0_map_pins[i]) lv_obj_set_hidden(t0_map_pins[i], true);
+        }
+        lv_obj_set_hidden(t0_map_btn_zin, true);
+        lv_obj_set_hidden(t0_map_btn_zout, true);
+        lv_obj_set_hidden(t0_map_btn_fit, true);
+        lv_obj_set_hidden(t0_map_btn_ctr, true);
+
         lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 170 - 8);
         lv_obj_set_hidden(t0_rover_icon, false);
     }
+
 
     // 3. Update Tile 1: Field Survey Logger
     char next_id[WAYPOINT_LABEL_LEN];

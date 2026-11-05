@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.5.1`  
-**Firmware Version:** `v0.5.1`  
+**Document Version:** `v1.5.2`  
+**Firmware Version:** `v0.5.2`  
 **Last Updated:** November 4, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -171,23 +171,60 @@ When you close within $1.5\text{ m}$ of the target, the navigation engine automa
   * **Beeps Mode (`AUD: BEEPS`):** Stepped pitch chimes closing from $5.0\text{ m}$ inward.
   * **Mute Mode (`AUD: MUTE`):** Silences navigation proximity audio while preserving button taps, survey logged tones, and screenshot double-beeps.
 
+### Navigation Modes on Tile 0
+
+Tile 0 features an interactive tri-state navigation badge in the top-left corner of the canvas. Tapping the badge cycles through three specialized navigation modes:
+```
+[TACTICAL GUIDANCE] (Cyan) ──> [LINE STAKEOUT] (Amber) ──> [MAP VIEW] (Emerald Green) ──> [TACTICAL GUIDANCE]
+```
+
+---
+
 ### Phase 4: Line Stakeout Mode (Station & Offset)
-Tap the top-left mode badge (`TACTICAL GUIDANCE` / `LINE STAKEOUT`) on Tile 0 to toggle between **Point Guidance** and **Line Stakeout**:
+When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
 * **Baseline Definition ($A \rightarrow B$):** Directs the surveyor along the boundary line between Point A (Station $0+00$) and Point B (Target).
   * **Auto-Pairing:** By default, Point B is the actively selected target (`Index`), and Point A is the preceding waypoint (`Index - 1`, wrapping around to close parcels).
   * **One-Tap Swap (`[ <-> SWAP ]`):** Tap the target row label (`A -> B [SWAP]`) to reverse the line direction instantly. This enables walking backwards along a boundary line with Station counting up in your walking direction and Left/Right cues matching your eyes.
 * **Canvas Visualization:**
-  * **Centerline:** An Electric Cyan vertical baseline down the center axis ($x = 152$) represents the deed boundary.
-  * **Endpoint B:** Placed at the top of the line ($x = 152, y = 35$).
+  * **Centerline Baseline:** An Electric Cyan vertical baseline ($x = 152$) runs from Point A at the bottom ($y = 185$) to Point B at the top ($y = 35$) with a directional traverse chevron at the top.
+  * **Point A & B Labels:** On-canvas labels identify Point A and Point B by their surveyor names.
+  * **Perpendicular Tie-Line:** A dynamic horizontal line drops perpendicularly from the Rover marker to the baseline, color-coded green when on-line and amber when off-line.
   * **Live Rover Marker:** Placed at cross-track offset $x$ and along-track station $y$. Turns bright green when on the line ($\le 2\text{ cm}$), and amber with a heading beam when off-line.
-* **Large Readouts Below Canvas:**
-  * **Perpendicular Offset:** Displays signed cross-track error with bold directional arrows:
-    * `1.4 ft LEFT ◄── (Move R)`: You are left of the line; step right.
-    * `2.1 ft RIGHT (Move L) ──►`: You are right of the line; step left.
-    * `[OK] ON LINE! (0.01 m)`: You are within $\pm 2\text{ cm}$ of the deed line.
-  * **Stationing Progress:** Formatted in standard surveying stationing: `Sta 4+20.5 ft (36.4%) | Rem: 733.7 ft`.
-  * **Deed Bearing:** Formatted in surveying quadrant notation: `Deed: S 62°15'12.0" E (117.7 deg)`.
+* **Scaled 4-Row Readout Deck Below Canvas:**
+  * **Row 1 (Offset Magnitude & Direction - 20pt Bold):**
+    * `[OK] ON LINE (0.01 ft)`: Within $\pm 2\text{ cm}$ threshold (Bright Green `#00FF88`).
+    * `125.96 ft RIGHT`: Displaced right of deed line (Amber `#F59E0B`).
+    * `125.96 ft LEFT`: Displaced left of deed line (Amber `#F59E0B`).
+  * **Row 2 (Lateral Steer Prompt - 14pt):**
+    * `[OK] ON LINE - PROCEED ON BEARING`
+    * `<<< MOVE LEFT TO LINE`
+    * `MOVE RIGHT TO LINE >>>`
+  * **Row 3 (Longitudinal Progress - 12pt):** Formatted in standard surveying stationing: `Sta: 0+78.6 ft (26.8%) | Rem: 215.1 ft`.
+  * **Row 4 (Cadastral Deed Bearing - 12pt):** Formatted in surveying quadrant notation: `Deed: N 56°00'12" W (304.0 deg)`.
 * **Eyes-Free Line Audio Guidance:** In `AUD: GEIGER` mode, proximity audio tracks your perpendicular distance to the deed line. Clicks accelerate as you step toward the line, bursting into a solid $2,400\text{ Hz}$ confirmation tone when you stand within $2\text{ cm}$ of the line.
+
+---
+
+### Mode 2: Map View (Geodetic 2D Canvas with Zoom & Pan)
+When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
+* **Geodetic Tangent-Plane Canvas:** Projects real-world WGS84 coordinates onto a 2D local equirectangular plane centered on the map viewport.
+* **Interactive Zoom & Pan:**
+  * **Single-Touch Drag Pan:** Touch and drag anywhere on the map canvas to smoothly pan the view in real-time.
+  * **HUD Zoom Buttons (Canvas Right Edge):**
+    * `[+]`: Zoom in (magnifies view by 30%, down to 0.05 m/px).
+    * `[-]`: Zoom out (expands view by 40%, up to 30.0 m/px).
+    * `[FIT]`: Auto-fit bounding box encompassing all loaded survey waypoints and the current rover location.
+    * `[CTR]`: Center map viewport directly on the live rover ground-tip coordinates.
+* **Rendered Map Layers:**
+  * **Boundary Polyline:** Sky Blue line connecting all loaded waypoints in sequence ($0 \rightarrow 1 \dots \rightarrow N-1$), closing the loop back to Point 0 for closed parcels ($\ge 3$ points).
+  * **Waypoint Pins:** High-contrast amber pins identify survey points across the tract; the actively selected target is highlighted with the primary green bullseye icon.
+  * **Breadcrumb Trail:** Slate blue polyline tracking the rover's physical walking path.
+  * **Live Rover & Heading Vector:** Cyan rover marker with directional heading pointer showing orientation.
+* **Readouts Below Canvas:**
+  * **Row 1:** Target distance and true bearing (`14.28 m @ 042.5 deg`).
+  * **Row 2:** Active target ID, index, and note (`TGT: P3 (3/8) - Corner Iron`).
+  * **Row 3:** Viewport center geodetic coordinates (`Map Ctr: 43.73248, -70.62408`).
+  * **Row 4:** Viewport scale and loaded waypoint count (`Scale: 0.50 m/px | Pts: 8`).
 
 ---
 

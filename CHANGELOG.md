@@ -5,6 +5,41 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.2] - 2026-11-04
+
+### Added
+- **Mode 2 Map View with Zoom & Pan (`src/lvgl_port/lvgl_port.c`, `src/lvgl_port/lvgl_port.h`):**
+  - Integrated interactive 2D Geodetic Map View as the 3rd state of Tile 0's navigation badge cycle (`Tactical Guidance` -> `Line Stakeout` -> `Map View` -> `Tactical Guidance`).
+  - Added on-screen Map HUD buttons on right edge of canvas: `[+]` Zoom In, `[-]` Zoom Out, `[FIT]` Auto-Fit Bounding Box, and `[CTR]` Center on Rover.
+  - Added single-touch drag pan event handling (`LV_EVENT_PRESSING`) directly on the map canvas, translating screen touch deltas ($\Delta x, \Delta y$) to local East/North distance and updating geodetic center coordinates.
+  - Implemented local equirectangular tangent-plane projection rendering:
+    - Boundary polyline connecting all loaded survey waypoints ($0 \rightarrow 1 \rightarrow \dots \rightarrow N-1$, closed loop if $\ge 3$ points).
+    - Waypoint pins with active target pin highlighted using high-visibility bullseye marker.
+    - Breadcrumb track history polyline rendered from rover position buffer.
+    - Live rover position marker with true heading beam indicator.
+    - Continuous map scale and viewport width readout (`Win: 60m (0.20m/px)`).
+
+### Fixed
+- **Rate-Adaptive LoRa RTCM Frame Truncation Timeout (`src/e220_driver/e220_driver.cpp`):**
+  - Fixed multi-subpacket RTCM frame drops at slower LoRa air rates (e.g. GPS Type 1074 ~235B and Galileo Type 1094 ~316B dropping after 260ms at 9600 baud).
+  - Implemented `e220_get_trunc_timeout_ms()` dynamically scaling the broken head truncation timeout based on current air rate: 650 ms for $\le 9.6\text{ kbps}$, 1200 ms for $\le 4.8\text{ kbps}$, and 280 ms for high rates ($\ge 19.2\text{ kbps}$).
+- **Line Stakeout Text Formatting & Glyph Elimination (`src/lvgl_port/lvgl_port.c`):**
+  - Eliminated missing UTF-8 arrow tofu boxes (`▯▯`) in Montserrat font by replacing them with clean ASCII arrows (`<<<`, `>>>`) and status tags (`[OK]`).
+  - Re-architected readouts below canvas into 4 dedicated, scaled rows preventing text clipping and screen overflow:
+    - Row 1 (`t0_dist_lbl` in Montserrat 20): Primary lateral offset (`125.96 ft RIGHT` or `[OK] ON LINE (0.01 ft)`).
+    - Row 2 (`t0_steer_lbl` in Montserrat 14): Lateral steer action prompt (`<<< MOVE LEFT TO LINE` or `MOVE RIGHT TO LINE >>>`).
+    - Row 3 (`t0_offsets_lbl` in Montserrat 12): Station progress (`Sta: 0+78.6 ft (26.8%) | Rem: 215.1 ft`).
+    - Row 4 (`t0_extra_lbl` in Montserrat 12): Cadastral deed bearing (`Deed: N 56°00'12" W (304.0 deg)`).
+- **Line Stakeout Canvas Symbology Overhaul (`src/lvgl_port/lvgl_port.c`):**
+  - Added dedicated baseline line from Point A (bottom) to Point B (top) with directional traverse chevron.
+  - Added on-canvas Point A (`t0_line_lbl_a`, `t0_line_pt_a`) and Point B (`t0_line_lbl_b`, `t0_target_icon`) labels and markers.
+  - Implemented dynamic perpendicular tie-line connecting Rover position directly to the baseline with green/amber color coding.
+- **Settings Dual-FS Upload Synchronization (`src/web_server/web_server.cpp`):**
+  - Fixed bug where web portal uploads to one filesystem (e.g. FFat) were wiped out upon reboot by the mirror sync from the active SD Card filesystem.
+  - Web portal `handleUpload()` now synchronizes `settings.json` writes simultaneously to both internal FFat and MicroSD storage.
+- **Semantic Versioning Bumps (`user_config.h`, `README.md`, `docs/user_manual.md`, `CHANGELOG.md`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.5.2`.
+
 ## [v0.5.1] - 2026-11-04
 
 ### Fixed
