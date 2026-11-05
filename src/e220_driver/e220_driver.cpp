@@ -945,12 +945,15 @@ extern "C" void e220_poll_and_forward_rtcm(void)
                 s_uplink_seq++;
                 e220_stats.uplink_packets_sent++;
                 if (current_settings.enable_serial_logging) {
-                    Serial.printf("[E220 LORA TX #%u] Uplink 39B (Fix:%d Tip:%.7f,%.7f,%.2fm Bat:%u%%)\n",
+                    Serial.printf("[E220 LORA TX #%u] Uplink 45B (Fix:%d SLV:%d Tip:%.7f,%.7f,%.2fm BL:%.1fcm P:%+.1f° Bat:%u%%)\n",
                                   s_uplink_seq,
                                   s_latest_telemetry_state.fix_type,
+                                  s_latest_telemetry_state.slave_fix_type,
                                   s_latest_telemetry_state.tip_lat,
                                   s_latest_telemetry_state.tip_lon,
                                   s_latest_telemetry_state.tip_height_m,
+                                  s_latest_telemetry_state.baseline_length_m * 100.0f,
+                                  s_latest_telemetry_state.baseline_pitch_deg,
                                   s_latest_telemetry_state.battery_percent);
                 }
             }

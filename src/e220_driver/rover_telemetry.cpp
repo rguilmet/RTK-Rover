@@ -45,7 +45,23 @@ size_t rover_build_telemetry_packet(uint8_t *out_buf,
     if (acc_mm > 65535.0f) acc_mm = 65535.0f;
     pkt.h_acc_mm = (uint16_t)acc_mm;
 
-    pkt.fix_type    = (uint8_t)state->fix_type;
+    pkt.fix_type      = (uint8_t)state->fix_type;
+    pkt.ant2_fix_type = (uint8_t)state->slave_fix_type;
+
+    // Measured baseline length in millimeters
+    float bl_mm = state->baseline_length_m * 1000.0f;
+    if (bl_mm < 0.0f) bl_mm = 0.0f;
+    if (bl_mm > 65535.0f) bl_mm = 65535.0f;
+    pkt.baseline_mm = (uint16_t)bl_mm;
+
+    // Measured baseline pitch in centidegrees (-90.00°..+90.00° -> -9000..+9000)
+    float p_cdeg = state->baseline_pitch_deg * 100.0f;
+    if (p_cdeg < -32768.0f) p_cdeg = -32768.0f;
+    if (p_cdeg > 32767.0f)  p_cdeg = 32767.0f;
+    pkt.baseline_pitch_cdeg = (int16_t)p_cdeg;
+
+    pkt.heading_source = (uint8_t)state->heading_source;
+
     pkt.sats_master = state->num_sats;
     uint8_t slave_sats = (state->slave_num_sats & 0x3FU);
     if (state->heading_valid)    slave_sats |= 0x40U;

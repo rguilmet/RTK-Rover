@@ -5,6 +5,26 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.1] - 2026-11-05
+
+### Added
+- **Rover-to-Base Telemetry Frame Expansion (45 Bytes, +6B):**
+  - Expanded `RoverUplinkTelemetry_t` from 39 to 45 bytes (`ROVER_TELEM_PAYLOAD_LEN = 39`, `ROVER_TELEM_FRAME_LEN = 45`) in `src/e220_driver/rover_telemetry.h` and `rover_telemetry.cpp`.
+  - Added `ant2_fix_type` (`uint8_t`): secondary RF fix quality.
+  - Added `baseline_mm` (`uint16_t`): measured 3D inter-antenna distance in millimeters ($555\text{ mm}$ nominal).
+  - Added `baseline_pitch_cdeg` (`int16_t`): antenna crossbar pitch angle in centidegrees (e.g. `+20` = $+0.20^\circ$).
+  - Added `heading_source` (`uint8_t`): explicit enum distinguishing `DUAL_FIX`, `DUAL_FLT`, `WALK` (displacement), `GYRO` (IMU), `COG`, `HOLD`.
+- **Base Station Driver Lockstep Sync (`scripts/e220_pacer.py v3.3.0`):**
+  - Implemented dual-format auto-detecting unpacker in `_handle_telemetry_packet()` handling both legacy 39-byte and expanded 45-byte frames seamlessly during field rollouts.
+  - Aligned ANT2 status labeling to `SLV_FIX`, `SLV_FLT`, `SLV_DGPS`, `SLV_SGL` (avoiding confusion with ANT1 `RTK_FIX`/`RTK_FLT` and matching Rover Row 3 header semantics).
+  - Updated console heartbeat output:
+    `[ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2°) | Hdg:142.6° [DUAL_FIX] | Bat:85% (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m`
+  - Extended `/run/rtk_rover_status.json` RAM tmpfs schema with `ant2_fix_name`, `baseline_length_cm`, `baseline_pitch_deg`, and `heading_source`.
+  - Added `ant2_fix`, `baseline_mm`, `pitch_deg`, `hdg_source` columns to daily rolling CSV log (`~/rover_logs/rover_YYYY-MM-DD.csv`).
+- **Semantic Version Bumps:**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.6.1`.
+  - Bumped `e220_pacer.py` to `v3.3.0`.
+
 ## [v0.6.0] - 2026-11-05
 
 ### Added

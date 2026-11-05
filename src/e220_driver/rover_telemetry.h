@@ -21,8 +21,8 @@ extern "C" {
 #define ROVER_MSG_ID_CMD_RATE_SWITCH    0x02U
 #define ROVER_MSG_ID_ACK_RATE_SWITCH    0x82U
 
-#define ROVER_TELEM_PAYLOAD_LEN         33U
-#define ROVER_TELEM_FRAME_LEN           39U  // 2 sync + 1 id + 1 len + 33 payload + 2 crc16
+#define ROVER_TELEM_PAYLOAD_LEN         39U
+#define ROVER_TELEM_FRAME_LEN           45U  // 2 sync + 1 id + 1 len + 39 payload + 2 crc16
 
 #define ROVER_CMD_SWITCH_PAYLOAD_LEN    4U
 #define ROVER_CMD_SWITCH_FRAME_LEN      10U  // 2 sync + 1 id + 1 len + 4 payload + 2 crc16
@@ -40,16 +40,20 @@ extern "C" {
 
 #pragma pack(push, 1)
 
-// 39-Byte Uplink Telemetry Frame
+// 45-Byte Uplink Telemetry Frame
 typedef struct {
     uint8_t  sync[2];        // 0xAA, 0x55
     uint8_t  msg_id;         // 0x01
-    uint8_t  payload_len;    // 33
+    uint8_t  payload_len;    // 39
     double   tip_lat;        // Ground-tip Latitude (WGS84 degrees)
     double   tip_lon;        // Ground-tip Longitude (WGS84 degrees)
     float    tip_height_m;   // Ground-tip Ellipsoidal Height (meters)
     uint16_t h_acc_mm;       // Horizontal Accuracy Estimate (millimeters)
     uint8_t  fix_type;       // GnssFixType_t (0=None, 1=Single, 2=DGPS, 4=Fix, 5=Float)
+    uint8_t  ant2_fix_type;  // Slave Antenna Fix Type (0=None, 1=Single, 2=DGPS, 4=Fix, 5=Float)
+    uint16_t baseline_mm;    // Measured 3D Baseline Length in millimeters (e.g. 555 mm)
+    int16_t  baseline_pitch_cdeg; // Measured Baseline Pitch in centidegrees (e.g. +20 = +0.20°)
+    uint8_t  heading_source; // HeadingSource_t (0=NONE, 1=DUAL_FIX, 2=DUAL_FLT, 3=DISP, 4=GYRO, 5=COG, 6=HOLD)
     uint8_t  sats_master;    // Master Antenna (ANT1) Satellites Used
     uint8_t  sats_slave;     // Slave Antenna (ANT2) Satellites Used
     uint16_t heading_cdeg;   // True Heading in centidegrees (0..36000 -> 0.00°..360.00°)

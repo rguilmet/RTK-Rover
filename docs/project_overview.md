@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.2.0`  
+**Document Version:** `v2.2.1`  
 **Last Updated:** November 5, 2026  
-**Firmware Target:** `v0.6.0`  
-**Python Ecosystem Target:** `v3.2.0`  
+**Firmware Target:** `v0.6.1`  
+**Python Ecosystem Target:** `v3.3.0`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.
@@ -167,7 +167,7 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.6.0` in Montserrat 16 White).
+  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.6.1` in Montserrat 16 White).
   * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI, AUX edges, RTCM message counters, and truncation drops.
   * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:
     * Storage status in Electric Cyan (`#22D3EE`).
@@ -181,7 +181,7 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
-* **`e220_pacer.py` (v3.2.0):** Datasheet Section 5.6.2 hardware-paced LoRa driver for RTKBase. Handles atomic RTCM3 frame pacing, `GPIO 22` hardware watchdog, `TIOCEXCL` locking, Mode 0 ambient noise floor probing, bi-directional uplink telemetry logging (RAM JSON + rolling daily CSV), remote air-rate switching (`0x02`/`0x82`), terminal burst quiet-window enforcement, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$ (interleaving GLONASS 1084, Galileo 1094, and BeiDou 1124 across epochs while preserving 1.0 Hz GPS 1074).
+* **`e220_pacer.py` (v3.3.0):** Datasheet Section 5.6.2 hardware-paced LoRa driver for RTKBase. Handles atomic RTCM3 frame pacing, `GPIO 22` hardware watchdog, `TIOCEXCL` locking, Mode 0 ambient noise floor probing, bi-directional uplink telemetry logging (dual-format 39B/45B auto-detecting unpacker recording ANT1 RTK fix, ANT2 slave fix `SLV_FIX`/`SLV_FLT`, 3D baseline length, crossbar pitch, explicit heading source, RAM JSON + rolling daily CSV), remote air-rate switching (`0x02`/`0x82`), terminal burst quiet-window enforcement, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$ (interleaving GLONASS 1084, Galileo 1094, and BeiDou 1124 across epochs while preserving 1.0 Hz GPS 1074).
 * **`cogo_solver.py` (v1.1.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, AutoCAD DXF (with layer organization), and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
 * **`check_secrets.py` (v1.1.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
 * **`install_git_hooks.py` (v1.1.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.

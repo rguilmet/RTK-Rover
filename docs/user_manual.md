@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.6.0`  
-**Firmware Version:** `v0.6.0`  
+**Document Version:** `v1.6.1`  
+**Firmware Version:** `v0.6.1`  
 **Last Updated:** November 5, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -491,11 +491,18 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 ### 13.1 Half-Duplex Quiet-Window Interleaving
 * The Base Station broadcasts RTCM3 corrections in a burst at the beginning of each 1-second UTC epoch ($t = 0.00\text{ s} \dots 0.45\text{ s}$).
 * The Rover transmits an uplink telemetry frame strictly within the post-epoch quiet window ($t = 0.10\text{ s} \dots 0.45\text{ s}$) every 5 seconds.
-* At $19.2\text{ kbps}$, the 39-byte frame consumes only $\approx 30\text{ ms}$ Time-on-Air ($<1\%$ duty cycle), leaving hundreds of milliseconds of guard margin before the next base epoch.
+* At $19.2\text{ kbps}$, the 45-byte frame consumes only $\approx 31\text{ ms}$ Time-on-Air ($<1\%$ duty cycle), leaving hundreds of milliseconds of guard margin before the next base epoch.
 
-### 13.2 39-Byte Uplink Telemetry Frame
+### 13.2 45-Byte Uplink Telemetry Frame
 * **Sync Preamble:** `0xAA 0x55` (distinct from RTCM3 `0xD3` to prevent false-framing).
-* **Payload:** Sub-millimeter ground-tip coordinates (`tip_lat`, `tip_lon`, `tip_height_m`), horizontal accuracy (`h_acc_mm`), fix quality, Master/Slave satellite counts, True Heading centidegrees, battery percentage and millivolts, Rover packet RSSI, live ambient noise floor, and sequence counter.
+* **Payload (39 Bytes):**
+  * Sub-millimeter ground-tip coordinates (`tip_lat`, `tip_lon`, `tip_height_m`) and horizontal accuracy (`h_acc_mm`).
+  * Master ANT1 fix quality (`RTK_FIX`, `RTK_FLT`, `DGPS`, `SINGLE`, `NONE`).
+  * Slave ANT2 fix quality (`SLV_FIX`, `SLV_FLT`, `SLV_DGPS`, `SLV_SGL`, `NONE`).
+  * Measured 3D inter-antenna baseline length (`baseline_mm`, nominal $555\text{ mm}$ / $55.4\text{ cm}$).
+  * Measured crossbar pitch angle (`baseline_pitch_cdeg`, centidegrees).
+  * Explicit heading source tag (`DUAL_FIX`, `DUAL_FLT`, `WALK`, `GYRO`, `COG`, `HOLD`).
+  * Master & Slave satellite counts, True Heading centidegrees, battery percentage and millivolts, Rover packet RSSI, live ambient noise floor, and sequence counter.
 * **Integrity:** Protected by a 16-bit CRC16-CCITT checksum.
 
 ### 13.3 Touchscreen Remote Air-Rate Switching
@@ -504,10 +511,15 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 * **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
 * **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
 
-### 13.4 Base Station Pacer (`e220_pacer.py` v3.2.0)
-* **Real-Time Terminal Output:** Displays live Rover telemetry lines on reception.
-* **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs for instant zero-overhead dashboard querying.
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.3.0)
+* **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables:
+  ```text
+  [ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2°) | Hdg:142.6° [DUAL_FIX] | Bat:85% (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
+  ```
+* **Dual-Format Backward-Compatible Decoder:** Supports both legacy 39-byte and expanded 45-byte frames seamlessly during field rollouts.
+* **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs including `ant2_fix_name`, `baseline_length_cm`, `baseline_pitch_deg`, and `heading_source`.
 * **Rolling Daily CSV Log (`~/rover_logs/rover_YYYY-MM-DD.csv`):**
+  * Logs extended columns: `timestamp_utc, seq, fix_type, fix_name, ant2_fix, baseline_mm, pitch_deg, hdg_source, latitude, longitude, height_m, h_acc_mm, sats_master, sats_slave, heading_deg, battery_pct, battery_mv, rover_rssi_dbm, rover_noise_dbm, air_rate_kbps, channel`.
   * Auto-prunes files older than 30 days (`--log-retention-days 30`).
   * Caps maximum log directory footprint at $50\text{ MB}$ (`--max-log-mb 50`).
   * Compresses completed logs with `gzip` at midnight (`rover_YYYY-MM-DD.csv.gz`).

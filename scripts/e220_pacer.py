@@ -68,8 +68,8 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "3.2.0"
-__date__ = "2026-11-04"
+__version__ = "3.3.0"
+__date__ = "2026-11-05"
 
 # Force unbuffered output so systemd journalctl displays entries in real time
 if hasattr(sys.stdout, "reconfigure"):
@@ -134,10 +134,16 @@ MSG_ID_TELEMETRY = 0x01
 MSG_ID_REQ_SWITCH = 0x02
 MSG_ID_ACK_SWITCH = 0x82
 
-# 39-Byte Uplink Telemetry Frame Format:
+# 39-Byte Legacy Uplink Telemetry Frame Format (plen=33):
 # sync(2s), mid(B), plen(B), lat(d), lon(d), height(f), h_acc_mm(H), fix(B),
 # sats_m(B), sats_s(B), hdg_cdeg(H), bat_pct(B), bat_mv(H), rssi(b), noise(b), seq(B), crc(H)
-FMT_TELEMETRY = "<2sBBddfHBBBHBHbbBH"
+FMT_TELEMETRY_LEGACY = "<2sBBddfHBBBHBHbbBH"
+
+# 45-Byte Expanded Uplink Telemetry Frame Format (plen=39):
+# sync(2s), mid(B), plen(B), lat(d), lon(d), height(f), h_acc_mm(H), fix(B),
+# ant2_fix(B), baseline_mm(H), baseline_pitch_cdeg(h), hdg_source(B),
+# sats_m(B), sats_s(B), hdg_cdeg(H), bat_pct(B), bat_mv(H), rssi(b), noise(b), seq(B), crc(H)
+FMT_TELEMETRY = "<2sBBddfHBBHhBBBHBHbbBH"
 
 # 10-Byte Remote Air-Rate Switch Request Format:
 # sync(2s), mid(B), plen(B), target_code(B), target_chan(B), req_id(H), crc(H)
@@ -842,6 +848,7 @@ class E220Pacer:
                     pass
                 headers = [
                     "timestamp_utc", "seq", "fix_type", "fix_name",
+                    "ant2_fix", "baseline_mm", "pitch_deg", "hdg_source",
                     "latitude", "longitude", "height_m", "h_acc_mm",
                     "sats_master", "sats_slave", "heading_deg",
                     "battery_pct", "battery_mv",
@@ -855,6 +862,10 @@ class E220Pacer:
             str(data["seq"]),
             str(data["fix_type"]),
             data["fix_name"],
+            data.get("ant2_fix_name", "NONE"),
+            str(int(data.get("baseline_length_cm", 0.0) * 10)),
+            f"{data.get('baseline_pitch_deg', 0.0):.2f}",
+            data.get("heading_source", "NONE"),
             f"{data['latitude']:.8f}",
             f"{data['longitude']:.8f}",
             f"{data['height_m']:.3f}",
@@ -958,23 +969,49 @@ class E220Pacer:
 
     def _handle_telemetry_packet(self, cand: bytes) -> None:
         self.uplink_packets_received += 1
-        (sync, mid, plen, lat, lon, height, h_acc_mm, fix_type, sats_m, sats_s,
-         hdg_cdeg, bat_pct, bat_mv, r_rssi, r_noise, seq, crc) = struct.unpack(FMT_TELEMETRY, cand)
-
         fix_names = {0: "NONE", 1: "SINGLE", 2: "DGPS", 3: "PPS", 4: "RTK_FIX", 5: "RTK_FLOAT", 6: "DR"}
+        slv_fix_names = {0: "NONE", 1: "SLV_SGL", 2: "SLV_DGPS", 3: "PPS", 4: "SLV_FIX", 5: "SLV_FLT", 6: "DR"}
+        hdg_source_names = {
+            0: "NONE",
+            1: "DUAL_FIX",
+            2: "DUAL_FLT",
+            3: "WALK",
+            4: "GYRO",
+            5: "COG",
+            6: "HOLD",
+        }
+
+        if len(cand) == 45:
+            (sync, mid, plen, lat, lon, height, h_acc_mm, fix_type,
+             ant2_fix_type, baseline_mm, baseline_pitch_cdeg, heading_source,
+             sats_m, sats_s, hdg_cdeg, bat_pct, bat_mv, r_rssi, r_noise, seq, crc) = struct.unpack(FMT_TELEMETRY, cand)
+            bl_cm = baseline_mm / 10.0
+            pitch_deg = baseline_pitch_cdeg / 100.0
+            slv_fix_str = slv_fix_names.get(ant2_fix_type, f"TYPE_{ant2_fix_type}")
+            hdg_tag = hdg_source_names.get(heading_source, f"SRC_{heading_source}")
+        else:
+            (sync, mid, plen, lat, lon, height, h_acc_mm, fix_type, sats_m, sats_s,
+             hdg_cdeg, bat_pct, bat_mv, r_rssi, r_noise, seq, crc) = struct.unpack(FMT_TELEMETRY_LEGACY, cand)
+            bl_cm = 55.5
+            pitch_deg = 0.0
+            ant2_fix_type = 4 if (sats_s & 0x80) else (5 if (sats_s & 0x40) else 0)
+            slv_fix_str = slv_fix_names.get(ant2_fix_type, "NONE")
+            heading_source = 1 if (sats_s & 0x80) else (2 if (sats_s & 0x40) else 0)
+            hdg_tag = hdg_source_names.get(heading_source, "NONE")
+
         fix_str = fix_names.get(fix_type, f"TYPE_{fix_type}")
         hdg_deg = hdg_cdeg / 100.0
 
         # High 2 bits of sats_s: bit 6 = heading_valid, bit 7 = heading_is_fixed
         sats_s_clean = sats_s & 0x3F
-        hdg_valid = bool(sats_s & 0x40)
-        hdg_fixed = bool(sats_s & 0x80)
-        hdg_tag = "FIX" if hdg_fixed else ("VAL" if hdg_valid else "NONE")
+        hdg_valid = bool(sats_s & 0x40) or (heading_source in (1, 2, 3, 4, 5, 6))
+        hdg_fixed = bool(sats_s & 0x80) or (heading_source == 1)
 
         print(
-            f"[ROVER TEL #{seq:03d}] Fix:{fix_str} (Sats:{sats_m}M/{sats_s_clean}S, +/-{h_acc_mm/10.0:.1f}cm) | "
-            f"Hdg:{hdg_deg:5.1f} deg [{hdg_tag}] | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
-            f"RSSI:{r_rssi}dBm (Noise:{r_noise}dBm) | Pos:{lat:.7f}, {lon:.7f}, {height:.2f}m",
+            f"[ROVER TEL #{seq:03d}] ANT1:{fix_str} ({sats_m}M) | "
+            f"ANT2:{slv_fix_str} ({sats_s_clean}S, BL:{bl_cm:.1f}cm, P:{pitch_deg:+.1f}°) | "
+            f"Hdg:{hdg_deg:5.1f}° [{hdg_tag}] | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
+            f"RSSI:{r_rssi}dBm | Pos:{lat:.7f}, {lon:.7f}, {height:.2f}m",
             flush=True,
         )
 
@@ -983,12 +1020,17 @@ class E220Pacer:
             "seq": seq,
             "fix_type": fix_type,
             "fix_name": fix_str,
+            "ant2_fix_type": ant2_fix_type,
+            "ant2_fix_name": slv_fix_str,
             "latitude": round(lat, 8),
             "longitude": round(lon, 8),
             "height_m": round(height, 3),
             "h_acc_mm": h_acc_mm,
             "sats_master": sats_m,
             "sats_slave": sats_s_clean,
+            "baseline_length_cm": round(bl_cm, 1),
+            "baseline_pitch_deg": round(pitch_deg, 2),
+            "heading_source": hdg_tag,
             "heading_deg": round(hdg_deg, 2),
             "heading_valid": hdg_valid,
             "heading_fixed": hdg_fixed,
@@ -1085,7 +1127,7 @@ class E220Pacer:
             del self.uplink_buf[:tot_len]
             self.last_rover_rx_time = time.monotonic()
 
-            if msg_id == MSG_ID_TELEMETRY and tot_len == 39:
+            if msg_id == MSG_ID_TELEMETRY and (tot_len == 45 or tot_len == 39):
                 self._handle_telemetry_packet(cand)
             elif msg_id == MSG_ID_REQ_SWITCH and tot_len == 10:
                 self._handle_rate_switch_request(cand)
