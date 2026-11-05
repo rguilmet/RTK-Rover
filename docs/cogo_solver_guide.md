@@ -15,7 +15,7 @@ Adhering to state-of-the-art software engineering principles, the solver is comp
 * **Compass Rule (Bowditch Adjustment):** Dynamically distributes linear misclosure across traverse legs proportional to call lengths.
 * **Circular Road Curve Geometry:** Solves Points of Curvature (PC), Points of Tangency (PT), radius centers, chord azimuths, and arc midpoints for road right-of-ways and cul-de-sacs.
 * **Adjoiner Common-Line Snapping:** Reconciles shared boundary corners across adjacent parcels to eliminate rounding gaps or overlaps.
-* **Multi-Format GIS Exporters:** Generates Rover 19-column `waypoints.csv`, Google Earth KML, RFC 7946 GeoJSON, and ASCII closure reports.
+* **Multi-Format GIS Exporters:** Generates Rover 19/20-column `waypoints.csv` (with `poly_order` cadastral sequencing and tie-lines), Google Earth KML, RFC 7946 GeoJSON, AutoCAD DXF, and ASCII closure reports.
 
 ---
 
@@ -133,9 +133,10 @@ python scripts/cogo_solver.py \
 
 1. **Rover Waypoints CSV (`output/waypoints.csv`):**
    ```csv
-   timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes
-   ,,PIN_LOT1_POB,45.123456789,-69.123456789,125.400,RTK_FIX,HDG_FIX,0.035,0.032,0.6,26,0,0.0,0,0.00,0.00,1,5/8in Rebar Set w/ Plastic Cap 'PLS 9999'
-   ,,PIN_LOT1_NE,45.123992746,-69.122853299,,ADJ_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,5/8in Rebar Set w/ Plastic Cap 'PLS 9999'
+   timestamp,firmware_ver,label,latitude,longitude,elevation,poly_order,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes
+   ,,PIN_LOT1_POB,45.123456789,-69.123456789,125.400,1,RTK_FIX,HDG_FIX,0.035,0.032,0.6,26,0,0.0,0,0.00,0.00,1,5/8in Rebar Set w/ Plastic Cap 'PLS 9999'
+   ,,PIN_LOT1_NE,45.123992746,-69.122853299,,2,ADJ_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,5/8in Rebar Set w/ Plastic Cap 'PLS 9999'
+   ,,REF_TIE_01,45.124100000,-69.122700000,,-2,DEED_CALC,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Reference tie to LOT1_NE corner
    ```
 2. **Google Earth KML (`output/subdivision.kml`):**
    Interactive visualization with translucent parcel polygons, line boundaries, and color-coded pushpins for pins and curvature centers.

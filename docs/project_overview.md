@@ -73,11 +73,12 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 * **Closed-Form Geodetic Conversion:** The ESP32 driver converts base ECEF coordinates into WGS84 Latitude, Longitude, and Height via closed-form Bowring equations in $O(1)$ time with sub-millimeter precision.
 * **Dedicated Observer Card:** Tile 4 displays Base ID, differential correction age, exact WGS84 coordinates, altitude, ECEF vectors, and RTCM 1005 / MSM message counters.
 
-### D. Full 6-DOF IMU Telemetry & Atomic Burst Read (`imu_bsp`)
-* **12-Byte Atomic I2C Read:** Reads registers `0x35..0x40` in a single transaction, capturing 3-axis Accelerometer (`ax`, `ay`, `az`) and 3-axis Gyroscope (`gx`, `gy`, `gz`) simultaneously with zero bus overhead.
-* **Calibrated Units:** Accelerometer converted at 8192 LSB/g (4g range); Gyroscope converted at 64 LSB/(deg/s) (512 dps full-scale range).
-* **Portrait Bubble Level Realignment:** Sensor $a_y$ drives horizontal roll ($b_x$), sensor $a_x$ drives vertical pitch ($b_y$). Resting flat face-up produces $0.0^\circ$ pitch and $0.0^\circ$ roll.
-* **Bracket Tare Calibration:** An on-screen **Tare** button on Tile 3 records mounting angle offsets into `settings.json`, allowing the 2D bubble level to zero out when the screen is clipped to an angled pole clamp.
+### E. Deep-Woods Heading Fallback Architecture ("Walk 3 Steps" Displacement + Gyro Yaw)
+In dense forest canopy where secondary (Slave) antenna carrier tracking drops, the firmware implements an autonomous multi-tier heading fallback pipeline:
+* **Tier 1 (Dual-Antenna RTK Moving Baseline):** `HDG FIX` / `HDG FLT` ($0.2^\circ$ precision) whenever the UM982 resolves carrier phase.
+* **Tier 2 (Kinematic Geodetic Displacement Azimuth):** When dual-antenna lock is lost, `nav_heading_displacement_update()` tracks total WGS84 displacement from the last stationary anchor. Upon moving $\ge 0.70\text{ m}$ ($2\text{--}3$ walking paces), it computes geographic azimuth via `nav_compute_target_guidance()`. Unlike receiver Doppler COG, this displacement azimuth is **velocity-independent**, resolving accurate headings even when crawling at $< 0.4\text{ m/s}$ through thick brush. Displayed as `HDG WALK` (`WLK`, Cyan `#06B6D4`).
+* **Tier 3 (50 Hz QMI8658 Gyroscope Yaw Integration):** When the surveyor pauses, stands over a pin, or rotates in place, the Z-axis gyroscope integrates angular velocity ($\Delta \psi = \omega_z \cdot \Delta t$) with a 60-second hold window. This preserves compass and map orientation while stationary. Displayed as `HDG GYRO` (`GYR`, Blue `#3B82F6`).
+* **UM982 Fallback Protection:** `handle_uniheadinga_sentence()` selectively invalidates only dual-antenna heading when Slave tracking is lost, strictly preserving displacement, gyro, COG, and hold headings instead of zeroing orientation twice per second.
 
 ---
 
@@ -135,8 +136,8 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 * **Tile 0 (Screen 1) -- Multi-Mode Navigation & Pin Seeker:**
   * Interactive tri-state navigation badge in top-left corner cycles through three specialized navigation modes:
     1. **`[TACTICAL GUIDANCE]` (Cyan):** Course-Up dynamic canvas auto-scaling from $500\text{ m} \rightarrow 5\text{ m}$. Rotating antenna crossbar with colored tips (Green ANT1, Amber ANT2) and green field-of-view guidance wedge. Line-of-sight tracking vector, turn prompt, distance readout, cardinal North/East offsets, 64-point breadcrumb trail, and high-precision Bullseye mode automatically active at $\le 1.5\text{ m}$ ($1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings with ES8311 proximity audio lock cues).
-    2. **`[LINE STAKEOUT]` (Amber):** Directs surveyor along a boundary line between Point A and Point B. Displays vertical centerline baseline with traverse chevron, on-canvas Point A/B labels, perpendicular tie-line, live rover marker, one-tap swap (`[<-> SWAP]`) to reverse line direction, and scaled 4-row readout deck (Row 1: 16pt offset magnitude, Row 2: ASCII lateral steer cues `<<<`/`>>>`, Row 3: station progress `Sta: 0+78.6 ft`, Row 4: cadastral deed bearing).
-    3. **`[MAP VIEW]` (Emerald Green):** Geodetic 2D tangent-plane projection canvas with interactive single-touch drag pan and right-edge HUD Zoom buttons (`[+]` in, `[-]` out, `[FIT]` bounding box, `[CTR]` center on rover). Renders boundary polyline connecting all waypoints (closed loop if $\ge 3$ pts), waypoint pins with active target bullseye, breadcrumb track, live rover position marker with true heading beam indicator, and geodetic center coordinates.
+    2. **`[LINE STAKEOUT]` (Amber):** Directs surveyor along a boundary line between Point A and Point B. Displays vertical centerline baseline with traverse chevron, decluttered vector geometry (text labels moved to top marquee row to eliminate button overlap), perpendicular tie-line, live rover marker, one-tap swap (`[<-> SWAP]`) to reverse line direction, and scaled 4-row readout deck (Row 1: 16pt offset magnitude, Row 2: ASCII lateral steer cues `<<<`/`>>>`, Row 3: station progress `Sta: 0+78.6 ft`, Row 4: cadastral deed bearing).
+    3. **`[MAP VIEW]` (Emerald Green):** Cadastral 2D tangent-plane projection canvas with interactive single-touch drag pan and right-edge HUD Zoom buttons (`[+]` in, `[-]` out, `[FIT]` bounding box, `[CTR]` center on rover). Renders closed boundary polygon connecting all points with positive `poly_order` ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$), dashed tie-lines for negative tie points ($-k$ connecting to vertex $k$), color-coded pins (Gold for boundary vertices, Orange for reference/tie pins, Cyan for active target), 128-point historical route trail (toggleable via `"map_show_route_trail"`), live rover marker with heading beam, and geodetic center coordinates.
   * Route recording toggle (`REC ON` / `REC OFF`).
 * **Tile 1 (Screen 2) -- Field Survey Logger & Quick Settings:**
   * **Row 1 (`y = 8`):** Symmetrical Location ID Prefix dropdown (`<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`) and Averaging duration button (`1s`, `5s`, `10s`, `30s`).
@@ -154,6 +155,8 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
     * Row 5: Centered Wi-Fi status & web portal URL.
 * **Tile 2 (Screen 3) -- Waypoint CSV Browser & Multi-File Selector:**
   * Top navigation bar with `< Prev` and `Next >` file buttons and circular marquee for filenames.
+  * Instant sub-25ms touch responsiveness powered by a 20 ms LVGL polling loop and RAM survey stem cache (`s_stem_cache`), eliminating SD card blocking.
+  * Ingests standard 19-column and 20-column CSV files with `poly_order` cadastral signed sequence numbering.
   * Dynamic scanning of `/waypoints.csv` and all `/waypoints_*.csv` with alphabetical sorting.
   * Scrollable table of waypoints; tapping any row selects it as the active navigation target.
   * Remembers and restores the active file and active waypoint index across reboots.

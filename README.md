@@ -11,6 +11,15 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 ## 1. Overview & Key Capabilities
 
+* **Cadastral Parcel Mapping & Signed Sequence Ordering (Phase 5):**
+  * **Signed Sequence Schema (`poly_order`):** Connects positive sequence numbers ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$) into closed parcel boundary polygons (Gold pins `#FBBF24`), draws dashed tie-lines from negative sequence points ($-k$) to boundary vertex $k$ (Orange pins `#F97316`), and supports standalone control/construction points (`0`).
+  * **Decluttered Line Stakeout Canvas:** Clean baseline vector, traverse chevron, and perpendicular tie-line with text labels elevated to the top marquee row to prevent overlap with buttons and notes.
+  * **Sub-25ms Touch Responsiveness:** Reduced LVGL polling delay to 20 ms and eliminated synchronous SD reads via an in-memory survey stem cache.
+  * **128-Point Route Trail:** Toggleable historical surveyor walking trail directly on the Map View canvas (`"map_show_route_trail"` in `settings.json`).
+* **Deep-Woods Heading Fallback ("Walk 3 Steps" Displacement + Gyro Tracking - Phase 5):**
+  * Velocity-independent geodetic displacement tracker (`nav_heading_displacement_update()`) establishing accurate geographic azimuth from $\ge 0.70\text{ m}$ (2–3 walking paces) movement even when crawling through thick brush (`HDG WALK` / `WLK` Cyan `#06B6D4`).
+  * 50 Hz QMI8658 6-DOF IMU Z-axis gyro integration with a 60-second stationary hold window (`HDG GYRO` / `GYR` Blue `#3B82F6`) maintaining compass and map orientation while stationary or turning in place.
+  * Fixed UM982 sentence parser so lost secondary antenna lock only invalidates dual-antenna heading, preserving displacement and inertial fallbacks.
 * **Geodesic Line Stakeout & Cadastral Guidance (Phase 4):**
   * Real-time along-track Station ($S$) and perpendicular cross-track Offset ($O$) navigation along boundary baselines ($A \rightarrow B$).
   * Interactive Tile 0 tri-mode toggle: `[TACTICAL GUIDANCE]` (Course-Up & Centimeter Bullseye) $\rightarrow$ `[LINE STAKEOUT]` (Deed Vector with Left/Right guidance prompts and quadrant bearings e.g. `S 62°15'12" W`) $\rightarrow$ `[MAP VIEW]` (2D Geodetic Canvas with Zoom, Pan, Boundary Polygon, Pins, and Breadcrumbs).

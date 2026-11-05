@@ -111,15 +111,18 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
   * Amber/Yellow: Moderate signal ($-91\text{ dBm} \dots -105\text{ dBm}$)
   * Red: Weak fringe signal ($< -105\text{ dBm}$) or `-- dB` when link is idle.
 
-### Row 3: Slave Antenna (ANT2 - Heading) Metrics
+### Row 3: Slave Antenna (ANT2 - Heading) & Woods Fallback Metrics
 * **Heading Fix Badge:**
-  * `HDG FIX` (Bright Green `#00FF88`): Dual-antenna carrier-phase integer ambiguity resolved.
-  * `HDG FLT` (Yellow `#FFCC00`): Heading solution converging.
-  * `NO HDG` (Red `#FF4444`): Dual-antenna heading unavailable.
+  * `HDG FIX` (Bright Green `#00FF88`): Dual-antenna carrier-phase integer ambiguity resolved ($0.2^\circ$ accuracy).
+  * `HDG FLT` (Yellow `#FFCC00`): Dual-antenna carrier-phase solution converging.
+  * `HDG WALK` / `WLK` (Cyan `#06B6D4`): Deep-woods kinematic displacement heading established from $\ge 0.70\text{ m}$ (2–3 paces) movement. Velocity-independent; functions even when crawling through heavy brush.
+  * `HDG GYRO` / `GYR` (Blue `#3B82F6`): Inertial yaw maintained by the 50 Hz QMI8658 6-DOF IMU while stationary or rotating in place (60-second hold window).
+  * `HDG HOLD` (Amber `#F59E0B`): Heading held for 5 seconds after dual-antenna lock loss before fallback activation.
+  * `NO HDG` (Red `#FF4444`): Heading unavailable; prompts user to walk 2–3 paces to establish displacement azimuth.
 * **Slave Satellites:** Number of satellites tracked by secondary RF path (`SV: 26`).
 * **Baseline Length:** Measured 3D distance between antenna phase centers (`BL: 55.4cm`).
 * **Baseline Pitch:** Crossbar pitch angle relative to the local horizon (`Pitch: +0.2 deg`).
-* **True Heading:** True geographic azimuth of antenna baseline (`Hdg: 142.6 deg`).
+* **True Heading:** True geographic azimuth of antenna baseline or integrated fallback source (`Hdg: 142.6 deg`).
 
 ### Row 4: Ground-Tip Geodetic Coordinates
 * **Prominent 14pt Font:** Displays real-time kinematic ground-tip Latitude, Longitude, and Ellipsoidal Height:
@@ -180,14 +183,14 @@ Tile 0 features an interactive tri-state navigation badge in the top-left corner
 
 ---
 
-### Phase 4: Line Stakeout Mode (Station & Offset)
+### Line Stakeout Mode (Station & Offset)
 When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
 * **Baseline Definition ($A \rightarrow B$):** Directs the surveyor along the boundary line between Point A (Station $0+00$) and Point B (Target).
   * **Auto-Pairing:** By default, Point B is the actively selected target (`Index`), and Point A is the preceding waypoint (`Index - 1`, wrapping around to close parcels).
   * **One-Tap Swap (`[ <-> SWAP ]`):** Tap the target row label (`A -> B [SWAP]`) to reverse the line direction instantly. This enables walking backwards along a boundary line with Station counting up in your walking direction and Left/Right cues matching your eyes.
-* **Canvas Visualization:**
+* **Decluttered Vector Canvas:**
   * **Centerline Baseline:** An Electric Cyan vertical baseline ($x = 152$) runs from Point A at the bottom ($y = 185$) to Point B at the top ($y = 35$) with a directional traverse chevron at the top.
-  * **Point A & B Labels:** On-canvas labels identify Point A and Point B by their surveyor names.
+  * **Pure Vector Geometry:** Text labels have been removed from the canvas surface to prevent visual overlap with buttons, steering cues, and notes. Point A and B identifiers scroll cleanly on the top marquee row.
   * **Perpendicular Tie-Line:** A dynamic horizontal line drops perpendicularly from the Rover marker to the baseline, color-coded green when on-line and amber when off-line.
   * **Live Rover Marker:** Placed at cross-track offset $x$ and along-track station $y$. Turns bright green when on the line ($\le 2\text{ cm}$), and amber with a heading beam when off-line.
 * **Scaled 4-Row Readout Deck Below Canvas:**
@@ -205,7 +208,7 @@ When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
 
 ---
 
-### Mode 2: Map View (Geodetic 2D Canvas with Zoom & Pan)
+### Mode 2: Map View (Cadastral 2D Canvas with Zoom, Pan & Tie-Lines)
 When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
 * **Geodetic Tangent-Plane Canvas:** Projects real-world WGS84 coordinates onto a 2D local equirectangular plane centered on the map viewport.
 * **Interactive Zoom & Pan:**
@@ -215,11 +218,15 @@ When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
     * `[-]`: Zoom out (expands view by 40%, up to 30.0 m/px).
     * `[FIT]`: Auto-fit bounding box encompassing all loaded survey waypoints and the current rover location.
     * `[CTR]`: Center map viewport directly on the live rover ground-tip coordinates.
-* **Rendered Map Layers:**
-  * **Boundary Polyline:** Sky Blue line connecting all loaded waypoints in sequence ($0 \rightarrow 1 \dots \rightarrow N-1$), closing the loop back to Point 0 for closed parcels ($\ge 3$ points).
-  * **Waypoint Pins:** High-contrast amber pins identify survey points across the tract; the actively selected target is highlighted with the primary green bullseye icon.
-  * **Breadcrumb Trail:** Slate blue polyline tracking the rover's physical walking path.
-  * **Live Rover & Heading Vector:** Cyan rover marker with directional heading pointer showing orientation.
+* **Rendered Cadastral Map Layers:**
+  * **Closed Boundary Polygon:** Connects all parcel boundary vertices with positive sequence numbers ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$) using a solid Sky Blue polyline.
+  * **Dashed Cadastral Tie-Lines:** For external reference / tie points with negative sequence numbers ($-k$), draws a distinct dashed line directly connecting the tie point to parcel boundary vertex $k$.
+  * **Differentiated Pin Symbology:**
+    * **Boundary Vertices:** High-visibility Gold pins (`#FBBF24`).
+    * **Reference / Tie Pins:** High-visibility Orange pins (`#F97316`).
+    * **Active Target:** Prominent green bullseye icon over the selected waypoint.
+    * **Live Rover:** Bright cyan position circle with a forward-projecting true heading beam.
+  * **128-Point Route Trail:** Renders the surveyor's historical movement trail across the parcel. Can be enabled or disabled via `"map_show_route_trail"` in `settings.json`.
 * **Readouts Below Canvas:**
   * **Row 1:** Target distance and true bearing (`14.28 m @ 042.5 deg`).
   * **Row 2:** Active target ID, index, and note (`TGT: P3 (3/8) - Corner Iron`).
@@ -318,6 +325,24 @@ Tile 2 enables operators to manage, browse, and switch between multiple project 
 ### Interactive Waypoint Table
 * **Table Rows:** Displays point ID, target Latitude, Longitude, Elevation, and feature notes.
 * **Tap-to-Target Selection:** Tapping any row instantly selects that waypoint as the active navigation target for Tile 0 and derives the naming stem for Tile 1.
+* **Instant Touch Response (Sub-25ms):** Optimized with a 20 ms LVGL polling loop and in-memory suffix stem cache, completely eliminating touch latency and audio beeping lag.
+
+### Waypoint CSV Format & Cadastral Ordering Schema
+The Rover natively loads standard 19-column and 20-column survey CSV files. The 20-column schema introduces the `poly_order` column for cadastral mapping:
+
+```csv
+timestamp,firmware_ver,label,latitude,longitude,elevation,poly_order,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes
+2026-10-27_12-00-00.000-240,v0.6.0,PIN_NW_01,42.360100000,-71.094200000,12.500,1,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NW corner iron pipe
+2026-10-27_12-00-00.000-240,v0.6.0,PIN_NE_02,42.360450000,-71.093500000,13.100,2,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,NE corner rebar
+2026-10-27_12-00-00.000-240,v0.6.0,PIN_SE_03,42.359800000,-71.093400000,11.800,3,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SE corner granite bound
+2026-10-27_12-00-00.000-240,v0.6.0,PIN_SW_04,42.359750000,-71.094150000,12.000,4,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,SW corner pin
+2026-10-27_12-00-00.000-240,v0.6.0,REF_TREE_TIE,42.360550000,-71.093350000,13.000,-2,DESIGN,NONE,0.000,0.000,0.0,0,0,0.0,0,0.00,0.00,1,Witness tree tie point (ties to vertex 2)
+```
+
+* **`poly_order > 0` (e.g. `1, 2, 3, 4`):** Boundary vertices that define the closed property boundary loop in sequence ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$). Rendered as Gold pins on the Map View.
+* **`poly_order < 0` (e.g. `-2`, `-10`):** Cadastral tie / reference points. The negative number identifies the boundary vertex to which this point connects. Rendered as Orange pins with dashed tie-lines on the Map View.
+* **`poly_order = 0` (or `CONTROL`, `REF`, `TIE`):** Standalone reference, road center, or control points not connected to the parcel boundary polygon.
+* **Backward Compatibility:** If the `poly_order` column is absent, all waypoints default to a sequential boundary loop ($0 \rightarrow 1 \dots \rightarrow N-1 \rightarrow 0$).
 
 ---
 
