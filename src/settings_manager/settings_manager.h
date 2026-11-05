@@ -46,6 +46,7 @@ struct SystemSettings {
     bool     enable_imu_logging;
     bool     enable_telemetry_logging;
     bool     enable_touch_logging;
+    bool     map_show_route_trail;
 };
 
 extern struct SystemSettings current_settings;

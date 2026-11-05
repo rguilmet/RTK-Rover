@@ -46,6 +46,10 @@ void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b);
 void waypoint_line_stakeout_reset_auto(void);
 bool waypoint_get_at(int16_t idx, WaypointRecord_t *wp_out);
 
+// Phase 5: Cadastral Boundary Polygon & Tie-Line APIs
+int16_t waypoint_get_boundary_polygon(int16_t *idx_list_out, int16_t max_count);
+int16_t waypoint_find_by_poly_order(int16_t target_order);
+
 bool        waypoint_is_derived_mode(void);
 const char* waypoint_get_prefix_options(void);
 const char* waypoint_get_note_tag_options(void);

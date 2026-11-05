@@ -276,17 +276,17 @@ static void handle_uniheadinga_sentence(char *line)
                 gnss_state.heading_source     = HDG_SRC_DUAL_FLT;
                 port_stats.heading_sentences_ok++;
             } else {
-                // Wild baseline vector (e.g. 4.88m in Float) - reject as invalid heading!
-                gnss_state.heading_valid    = false;
+                // Wild baseline vector (e.g. 4.88m in Float) - reject dual-antenna heading!
                 gnss_state.heading_is_fixed = false;
                 if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
+                    gnss_state.heading_valid  = false;
                     gnss_state.heading_source = HDG_SRC_NONE;
                 }
             }
         } else {
-            gnss_state.heading_valid    = false;
             gnss_state.heading_is_fixed = false;
             if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
+                gnss_state.heading_valid  = false;
                 gnss_state.heading_source = HDG_SRC_NONE;
             }
         }

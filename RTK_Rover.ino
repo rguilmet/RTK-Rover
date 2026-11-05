@@ -360,6 +360,27 @@ void task_display_and_audio(void *pvParameters)
             ui_state.battery_percent   = pwr.battery_percent;
             ui_state.is_charging       = pwr.is_charging;
             ui_state.vbus_present      = pwr.vbus_good;
+
+            // Phase 5: Deep-Woods Heading Fallback (Kinematic Displacement Azimuth & Gyro Yaw)
+            nav_heading_displacement_update(ui_state.tip_lat,
+                                            ui_state.tip_lon,
+                                            cached_gyr[2],
+                                            now,
+                                            (ui_state.heading_valid && (ui_state.heading_source == HDG_SRC_DUAL_FIX || ui_state.heading_source == HDG_SRC_DUAL_FLT)),
+                                            ui_state.heading_is_fixed,
+                                            ui_state.true_heading_deg,
+                                            &ui_state.heading_valid,
+                                            &ui_state.true_heading_deg,
+                                            &ui_state.heading_source,
+                                            &ui_state.displacement_dist_m);
+
+            if (ui_state.has_active_target && ui_state.heading_valid) {
+                float rel = ui_state.bearing_to_target_deg - ui_state.true_heading_deg;
+                while (rel < -180.0f) rel += 360.0f;
+                while (rel > 180.0f)  rel -= 360.0f;
+                ui_state.rel_bearing_deg = rel;
+            }
+
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
 

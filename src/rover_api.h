@@ -43,6 +43,9 @@ typedef struct {
     double   longitude;
     float    elevation_m;
     bool     has_elevation;
+    int16_t  poly_order;        // Positive: polygon vertex sequence (1, 2, ...); Negative: tie to vertex; 0: pin
+    bool     is_boundary;       // True if poly_order > 0
+    int16_t  tie_to_poly_order; // Vertex sequence number this pin ties to (positive int), or 0 if none
     char     notes[WAYPOINT_NOTES_LEN];
 } WaypointRecord_t;
 
@@ -112,6 +115,8 @@ typedef enum {
     HDG_SRC_NONE = 0,
     HDG_SRC_DUAL_FIX,    // Dual-antenna integer carrier phase RTK (NARROW_INT)
     HDG_SRC_DUAL_FLT,    // Dual-antenna float carrier phase with verified baseline
+    HDG_SRC_DISP,        // Kinematic geodetic displacement from 2-3 paces (>= 0.70m)
+    HDG_SRC_GYRO,        // IMU Gyroscope dead-reckoning hold during pauses (< 60s)
     HDG_SRC_COG,         // Kinematic Course-Over-Ground from walking motion (> 0.4 m/s)
     HDG_SRC_HOLD         // Stationary hold of last valid heading (< 0.2 m/s)
 } HeadingSource_t;
@@ -148,6 +153,7 @@ typedef struct {
     float            baseline_length_m;  // Measured Master->Slave distance (e.g. 0.555m)
     float            speed_m_s;          // Speed over ground (m/s) from RMC
     float            cog_deg;            // Course over ground (deg) from RMC
+    float            displacement_dist_m;// Phase 5: Distance moved from step anchor (m)
 
     // Slave Antenna (ANT2) Diagnostics (from GNGGAH)
     GnssFixType_t    slave_fix_type;

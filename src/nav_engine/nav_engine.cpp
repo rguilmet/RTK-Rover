@@ -413,3 +413,117 @@ extern "C" bool nav_breadcrumb_get_point(int index, NavBreadcrumb_t *pt_out)
     *pt_out = s_breadcrumbs[actual_idx];
     return true;
 }
+
+// =========================================================================
+// Phase 5: Deep-Woods Heading Fallback Engine (Kinematic Displacement + Gyro Yaw)
+// =========================================================================
+static double   s_anchor_lat       = 0.0;
+static double   s_anchor_lon       = 0.0;
+static bool     s_has_anchor       = false;
+static float    s_fused_heading    = 0.0f;
+static bool     s_fused_valid      = false;
+static HeadingSource_t s_fused_src = HDG_SRC_NONE;
+static uint32_t s_last_update_ms   = 0;
+static uint32_t s_last_disp_ms     = 0;
+
+extern "C" void nav_heading_displacement_reset(void)
+{
+    s_has_anchor     = false;
+    s_fused_valid    = false;
+    s_fused_src      = HDG_SRC_NONE;
+    s_last_update_ms = 0;
+    s_last_disp_ms   = 0;
+}
+
+extern "C" void nav_heading_displacement_update(double tip_lat,
+                                               double tip_lon,
+                                               float gyr_z_dps,
+                                               uint32_t now_ms,
+                                               bool dual_antenna_valid,
+                                               bool dual_antenna_fixed,
+                                               float dual_heading_deg,
+                                               bool *heading_valid_out,
+                                               float *true_heading_out,
+                                               HeadingSource_t *heading_src_out,
+                                               float *disp_dist_out)
+{
+    // Tier 1: Dual-Antenna Primary Source Available
+    if (dual_antenna_valid) {
+        s_anchor_lat     = tip_lat;
+        s_anchor_lon     = tip_lon;
+        s_has_anchor     = true;
+        s_fused_heading  = dual_heading_deg;
+        s_fused_valid    = true;
+        s_fused_src      = dual_antenna_fixed ? HDG_SRC_DUAL_FIX : HDG_SRC_DUAL_FLT;
+        s_last_update_ms = now_ms;
+        s_last_disp_ms   = now_ms;
+
+        if (heading_valid_out) *heading_valid_out = true;
+        if (true_heading_out)  *true_heading_out  = dual_heading_deg;
+        if (heading_src_out)   *heading_src_out   = s_fused_src;
+        if (disp_dist_out)     *disp_dist_out     = 0.0f;
+        return;
+    }
+
+    // Tier 2 & 3: Woods Fallback (Slave Antenna lock lost)
+    if (!s_has_anchor || s_anchor_lat == 0.0 || s_anchor_lon == 0.0) {
+        s_anchor_lat     = tip_lat;
+        s_anchor_lon     = tip_lon;
+        s_has_anchor     = (tip_lat != 0.0 && tip_lon != 0.0);
+        s_last_update_ms = now_ms;
+        s_last_disp_ms   = now_ms;
+    }
+
+    // Compute displacement distance and geodetic delta from anchor
+    double lat1 = s_anchor_lat * DEG_TO_RAD;
+    double lat2 = tip_lat * DEG_TO_RAD;
+    double lon1 = s_anchor_lon * DEG_TO_RAD;
+    double lon2 = tip_lon * DEG_TO_RAD;
+    double r_m = WGS84_A, r_n = WGS84_A;
+    wgs84_radii((lat1 + lat2) * 0.5, &r_m, &r_n);
+    double dn = (lat2 - lat1) * r_m;
+    double de = (lon2 - lon1) * r_n * cos((lat1 + lat2) * 0.5);
+    double dist_m = sqrt(dn * dn + de * de);
+
+    float dt_s = (s_last_update_ms > 0 && now_ms >= s_last_update_ms) ? (float)(now_ms - s_last_update_ms) / 1000.0f : 0.033f;
+    s_last_update_ms = now_ms;
+
+    // Displacement trigger: Moving >= 0.70m (~2 to 3 paces)
+    if (dist_m >= 0.70) {
+        // Compute geodetic azimuth from anchor to current tip position
+        double az_rad = atan2(de, dn);
+        double az_deg = az_rad * (180.0 / M_PI);
+        if (az_deg < 0.0) az_deg += 360.0;
+
+        s_fused_heading = (float)az_deg;
+        s_fused_valid   = true;
+        s_fused_src     = HDG_SRC_DISP;
+        s_last_disp_ms  = now_ms;
+
+        // Advance anchor to current position for continuous sliding window
+        s_anchor_lat = tip_lat;
+        s_anchor_lon = tip_lon;
+        dist_m = 0.0;
+    } else if (s_fused_valid) {
+        // Paused or slow stepping: Integrate QMI8658 Gyroscope Z-axis yaw rate
+        if (fabsf(gyr_z_dps) > 0.3f && dt_s > 0.0f && dt_s < 0.5f) {
+            // Note: display held flat: Z-gyro measures pole azimuth rotation in dps
+            s_fused_heading += gyr_z_dps * dt_s;
+            while (s_fused_heading < 0.0f)   s_fused_heading += 360.0f;
+            while (s_fused_heading >= 360.0f) s_fused_heading -= 360.0f;
+        }
+
+        // 60-second gyro hold window
+        if (now_ms - s_last_disp_ms <= 60000) {
+            s_fused_src = HDG_SRC_GYRO;
+        } else {
+            // Over 60 seconds stationary: prompt walk to realign
+            s_fused_src = HDG_SRC_HOLD;
+        }
+    }
+
+    if (heading_valid_out) *heading_valid_out = s_fused_valid;
+    if (true_heading_out)  *true_heading_out  = s_fused_heading;
+    if (heading_src_out)   *heading_src_out   = s_fused_src;
+    if (disp_dist_out)     *disp_dist_out     = (float)dist_m;
+}

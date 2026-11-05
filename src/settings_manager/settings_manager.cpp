@@ -51,7 +51,8 @@ struct SystemSettings current_settings = {
     false,            // enable_rtcm_logging (Raw RTCM base stream logging to SD card / FFat)
     false,            // enable_imu_logging (periodic 1 Hz IMU pose and raw accelerometer logs)
     true,             // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
-    true              // enable_touch_logging (log touch events and coordinates to Serial Monitor)
+    true,             // enable_touch_logging (log touch events and coordinates to Serial Monitor)
+    true              // map_show_route_trail (render breadcrumb dots of logged route on Map View)
 };
 
 volatile bool settings_dirty = false;
@@ -341,6 +342,7 @@ extern "C" void load_settings(void) {
     else if (!doc["enable_telem_logging"].isNull()) current_settings.enable_telemetry_logging = doc["enable_telem_logging"];
     if (!doc["enable_touch_logging"].isNull()) current_settings.enable_touch_logging = doc["enable_touch_logging"];
     else if (!doc["log_touch_events"].isNull()) current_settings.enable_touch_logging = doc["log_touch_events"];
+    if (!doc["map_show_route_trail"].isNull()) current_settings.map_show_route_trail = doc["map_show_route_trail"];
 
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
     if (sd_card_mounted && !migrate_e220_profile) {
@@ -419,6 +421,7 @@ extern "C" void save_settings(void) {
     doc["enable_imu_logging"]        = current_settings.enable_imu_logging;
     doc["enable_telemetry_logging"]  = current_settings.enable_telemetry_logging;
     doc["enable_touch_logging"]      = current_settings.enable_touch_logging;
+    doc["map_show_route_trail"]      = current_settings.map_show_route_trail;
 
     String output;
     serializeJsonPretty(doc, output);

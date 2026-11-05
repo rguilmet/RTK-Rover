@@ -130,7 +130,7 @@
 // LVGL Task Timing & Priorities
 // =========================================================================
 #define LVGL_TICK_PERIOD_MS       5
-#define LVGL_TASK_MAX_DELAY_MS    500
+#define LVGL_TASK_MAX_DELAY_MS    20
 #define LVGL_TASK_MIN_DELAY_MS    5
 #define LVGL_TASK_STACK_SIZE      (10 * 1024)
 #define LVGL_TASK_PRIORITY        3
