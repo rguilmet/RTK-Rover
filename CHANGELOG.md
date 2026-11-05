@@ -5,6 +5,39 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.0] - 2026-11-05
+
+### Added
+- **Dual-Power & Hot-Swap UPS Architecture (AXP2101 PMIC):**
+  - Configured AXP2101 PMIC constant-current charge rate to $500\text{ mA}$ (`0x0B` in `REG 0x62`) for safe, cool charging and float maintenance of a 1,000 mAh internal 1S LiPo buffer.
+  - Enabled 14-bit VBUS voltage measurement via `REG 0x38/0x39` (`vbus_voltage_v`).
+  - Implemented `axp2101_bsp_power_off()` triggering clean soft power-off via `REG 0x10` Bit 0 (`Soft PWROFF`), putting the board into ultra-low quiescent standby ($<40\,\mu\text{A}$).
+  - External 5.0V USB power pack supplies UM982 GNSS and E220 1W LoRa radio while floating the internal battery. When external USB power is unplugged or switched off, UM982 and E220 power down to zero drain while the ESP32-S3 and LCD stay continuously awake on battery backup with zero reboots, preserving survey point indexes, tare offsets, route trails, and Wi-Fi connections.
+- **Auto-Shutdown on Battery Timeout (`settings.json`):**
+  - Added `auto_shutdown_battery_min` setting (default `5` minutes, `0` = disabled) persisted to SD Card and internal FFat mirror.
+  - Core 1 automatically tracks battery-only runtime and commands `axp2101_bsp_power_off()` when the inactivity timer expires.
+  - Any capacitive screen touch event dynamically resets the shutdown window (`rover_get_last_user_activity_ms()`).
+- **Tile 4 Diagnostics Power Overhaul (`t4_power_lbl`):**
+  - USB Mode: Displays live VBUS line voltage, 5V rail status (`ON`), backup battery voltage & percentage, charging current state (`YES (500mA)` vs `FLOAT (100%)`), and UPS readiness.
+  - Battery Mode: Displays backup battery voltage & percentage, 5V rail status (`OFF`), estimated current drain ($\approx 130\text{ mA}$), and active auto-shutdown timeout.
+- **Base Station Telemetry Pacer Dual-Power Alignment (`scripts/e220_pacer.py v3.4.0`):**
+  - Transmits sentinel `battery_pct = 255` and `vbus_mv` over LoRa when on USB power pack.
+  - Base Station pacer console heartbeat formats power as `PWR:USB (5.04V)` when `battery_pct == 255`, and `Bat:85% (3.92V)` when running on battery.
+
+### Fixed
+- **Row 1 Header Bar Spacing & Overlap Elimination:**
+  - Resolved visual collision where the battery/charging percentage text overlapped the Wi-Fi icon.
+  - Re-anchored Row 1 layout: `Power` at `-4`, `Wi-Fi` at `-118`, `Units` at `-145`, and `Date/Time` at `+4`.
+  - Guaranteed a minimum $16\text{ px}$ clearance between the longest battery string and Wi-Fi, leaving $140\text{ px}$ of empty center buffer margin across the 480 px width.
+- **Minimalist Power Bar & Charge Indicator:**
+  - Compact Row 1 power widget: displays `[USB] 5.04V+` while charging, dropping `+` to `[USB] 5.04V` when fully charged.
+  - On battery: displays `[Bat] 85% 3.92V` (with color coded battery icon).
+- **Sensor Offline Badges on Battery:**
+  - When 5V external power is down (`vbus_present == false`), Row 2 ANT1 Fix badge and Row 3 ANT2 Fix badge dynamically switch to **RED** with **`[OFF]`**, and radio status displays **`LoRa: OFF`**.
+- **Semantic Version Bumps:**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.7.0`.
+  - Bumped `scripts/e220_pacer.py` to `v3.4.0`.
+
 ## [v0.6.2] - 2026-11-05
 
 ### Fixed

@@ -47,6 +47,7 @@ struct SystemSettings {
     bool     enable_telemetry_logging;
     bool     enable_touch_logging;
     bool     map_show_route_trail;
+    uint8_t  auto_shutdown_battery_min;
 };
 
 extern struct SystemSettings current_settings;

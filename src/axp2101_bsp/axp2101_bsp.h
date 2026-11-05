@@ -14,10 +14,12 @@ typedef struct {
     uint8_t battery_percent;
     bool    is_charging;
     bool    vbus_good;
+    float   vbus_voltage_v;
 } Axp2101Status_t;
 
 void axp2101_bsp_init(void);
 void axp2101_bsp_read(Axp2101Status_t *status);
+void axp2101_bsp_power_off(void);
 
 #ifdef __cplusplus
 }

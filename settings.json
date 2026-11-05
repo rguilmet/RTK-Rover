@@ -29,5 +29,7 @@
   "enable_rtcm_logging": false,
   "enable_imu_logging": false,
   "enable_telemetry_logging": true,
-  "enable_touch_logging": true
+  "enable_touch_logging": true,
+  "map_show_route_trail": true,
+  "auto_shutdown_battery_min": 5
 }

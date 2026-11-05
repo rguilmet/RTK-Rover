@@ -312,6 +312,34 @@ void task_display_and_audio(void *pvParameters)
             axp2101_bsp_read(&pwr);
         }
 
+        // Auto-shutdown on battery inactivity timeout
+        static uint32_t s_battery_since_ms = 0;
+        static uint32_t s_last_touch_seen_ms = 0;
+        uint32_t touch_act_ms = rover_get_last_user_activity_ms();
+        if (touch_act_ms != s_last_touch_seen_ms) {
+            s_last_touch_seen_ms = touch_act_ms;
+            s_battery_since_ms = now; // User interacted: reset timeout window
+        }
+
+        if (pwr.vbus_good) {
+            s_battery_since_ms = now; // On USB power: hold timer reset
+        } else {
+            if (s_battery_since_ms == 0) s_battery_since_ms = now;
+            if (current_settings.auto_shutdown_battery_min > 0) {
+                uint32_t timeout_ms = (uint32_t)current_settings.auto_shutdown_battery_min * 60000ULL;
+                if (now - s_battery_since_ms >= timeout_ms) {
+                    Serial.printf("[POWER] Battery inactivity timeout (%u min) expired -> Initiating clean shutdown.\n",
+                                  current_settings.auto_shutdown_battery_min);
+                    rover_lvgl_lock(200);
+                    save_settings();
+                    play_rover_beep(800, 300);
+                    vTaskDelay(pdMS_TO_TICKS(350));
+                    axp2101_bsp_power_off();
+                    rover_lvgl_unlock();
+                }
+            }
+        }
+
         // 4. Persist dirty settings after 4s debounce
         if (settings_dirty && (now - last_settings_change_ms > 4000)) {
             save_settings();
@@ -358,6 +386,7 @@ void task_display_and_audio(void *pvParameters)
             ui_state.battery_percent   = pwr.battery_percent;
             ui_state.is_charging       = pwr.is_charging;
             ui_state.vbus_present      = pwr.vbus_good;
+            ui_state.vbus_voltage      = pwr.vbus_voltage_v;
 
             // Phase 5: Deep-Woods Heading Fallback (Kinematic Displacement Azimuth & Gyro Yaw)
             nav_heading_displacement_update(ui_state.tip_lat,

@@ -297,6 +297,18 @@ static void rover_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8
     lv_disp_flush_ready(disp);
 }
 
+static volatile uint32_t s_last_user_activity_ms = 0;
+
+uint32_t rover_get_last_user_activity_ms(void)
+{
+    return s_last_user_activity_ms;
+}
+
+void rover_note_user_activity(void)
+{
+    s_last_user_activity_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
+
 static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData)
 {
     (void)indev;
@@ -324,6 +336,7 @@ static void TouchInputReadCallback(lv_indev_t *indev, lv_indev_data_t *indevData
             indevData->point.x = last_x;
             indevData->point.y = last_y;
             indevData->state   = LV_INDEV_STATE_PRESSED;
+            s_last_user_activity_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
             if (current_settings.enable_touch_logging) {
                 uint32_t now = (uint32_t)(esp_timer_get_time() / 1000ULL);
@@ -1373,13 +1386,13 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
     lv_obj_set_style_text_color(hdr_units_lbl, current_settings.use_imperial_units ? COLOR_UNIT_IMP_AMBER : COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -92, 2);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -145, 2);
 
     hdr_wifi_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);
     lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -70, 2);
+    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -118, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");
@@ -2299,6 +2312,7 @@ void update_rover_ui(const RoverUIData_t *d)
     if (!rover_lvgl_lock(100)) return;
 
     char buf[512];
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
     // 1. Update Persistent Header Bar (Date, Time, Units, Battery, Fix, RTCM)
     RtcDateTime_t lt;
@@ -2309,11 +2323,29 @@ void update_rover_ui(const RoverUIData_t *d)
     lv_label_set_text(hdr_datetime_lbl, buf);
 
 
-    snprintf(buf, sizeof(buf), "%u%%%s %.2fV",
-             d->battery_percent,
-             d->is_charging ? "+" : "",
-             d->battery_voltage);
-    lv_label_set_text(hdr_batt_lbl, buf);
+    if (d->vbus_present) {
+        snprintf(buf, sizeof(buf), "%s %.2fV%s",
+                 LV_SYMBOL_USB,
+                 d->vbus_voltage,
+                 d->is_charging ? "+" : "");
+        lv_label_set_text(hdr_batt_lbl, buf);
+        lv_obj_set_style_text_color(hdr_batt_lbl, lv_color_hex(0x22D3EE), 0); // Cyan
+    } else {
+        const char *bat_sym = (d->battery_percent >= 80) ? LV_SYMBOL_BATTERY_FULL :
+                              (d->battery_percent >= 55) ? LV_SYMBOL_BATTERY_3 :
+                              (d->battery_percent >= 30) ? LV_SYMBOL_BATTERY_2 :
+                              (d->battery_percent >= 15) ? LV_SYMBOL_BATTERY_1 :
+                                                           LV_SYMBOL_BATTERY_EMPTY;
+        snprintf(buf, sizeof(buf), "%s %u%% %.2fV",
+                 bat_sym,
+                 d->battery_percent,
+                 d->battery_voltage);
+        lv_label_set_text(hdr_batt_lbl, buf);
+        lv_color_t bat_col = (d->battery_percent <= 20) ? lv_palette_main(LV_PALETTE_RED) :
+                             (d->battery_percent <= 40) ? lv_palette_main(LV_PALETTE_AMBER) :
+                                                          lv_palette_main(LV_PALETTE_GREEN);
+        lv_obj_set_style_text_color(hdr_batt_lbl, bat_col, 0);
+    }
 
     // Wi-Fi Status Badge in Row 1 (Icon only)
     if (hdr_wifi_lbl) {
@@ -2343,108 +2375,126 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
     // Row 2: Master Antenna (ANT1) Fix Badge & Metrics
-    const char *fix_str = "NO FIX";
-    lv_color_t fix_col  = lv_palette_main(LV_PALETTE_RED);
-    if (d->fix_type == GNSS_FIX_RTK_FIXED) {
-        fix_str = "RTK FIX";
-        fix_col = lv_palette_main(LV_PALETTE_GREEN);
-    } else if (d->fix_type == GNSS_FIX_RTK_FLOAT) {
-        fix_str = "RTK FLT";
-        fix_col = lv_palette_main(LV_PALETTE_ORANGE);
-    } else if (d->fix_type == GNSS_FIX_DGPS) {
-        fix_str = "DGPS";
-        fix_col = lv_palette_main(LV_PALETTE_BLUE);
-    } else if (d->fix_type == GNSS_FIX_SINGLE) {
-        fix_str = "SINGLE";
-        fix_col = lv_palette_main(LV_PALETTE_AMBER);
-    }
-    lv_label_set_text(hdr_m_fix_lbl, fix_str);
-    lv_obj_set_style_bg_color(hdr_m_fix_badge, fix_col, 0);
-
-    char acc_str[24];
-    nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
-    uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
-    snprintf(buf, sizeof(buf), "SV:%u/%u", d->num_sats, sv_view);
-    lv_label_set_text(hdr_m_sats_lbl, buf);
-
-    snprintf(buf, sizeof(buf), "+/-%s", acc_str);
-    lv_label_set_text(hdr_m_acc_lbl, buf);
-    lv_obj_set_style_text_color(hdr_m_acc_lbl, fix_col, 0);
-
-    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-    uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
-
-    // Header Row 2: LoRa Signal Strength (Numeric "LoRa: -104dB" or "LoRa: -- dB")
-    if (d->e220_stats.rssi_valid && d->e220_stats.rx_bytes_total > 0) {
-        bool is_stale = (last_radio_rx_age > 4000);
-        snprintf(buf, sizeof(buf), "LoRa: %ddB", (int)d->e220_stats.last_pkt_rssi_dbm);
-        lv_label_set_text(hdr_m_rtcm_lbl, buf);
-        lv_obj_set_style_text_color(hdr_m_rtcm_lbl, get_lora_rssi_color(d->e220_stats.last_pkt_rssi_dbm, is_stale), 0);
-    } else {
-        lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: -- dB");
+    if (!d->vbus_present) {
+        lv_label_set_text(hdr_m_fix_lbl, "OFF");
+        lv_obj_set_style_bg_color(hdr_m_fix_badge, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_label_set_text(hdr_m_sats_lbl, "SV:--");
+        lv_label_set_text(hdr_m_acc_lbl, "+/- ---");
+        lv_obj_set_style_text_color(hdr_m_acc_lbl, lv_color_hex(0x64748B), 0);
+        lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: OFF");
         lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
+    } else {
+        const char *fix_str = "NO FIX";
+        lv_color_t fix_col  = lv_palette_main(LV_PALETTE_RED);
+        if (d->fix_type == GNSS_FIX_RTK_FIXED) {
+            fix_str = "RTK FIX";
+            fix_col = lv_palette_main(LV_PALETTE_GREEN);
+        } else if (d->fix_type == GNSS_FIX_RTK_FLOAT) {
+            fix_str = "RTK FLT";
+            fix_col = lv_palette_main(LV_PALETTE_ORANGE);
+        } else if (d->fix_type == GNSS_FIX_DGPS) {
+            fix_str = "DGPS";
+            fix_col = lv_palette_main(LV_PALETTE_BLUE);
+        } else if (d->fix_type == GNSS_FIX_SINGLE) {
+            fix_str = "SINGLE";
+            fix_col = lv_palette_main(LV_PALETTE_AMBER);
+        }
+        lv_label_set_text(hdr_m_fix_lbl, fix_str);
+        lv_obj_set_style_bg_color(hdr_m_fix_badge, fix_col, 0);
+
+        char acc_str[24];
+        nav_format_distance(d->h_acc_m, acc_str, sizeof(acc_str));
+        uint8_t sv_view = (d->sats_in_view >= d->num_sats) ? d->sats_in_view : d->num_sats;
+        snprintf(buf, sizeof(buf), "SV:%u/%u", d->num_sats, sv_view);
+        lv_label_set_text(hdr_m_sats_lbl, buf);
+
+        snprintf(buf, sizeof(buf), "+/-%s", acc_str);
+        lv_label_set_text(hdr_m_acc_lbl, buf);
+        lv_obj_set_style_text_color(hdr_m_acc_lbl, fix_col, 0);
+
+        now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+        uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
+
+        // Header Row 2: LoRa Signal Strength (Numeric "LoRa: -104dB" or "LoRa: -- dB")
+        if (d->e220_stats.rssi_valid && d->e220_stats.rx_bytes_total > 0) {
+            bool is_stale = (last_radio_rx_age > 4000);
+            snprintf(buf, sizeof(buf), "LoRa: %ddB", (int)d->e220_stats.last_pkt_rssi_dbm);
+            lv_label_set_text(hdr_m_rtcm_lbl, buf);
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, get_lora_rssi_color(d->e220_stats.last_pkt_rssi_dbm, is_stale), 0);
+        } else {
+            lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: -- dB");
+            lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
+        }
     }
 
     // Row 3: Dual-Antenna Heading Status & Metrics
-    const char *hdg_badge_str = "HDG ---";
-    lv_color_t hdg_badge_col  = lv_color_hex(0x3A3F47);
-    if (d->heading_valid) {
-        if (d->heading_source == HDG_SRC_DUAL_FIX) {
-            hdg_badge_str = "SLV FIX";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
-        } else if (d->heading_source == HDG_SRC_DUAL_FLT) {
-            hdg_badge_str = "SLV FLT";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_CYAN);
-        } else if (d->heading_source == HDG_SRC_DISP) {
-            hdg_badge_str = "HDG WALK";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
-        } else if (d->heading_source == HDG_SRC_GYRO) {
-            hdg_badge_str = "HDG GYRO";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
-        } else if (d->heading_source == HDG_SRC_COG) {
-            hdg_badge_str = "HDG COG";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_CYAN);
-        } else if (d->heading_source == HDG_SRC_HOLD) {
-            hdg_badge_str = "HDG HLD";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
-        } else if (d->heading_is_fixed) {
-            hdg_badge_str = "SLV FIX";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
-        } else {
-            hdg_badge_str = "SLV FLT";
-            hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
+    if (!d->vbus_present) {
+        if (hdr_s_fix_lbl) lv_label_set_text(hdr_s_fix_lbl, "OFF");
+        if (hdr_s_fix_badge) lv_obj_set_style_bg_color(hdr_s_fix_badge, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_label_set_text(hdr_s_sats_lbl, "SV:--");
+        lv_label_set_text(hdr_s_bl_lbl, "BL:--.-cm");
+        lv_label_set_text(hdr_s_hdg_lbl, "Hdg:---.-");
+    } else {
+        const char *hdg_badge_str = "HDG ---";
+        lv_color_t hdg_badge_col  = lv_color_hex(0x3A3F47);
+        if (d->heading_valid) {
+            if (d->heading_source == HDG_SRC_DUAL_FIX) {
+                hdg_badge_str = "SLV FIX";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
+            } else if (d->heading_source == HDG_SRC_DUAL_FLT) {
+                hdg_badge_str = "SLV FLT";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_CYAN);
+            } else if (d->heading_source == HDG_SRC_DISP) {
+                hdg_badge_str = "HDG WALK";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
+            } else if (d->heading_source == HDG_SRC_GYRO) {
+                hdg_badge_str = "HDG GYRO";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
+            } else if (d->heading_source == HDG_SRC_COG) {
+                hdg_badge_str = "HDG COG";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_CYAN);
+            } else if (d->heading_source == HDG_SRC_HOLD) {
+                hdg_badge_str = "HDG HLD";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
+            } else if (d->heading_is_fixed) {
+                hdg_badge_str = "SLV FIX";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_GREEN);
+            } else {
+                hdg_badge_str = "SLV FLT";
+                hdg_badge_col = lv_palette_main(LV_PALETTE_ORANGE);
+            }
         }
-    }
-    if (hdr_s_fix_lbl) lv_label_set_text(hdr_s_fix_lbl, hdg_badge_str);
-    if (hdr_s_fix_badge) lv_obj_set_style_bg_color(hdr_s_fix_badge, hdg_badge_col, 0);
+        if (hdr_s_fix_lbl) lv_label_set_text(hdr_s_fix_lbl, hdg_badge_str);
+        if (hdr_s_fix_badge) lv_obj_set_style_bg_color(hdr_s_fix_badge, hdg_badge_col, 0);
 
-    if (d->slave_num_sats > 0) {
-        snprintf(buf, sizeof(buf), "SV:%u", d->slave_num_sats);
-    } else {
-        snprintf(buf, sizeof(buf), "SV:--");
-    }
-    lv_label_set_text(hdr_s_sats_lbl, buf);
+        if (d->slave_num_sats > 0) {
+            snprintf(buf, sizeof(buf), "SV:%u", d->slave_num_sats);
+        } else {
+            snprintf(buf, sizeof(buf), "SV:--");
+        }
+        lv_label_set_text(hdr_s_sats_lbl, buf);
 
-    if (d->baseline_length_m > 0.01f) {
-        snprintf(buf, sizeof(buf), "BL:%.1fcm", d->baseline_length_m * 100.0f);
-    } else {
-        snprintf(buf, sizeof(buf), "BL:--.-cm");
-    }
-    lv_label_set_text(hdr_s_bl_lbl, buf);
+        if (d->baseline_length_m > 0.01f) {
+            snprintf(buf, sizeof(buf), "BL:%.1fcm", d->baseline_length_m * 100.0f);
+        } else {
+            snprintf(buf, sizeof(buf), "BL:--.-cm");
+        }
+        lv_label_set_text(hdr_s_bl_lbl, buf);
 
-    if (d->heading_valid) {
-        const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
-                              (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
-                              (d->heading_source == HDG_SRC_DISP)     ? "WLK" :
-                              (d->heading_source == HDG_SRC_GYRO)     ? "GYR" :
-                              (d->heading_source == HDG_SRC_COG)      ? "COG" :
-                              (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
-                              (d->heading_is_fixed ? "FIX" : "FLT");
-        snprintf(buf, sizeof(buf), "Hdg:%.1f %s", d->true_heading_deg, src_tag);
-    } else {
-        snprintf(buf, sizeof(buf), "Hdg:---.-");
+        if (d->heading_valid) {
+            const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
+                                  (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
+                                  (d->heading_source == HDG_SRC_DISP)     ? "WLK" :
+                                  (d->heading_source == HDG_SRC_GYRO)     ? "GYR" :
+                                  (d->heading_source == HDG_SRC_COG)      ? "COG" :
+                                  (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
+                                  (d->heading_is_fixed ? "FIX" : "FLT");
+            snprintf(buf, sizeof(buf), "Hdg:%.1f %s", d->true_heading_deg, src_tag);
+        } else {
+            snprintf(buf, sizeof(buf), "Hdg:---.-");
+        }
+        lv_label_set_text(hdr_s_hdg_lbl, buf);
     }
-    lv_label_set_text(hdr_s_hdg_lbl, buf);
 
     // Row 4: Streamlined Coordinates Bar (7 decimals in Montserrat 16 for high visibility)
     char hgt_str[24], dist_str[24], dn_str[24], de_str[24];
@@ -3665,13 +3715,26 @@ void update_rover_ui(const RoverUIData_t *d)
 
     // 8. Update Tile 4: Power / PMIC AXP2101 Diagnostics
     if (t4_power_lbl) {
-        snprintf(buf, sizeof(buf),
-                 "[POWER / PMIC AXP2101]\n"
-                 "VBAT: %.2fV (%u%%) | VBUS: %s | Chg: %s",
-                 d->battery_voltage,
-                 (unsigned int)d->battery_percent,
-                 d->vbus_present ? "YES" : "NO",
-                 d->is_charging ? "YES" : "NO");
+        if (d->vbus_present) {
+            snprintf(buf, sizeof(buf),
+                     "[POWER / PMIC AXP2101]\n"
+                     "Input: USB Power Pack (%.2fV) | 5V Rail: ON\n"
+                     "Backup Bat: %.2fV (%u%%) | Chg: %s\n"
+                     "Status: UPS Charged & Standby",
+                     d->vbus_voltage,
+                     d->battery_voltage,
+                     (unsigned int)d->battery_percent,
+                     d->is_charging ? "YES (500mA)" : "FLOAT (100%)");
+        } else {
+            snprintf(buf, sizeof(buf),
+                     "[POWER / PMIC AXP2101]\n"
+                     "Input: BACKUP BATTERY ONLY | 5V Rail: OFF\n"
+                     "Battery: %.2fV (%u%%) | ESP32+LCD Drain: ~130mA\n"
+                     "Auto-Shutdown: %u min timeout (Touch resets)",
+                     d->battery_voltage,
+                     (unsigned int)d->battery_percent,
+                     current_settings.auto_shutdown_battery_min);
+        }
         lv_label_set_text(t4_power_lbl, buf);
     }
 

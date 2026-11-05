@@ -81,7 +81,7 @@ timeline
 +------------------------------------+----------------------------------+----------------------------+
 | • Mathematical Kinematics upfront  | • I2C clock-stretching stalls    | • Open M0 pull-up trap     |
 | • Sub-inch deed boundary recovery  | • LVGL float formatting panics   | • AUX rising before subpkt2|
-| • Decoupled legal data architecture| • Missing secondary coordinates  | • Passive 32MHz XTAL drift |
+| • Decoupled legal data architecture| • Missing secondary coordinates  |                            |
 | • Deep-woods heading fallback      | • 9.6k channel saturation math   | • Flash erase UART FIFO hit|
 | • Dual-format telemetry pacer      | • Core 0/1 telemetry desync      | • 320x480 screen budgeting |
 +------------------------------------+----------------------------------+----------------------------+
@@ -100,7 +100,6 @@ timeline
 
 ### 4.3. The Ugly
 * **Ebyte Silicon Realities vs. Datasheet Claims:** The official Ebyte manuals claimed `AUX` stayed low during RF transmission and that EEPROM writes acknowledged with `0xC1`. In reality, `AUX` stays high on `<= 200 B` packets, rises when Subpacket 2 *starts* airing on `201..400 B` packets, and certain firmware versions echo `0xC0`. Only oscilloscope traces and microsecond-level timing loops revealed the truth.
-* **Passive Quartz Thermal Drift:** Under continuous $1\text{ W}$ transmission, PA self-heating drifted the passive $32\text{ MHz}$ crystal. Pacing duty cycles to $\le 65\%$ and standardizing on clean Channel 75 ($925.125\text{ MHz}$) mitigated this vulnerability.
 
 ---
 

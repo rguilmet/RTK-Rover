@@ -27,6 +27,10 @@ void create_rover_ui(void);
 void update_rover_ui(const RoverUIData_t *data);
 void refresh_waypoint_table_ui(void);
 
+// User Activity Tracking for Battery Timeout Auto-Shutdown
+uint32_t rover_get_last_user_activity_ms(void);
+void rover_note_user_activity(void);
+
 #ifdef __cplusplus
 }
 #endif

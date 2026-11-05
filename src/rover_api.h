@@ -199,6 +199,7 @@ typedef struct {
     uint8_t          battery_percent;
     bool             is_charging;
     bool             vbus_present;
+    float            vbus_voltage;
 
     // Survey Logging State (Tile 2 BOOT button)
     bool             survey_in_progress;

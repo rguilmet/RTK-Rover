@@ -52,7 +52,8 @@ struct SystemSettings current_settings = {
     false,            // enable_imu_logging (periodic 1 Hz IMU pose and raw accelerometer logs)
     true,             // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
     true,             // enable_touch_logging (log touch events and coordinates to Serial Monitor)
-    true              // map_show_route_trail (render breadcrumb dots of logged route on Map View)
+    true,             // map_show_route_trail (render breadcrumb dots of logged route on Map View)
+    5                 // auto_shutdown_battery_min (5 min default timeout on battery only; 0 = disabled)
 };
 
 volatile bool settings_dirty = false;
@@ -343,6 +344,7 @@ extern "C" void load_settings(void) {
     if (!doc["enable_touch_logging"].isNull()) current_settings.enable_touch_logging = doc["enable_touch_logging"];
     else if (!doc["log_touch_events"].isNull()) current_settings.enable_touch_logging = doc["log_touch_events"];
     if (!doc["map_show_route_trail"].isNull()) current_settings.map_show_route_trail = doc["map_show_route_trail"];
+    if (!doc["auto_shutdown_battery_min"].isNull()) current_settings.auto_shutdown_battery_min = doc["auto_shutdown_battery_min"];
 
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
     if (sd_card_mounted && !migrate_e220_profile) {
@@ -422,6 +424,7 @@ extern "C" void save_settings(void) {
     doc["enable_telemetry_logging"]  = current_settings.enable_telemetry_logging;
     doc["enable_touch_logging"]      = current_settings.enable_touch_logging;
     doc["map_show_route_trail"]      = current_settings.map_show_route_trail;
+    doc["auto_shutdown_battery_min"] = current_settings.auto_shutdown_battery_min;
 
     String output;
     serializeJsonPretty(doc, output);

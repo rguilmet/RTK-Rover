@@ -17,6 +17,7 @@ from e220_pacer import (
     MSG_ID_REQ_SWITCH,
     MSG_ID_ACK_SWITCH,
     FMT_TELEMETRY,
+    FMT_TELEMETRY_LEGACY,
     FMT_REQ_SWITCH,
     FMT_ACK_SWITCH,
     crc16_ccitt,
@@ -24,17 +25,21 @@ from e220_pacer import (
 
 
 def test_telemetry_packing():
-    # 39-byte frame
+    # 45-byte modern frame
     tip_lat = 43.73191234
     tip_lon = -70.62373156
     tip_height = 88.42
     h_acc_mm = 12
     fix_type = 4
+    ant2_fix_type = 4
+    baseline_mm = 554
+    baseline_pitch_cdeg = 20
+    heading_source = 1
     sats_m = 18
     sats_s = 14
     hdg_cdeg = 23450
-    bat_pct = 88
-    bat_mv = 4020
+    bat_pct = 255  # USB power pack mode
+    bat_mv = 5040  # 5.04V
     rssi = -84
     noise = -102
     seq = 42
@@ -43,12 +48,16 @@ def test_telemetry_packing():
         FMT_TELEMETRY,
         ROVER_SYNC,
         MSG_ID_TELEMETRY,
-        33,
+        39,  # payload length
         tip_lat,
         tip_lon,
         tip_height,
         h_acc_mm,
         fix_type,
+        ant2_fix_type,
+        baseline_mm,
+        baseline_pitch_cdeg,
+        heading_source,
         sats_m,
         sats_s,
         hdg_cdeg,
@@ -59,7 +68,7 @@ def test_telemetry_packing():
         seq,
         0,
     )
-    assert len(body) == 39, f"Expected 39B, got {len(body)}"
+    assert len(body) == 45, f"Expected 45B, got {len(body)}"
     crc = crc16_ccitt(body[:-2])
     frame = body[:-2] + struct.pack("<H", crc)
 
@@ -67,21 +76,25 @@ def test_telemetry_packing():
     unpacked = struct.unpack(FMT_TELEMETRY, frame)
     assert unpacked[0] == ROVER_SYNC
     assert unpacked[1] == MSG_ID_TELEMETRY
-    assert unpacked[2] == 33
+    assert unpacked[2] == 39
     assert abs(unpacked[3] - tip_lat) < 1e-7
     assert abs(unpacked[4] - tip_lon) < 1e-7
     assert unpacked[6] == 12
     assert unpacked[7] == 4
-    assert unpacked[8] == 18
-    assert unpacked[9] == 14
-    assert unpacked[10] == 23450
-    assert unpacked[11] == 88
-    assert unpacked[12] == 4020
-    assert unpacked[13] == -84
-    assert unpacked[14] == -102
-    assert unpacked[15] == 42
-    assert unpacked[16] == crc
-    print("[PASS] Telemetry packing, size (39B) and CRC16 verified!")
+    assert unpacked[8] == 4
+    assert unpacked[9] == 554
+    assert unpacked[10] == 20
+    assert unpacked[11] == 1
+    assert unpacked[12] == 18
+    assert unpacked[13] == 14
+    assert unpacked[14] == 23450
+    assert unpacked[15] == 255
+    assert unpacked[16] == 5040
+    assert unpacked[17] == -84
+    assert unpacked[18] == -102
+    assert unpacked[19] == 42
+    assert unpacked[20] == crc
+    print("[PASS] Telemetry packing, size (45B), USB sentinel (255) and CRC16 verified!")
 
 
 def test_rate_switch_frames():

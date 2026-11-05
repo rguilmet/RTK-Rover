@@ -68,7 +68,7 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "3.3.1"
+__version__ = "3.4.0"
 __date__ = "2026-11-05"
 
 # Force unbuffered output so systemd journalctl displays entries in real time
@@ -1037,10 +1037,12 @@ class E220Pacer:
         hdg_valid = bool(sats_s & 0x40) or (heading_source in (1, 2, 3, 4, 5, 6))
         hdg_fixed = bool(sats_s & 0x80) or (heading_source == 1)
 
+        bat_str = f"PWR:USB ({bat_mv/1000.0:.2f}V)" if bat_pct == 255 else f"Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V)"
+
         print(
             f"[ROVER TEL #{seq:03d}] ANT1:{fix_str} ({sats_m}M) | "
             f"ANT2:{slv_fix_str} ({sats_s_clean}S, BL:{bl_cm:.1f}cm, P:{pitch_deg:+.1f}deg) | "
-            f"Hdg:{hdg_deg:5.1f}deg [{hdg_tag}] | Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V) | "
+            f"Hdg:{hdg_deg:5.1f}deg [{hdg_tag}] | {bat_str} | "
             f"RSSI:{r_rssi}dBm | Pos:{lat:.7f}, {lon:.7f}, {height:.2f}m",
             flush=True,
         )

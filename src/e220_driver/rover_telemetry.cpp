@@ -85,12 +85,19 @@ size_t rover_build_telemetry_packet(uint8_t *out_buf,
     if (hdg > 360.0f) hdg = 360.0f;
     pkt.heading_cdeg = (uint16_t)(hdg * 100.0f + 0.5f);
 
-    pkt.battery_pct = state->battery_percent;
-    // Voltage in millivolts
-    float v_mv = state->battery_voltage * 1000.0f;
-    if (v_mv < 0.0f) v_mv = 0.0f;
-    if (v_mv > 65535.0f) v_mv = 65535.0f;
-    pkt.battery_mv = (uint16_t)v_mv;
+    if (state->vbus_present) {
+        pkt.battery_pct = 255; // Sentinel: USB external power
+        float vbus_mv = state->vbus_voltage * 1000.0f;
+        if (vbus_mv < 0.0f) vbus_mv = 0.0f;
+        if (vbus_mv > 65535.0f) vbus_mv = 65535.0f;
+        pkt.battery_mv = (uint16_t)vbus_mv;
+    } else {
+        pkt.battery_pct = state->battery_percent;
+        float v_mv = state->battery_voltage * 1000.0f;
+        if (v_mv < 0.0f) v_mv = 0.0f;
+        if (v_mv > 65535.0f) v_mv = 65535.0f;
+        pkt.battery_mv = (uint16_t)v_mv;
+    }
 
     pkt.rover_rssi_dbm  = (int8_t)state->e220_stats.last_pkt_rssi_dbm;
     pkt.rover_noise_dbm = (int8_t)state->e220_stats.ambient_noise_dbm;
