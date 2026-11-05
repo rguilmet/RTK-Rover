@@ -228,6 +228,17 @@ class E220Pacer:
                 resolved_log_dir = "/home/pi/rover_logs"
             elif os.environ.get("SUDO_USER") and os.path.isdir(f"/home/{os.environ.get('SUDO_USER')}"):
                 resolved_log_dir = f"/home/{os.environ.get('SUDO_USER')}/rover_logs"
+            else:
+                # Find the first non-root interactive user directory in /home
+                try:
+                    candidates = [
+                        os.path.join("/home", u) for u in os.listdir("/home")
+                        if os.path.isdir(os.path.join("/home", u)) and not u.startswith(".")
+                    ]
+                    if candidates:
+                        resolved_log_dir = os.path.join(candidates[0], "rover_logs")
+                except Exception:
+                    pass
         self.log_dir = resolved_log_dir
         self.log_retention_days = log_retention_days
         self.max_log_mb = max_log_mb
@@ -235,6 +246,25 @@ class E220Pacer:
         self.enable_csv = not no_csv
         self.current_log_date = ""
         self.current_log_file = None
+
+        # Pre-create log directory immediately on startup with full access
+        if self.enable_csv:
+            try:
+                os.makedirs(self.log_dir, exist_ok=True)
+                os.chmod(self.log_dir, 0o777)
+                # If created in /root, also attempt to symlink into /home candidate for convenience
+                if self.log_dir.startswith("/root"):
+                    for u in os.listdir("/home"):
+                        uhome = os.path.join("/home", u)
+                        if os.path.isdir(uhome) and not u.startswith("."):
+                            ulink = os.path.join(uhome, "rover_logs")
+                            if not os.path.exists(ulink):
+                                try:
+                                    os.symlink(self.log_dir, ulink)
+                                except OSError:
+                                    pass
+            except OSError:
+                pass
 
         # Telemetry counters
         self.total_bytes_in = 0
