@@ -68,7 +68,7 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 __date__ = "2026-11-04"
 
 # Force unbuffered output so systemd journalctl displays entries in real time
@@ -183,6 +183,7 @@ class E220Pacer:
         max_log_mb: int = 50,
         compress_logs: bool = True,
         no_csv: bool = False,
+        no_interleave: bool = False,
     ):
         self.port_name = port
         self.baud = baud
@@ -240,6 +241,13 @@ class E220Pacer:
         self.src_orphan_bytes = 0
         self.backlog_shed_frames = 0
         self.rtcm_stats: dict[int, int] = {}
+
+        # Adaptive Constellation Interleaver State
+        self.enable_interleave = not no_interleave
+        self.seen_secondary_types: set[int] = set()
+        self.epoch_counter = 0
+        self.last_epoch_start_time = 0.0
+        self.interleave_dropped_frames = 0
 
     def estimate_subpacket_air_s(self, n_bytes: int) -> float:
         """
@@ -704,6 +712,93 @@ class E220Pacer:
                     flush=True,
                 )
 
+    def should_send_rtcm_frame(self, msg_type: int) -> bool:
+        """
+        Adaptive Constellation Interleaver:
+        At air rates <= 9.6 kbps, the full multi-constellation MSM set (~650B) exceeds
+        the 1.0s Time-on-Air budget + 200ms half-duplex quiet window.
+        - 1005, 1006, 1033, 1230 (Base ARP, antenna, GLONASS biases): ALWAYS TRANSMITTED.
+        - Air rate >= 19.2 kbps: 100% passthrough (sufficient RF channel capacity).
+        - Air rate == 9.6 kbps: GPS (1074) transmitted every second (1 Hz).
+          Secondary constellations (GLO 1084, GAL 1094, BDS 1124) are interleaved across epochs:
+            - If 2 secondaries active: alternate even/odd epochs (0.5 Hz each).
+            - If 3 secondaries active: rotate across 3 epochs (0.33 Hz each).
+        - Air rate <= 4.8 kbps: Rotate 1 constellation per second (GPS -> GAL -> GPS -> GLO).
+        """
+        if msg_type in (1005, 1006, 1033, 1230):
+            return True
+
+        now = time.monotonic()
+        is_new_epoch = False
+        if msg_type == 1074 and (now - self.last_epoch_start_time) >= 0.500:
+            is_new_epoch = True
+        elif (now - self.last_epoch_start_time) >= 0.850 and msg_type in (1084, 1094, 1124):
+            is_new_epoch = True
+
+        if is_new_epoch:
+            self.epoch_counter += 1
+            self.last_epoch_start_time = now
+
+        if msg_type in (1084, 1094, 1124):
+            self.seen_secondary_types.add(msg_type)
+
+        if not self.enable_interleave or self.air_rate_kbps >= 19.2:
+            return True
+
+        # GPS (1074): Primary constellation
+        if msg_type == 1074:
+            if self.air_rate_kbps == 9.6:
+                return True
+            elif self.air_rate_kbps <= 4.8:
+                # At <=4.8k, GPS sent on even epochs (0.5 Hz)
+                return (self.epoch_counter % 2) == 0
+
+        # Secondary constellations: Interleave at <= 9.6k
+        if msg_type in (1084, 1094, 1124):
+            active = sorted(self.seen_secondary_types)
+            if not active:
+                return True
+
+            if self.air_rate_kbps == 9.6:
+                if len(active) == 1:
+                    return (self.epoch_counter % 2) == 0
+                target_idx = self.epoch_counter % len(active)
+                return active[target_idx] == msg_type
+
+            elif self.air_rate_kbps <= 4.8:
+                # At <=4.8k, secondary constellation sent on odd epochs (0.5 Hz / N)
+                if (self.epoch_counter % 2) == 1:
+                    sec_epoch = (self.epoch_counter // 2) % len(active)
+                    return active[sec_epoch] == msg_type
+                return False
+
+        return True
+
+    def _is_terminal_burst_msg(self, msg_type: int) -> bool:
+        """Determines if msg_type is the final MSM constellation frame in the incoming epoch burst."""
+        if msg_type == 1124:
+            return True
+        if msg_type == 1094 and 1124 not in self.seen_secondary_types:
+            return True
+        if msg_type == 1084 and 1094 not in self.seen_secondary_types and 1124 not in self.seen_secondary_types:
+            if self.epoch_counter > 1 or self.rtcm_stats.get(1094, 0) == 0:
+                return True
+        if msg_type == 1074 and not self.seen_secondary_types and self.epoch_counter > 1:
+            return True
+        return False
+
+    def _enforce_quiet_window(self, buffer: bytearray) -> None:
+        """Enforces guaranteed 200ms half-duplex uplink quiet window and clears stale backlog."""
+        quiet_deadline = time.monotonic() + 0.200
+        while running and time.monotonic() < quiet_deadline:
+            self.poll_uplink()
+            self._check_watchdog_revert()
+            time.sleep(0.010)
+
+        # Shed backlog at lower air rates to keep differential age fresh
+        if len(buffer) > 600 and self.air_rate_kbps <= 9.6:
+            self._shed_stale_backlog(buffer)
+
     def _write_atomic_json(self, data: dict) -> None:
         """Writes live rover telemetry atomically to RAM tmpfs (/run or /tmp) with zero SD card wear."""
         for target_dir in ("/run", "/tmp"):
@@ -1065,6 +1160,21 @@ class E220Pacer:
                     continue
 
                 del buffer[:total_frame_len]
+
+                # Adaptive Constellation Interleaver (at <=9.6 kbps air rates)
+                if not self.should_send_rtcm_frame(msg_type):
+                    self.interleave_dropped_frames += 1
+                    if self.verbose:
+                        print(
+                            f"[INTERLEAVE] Skipped Type:{msg_type:<4d} in Epoch #{self.epoch_counter} "
+                            f"to conserve {self.air_rate_kbps}k channel bandwidth",
+                            flush=True,
+                        )
+                    if self._is_terminal_burst_msg(msg_type):
+                        self._enforce_quiet_window(buffer)
+                        break
+                    continue
+
                 self.send_rtcm_frame(frame, msg_type)
 
                 # Poll uplink and watchdog immediately after each frame transmission
@@ -1072,17 +1182,8 @@ class E220Pacer:
                 self._check_watchdog_revert()
 
                 # End of MSM constellation epoch: enforce guaranteed 200ms half-duplex uplink quiet window
-                if msg_type in (1094, 1124) or (msg_type == 1084 and self.rtcm_stats.get(1094, 0) == 0):
-                    quiet_deadline = time.monotonic() + 0.200
-                    while running and time.monotonic() < quiet_deadline:
-                        self.poll_uplink()
-                        self._check_watchdog_revert()
-                        time.sleep(0.010)
-
-                    # Shed backlog at lower air rates to keep differential age fresh
-                    if len(buffer) > 600 and self.air_rate_kbps <= 9.6:
-                        self._shed_stale_backlog(buffer)
-
+                if self._is_terminal_burst_msg(msg_type):
+                    self._enforce_quiet_window(buffer)
                     break  # Yield to outer loop for heartbeat reporting and fresh socket reads
 
                 # Poll socket opportunistically between frames so TCP buffer stays fresh
@@ -1101,11 +1202,12 @@ class E220Pacer:
                 t_str = time.strftime("%H:%M:%S")
                 frames_summary = ", ".join(f"{t}:{c}" for t, c in sorted(self.rtcm_stats.items())) or "None"
                 uplink_str = f"Uplink:[{self.uplink_packets_received} pkts, {self.rate_switch_count} sw]"
+                interleave_str = f"Interleave:[{self.interleave_dropped_frames} skp]" if self.enable_interleave else "Interleave:[OFF]"
                 print(
                     f"[{t_str}] [PACER HEARTBEAT] In:{self.total_bytes_in}B ({rate_in:.1f}B/s) | "
                     f"Out:{self.total_bytes_out}B ({rate_out:.1f}B/s) | "
                     f"Duty:{duty_pct:.1f}% | RTCM:[{frames_summary}] | "
-                    f"{uplink_str} | "
+                    f"{uplink_str} | {interleave_str} | "
                     f"Frames:{self.total_packets_sent} (Subpkts:{self.total_subpackets_sent} "
                     f"Rst:{self.watchdog_resets} SrcErr:{self.src_crc_errors})",
                     flush=True,
@@ -1298,6 +1400,7 @@ def main() -> int:
     parser.add_argument("--max-log-mb", type=int, default=50, help="Maximum total megabytes for rover log directory")
     parser.add_argument("--no-compress", action="store_true", help="Disable automatic gzip compression of yesterday's CSV")
     parser.add_argument("--no-csv", action="store_true", help="Disable CSV disk logging (RAM JSON only)")
+    parser.add_argument("--no-interleave", action="store_true", help="Disable adaptive constellation interleaving at <=9.6 kbps air rates")
 
     args = parser.parse_args()
     freq_mhz = 850.125 + args.channel
@@ -1329,6 +1432,7 @@ def main() -> int:
         max_log_mb=args.max_log_mb,
         compress_logs=not args.no_compress,
         no_csv=args.no_csv,
+        no_interleave=args.no_interleave,
     )
 
     if args.tcp_connect:

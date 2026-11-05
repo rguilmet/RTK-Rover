@@ -5,6 +5,27 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.3] - 2026-11-04
+
+### Added
+- **Base Station Adaptive Constellation Interleaver (`scripts/e220_pacer.py` v3.2.0):**
+  - Added self-adaptive MSM frame interleaver that actively manages channel bandwidth when operating at $\le 9.6\text{ kbps}$ LoRa air rates to prevent 1-second epoch oversubscription (RTKBase multi-constellation bursts of $\approx 650\text{B}$ exceed 1.2s Time-on-Air at 9600 baud).
+  - Preserves Base ARP (1005/1006), Antenna (1033), and GLONASS code-phase biases (1230) with 100% passthrough.
+  - At $9.6\text{ kbps}$, maintains GPS (1074) at 1 Hz while dynamically interleaving secondary constellations (GLONASS 1084, Galileo 1094, BeiDou 1124) across alternating epochs (0.5 Hz each for 2 secondaries, 0.33 Hz for 3).
+  - At $\le 4.8\text{ kbps}$, rotates 1 constellation per second in a 4-epoch sequence (GPS $\rightarrow$ Galileo $\rightarrow$ GPS $\rightarrow$ GLONASS).
+  - At $\ge 19.2\text{ kbps}$, retains 100% unconstrained passthrough of all constellations.
+  - Added CLI flag `--no-interleave` to disable interleaving if desired.
+  - Added `Interleave:[<count> skp]` metrics to the 5-second pacer heartbeat.
+  - Added automatic terminal burst detection (`_is_terminal_burst_msg`) and half-duplex quiet window enforcement (`_enforce_quiet_window`) so the radio is guaranteed 200 ms of quiet listening time for Rover telemetry and rate switch commands even when terminal frames are interleaved.
+
+### Fixed
+- **Montserrat Font Build Error in LVGL Port (`src/lvgl_port/lvgl_port.c`):**
+  - Replaced undeclared `lv_font_montserrat_20` with `lv_font_montserrat_16` on lines 2661, 2710, and 2919 for Line Stakeout lateral offset and Map View HUD scale indicators.
+  - Resolves `xtensa-esp32s3-elf-g++` compilation error `'lv_font_montserrat_20' undeclared` under Arduino IDE / ESP32-S3 toolchain where only fonts 12, 14, 16, and 24 are compiled in `lv_conf.h`.
+- **Semantic Versioning Bumps (`user_config.h`, `README.md`, `docs/user_manual.md`, `scripts/e220_pacer.py`):**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.5.3`.
+  - Bumped `e220_pacer.py` to `v3.2.0`.
+
 ## [v0.5.2] - 2026-11-04
 
 ### Added

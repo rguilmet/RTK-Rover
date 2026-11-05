@@ -2658,7 +2658,7 @@ void update_rover_ui(const RoverUIData_t *d)
             }
 
             // Row 1: Large Offset Display (t0_dist_lbl in Montserrat 20)
-            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
             char off_val_str[24];
             nav_format_offset((float)fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
             if (on_line) {
@@ -2707,7 +2707,7 @@ void update_rover_ui(const RoverUIData_t *d)
         } else {
             // Need at least 2 points to define baseline
             if (t0_dist_lbl) {
-                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
                 lv_label_set_text(t0_dist_lbl, "Need >= 2 Waypoints");
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xEF4444), 0);
             }
@@ -2916,7 +2916,7 @@ void update_rover_ui(const RoverUIData_t *d)
         }
 
         // Row 1: Distance & Bearing to Target (t0_dist_lbl in Montserrat 20)
-        lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
         if (d->has_active_target) {
             snprintf(buf, sizeof(buf), "%s @ %05.1f deg", dist_str, d->bearing_to_target_deg);
         } else {
