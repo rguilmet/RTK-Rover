@@ -34,9 +34,9 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
   * Multi-epoch averaging (`1s`, `5s`, `10s`, `30s`), visual progress bar, large `[LOG PIN NOW]` button, and circular marquee ID label.
   * **Consolidated $3\times 4$ Quick Settings Grid (12 Buttons):**
     * Row 1: `VOL: xx%` / `VOL: MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: xx%`
-    * Row 2: `NMEA: ON/OFF`, `ROUTE: ON/OFF`, `RTCM: ON/OFF`
+    * Row 2: `SERIAL: ON/OFF`, `NMEA: ON/OFF`, `RTCM: ON/OFF`
     * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
-    * Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k`
+    * Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k`
   * Centered Wi-Fi status banner below grid (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
 * **Multi-File Waypoint Browser & Selector (Tile 2):**
   * Multi-file CSV selector scanning `/waypoints.csv` and all `/waypoints_*.csv` on MicroSD card or internal flash.
@@ -113,7 +113,7 @@ All peripheral UART pin labels are **device-relative** (`<DEV>_TXD` is an output
 | **UM982 COM1** | `UM982_RXD0` | `GPIO 18` | **ESP32 TX** (`Serial1`) | ESP32 TX $\rightarrow$ UM982 COM1 RX (`115200 8N1`, Configuration commands) |
 | **UM982 COM2** | `UM982_TXD1` | `GPIO 47` | **ESP32 RX** (`Serial2`) | UM982 COM2 TX $\rightarrow$ ESP32 RX (`115200 8N1`, Response telemetry) |
 | **UM982 COM2** | `UM982_RXD1` | `GPIO 48` | **ESP32 TX** (`Serial2`) | ESP32 TX $\rightarrow$ UM982 COM2 RX (`115200 8N1`, RTCM3 correction stream) |
-| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`57600 8N1` Transparent / `9600` Config) |
+| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`115200 8N1` Transparent / `9600` Config) |
 | **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX $\rightarrow$ E220 RXD |
 | **E220 Control** | `E220_AUX` | `GPIO 21` | **ESP32 Input** | Module Busy (`LOW`) / Idle & Ready (`HIGH`) status |
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |
@@ -131,7 +131,7 @@ All peripheral UART pin labels are **device-relative** (`<DEV>_TXD` is an output
 ```mermaid
 flowchart TD
     subgraph Core0["Core 0: High-Throughput Real-Time Task (Priority 4)"]
-        E220_RX["E220 LoRa UART0 (IO41/42 @ 57600)"] --> RTCM_FWD["Forward RTCM3 Bytes"]
+        E220_RX["E220 LoRa UART0 (IO41/42 @ 115200)"] --> RTCM_FWD["Forward RTCM3 Bytes"]
         RTCM_FWD --> COM2_TX["UM982 COM2 UART2 (IO47/48 @ 115200)"]
         COM1_RX["UM982 COM1 UART1 (IO17/18 @ 115200)"] --> NMEA_PARSE["NMEA & UNIHEADINGA Parser\n(GPGGA, GPRMC, GPGST, GPGSV, GNGGAH, BASEINFOA)"]
         NMEA_PARSE --> KINEMATICS["3D Lever-Arm & Ground Tip Kinematics\n(Midpoint 27.75cm, Height 1.80m)"]
@@ -166,11 +166,11 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
   "apply_lever_arm": true,
   "pole_tilt_tare_pitch_deg": 0.0,
   "pole_tilt_tare_roll_deg": 0.0,
-  "e220_uart_baud": 57600,
-  "e220_channel": 55,
-  "e220_air_rate_kbps": 38.4,
+  "e220_uart_baud": 115200,
+  "e220_channel": 75,
+  "e220_air_rate_kbps": 19.2,
   "e220_tx_power_dbm": 21,
-  "e220_subpacket_bytes": 128,
+  "e220_subpacket_bytes": 200,
   "e220_lbt_enable": false,
   "survey_avg_seconds": 5,
   "default_label_prefix": "PIN",
@@ -199,7 +199,7 @@ Python command-line tools in scripts/ automate cadastral COGO network solving, w
 * **install_git_hooks.py (v1.1.0):** Installs the pre-push security verification hook into .git/hooks/pre-push.
 * **kml_to_waypoints.py (v1.0.0):** Converts Google Earth or GIS .kml boundary polygons, paths, and placemarks directly into the rover's 19-column waypoints.csv format with automatic label sanitization and multi-line description handling.
 * **validate_waypoints.py** (v1.2.0): Checks syntax, column count, bounds, and computes leg-by-leg distances, bearings, and closed-loop perimeter for any waypoint CSV file.
-* **e220_pacer.py (v2.8.1):** Base station hardware pacer daemon for RTKBase streams with silicon-calibrated Time-on-Air and Section 5.6.2 two-regime pacing.
+* **`e220_pacer.py` (v3.2.0):** Base station hardware pacer daemon for RTKBase streams with silicon-calibrated Time-on-Air, Section 5.6.2 two-regime pacing, bi-directional uplink telemetry, remote air-rate switching, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$.
 
 ---
 

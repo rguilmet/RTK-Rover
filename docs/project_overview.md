@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.0.0`  
-**Last Updated:** November 3, 2026  
-**Firmware Target:** `v0.2.55`  
-**Python Ecosystem Target:** `v2.8.1`  
+**Document Version:** `v2.1.0`  
+**Last Updated:** November 5, 2026  
+**Firmware Target:** `v0.5.3`  
+**Python Ecosystem Target:** `v3.2.0`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.
@@ -39,11 +39,16 @@ This document serves as the master technical specification for the **RTK Rover**
      * **Target EEPROM Profile:** `ADDH=0x00 ADDL=0x00 REG0=0xE6 REG1=0x23 CHAN=0x4B REG3=0x00`.
    * **Base Station Software & Datasheet Section 5.6.2 Pacing Architecture:**
      * **RTKBase Stream Filtering:** RTKBase port `5016` is filtered via `str2str` to `"1006(5),1074,1084,1094,1230(10)"`, producing a lean, high-fidelity stream of ~625-650 Bytes/s (GPS MSM4, GLONASS MSM4, Galileo MSM4, Base ARP, and GLONASS biases).
-     * **Two-Regime AUX + Hardware-Calibrated Time-on-Air Pacing (`scripts/e220_pacer.py v2.8.1`):**
+     * **Two-Regime AUX + Hardware-Calibrated Time-on-Air Pacing (`scripts/e220_pacer.py v3.2.0`):**
        * Per E220-900T30S Manual Section 5.6.2, `AUX=1` indicates the 400-byte UART buffer emptied into the LLCC68 transceiver, **not** that over-the-air RF transmission has completed.
        * **Single-Subpacket Frames (`<= 200B`, e.g., `1006`, `1230`, `1084`):** Transfer straight into an idle LLCC68 FIFO without holding `AUX` LOW; paced deterministically by silicon-calibrated LoRa Time-on-Air (`82.2 ms` for `200B`, `58.3 ms` for `122B` @ `38.4k`) plus a `35 ms` receiver UART drain guard delay.
        * **Two-Subpacket Frames (`201..400B`, e.g., `1074`, `1094`):** Hold `AUX` LOW (~82 ms @ 38.4k) while Subpacket 1 (`200B`) transmits on air, then raise `AUX` HIGH the instant Subpacket 2 (`len - 200`) enters the LLCC68 FIFO and **begins** RF TX; paced by waiting for `AUX` rising edge plus `estimate_subpacket_air_s(len - 200) + 35 ms` guard delay.
        * Includes `GPIO 22` hardware reset watchdog if `AUX` locks LOW `> 1.5 s`, `TIOCEXCL` exclusive serial port locking, source `CRC24Q` verification, and startup Channel 75 ambient RF noise floor probing.
+     * **Adaptive Constellation Interleaver (at $\le 9.6\text{ kbps}$):**
+       * Interleaves secondary constellations across alternating epochs to prevent LoRa channel saturation at slower air rates: GPS 1074 is transmitted every second ($1.0\text{ Hz}$), while GLONASS 1084, Galileo 1094, and BeiDou 1124 alternate ($0.5\text{ Hz}$ each for 2 secondaries, $0.33\text{ Hz}$ for 3).
+       * Base ARP (1005/1006), antenna (1033), and GLONASS biases (1230) retain 100% passthrough.
+       * Guarantees a $200\text{ ms}$ half-duplex quiet window for receiving Rover uplink telemetry (`0xAA 0x55` 39-byte frames) and remote air-rate switch commands (`0x02` / `0x82`).
+       * Supports `--no-interleave` CLI flag and reports `Interleave:[N skp]` in the console heartbeat.
      * **Link Budget & Passive-XTAL Thermal Stability at 38.4k:**
        * Because the `E220-900T30S` (`LLCC68` + 1W PA) uses a passive `32 MHz` crystal (`XTAL`, no `TCXO`), operating at `38.4 kbps` (`500 kHz` LoRa bandwidth, `~37-45%` air duty cycle) provides `2x-4x` wider carrier/thermal drift tolerance on multi-subpacket `201..400B` bursts than `19.2 kbps` (verified across 16 empirical tests: `223` intact `> 200B` frames at `38.4k`/`62.5k` vs `0` at `19.2k`) while maintaining $\approx -123\text{ dBm}$ receiver sensitivity.
 
@@ -127,13 +132,13 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 * **Row 4:** Ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt Montserrat font (`0.00000000, 0.00000000, 0.000 m`).
 
 ### Tile Walkthrough
-* **Tile 0 (Screen 1) — Pin Seeker & Tactical Guidance:**
-  * Active target selector row with label and notes.
-  * Dynamic Course-Up canvas with auto-scaling ($500\text{ m} \rightarrow 5\text{ m}$): rotating crossbar with colored antenna tips (Green ANT1, Amber ANT2) and green field-of-view guidance wedge.
-  * Line-of-sight tracking vector, turn prompt, distance readout, cardinal North/East offsets, and 64-point breadcrumb trail.
-  * High-precision Bullseye mode automatically active at distance $\le 1.5\text{ m}$ with $1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings with lock audio cues.
+* **Tile 0 (Screen 1) -- Multi-Mode Navigation & Pin Seeker:**
+  * Interactive tri-state navigation badge in top-left corner cycles through three specialized navigation modes:
+    1. **`[TACTICAL GUIDANCE]` (Cyan):** Course-Up dynamic canvas auto-scaling from $500\text{ m} \rightarrow 5\text{ m}$. Rotating antenna crossbar with colored tips (Green ANT1, Amber ANT2) and green field-of-view guidance wedge. Line-of-sight tracking vector, turn prompt, distance readout, cardinal North/East offsets, 64-point breadcrumb trail, and high-precision Bullseye mode automatically active at $\le 1.5\text{ m}$ ($1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings with ES8311 proximity audio lock cues).
+    2. **`[LINE STAKEOUT]` (Amber):** Directs surveyor along a boundary line between Point A and Point B. Displays vertical centerline baseline with traverse chevron, on-canvas Point A/B labels, perpendicular tie-line, live rover marker, one-tap swap (`[<-> SWAP]`) to reverse line direction, and scaled 4-row readout deck (Row 1: 16pt offset magnitude, Row 2: ASCII lateral steer cues `<<<`/`>>>`, Row 3: station progress `Sta: 0+78.6 ft`, Row 4: cadastral deed bearing).
+    3. **`[MAP VIEW]` (Emerald Green):** Geodetic 2D tangent-plane projection canvas with interactive single-touch drag pan and right-edge HUD Zoom buttons (`[+]` in, `[-]` out, `[FIT]` bounding box, `[CTR]` center on rover). Renders boundary polyline connecting all waypoints (closed loop if $\ge 3$ pts), waypoint pins with active target bullseye, breadcrumb track, live rover position marker with true heading beam indicator, and geodetic center coordinates.
   * Route recording toggle (`REC ON` / `REC OFF`).
-* **Tile 1 (Screen 2) — Field Survey Logger & Quick Settings:**
+* **Tile 1 (Screen 2) -- Field Survey Logger & Quick Settings:**
   * **Row 1 (`y = 8`):** Symmetrical Location ID Prefix dropdown (`<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`) and Averaging duration button (`1s`, `5s`, `10s`, `30s`).
   * **Row 2 (`y = 44`):** Quick Note Tag dropdown (`Found Iron Pipe`, `Found Rebar`, `Found Stone Bound`, `Set Temp Flag`, etc.).
   * **Row 3 (`y = 82`):** Next ID row (`ID: <label>`) in Montserrat 14 `#FFCC00` with circular marquee for long compound labels.
@@ -141,27 +146,39 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
   * **Row 5 (`y = 124`):** Large `[LOG PIN NOW]` button with visual feedback.
   * **Row 6 (`y = 172`):** Last logged pin label and destination CSV path (`/survey_logged_pins.csv`).
   * **Row 7 (`y = 218`):** Subtle horizontal divider line separating survey controls from settings.
-  * **Quick Settings (`y = 238..360`):** Row 1 (NMEA & Route log toggles), Row 2 (Brightness & Volume in 20% steps), Row 3 (Wi-Fi & Units), Row 4 (Wi-Fi status & web portal URL).
-* **Tile 2 (Screen 3) — Waypoint CSV Browser & Multi-File Selector:**
+  * **Quick Settings Consolidated 3x4 Grid (`y = 238..360`):**
+    * Row 1: `VOL: 20%..100% / MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: 20%..100%`
+    * Row 2: `SERIAL: ON/OFF`, `NMEA: ON/OFF`, `RTCM: ON/OFF`
+    * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
+    * Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k`
+    * Row 5: Centered Wi-Fi status & web portal URL.
+* **Tile 2 (Screen 3) -- Waypoint CSV Browser & Multi-File Selector:**
   * Top navigation bar with `< Prev` and `Next >` file buttons and circular marquee for filenames.
   * Dynamic scanning of `/waypoints.csv` and all `/waypoints_*.csv` with alphabetical sorting.
   * Scrollable table of waypoints; tapping any row selects it as the active navigation target.
   * Remembers and restores the active file and active waypoint index across reboots.
-* **Tile 3 (Screen 4) — Dual-Antenna Compass & Bubble Level:**
+* **Tile 3 (Screen 4) -- Dual-Antenna Compass & Bubble Level:**
   * Numerical True Heading readout in prominent 24pt font (`Heading: 162.4`).
   * Baseline length ($55.5\text{ cm}$) and pitch ($^\circ$) verification with display pose indicator.
   * Enlarged $224\text{ px}$ diameter spirit bubble level with Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping heading UP (12 o'clock).
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
-* **Tile 4 (Screen 5) — Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.2.55` in Montserrat 16 White) and dual-row interactive logging controls (`SERIAL`, `IMU`, `TELEM`, `TOUCH`).
-  * **Scrollable Container:** Multi-line auto-wrapping across all telemetry blocks.
-  * **Observers:** Storage status in Electric Cyan (`#22D3EE`), Antenna Master (ANT1) metrics, Antenna Slave (ANT2) metrics with live coordinates, dedicated Base Station card (ID, RTCM age, WGS84 coordinates, ECEF, RTCM counters), 6-DOF IMU (Pitch, Roll, 3-axis Accel, 3-axis Gyro), UM982 COM1/COM2 metrics, and E220 LoRa registers.
+* **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
+  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.5.3` in Montserrat 16 White).
+  * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI, AUX edges, RTCM message counters, and truncation drops.
+  * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:
+    * Storage status in Electric Cyan (`#22D3EE`).
+    * Antenna Master (ANT1) and Slave (ANT2) metrics with live coordinates.
+    * Base Station observer card (ID, RTCM differential age, WGS84 coordinates, ECEF vectors, message counters).
+    * 6-DOF IMU telemetry (Pitch, Roll, 3-axis Accel, 3-axis Gyro, Tare offsets).
+    * UM982 COM1/COM2 baud rates, byte throughput, and error counters.
+    * E220 LoRa hardware register decode and boot-time `M0`/`M1` pin continuity self-test.
 
 ---
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
+* **`e220_pacer.py` (v3.2.0):** Datasheet Section 5.6.2 hardware-paced LoRa driver for RTKBase. Handles atomic RTCM3 frame pacing, `GPIO 22` hardware watchdog, `TIOCEXCL` locking, Mode 0 ambient noise floor probing, bi-directional uplink telemetry logging (RAM JSON + rolling daily CSV), remote air-rate switching (`0x02`/`0x82`), terminal burst quiet-window enforcement, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$ (interleaving GLONASS 1084, Galileo 1094, and BeiDou 1124 across epochs while preserving 1.0 Hz GPS 1074).
 * **`cogo_solver.py` (v1.1.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, AutoCAD DXF (with layer organization), and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
 * **`check_secrets.py` (v1.1.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
 * **`install_git_hooks.py` (v1.1.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.

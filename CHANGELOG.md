@@ -5,7 +5,7 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.5.3] - 2026-11-04
+## [v0.5.3] - 2026-11-05
 
 ### Added
 - **Base Station Adaptive Constellation Interleaver (`scripts/e220_pacer.py` v3.2.0):**
@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added CLI flag `--no-interleave` to disable interleaving if desired.
   - Added `Interleave:[<count> skp]` metrics to the 5-second pacer heartbeat.
   - Added automatic terminal burst detection (`_is_terminal_burst_msg`) and half-duplex quiet window enforcement (`_enforce_quiet_window`) so the radio is guaranteed 200 ms of quiet listening time for Rover telemetry and rate switch commands even when terminal frames are interleaved.
+- **Comprehensive Master Documentation Review & Obsolete Plan Archival:**
+  - Synchronized `README.md`, `docs/user_manual.md` (v1.5.3), `docs/project_overview.md` (v2.1.0), `docs/hyper-context-anchor.md`, and `docs/session_handoff.md` across all recent capabilities (Mode 2 Map View with Zoom & Pan, Line Stakeout with deed bearing & stationing, bi-directional LoRa telemetry uplink, remote air-rate switching, rate-adaptive truncation timeouts, settings dual-FS sync, and adaptive constellation interleaving).
+  - Deprecated and removed 5 obsolete, fully-implemented planning documents from the repository: `docs/implementation_plan.md`, `docs/navigation_and_route_logging_plan.md`, `docs/next-steps.md`, `docs/architecture_plan_public_private_decoupling.md`, and `docs/session_startup_prompt.md`.
 
 ### Fixed
 - **Montserrat Font Build Error in LVGL Port (`src/lvgl_port/lvgl_port.c`):**

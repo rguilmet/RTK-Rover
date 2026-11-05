@@ -1,8 +1,8 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.5.2`  
+**Document Version:** `v1.5.3`  
 **Firmware Version:** `v0.5.3`  
-**Last Updated:** November 4, 2026  
+**Last Updated:** November 5, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
 ---
@@ -191,7 +191,7 @@ When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
   * **Perpendicular Tie-Line:** A dynamic horizontal line drops perpendicularly from the Rover marker to the baseline, color-coded green when on-line and amber when off-line.
   * **Live Rover Marker:** Placed at cross-track offset $x$ and along-track station $y$. Turns bright green when on the line ($\le 2\text{ cm}$), and amber with a heading beam when off-line.
 * **Scaled 4-Row Readout Deck Below Canvas:**
-  * **Row 1 (Offset Magnitude & Direction - 20pt Bold):**
+  * **Row 1 (Offset Magnitude & Direction - 16pt Bold):**
     * `[OK] ON LINE (0.01 ft)`: Within $\pm 2\text{ cm}$ threshold (Bright Green `#00FF88`).
     * `125.96 ft RIGHT`: Displaced right of deed line (Amber `#F59E0B`).
     * `125.96 ft LEFT`: Displaced left of deed line (Amber `#F59E0B`).
@@ -356,7 +356,7 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
 *Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
 
 ### Pinned Top Control Deck & Elevated RF Survey Card
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.4.0"` in Montserrat 16 White (`#FFFFFF`).
+* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.5.3"` in Montserrat 16 White (`#FFFFFF`).
 * **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
   * Live ambient noise floor (`Noise: -102dBm`).
   * Last received packet signal strength (`Pkt: -84dBm`).
@@ -442,7 +442,7 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 ## 12. Troubleshooting & Field Diagnostics FAQ
 
 ### Q1: Antenna 1 shows `SINGLE` or `DGPS`, but never achieves `RTK FIX`.
-* **Cause 1: Differential Link Down.** Check Row 2 `RTCM: X.Xs`. If age exceeds $5.0\text{ s}$ or reads `None`, the rover is not receiving RTCM packets. Inspect LoRa antenna connection and verify E220 RF channel on Tile 4 matches the Base Station transmitter (`Channel 55` / `905.125 MHz`).
+* **Cause 1: Differential Link Down.** Check Row 2 `RTCM: X.Xs`. If age exceeds $5.0\text{ s}$ or reads `None`, the rover is not receiving RTCM packets. Inspect LoRa antenna connection and verify E220 RF channel on Tile 4 matches the Base Station transmitter (`Channel 75` / `925.125 MHz`).
 * **Cause 2: Obstructed Sky.** Verify in Row 2 that satellite count used is $\ge 18$. Move away from heavy tree canopy or metal building walls.
 
 ### Q2: Row 3 shows `NO HDG` or `HDG FLT` while ANT1 has `RTK FIX`.
@@ -479,10 +479,23 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 * **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
 * **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
 
-### 13.4 Base Station Pacer (`e220_pacer.py` v3.1.0)
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.2.0)
 * **Real-Time Terminal Output:** Displays live Rover telemetry lines on reception.
 * **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs for instant zero-overhead dashboard querying.
 * **Rolling Daily CSV Log (`~/rover_logs/rover_YYYY-MM-DD.csv`):**
   * Auto-prunes files older than 30 days (`--log-retention-days 30`).
   * Caps maximum log directory footprint at $50\text{ MB}$ (`--max-log-mb 50`).
   * Compresses completed logs with `gzip` at midnight (`rover_YYYY-MM-DD.csv.gz`).
+
+### 13.5 Adaptive Constellation Interleaver (at $\le 9.6\text{ kbps}$)
+* **The Bandwidth Dilemma at 9600 Baud:** RTKBase broadcasts full multi-constellation MSM bursts ($\approx 650\text{ bytes}$ per second for Base ARP 1006 + GPS 1074 + GLONASS 1084 + Galileo 1094). At $9.6\text{ kbps}$, total Time-on-Air is $\approx 1.25\text{ s} + 0.20\text{ s quiet} = 1.45\text{ s}$, which oversubscribes the 1-second cadence by 45%. This causes buffer accumulation, differential age latency, and multi-subpacket truncation drops.
+* **Adaptive Interleaving Architecture:**
+  * **Base ARP (`1005`/`1006`), Antenna (`1033`), and GLONASS Biases (`1230`):** Transmitted with 100% passthrough.
+  * **$\ge 19.2\text{ kbps}$ Air Rates:** 100% passthrough of all constellations every second ($1.0\text{ Hz}$).
+  * **$9.6\text{ kbps}$ Air Rates:**
+    * **GPS (`1074`):** Transmitted every second ($1.0\text{ Hz}$) as the continuous primary positioning anchor.
+    * **Secondary Constellations (`1084` GLONASS, `1094` Galileo, `1124` BeiDou):** Dynamically alternated across epochs ($0.5\text{ Hz}$ each for 2 secondaries, $0.33\text{ Hz}$ for 3).
+    * **Throughput Result:** Epoch payload drops to $\approx 370 - 490\text{ B}$ and Time-on-Air drops to $\approx 630 - 900\text{ ms}$, leaving ample quiet window for uplink telemetry within the 1-second interval.
+  * **$\le 4.8\text{ kbps}$ Air Rates:** Rotates 1 single constellation per second (GPS $\rightarrow$ Galileo $\rightarrow$ GPS $\rightarrow$ GLONASS).
+  * **Guaranteed Half-Duplex Quiet Window:** Pacer tracks the terminal constellation message of each epoch (`_is_terminal_burst_msg()`) and enforces a guaranteed $200\text{ ms}$ listening window (`_enforce_quiet_window()`), even when the terminal message itself is skipped.
+  * **Heartbeat & CLI Controls:** Heartbeat displays `Interleave:[<count> skp]`. Interleaving can be bypassed if desired via the `--no-interleave` CLI flag.
