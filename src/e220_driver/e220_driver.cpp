@@ -18,6 +18,7 @@ static volatile bool pending_cfg_write = false;
 // =========================================================================
 static RoverUIData_t     s_latest_telemetry_state = {};
 static bool              s_has_telemetry_state    = false;
+static portMUX_TYPE      s_telem_mux              = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t          s_last_uplink_tx_ms      = 0;
 static uint8_t           s_uplink_seq             = 0;
 
@@ -933,8 +934,13 @@ extern "C" void e220_poll_and_forward_rtcm(void)
                  in_quiet_window &&
                  (now - s_last_uplink_tx_ms >= 5000U)) {
 
+            RoverUIData_t telem_state;
+            portENTER_CRITICAL(&s_telem_mux);
+            telem_state = s_latest_telemetry_state;
+            portEXIT_CRITICAL(&s_telem_mux);
+
             uint8_t tx_buf[ROVER_TELEM_FRAME_LEN];
-            size_t n = rover_build_telemetry_packet(tx_buf, sizeof(tx_buf), &s_latest_telemetry_state, s_uplink_seq);
+            size_t n = rover_build_telemetry_packet(tx_buf, sizeof(tx_buf), &telem_state, s_uplink_seq);
             if (n > 0) {
                 e220_suppress_aux_isr = true;
                 Serial0.write(tx_buf, n);
@@ -945,16 +951,16 @@ extern "C" void e220_poll_and_forward_rtcm(void)
                 s_uplink_seq++;
                 e220_stats.uplink_packets_sent++;
                 if (current_settings.enable_serial_logging) {
-                    Serial.printf("[E220 LORA TX #%u] Uplink 45B (Fix:%d SLV:%d Tip:%.7f,%.7f,%.2fm BL:%.1fcm P:%+.1f° Bat:%u%%)\n",
+                    Serial.printf("[E220 LORA TX #%u] Uplink 45B (Fix:%d SLV:%d Tip:%.7f,%.7f,%.2fm BL:%.1fcm P:%+.1fdeg Bat:%u%%)\n",
                                   s_uplink_seq,
-                                  s_latest_telemetry_state.fix_type,
-                                  s_latest_telemetry_state.slave_fix_type,
-                                  s_latest_telemetry_state.tip_lat,
-                                  s_latest_telemetry_state.tip_lon,
-                                  s_latest_telemetry_state.tip_height_m,
-                                  s_latest_telemetry_state.baseline_length_m * 100.0f,
-                                  s_latest_telemetry_state.baseline_pitch_deg,
-                                  s_latest_telemetry_state.battery_percent);
+                                  telem_state.fix_type,
+                                  telem_state.slave_fix_type,
+                                  telem_state.tip_lat,
+                                  telem_state.tip_lon,
+                                  telem_state.tip_height_m,
+                                  telem_state.baseline_length_m * 100.0f,
+                                  telem_state.baseline_pitch_deg,
+                                  telem_state.battery_percent);
                 }
             }
         }
@@ -1003,8 +1009,10 @@ extern "C" void e220_poll_and_forward_rtcm(void)
 extern "C" void e220_feed_telemetry_state(const RoverUIData_t *state)
 {
     if (state) {
+        portENTER_CRITICAL(&s_telem_mux);
         s_latest_telemetry_state = *state;
         s_has_telemetry_state    = true;
+        portEXIT_CRITICAL(&s_telem_mux);
     }
 }
 

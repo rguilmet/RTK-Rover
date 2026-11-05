@@ -5,6 +5,26 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.2] - 2026-11-05
+
+### Fixed
+- **Telemetry Fusion Core Synchronization (Battery, IMU & Woods Fallback):**
+  - Resolved telemetry state divergence where `e220_feed_telemetry_state()` was invoked on Core 0 (`gnss_nav_task`) before PMIC battery and woods fallback heading were attached on Core 1 (`loopTask`).
+  - Moved `e220_feed_telemetry_state(&ui_state)` to Core 1 immediately after `nav_heading_displacement_update()` and target guidance calculations.
+  - Added thread-safe cross-core `portENTER_CRITICAL(&s_telem_mux)` spinlock around `s_latest_telemetry_state` in `src/e220_driver/e220_driver.cpp`.
+  - Fixes telemetry reporting `Bat:0% (0.00V)` and `Hdg:0.0deg [NONE]` when the Rover display is holding a valid heading (`HDG HLD`) and battery is active.
+- **ANT2 Moving-Baseline Fix Status Alignment:**
+  - Decoupled `pkt.ant2_fix_type` from raw NMEA `$GPGGAH` quality (which only reflected ANT2's standalone fix relative to the base station).
+  - Aligned `pkt.ant2_fix_type` strictly with secondary antenna moving-baseline solution: `GNSS_FIX_RTK_FIXED` (`SLV_FIX`) only when `heading_source == HDG_SRC_DUAL_FIX`, `GNSS_FIX_RTK_FLOAT` (`SLV_FLT`) when `heading_source == HDG_SRC_DUAL_FLT`, and `GNSS_FIX_NONE` (`NONE`) when baseline fails sanity checks or heading is in fallback (`[HOLD]`, `[WALK]`, `[GYRO]`).
+  - Updated `handle_uniheadinga_sentence()` in `src/um982_driver/um982_driver.cpp` to explicitly set `slave_fix_type = GNSS_FIX_NONE` when inter-antenna baseline distance is rejected.
+  - Aligned Tile 4 slave antenna diagnostic label in `src/lvgl_port/lvgl_port.c` to honor `heading_source`.
+- **Unicode Terminal Mojibake Elimination (`Â°`):**
+  - Replaced literal Unicode degree symbols (`°` / `\u00b0`) with standard 7-bit ASCII `deg` in `scripts/e220_pacer.py` and `src/e220_driver/e220_driver.cpp`.
+  - Guarantees 100% clean rendering across Windows PowerShell, SSH, systemd journalctl, PuTTY, and non-UTF-8 serial consoles without byte-expansion artifacts (e.g. `Â°`).
+- **Semantic Version Bumps:**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.6.2`.
+  - Bumped `scripts/e220_pacer.py` to `v3.3.1`.
+
 ## [v0.6.1] - 2026-11-05
 
 ### Added

@@ -3482,23 +3482,15 @@ void update_rover_ui(const RoverUIData_t *d)
 
     if (t4_ant_slave_lbl) {
         const char *s_fix_str = "NO FIX";
-        if (d->heading_valid) {
-            if (d->heading_source == HDG_SRC_DUAL_FIX)      s_fix_str = "SLV FIX";
-            else if (d->heading_source == HDG_SRC_DUAL_FLT) s_fix_str = "SLV FLT";
-            else if (d->heading_source == HDG_SRC_DISP)     s_fix_str = "HDG WALK";
-            else if (d->heading_source == HDG_SRC_GYRO)     s_fix_str = "HDG GYRO";
-            else if (d->heading_source == HDG_SRC_COG)      s_fix_str = "HDG COG";
-            else if (d->heading_source == HDG_SRC_HOLD)     s_fix_str = "HDG HLD";
-            else s_fix_str = d->heading_is_fixed ? "SLV FIX" : "SLV FLT";
-        } else if (d->slave_fix_type == GNSS_FIX_RTK_FIXED) {
-            s_fix_str = "SLV FIX";
-        } else if (d->slave_fix_type == GNSS_FIX_RTK_FLOAT) {
-            s_fix_str = "SLV FLT";
-        } else if (d->slave_fix_type == GNSS_FIX_DGPS) {
-            s_fix_str = "SLV DGPS";
-        } else if (d->slave_fix_type == GNSS_FIX_SINGLE) {
-            s_fix_str = "SLV SGL";
-        }
+        if (d->heading_source == HDG_SRC_DUAL_FIX)      s_fix_str = "SLV FIX";
+        else if (d->heading_source == HDG_SRC_DUAL_FLT) s_fix_str = "SLV FLT";
+        else if (d->heading_source == HDG_SRC_DISP)     s_fix_str = "HDG WALK";
+        else if (d->heading_source == HDG_SRC_GYRO)     s_fix_str = "HDG GYRO";
+        else if (d->heading_source == HDG_SRC_COG)      s_fix_str = "HDG COG";
+        else if (d->heading_source == HDG_SRC_HOLD)     s_fix_str = "HDG HLD";
+        else if (d->heading_valid)                      s_fix_str = d->heading_is_fixed ? "SLV FIX" : "SLV FLT";
+        else if (d->slave_fix_type == GNSS_FIX_DGPS)    s_fix_str = "SLV DGPS";
+        else if (d->slave_fix_type == GNSS_FIX_SINGLE)  s_fix_str = "SLV SGL";
 
         char bl_str[24];
         if (d->baseline_length_m > 0.01f) {

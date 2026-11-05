@@ -108,7 +108,11 @@ static void handle_ggah_sentence(char *line)
     if (n < 9) return;
 
     int qual = f[6] ? atoi(f[6]) : 0;
-    gnss_state.slave_fix_type = (GnssFixType_t)qual;
+    // Note: Only record single/DGPS standalone qual; moving-baseline RTK status is governed by UNIHEADINGA
+    if (gnss_state.slave_fix_type == GNSS_FIX_NONE) {
+        if (qual == 1)      gnss_state.slave_fix_type = GNSS_FIX_SINGLE;
+        else if (qual == 2) gnss_state.slave_fix_type = GNSS_FIX_DGPS;
+    }
     gnss_state.slave_num_sats = f[7] ? (uint8_t)atoi(f[7]) : 0;
     if (f[8] && f[8][0]) gnss_state.slave_hdop  = (float)atof(f[8]);
     if (f[9] && f[9][0]) gnss_state.slave_alt_m = (float)atof(f[9]);
@@ -266,6 +270,7 @@ static void handle_uniheadinga_sentence(char *line)
                 gnss_state.heading_valid      = true;
                 gnss_state.heading_is_fixed   = true;
                 gnss_state.heading_source     = HDG_SRC_DUAL_FIX;
+                gnss_state.slave_fix_type     = GNSS_FIX_RTK_FIXED;
                 port_stats.heading_sentences_ok++;
             } else if (bl_physically_sane) {
                 // Float with sane physical baseline
@@ -274,10 +279,12 @@ static void handle_uniheadinga_sentence(char *line)
                 gnss_state.heading_valid      = true;
                 gnss_state.heading_is_fixed   = false;
                 gnss_state.heading_source     = HDG_SRC_DUAL_FLT;
+                gnss_state.slave_fix_type     = GNSS_FIX_RTK_FLOAT;
                 port_stats.heading_sentences_ok++;
             } else {
                 // Wild baseline vector (e.g. 4.88m in Float) - reject dual-antenna heading!
                 gnss_state.heading_is_fixed = false;
+                gnss_state.slave_fix_type   = GNSS_FIX_NONE;
                 if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
                     gnss_state.heading_valid  = false;
                     gnss_state.heading_source = HDG_SRC_NONE;
@@ -285,6 +292,7 @@ static void handle_uniheadinga_sentence(char *line)
             }
         } else {
             gnss_state.heading_is_fixed = false;
+            gnss_state.slave_fix_type   = GNSS_FIX_NONE;
             if (gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) {
                 gnss_state.heading_valid  = false;
                 gnss_state.heading_source = HDG_SRC_NONE;

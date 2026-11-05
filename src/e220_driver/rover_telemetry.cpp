@@ -46,7 +46,18 @@ size_t rover_build_telemetry_packet(uint8_t *out_buf,
     pkt.h_acc_mm = (uint16_t)acc_mm;
 
     pkt.fix_type      = (uint8_t)state->fix_type;
-    pkt.ant2_fix_type = (uint8_t)state->slave_fix_type;
+
+    // Map ANT2 fix status to reflect secondary antenna moving-baseline solution:
+    // If dual-antenna carrier phase integer locked -> GNSS_FIX_RTK_FIXED (SLV_FIX in pacer)
+    // If dual-antenna carrier phase float locked   -> GNSS_FIX_RTK_FLOAT (SLV_FLT in pacer)
+    // If in woods fallback (WALK, GYRO, HOLD) or unlocked -> GNSS_FIX_NONE (NONE in pacer)
+    if (state->heading_source == HDG_SRC_DUAL_FIX) {
+        pkt.ant2_fix_type = (uint8_t)GNSS_FIX_RTK_FIXED;
+    } else if (state->heading_source == HDG_SRC_DUAL_FLT) {
+        pkt.ant2_fix_type = (uint8_t)GNSS_FIX_RTK_FLOAT;
+    } else {
+        pkt.ant2_fix_type = (uint8_t)GNSS_FIX_NONE;
+    }
 
     // Measured baseline length in millimeters
     float bl_mm = state->baseline_length_m * 1000.0f;

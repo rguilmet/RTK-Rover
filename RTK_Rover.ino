@@ -190,8 +190,6 @@ void task_rover_core0(void *pvParameters)
                                              &state.survey_epochs_collected,
                                              state.last_logged_label);
 
-            e220_feed_telemetry_state(&state);
-
             if (roverStateQueue) {
                 xQueueOverwrite(roverStateQueue, &state);
             }
@@ -380,6 +378,9 @@ void task_display_and_audio(void *pvParameters)
                 while (rel > 180.0f)  rel -= 360.0f;
                 ui_state.rel_bearing_deg = rel;
             }
+
+            // Feed fully augmented & fused state (including Battery, IMU, and Woods Fallback Heading) to E220 Uplink Telemetry
+            e220_feed_telemetry_state(&ui_state);
 
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);

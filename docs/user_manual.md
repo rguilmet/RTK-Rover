@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.6.1`  
-**Firmware Version:** `v0.6.1`  
+**Document Version:** `v1.6.2`  
+**Firmware Version:** `v0.6.2`  
 **Last Updated:** November 5, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -511,10 +511,10 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 * **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
 * **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
 
-### 13.4 Base Station Pacer (`e220_pacer.py` v3.3.0)
-* **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables:
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.3.1)
+* **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables formatted with clean ASCII `deg` units:
   ```text
-  [ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2°) | Hdg:142.6° [DUAL_FIX] | Bat:85% (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
+  [ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2deg) | Hdg:142.6deg [DUAL_FIX] | Bat:85% (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
   ```
 * **Dual-Format Backward-Compatible Decoder:** Supports both legacy 39-byte and expanded 45-byte frames seamlessly during field rollouts.
 * **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs including `ant2_fix_name`, `baseline_length_cm`, `baseline_pitch_deg`, and `heading_source`.

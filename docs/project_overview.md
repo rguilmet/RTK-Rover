@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.2.1`  
+**Document Version:** `v2.2.2`  
 **Last Updated:** November 5, 2026  
-**Firmware Target:** `v0.6.1`  
-**Python Ecosystem Target:** `v3.3.0`  
+**Firmware Target:** `v0.6.2`  
+**Python Ecosystem Target:** `v3.3.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.
@@ -181,7 +181,7 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 
 ## 7. Python Survey & Ingestion Scripts (`scripts/`)
 
-* **`e220_pacer.py` (v3.3.0):** Datasheet Section 5.6.2 hardware-paced LoRa driver for RTKBase. Handles atomic RTCM3 frame pacing, `GPIO 22` hardware watchdog, `TIOCEXCL` locking, Mode 0 ambient noise floor probing, bi-directional uplink telemetry logging (dual-format 39B/45B auto-detecting unpacker recording ANT1 RTK fix, ANT2 slave fix `SLV_FIX`/`SLV_FLT`, 3D baseline length, crossbar pitch, explicit heading source, RAM JSON + rolling daily CSV), remote air-rate switching (`0x02`/`0x82`), terminal burst quiet-window enforcement, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$ (interleaving GLONASS 1084, Galileo 1094, and BeiDou 1124 across epochs while preserving 1.0 Hz GPS 1074).
+* **`e220_pacer.py` (v3.3.1):** Datasheet Section 5.6.2 hardware-paced LoRa driver for RTKBase. Handles atomic RTCM3 frame pacing, `GPIO 22` hardware watchdog, `TIOCEXCL` locking, Mode 0 ambient noise floor probing, bi-directional uplink telemetry logging (dual-format 39B/45B auto-detecting unpacker recording ANT1 RTK fix, ANT2 slave fix `SLV_FIX`/`SLV_FLT`, 3D baseline length, crossbar pitch, explicit heading source, RAM JSON + rolling daily CSV), clean ASCII `deg` units in console heartbeat, remote air-rate switching (`0x02`/`0x82`), terminal burst quiet-window enforcement, and Adaptive Constellation Interleaving at $\le 9.6\text{ kbps}$ (interleaving GLONASS 1084, Galileo 1094, and BeiDou 1124 across epochs while preserving 1.0 Hz GPS 1074).
 * **`cogo_solver.py` (v1.1.0):** Schema-driven Coordinate Geometry (COGO) traverse solver. Ingests standard parcel JSON schemas ([`docs/schemas/cadastral_schema.json`](schemas/cadastral_schema.json)) and control anchor CSV files, performs forward geodesic projections, verifies loop closure precision, applies Bowditch / Compass Rule adjustments, solves circular road curve geometry, reconciles common boundaries, and exports to Google Earth KML, Rover `/waypoints.csv`, GeoJSON, AutoCAD DXF (with layer organization), and text closure audits. Detailed documentation in [`docs/cogo_solver_guide.md`](cogo_solver_guide.md).
 * **`check_secrets.py` (v1.1.0):** Pre-push security verification scanner. Scans Git tracked files and unpushed commits for generic credentials, private keys, and local absolute filesystem paths, plus personal signatures defined in an unversioned `.secrets.local` configuration.
 * **`install_git_hooks.py` (v1.1.0):** Automatically installs the pre-push security verification hook into `.git/hooks/pre-push`.

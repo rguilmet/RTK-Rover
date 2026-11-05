@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.6.1`  
+**Firmware Version:** `v0.6.2`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)
@@ -26,7 +26,7 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
   * One-tap baseline direction swap (`[ <-> SWAP ]`) and Geiger audio guidance tracking deed line proximity.
 * **Bi-Directional LoRa Protocol & Remote Air-Rate Switching (Phase 3 & Phase 5.1):**
   * 45-byte packed binary uplink telemetry (`0xAA 0x55`, CRC16-CCITT) transmitted in the half-duplex quiet window ($t = 0.10\text{ s} \dots 0.45\text{ s}$ post-epoch, $\approx 31\text{ ms}$ airtime) every 5 seconds. Reports ANT1 position fix, ANT2 slave fix (`SLV_FIX`/`SLV_FLT`), measured 3D baseline length (`BL: 55.4cm`), crossbar pitch, explicit heading source (`DUAL_FIX`, `WALK`, `GYRO`), satellite counts, ground-tip coordinates, and battery health.
-  * Base Station [`e220_pacer.py`](scripts/e220_pacer.py) (v3.3.0) features a dual-format auto-detecting unpacker (39B/45B), outputs live telemetry heartbeats to console, writes atomic JSON to `/run/rtk_rover_status.json` (`tmpfs` in RAM, zero SD wear), and appends to rolling daily CSV with 30-day auto-pruning, gzip compression, and 50MB hard FIFO cap.
+  * Base Station [`e220_pacer.py`](scripts/e220_pacer.py) (v3.3.1) features a dual-format auto-detecting unpacker (39B/45B), outputs live telemetry heartbeats to console with clean ASCII `deg` units, writes atomic JSON to `/run/rtk_rover_status.json` (`tmpfs` in RAM, zero SD wear), and appends to rolling daily CSV with 30-day auto-pruning, gzip compression, and 50MB hard FIFO cap.
   * Over-the-air dynamic air-rate switching (`19.2k` $\leftrightarrow$ `9.6k` deep woods mode) triggered directly from Tile 1 `LORA` button with zero `sudo` passwords, zero service restarts, and 60-second automatic rollback failsafe.
 * **Dual-Antenna Moving-Baseline RTK Kinematics:** Powered by the Holybro H-RTK Unicore UM982. Phase centers for Master (Position) and Slave (Heading) are spaced at `55.5 cm` along a rigid crossbar. Kinematic algorithms project coordinates to the exact pole centerline midpoint and down to the ground tip (`1.80 m`), completely eliminating position orbit when rotating the pole.
 * **Dual-Mode Hybrid Navigation Engine (Tile 0):**
