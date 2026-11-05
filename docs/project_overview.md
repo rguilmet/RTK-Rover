@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.1.0`  
+**Document Version:** `v2.2.0`  
 **Last Updated:** November 5, 2026  
-**Firmware Target:** `v0.5.3`  
+**Firmware Target:** `v0.6.0`  
 **Python Ecosystem Target:** `v3.2.0`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -164,7 +164,7 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.5.3` in Montserrat 16 White).
+  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.6.0` in Montserrat 16 White).
   * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI, AUX edges, RTCM message counters, and truncation drops.
   * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:
     * Storage status in Electric Cyan (`#22D3EE`).

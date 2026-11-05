@@ -5,6 +5,32 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.0] - 2026-11-05
+
+### Added
+- **Cadastral Point Classification & Signed Traverse Sequence (`poly_order`):**
+  - Implemented signed sequence number column in CSV format: positive integers ($1 \rightarrow 2 \dots \rightarrow N$) define the ordered parcel boundary loop, negative integers ($-k$) define reference/tie pins connecting with dashed tie-lines to boundary vertex $k$, and `0` designates standalone pins.
+  - Added `waypoint_get_boundary_polygon()` and `waypoint_find_by_poly_order()` in `src/waypoint_manager/waypoint_manager.cpp`.
+  - Added dashed tie-line rendering pool (`t0_map_ties[8]`) on Map View canvas (Mode 2) with distinct pin symbology (Gold for boundary vertices, Orange for reference/tie pins).
+  - Updated all cadastral CSV files (`waypoints.csv`, `waypoints-guilmet.csv`, `waypoints-haslam.csv`, `waypoints-gray.csv`) with `poly_order` attributes.
+- **Touch Responsiveness Optimization & In-Memory Stem Cache:**
+  - Reduced `LVGL_TASK_MAX_DELAY_MS` from 500 ms to 20 ms in `user_config.h`, eliminating touch latency when navigating waypoints or cycling files.
+  - Implemented in-memory `s_stem_cache` in `waypoint_manager.cpp`, replacing synchronous byte-by-byte SD card reads of `/survey_logged_pins.csv` with instant RAM lookups on waypoint change.
+- **Map View Route Trail:**
+  - Added 128-point historical route trail display on Mode 2 Map View, toggleable via `"map_show_route_trail"` in `settings.json`.
+- **Deep-Woods Heading Fallback ("Walk 3 Steps" Kinematic Displacement + Gyro Tracking):**
+  - Implemented velocity-independent geodetic displacement tracker (`nav_heading_displacement_update()` in `src/nav_engine/nav_engine.cpp`) establishing true heading from $\ge 0.70\text{ m}$ (2-3 paces) movement even at creeping speeds in heavy brush.
+  - Integrated 50 Hz QMI8658 Z-axis gyro yaw tracking with a 60-second hold window to maintain compass and map orientation while standing still or turning in place under dense canopy.
+  - Added `HDG_SRC_DISP` (`HDG WALK` / `WLK`) and `HDG_SRC_GYRO` (`HDG GYRO` / `GYR`) badges to header, Tile 0 HUD, Tile 3 compass, and Tile 5 hardware diagnostics.
+
+### Fixed
+- **UM982 Fallback Heading Clobber Bug:**
+  - Fixed `handle_uniheadinga_sentence()` in `src/um982_driver/um982_driver.cpp` so that lost Slave antenna lock only invalidates dual-antenna heading (`HDG_SRC_DUAL_FIX` / `HDG_SRC_DUAL_FLT`), preserving displacement, gyro, COG, and hold fallback sources instead of blanking heading 2 times per second.
+- **Line Stakeout Canvas Decluttering:**
+  - Removed redundant on-canvas text labels (`t0_line_lbl_a` and `t0_line_lbl_b`) from Line Stakeout Mode 1, eliminating visual overlap with the SWAP button and notes deck while preserving clean vector geometry.
+- **Firmware Version Bump:**
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.6.0`.
+
 ## [v0.5.3] - 2026-11-05
 
 ### Added

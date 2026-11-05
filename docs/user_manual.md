@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.5.3`  
-**Firmware Version:** `v0.5.3`  
+**Document Version:** `v1.6.0`  
+**Firmware Version:** `v0.6.0`  
 **Last Updated:** November 5, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -356,7 +356,7 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
 *Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
 
 ### Pinned Top Control Deck & Elevated RF Survey Card
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.5.3"` in Montserrat 16 White (`#FFFFFF`).
+* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.6.0"` in Montserrat 16 White (`#FFFFFF`).
 * **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
   * Live ambient noise floor (`Noise: -102dBm`).
   * Last received packet signal strength (`Pkt: -84dBm`).
