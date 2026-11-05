@@ -19,7 +19,7 @@ import subprocess
 import argparse
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v1.1.1"
 
 # Generic forbidden filenames that must never be committed to the public repository
 DEFAULT_FORBIDDEN_FILENAMES = {
@@ -56,7 +56,9 @@ def get_repo_root():
         out = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"],
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         ).strip()
         return out
     except Exception:
@@ -139,7 +141,9 @@ def get_tracked_files(repo_root):
             ["git", "ls-files"],
             cwd=repo_root,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         )
         files = [os.path.normpath(line.strip()) for line in out.splitlines() if line.strip()]
         return files
@@ -212,7 +216,9 @@ def check_unpushed_commits(repo_root, forbidden_patterns):
             ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
             cwd=repo_root,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         ).strip()
         upstream = out if out else "origin/master"
     except Exception:
@@ -223,7 +229,9 @@ def check_unpushed_commits(repo_root, forbidden_patterns):
             ["git", "diff", f"{upstream}..HEAD"],
             cwd=repo_root,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except Exception:
         # If upstream is not yet pushed or not found, diff against empty tree or HEAD

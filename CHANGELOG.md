@@ -25,9 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Montserrat Font Build Error in LVGL Port (`src/lvgl_port/lvgl_port.c`):**
   - Replaced undeclared `lv_font_montserrat_20` with `lv_font_montserrat_16` on lines 2661, 2710, and 2919 for Line Stakeout lateral offset and Map View HUD scale indicators.
   - Resolves `xtensa-esp32s3-elf-g++` compilation error `'lv_font_montserrat_20' undeclared` under Arduino IDE / ESP32-S3 toolchain where only fonts 12, 14, 16, and 24 are compiled in `lv_conf.h`.
-- **Semantic Versioning Bumps (`user_config.h`, `README.md`, `docs/user_manual.md`, `scripts/e220_pacer.py`):**
+- **Semantic Versioning Bumps (`user_config.h`, `README.md`, `docs/user_manual.md`, `scripts/e220_pacer.py`, `scripts/check_secrets.py`):**
   - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.5.3`.
   - Bumped `e220_pacer.py` to `v3.2.0`.
+  - Bumped `check_secrets.py` to `v1.1.1` (UTF-8 encoding with replacement error handler for Windows subprocess git diff decodes).
 
 ## [v0.5.2] - 2026-11-04
 
