@@ -1,8 +1,8 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.6.2`  
-**Firmware Version:** `v0.6.2`  
-**Last Updated:** November 5, 2026  
+**Document Version:** `v1.7.2`  
+**Firmware Version:** `v0.7.2`  
+**Last Updated:** November 6, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
 ---
@@ -70,14 +70,14 @@ The **RTK Rover** is a dual-antenna, high-precision centimeter GNSS rover engine
 1. **Mounting:** Mount the crossbar securely to the top of the survey pole. Ensure ANT1 (Master) is on the user's left and ANT2 (Slave) is on the right when viewing the display from behind the rover.
 2. **Antenna Connections:** Connect the Master antenna to UM982 RF1 and the Slave antenna to UM982 RF2.
 3. **LoRa Antenna:** Attach the 900 MHz LoRa antenna to the E220 transceiver SMA connector.
-4. **Power-On:** Turn on battery power via the AXP2101 power switch.
+4. **Power-On:** Connect external USB 5V power pack to supply the UM982 GNSS and E220 1W LoRa radio. The internal 1S LiPo battery serves as an uninterruptible power supply (UPS) floating at $500\text{ mA}$ charge current via the AXP2101 PMIC.
 5. **Boot Sequence:**
    * Waveshare boots and initializes SPI Flash, MicroSD card, and I2C peripherals.
    * QSPI Display powers up at default brightness (80%).
    * MicroSD card is mounted and `/settings.json` is mirrored to internal `FFat`.
    * FreeRTOS tasks start: Core 0 streams RTCM3 corrections from E220 to UM982 COM2 and parses UM982 COM1 NMEA/heading frames; Core 1 renders LVGL 9 at 30 Hz.
 6. **Acquisition Checklist:**
-   * Verify battery voltage ($> 3.7\text{ V}$) in Row 1.
+   * Verify power widget reads `[USB] 5.04V+` (charging) or `[USB] 5.04V` (float) in Row 1.
    * Verify ANT1 acquires `RTK FIX` (Row 2, Green badge).
    * Verify ANT2 acquires `HDG FIX` (Row 3, Green badge).
    * Verify baseline length reads $\approx 55.5\text{ cm}$ ($\pm 1.5\text{ cm}$).
@@ -94,8 +94,14 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
 ### Row 1: System Time, Power & Environment
 * **Date & Time:** Local calendar date (`YYYY-MM-DD`) and 24-hr time (`HH:MM:SS TZ`) computed from UTC using `minutesOffsetToUTC` and synchronized with GNSS atomic clocks.
 * **Units Badge:** `SI` (meters/centimeters) or `IMP` (feet/inches). Tap to toggle on Tile 1.
-* **Wi-Fi Indicator:** Compact icon-only symbol (`LV_SYMBOL_WIFI`) freeing horizontal space for date/time. Colored Electric Cyan (`#22D3EE`) in station mode, Amber (`#FFCC00`) in AP mode, and Slate Gray (`#475569`) when inactive.
-* **Battery Telemetry:** Battery percentage (`0..100%`), charging indicator (`+`), and battery voltage (e.g. `4.12V`).
+* **Wi-Fi Indicator:** Compact icon-only symbol (`LV_SYMBOL_WIFI`) with distinct multi-state colors:
+  * **Electric Cyan (`#22D3EE`):** Connected to local router (`STA`).
+  * **Vivid Violet (`#A855F7`):** Access Point hotspot active (`AP`).
+  * **Vivid Amber (`#F59E0B`):** Actively connecting (`CONN`).
+  * **Slate Gray (`#475569`):** Inactive / radio off (`OFF`).
+* **Power Telemetry Widget:** Minimalist dual-mode power indicator:
+  * **USB Power Mode:** Displays `[USB] 5.04V+` while charging the backup battery, dropping to `[USB] 5.04V` when floating at 100%.
+  * **Battery Mode (Unplugged):** Displays `[Bat] 85% 3.92V` with color-coded battery icon (Green $>60\%$, Amber $20\text{--}60\%$, Red $<20\%$).
 
 ### Row 2: Master Antenna (ANT1 - Position) Metrics
 * **Fix Status Badge:**
@@ -103,6 +109,7 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
   * `RTK FLT` (Yellow `#FFCC00`): Carrier-phase float solution ($5\text{ cm}..30\text{ cm}$).
   * `DGPS` (Orange `#FFAA00`): Code-differential solution ($0.5\text{ m}..1.5\text{ m}$).
   * `SINGLE` (Red `#FF4444`): Autonomous uncorrected solution ($1.5\text{ m}..5.0\text{ m}$).
+  * `[OFF]` (Red `#EF4444`): External USB 5V rail disconnected (receiver unpowered to preserve battery).
 * **Satellites:** Count of satellites used in fix vs. total in view (`SV: 28/34`).
 * **Horizontal Precision:** Estimated horizontal precision standard deviation (`+/- 0.015m` / `+/- 0.05ft`).
 * **RTCM Differential Age:** Age of incoming RTCM corrections in seconds (`RTCM: 1.0s`).
@@ -110,14 +117,16 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
   * Green: Strong signal ($\ge -90\text{ dBm}$)
   * Amber/Yellow: Moderate signal ($-91\text{ dBm} \dots -105\text{ dBm}$)
   * Red: Weak fringe signal ($< -105\text{ dBm}$) or `-- dB` when link is idle.
+  * Gray (`LoRa: OFF`): External USB 5V rail disconnected.
 
 ### Row 3: Slave Antenna (ANT2 - Heading) & Woods Fallback Metrics
 * **Heading Fix Badge:**
   * `HDG FIX` (Bright Green `#00FF88`): Dual-antenna carrier-phase integer ambiguity resolved ($0.2^\circ$ accuracy).
   * `HDG FLT` (Yellow `#FFCC00`): Dual-antenna carrier-phase solution converging.
-  * `HDG WALK` / `WLK` (Cyan `#06B6D4`): Deep-woods kinematic displacement heading established from $\ge 0.70\text{ m}$ (2–3 paces) movement. Velocity-independent; functions even when crawling through heavy brush.
-  * `HDG GYRO` / `GYR` (Blue `#3B82F6`): Inertial yaw maintained by the 50 Hz QMI8658 6-DOF IMU while stationary or rotating in place (60-second hold window).
-  * `HDG HOLD` (Amber `#F59E0B`): Heading held for 5 seconds after dual-antenna lock loss before fallback activation.
+  * `HDG WALK` / `WLK` (Cyan `#06B6D4`): Deep-woods kinematic displacement heading established from $\ge 0.70\text{ m}$ (2–3 paces) movement with 3.0s walk persistence filter. Velocity-independent.
+  * `HDG GYRO` / `GYR` (Blue `#3B82F6`): In-place pivot yaw integration ($|\omega_z| \ge 1.5^\circ/\text{s}$) when turning the pole.
+  * `HDG HLD` / `HLD` (Slate `#94A3B8`): Stationary zero-drift hold ($0.0^\circ/\text{s}$ drift) freezing heading when stationary.
+  * `[OFF]` (Red `#EF4444`): External USB 5V rail disconnected.
   * `NO HDG` (Red `#FF4444`): Heading unavailable; prompts user to walk 2–3 paces to establish displacement azimuth.
 * **Slave Satellites:** Number of satellites tracked by secondary RF path (`SV: 26`).
 * **Baseline Length:** Measured 3D distance between antenna phase centers (`BL: 55.4cm`).
@@ -303,7 +312,11 @@ The bottom deck provides instantaneous touch control over hardware preferences i
   * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic serial output.
   * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.
   * `TOUCH: ON/OFF`: Toggles touch coordinate serial debugging.
-  * `WIFI: ON/OFF`: Starts or stops the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal.
+  * `WIFI: CONN/STA/AP/OFF`: Controls the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal with live multi-state color coding:
+    * `WIFI: CONN` (Vivid Amber `#D97706`): Actively connecting to local router SSID.
+    * `WIFI: STA` (Emerald Green `#107C41`): Connected to local router (`http://<local-ip>/`).
+    * `WIFI: AP` (Vivid Violet `#7C3AED`): Standalone SoftAP hotspot active (`http://192.168.4.1/`, SSID `RTK-Rover`).
+    * `WIFI: OFF` (Navy Blue `#1B6CA8`): Wi-Fi radio powered off.
   * `UNITS: IMP/SI`: Toggles between Imperial (feet/inches) and Metric (meters/centimeters).
   * `LORA: 19.2k` / `LORA: 9.6k`: Toggles remote over-the-air LoRa air-rate switching between standard ($19.2\text{ kbps}$) and deep woods canopy mode ($9.6\text{ kbps}$). Shows amber `REQ: 9.6k` while negotiating with the Base Station.
 * **Row 5 (y=332):** Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
@@ -461,6 +474,7 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 | `active_waypoint_index` | Integer | `0` | Active selected waypoint index (restored on boot). |
 | `brightness` | Integer | `80` | Backlight brightness percentage (`20`, `40`, `60`, `80`, `100`). |
 | `volume` | Integer | `40` | Audio volume percentage (`0` = Mute, `20`, `40`, `60`, `80`, `100`). |
+| `auto_shutdown_battery_min` | Integer | `5` | Idle timeout in minutes before soft power-off when running on battery (`0` = disabled). |
 
 ---
 

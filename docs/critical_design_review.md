@@ -1,9 +1,9 @@
 # Critical Design Review (CDR) - RTK Rover
 
-**Document Version:** `v2.0.0`  
-**Firmware Baseline:** `v0.6.2`  
-**Companion Software:** `e220_pacer.py v3.3.1` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
-**Date:** November 5, 2026  
+**Document Version:** `v2.1.0`  
+**Firmware Baseline:** `v0.7.2`  
+**Companion Software:** `e220_pacer.py v3.4.0` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
+**Date:** November 6, 2026  
 **Status:** Approved & Field Proven  
 **Author:** Engineering Team (Pair Programming Collaboration)  
 

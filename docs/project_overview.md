@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.2.2`  
-**Last Updated:** November 5, 2026  
-**Firmware Target:** `v0.6.2`  
-**Python Ecosystem Target:** `v3.3.1`  
+**Document Version:** `v2.3.0`  
+**Last Updated:** November 6, 2026  
+**Firmware Target:** `v0.7.2`  
+**Python Ecosystem Target:** `v3.4.0`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.
@@ -127,9 +127,9 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 ## 6. UI Tile Structure (`320x480` Portrait)
 
 ### Persistent Top Header Bar (`320x74`)
-* **Row 1:** Local Date (`YYYY-MM-DD`), Local Time (`HH:MM:SS TZ`), Units badge (`SI` / `IMP`), Wi-Fi badge (`ON` / `OFF`), and Battery telemetry (`%`, `+` charging, `V`).
-* **Row 2 (Master Antenna ANT1):** Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`), Satellites (`SV: used/view`), Precision (`+/- h_acc`), and RTCM differential age (`RTCM: X.Xs`).
-* **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`), Slave satellites (`SV: X`), Baseline length (`BL: 55.5cm`), and True Heading (`Hdg: XXX.X`).
+* **Row 1:** Local Date (`YYYY-MM-DD`), Local Time (`HH:MM:SS TZ`), Units badge (`SI` / `IMP`), Multi-state Wi-Fi icon (Cyan STA, Violet AP, Amber CONN, Slate OFF), and Minimalist Power Widget (`[USB] 5.04V` / `[Bat] 85% 3.92V`).
+* **Row 2 (Master Antenna ANT1):** Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`, `OFF`), Satellites (`SV: used/view`), Precision (`+/- h_acc`), and RTCM differential age (`RTCM: X.Xs`).
+* **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`, `OFF`), Slave satellites (`SV: X`), Baseline length (`BL: 55.5cm`), and True Heading (`Hdg: XXX.X`).
 * **Row 4:** Ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt Montserrat font (`0.00000000, 0.00000000, 0.000 m`).
 
 ### Tile Walkthrough
@@ -151,8 +151,8 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
     * Row 1: `VOL: 20%..100% / MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: 20%..100%`
     * Row 2: `SERIAL: ON/OFF`, `NMEA: ON/OFF`, `RTCM: ON/OFF`
     * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
-    * Row 4: `WIFI: ON/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k`
-    * Row 5: Centered Wi-Fi status & web portal URL.
+    * Row 4: `WIFI: CONN/STA/AP/OFF` (Multi-state color feedback), `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k`
+    * Row 5: Centered Wi-Fi status & web portal URL (`http://<ip>/`).
 * **Tile 2 (Screen 3) -- Waypoint CSV Browser & Multi-File Selector:**
   * Top navigation bar with `< Prev` and `Next >` file buttons and circular marquee for filenames.
   * Instant sub-25ms touch responsiveness powered by a 20 ms LVGL polling loop and RAM survey stem cache (`s_stem_cache`), eliminating SD card blocking.
@@ -167,7 +167,8 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.6.1` in Montserrat 16 White).
+  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.7.2` in Montserrat 16 White).
+  * **Dual-Power & UPS Card:** Displays external VBUS line voltage, 5V rail status, internal battery voltage/percentage, charging/float status, and auto-shutdown timer countdown.
   * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI, AUX edges, RTCM message counters, and truncation drops.
   * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:
     * Storage status in Electric Cyan (`#22D3EE`).
