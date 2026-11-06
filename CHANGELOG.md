@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.7.1] - 2026-11-06
 
 ### Fixed
+- **Wi-Fi Station Mode Connection & Authentication Failure:**
+  - Resolved failure to associate with local home Wi-Fi routers even with valid credentials in `settings.json`.
+  - Added clean hardware reset: `WiFi.disconnect(true)` and `vTaskDelay(100ms)` before entering Station mode to clear any stale state from prior boots or scan operations.
+  - Removed restrictive `WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK)` that forced legacy WPA1 negotiation and caused association rejection on standard WPA2-PSK and mixed WPA2/WPA3 access points. Restored native ESP32 multi-mode authentication.
+  - Removed `WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN)` and `WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL)` which prolonged channel dwelling and caused probe timeouts during association. Restored default Fast Scan.
+  - Added periodic active re-trigger (`WiFi.reconnect()`) at 5s, 10s, and 15s if the driver remains in `WL_DISCONNECTED`.
 - **Wi-Fi Portal Mode IP Resolution (`http://0.0.0.0/` Bug):**
   - Resolved issue where SoftAP fallback returned `0.0.0.0` on Tile 1 and Tile 4 when Station mode timed out or credentials were unconfigured.
   - Added explicit static AP IP configuration (`WiFi.softAPConfig(192.168.4.1, 192.168.4.1, 255.255.255.0)`), interface readiness polling loop, and guaranteed `192.168.4.1` fallback.

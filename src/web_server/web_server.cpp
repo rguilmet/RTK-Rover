@@ -511,13 +511,15 @@ extern "C" void start_wifi(void) {
         if (has_valid_ssid) {
             Serial.printf("[WIFI] Connecting to '%s' (password len=%d)...\n",
                           current_settings.wifi_ssid, (int)strlen(current_settings.wifi_password));
+            
+            // Clean reset of Wi-Fi subsystem before entering STA mode
+            WiFi.disconnect(true);
+            vTaskDelay(pdMS_TO_TICKS(100));
             WiFi.mode(WIFI_STA);
             WiFi.setSleep(false);
             WiFi.setAutoReconnect(true);
-            WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
-            WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-            WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
 
+            // Use standard Fast Scan & native security negotiation (supports WPA, WPA2, WPA3)
             WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
 
             int attempts = 0;
@@ -542,6 +544,12 @@ extern "C" void start_wifi(void) {
                     char prog[32];
                     snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
                     update_wifi_ip_label(prog);
+                }
+                
+                // If stuck disconnected after 10 attempts (5s), actively re-trigger connection
+                if (cur_status == WL_DISCONNECTED && (attempts == 10 || attempts == 20 || attempts == 30)) {
+                    Serial.printf("[WIFI] Re-triggering connection attempt (%d/%d)...\n", attempts, max_attempts);
+                    WiFi.reconnect();
                 }
             }
             sta_connected = (WiFi.status() == WL_CONNECTED);
