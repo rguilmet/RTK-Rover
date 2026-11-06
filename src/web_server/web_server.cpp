@@ -29,6 +29,10 @@ extern "C" bool is_wifi_active(void) {
     return wifi_active;
 }
 
+extern "C" bool is_wifi_softap(void) {
+    return wifi_active && ((WiFi.getMode() & WIFI_AP) != 0);
+}
+
 extern "C" const char* get_wifi_ip(void) {
     return s_wifi_ip;
 }
@@ -472,8 +476,6 @@ extern "C" void start_wifi(void) {
     s_wifi_starting = true;
     
     update_wifi_ip_label("Connecting...");
-    Serial.printf("[WIFI] Attempting connection to SSID: '%s' (password len=%d)...\n",
-                  current_settings.wifi_ssid, (int)strlen(current_settings.wifi_password));
     
     // Non-blocking connection task so UI stays responsive
     xTaskCreatePinnedToCore([](void* arg){
@@ -491,50 +493,68 @@ extern "C" void start_wifi(void) {
                 } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
                     Serial.printf("[WIFI EVENT] STA Got IP: %s\n",
                                   IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+                } else if (event == ARDUINO_EVENT_WIFI_AP_START) {
+                    Serial.println("[WIFI EVENT] SoftAP Started!");
                 }
             });
         }
 
-        WiFi.mode(WIFI_STA);
-        WiFi.setSleep(false);
-        WiFi.setAutoReconnect(true);
-        WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
-        WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-        WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
+        // Check if SSID is a placeholder or blank
+        bool has_valid_ssid = (current_settings.wifi_ssid[0] != '\0' &&
+                               strcasecmp(current_settings.wifi_ssid, "Your_SSID") != 0 &&
+                               strcasecmp(current_settings.wifi_ssid, "Your-SSID-Here") != 0 &&
+                               strcasecmp(current_settings.wifi_ssid, "Your-SSID") != 0 &&
+                               strcasecmp(current_settings.wifi_ssid, "SSID") != 0);
 
-        Serial.printf("[WIFI] Connecting to '%s'...\n", current_settings.wifi_ssid);
-        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+        bool sta_connected = false;
 
-        int attempts = 0;
-        const int max_attempts = 50; // 25 seconds timeout (50 * 500ms)
-        wl_status_t last_status = WL_IDLE_STATUS;
+        if (has_valid_ssid) {
+            Serial.printf("[WIFI] Connecting to '%s' (password len=%d)...\n",
+                          current_settings.wifi_ssid, (int)strlen(current_settings.wifi_password));
+            WiFi.mode(WIFI_STA);
+            WiFi.setSleep(false);
+            WiFi.setAutoReconnect(true);
+            WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+            WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+            WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
 
-        while (WiFi.status() != WL_CONNECTED && attempts < max_attempts) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            attempts++;
-            wl_status_t cur_status = WiFi.status();
-            if (cur_status != last_status || (attempts % 4 == 0)) {
-                last_status = cur_status;
-                const char* st_name = (cur_status == WL_IDLE_STATUS)     ? "IDLE" :
-                                      (cur_status == WL_NO_SSID_AVAIL)   ? "NO_SSID_AVAIL" :
-                                      (cur_status == WL_SCAN_COMPLETED)  ? "SCAN_COMPLETED" :
-                                      (cur_status == WL_CONNECTED)       ? "CONNECTED" :
-                                      (cur_status == WL_CONNECT_FAILED)  ? "CONNECT_FAILED" :
-                                      (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
-                                      (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" : "UNKNOWN";
-                Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
-                              st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
-                char prog[32];
-                snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
-                update_wifi_ip_label(prog);
+            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+
+            int attempts = 0;
+            const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
+            wl_status_t last_status = WL_IDLE_STATUS;
+
+            while (WiFi.status() != WL_CONNECTED && attempts < max_attempts) {
+                vTaskDelay(pdMS_TO_TICKS(500));
+                attempts++;
+                wl_status_t cur_status = WiFi.status();
+                if (cur_status != last_status || (attempts % 4 == 0)) {
+                    last_status = cur_status;
+                    const char* st_name = (cur_status == WL_IDLE_STATUS)     ? "IDLE" :
+                                          (cur_status == WL_NO_SSID_AVAIL)   ? "NO_SSID_AVAIL" :
+                                          (cur_status == WL_SCAN_COMPLETED)  ? "SCAN_COMPLETED" :
+                                          (cur_status == WL_CONNECTED)       ? "CONNECTED" :
+                                          (cur_status == WL_CONNECT_FAILED)  ? "CONNECT_FAILED" :
+                                          (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
+                                          (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" : "UNKNOWN";
+                    Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
+                                  st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
+                    char prog[32];
+                    snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
+                    update_wifi_ip_label(prog);
+                }
             }
+            sta_connected = (WiFi.status() == WL_CONNECTED);
+        } else {
+            Serial.println("[WIFI] No valid STA credentials configured in settings.json. Launching SoftAP hotspot immediately...");
         }
 
-        if (WiFi.status() == WL_CONNECTED) {
+        if (sta_connected) {
             wifi_active = true;
             s_wifi_starting = false;
             String ip = WiFi.localIP().toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
+            s_wifi_ip[sizeof(s_wifi_ip) - 1] = '\0';
             update_wifi_ip_label(s_wifi_ip);
             
             // Auto-sync NTP to RTC
@@ -551,17 +571,35 @@ extern "C" void start_wifi(void) {
             Serial.printf("[WIFI] Connected to '%s'! Web Portal: http://%s/\n", current_settings.wifi_ssid, s_wifi_ip);
         } else {
             // STA failed or unconfigured in field: Launch local SoftAP hotspot fallback
-            Serial.printf("[WIFI] STA connection to '%s' failed (Status: %d). Starting SoftAP 'RTK-Rover' fallback...\n",
-                          current_settings.wifi_ssid, (int)WiFi.status());
+            if (has_valid_ssid) {
+                Serial.printf("[WIFI] STA connection to '%s' failed (Status: %d). Starting SoftAP 'RTK-Rover' fallback...\n",
+                              current_settings.wifi_ssid, (int)WiFi.status());
+            }
             update_wifi_ip_label("Starting AP...");
-            WiFi.disconnect();
+            WiFi.disconnect(true);
+            vTaskDelay(pdMS_TO_TICKS(100));
             WiFi.mode(WIFI_AP);
+            
+            IPAddress ap_local_ip(192, 168, 4, 1);
+            IPAddress ap_gateway(192, 168, 4, 1);
+            IPAddress ap_subnet(255, 255, 255, 0);
+            WiFi.softAPConfig(ap_local_ip, ap_gateway, ap_subnet);
             WiFi.softAP("RTK-Rover", "12345678");
-            vTaskDelay(pdMS_TO_TICKS(150));
+            
+            // Wait up to 1 second for AP netif to bring up IP
+            int ap_wait = 0;
+            while (WiFi.softAPIP() == IPAddress(0, 0, 0, 0) && ap_wait < 10) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                ap_wait++;
+            }
             
             IPAddress apIP = WiFi.softAPIP();
+            if (apIP == IPAddress(0, 0, 0, 0)) {
+                apIP = ap_local_ip; // Guaranteed fallback: 192.168.4.1
+            }
             String ip = apIP.toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
+            s_wifi_ip[sizeof(s_wifi_ip) - 1] = '\0';
             wifi_active = true;
             s_wifi_starting = false;
             update_wifi_ip_label(s_wifi_ip);

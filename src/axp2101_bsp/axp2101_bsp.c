@@ -98,19 +98,42 @@ void axp2101_bsp_read(Axp2101Status_t *status)
     }
 
     uint8_t st[2] = {0};
+    bool raw_vbus_good = false;
     if (i2c_read_buff(axp2101_dev_handle, AXP2101_REG_STATUS1, st, 2) == ESP_OK) {
-        status->vbus_good   = (st[0] & (1 << 5)) != 0;
+        raw_vbus_good       = (st[0] & (1 << 5)) != 0;
         uint8_t chg_state   = (st[1] >> 5) & 0x07;
         status->is_charging = (chg_state == 0x01 || chg_state == 0x02);
     }
 
     uint8_t vbus_raw[2] = {0};
+    float raw_vbus_v = 0.0f;
     if (i2c_read_buff(axp2101_dev_handle, AXP2101_REG_VBUS_H, vbus_raw, 2) == ESP_OK) {
         uint16_t vbus_mv = ((uint16_t)(vbus_raw[0] & 0x3F) << 8) | vbus_raw[1];
-        status->vbus_voltage_v = (float)vbus_mv / 1000.0f;
+        raw_vbus_v = (float)vbus_mv / 1000.0f;
+        status->vbus_voltage_v = raw_vbus_v;
     } else {
-        status->vbus_voltage_v = 0.0f;
+        raw_vbus_v = status->vbus_voltage_v; // Retain previous valid reading on transient I2C bus contention
     }
+
+    // Debounce VBUS presence:
+    // USB power is considered present if hardware bit is set OR ADC measures >= 4.0V
+    static uint8_t s_vbus_loss_debounce = 0;
+    static bool s_filtered_vbus_good = true;
+
+    bool vbus_detected = raw_vbus_good || (raw_vbus_v >= 4.0f);
+    if (vbus_detected) {
+        s_vbus_loss_debounce = 0;
+        s_filtered_vbus_good = true;
+    } else {
+        // Require 2 consecutive missing cycles (>= 4s) of BOTH bit=0 and VBUS < 4.0V
+        // before declaring VBUS disconnected
+        if (s_vbus_loss_debounce < 2) {
+            s_vbus_loss_debounce++;
+        } else {
+            s_filtered_vbus_good = false;
+        }
+    }
+    status->vbus_good = s_filtered_vbus_good;
 
     uint8_t vbat_raw[2] = {0};
     if (i2c_read_buff(axp2101_dev_handle, AXP2101_REG_VBAT_H, vbat_raw, 2) == ESP_OK) {

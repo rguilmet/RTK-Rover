@@ -201,8 +201,10 @@ void task_rover_core0(void *pvParameters)
                 if (state.heading_valid) {
                     if (state.heading_source == HDG_SRC_DUAL_FIX) hdg_mode = "FIX";
                     else if (state.heading_source == HDG_SRC_DUAL_FLT) hdg_mode = "FLT";
-                    else if (state.heading_source == HDG_SRC_COG) hdg_mode = "COG";
+                    else if (state.heading_source == HDG_SRC_DISP) hdg_mode = "WALK";
+                    else if (state.heading_source == HDG_SRC_GYRO) hdg_mode = "GYRO";
                     else if (state.heading_source == HDG_SRC_HOLD) hdg_mode = "HLD";
+                    else if (state.heading_source == HDG_SRC_COG) hdg_mode = "COG";
                     else hdg_mode = state.heading_is_fixed ? "FIX" : "FLT";
                 }
                 char rssi_str[36];

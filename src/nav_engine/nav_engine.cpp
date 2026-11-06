@@ -505,19 +505,27 @@ extern "C" void nav_heading_displacement_update(double tip_lat,
         s_anchor_lon = tip_lon;
         dist_m = 0.0;
     } else if (s_fused_valid) {
-        // Paused or slow stepping: Integrate QMI8658 Gyroscope Z-axis yaw rate
-        if (fabsf(gyr_z_dps) > 0.3f && dt_s > 0.0f && dt_s < 0.5f) {
-            // Note: display held flat: Z-gyro measures pole azimuth rotation in dps
-            s_fused_heading += gyr_z_dps * dt_s;
-            while (s_fused_heading < 0.0f)   s_fused_heading += 360.0f;
-            while (s_fused_heading >= 360.0f) s_fused_heading -= 360.0f;
-        }
+        // Actively walking window: maintain HDG WALK for 3.0s after a valid displacement step
+        bool in_walk_window = (s_last_disp_ms > 0 && (now_ms - s_last_disp_ms <= 3000));
 
-        // 60-second gyro hold window
-        if (now_ms - s_last_disp_ms <= 60000) {
+        // Gyro rotation detection: QMI8658 resting zero-rate bias is ~0.4 to 1.0 dps.
+        // Rotation threshold set to 1.5 dps to reject stationary drift.
+        bool is_rotating = (fabsf(gyr_z_dps) >= 1.5f);
+
+        if (in_walk_window) {
+            // Actively walking: maintain HDG WALK continuously without intermediate GYRO drops
+            s_fused_src = HDG_SRC_DISP;
+        } else if (is_rotating) {
+            // Stationary in place but actively rotating the pole: integrate gyro yaw
+            if (dt_s > 0.0f && dt_s < 0.5f) {
+                s_fused_heading += gyr_z_dps * dt_s;
+                while (s_fused_heading < 0.0f)   s_fused_heading += 360.0f;
+                while (s_fused_heading >= 360.0f) s_fused_heading -= 360.0f;
+            }
             s_fused_src = HDG_SRC_GYRO;
         } else {
-            // Over 60 seconds stationary: prompt walk to realign
+            // Stationary and idle (not rotating): freeze heading completely!
+            // Rock-solid HDG HLD with zero drift.
             s_fused_src = HDG_SRC_HOLD;
         }
     }

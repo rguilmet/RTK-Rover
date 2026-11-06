@@ -2362,7 +2362,8 @@ void update_rover_ui(const RoverUIData_t *d)
         s_wifi_status_dirty = false;
         const char *ip = s_pending_wifi_status;
         if (ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 &&
-            strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 && strstr(ip, "...") == NULL) {
+            strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 &&
+            strcmp(ip, "0.0.0.0") != 0 && strstr(ip, "...") == NULL) {
             char ip_buf[64];
             snprintf(ip_buf, sizeof(ip_buf), "Portal: http://%s/", ip);
             lv_label_set_text(t1_wifi_status_lbl, ip_buf);
@@ -3760,13 +3761,14 @@ void update_rover_ui(const RoverUIData_t *d)
     // 10. Update Tile 4: Wi-Fi & Web Portal Diagnostics
     if (t4_wifi_lbl) {
         bool active = is_wifi_active();
+        bool softap = is_wifi_softap();
         const char *ip = get_wifi_ip();
-        if (active && ip && ip[0]) {
+        if (active && ip && ip[0] && strcmp(ip, "0.0.0.0") != 0) {
             snprintf(buf, sizeof(buf),
                      "[WIFI & WEB PORTAL]\n"
                      "SSID: '%s' [ONLINE]\n"
                      "Portal: http://%s/",
-                     current_settings.wifi_ssid,
+                     softap ? "RTK-Rover (AP)" : current_settings.wifi_ssid,
                      ip);
         } else if (active) {
             snprintf(buf, sizeof(buf),

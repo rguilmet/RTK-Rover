@@ -5,6 +5,26 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.1] - 2026-11-06
+
+### Fixed
+- **Wi-Fi Portal Mode IP Resolution (`http://0.0.0.0/` Bug):**
+  - Resolved issue where SoftAP fallback returned `0.0.0.0` on Tile 1 and Tile 4 when Station mode timed out or credentials were unconfigured.
+  - Added explicit static AP IP configuration (`WiFi.softAPConfig(192.168.4.1, 192.168.4.1, 255.255.255.0)`), interface readiness polling loop, and guaranteed `192.168.4.1` fallback.
+  - Added fast-path bypass for placeholder SSIDs (`"Your-SSID-Here"`, `"Your_SSID"`, empty): instantly launches SoftAP without blocking 20–25s on nonexistent field networks.
+  - Added `is_wifi_softap()` query and updated Tile 4 diagnostics to clearly display `SSID: 'RTK-Rover' (Hotspot AP) [ONLINE]`.
+- **VBUS / Peripheral Flickering (`vbus_present` False Alarms):**
+  - Resolved UI bug where ANT1/ANT2 fix badges flashed RED `"OFF"` and LoRa turned Gray `"LoRa: OFF"` despite being connected to the USB power pack.
+  - Combined AXP2101 REG 0x00 comparator bit with 14-bit ADC line voltage check (`vbus_voltage_v >= 4.0V`): USB power is confirmed valid even during peak RF TX power sags.
+  - Added a 2-cycle (4-second) hysteresis debounce filter before declaring external USB power disconnected.
+  - Prevented transient I2C bus read hiccups from resetting VBUS state to false.
+- **Deep-Woods Heading Fallback State Machine & Gyro Spin Elimination:**
+  - Resolved stationary heading spinning caused by low gyro deadband ($0.3^\circ/	ext{s}$) integrating QMI8658 resting zero-rate bias ($\sim 0.4	ext{--}1.0^\circ/	ext{s}$).
+  - Increased rotation threshold to $1.5^\circ/	ext{s}$ and implemented rock-solid heading freeze (`HDG_SRC_HOLD`) when stationary and idle, resulting in $0.0^\circ/	ext{s}$ drift.
+  - Implemented active in-place pivot integration (`HDG_SRC_GYRO`): integrates smooth yaw rate only when actively turning the pole ($|\omega_z| \ge 1.5^\circ/	ext{s}$), then freezes and returns to `HDG HLD` when stationary.
+  - Added 3.0-second persistence to `HDG_SRC_DISP` (`HDG WALK`): prevents the heading mode from dropping back to GYRO for 100 ms between walking paces.
+  - Updated `[TELEM]` diagnostic log formatter to correctly output `WALK`, `GYRO`, and `HLD`.
+
 ## [v0.7.0] - 2026-11-05
 
 ### Added
