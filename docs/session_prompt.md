@@ -45,7 +45,7 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
 * **Wireless Connectivity:** BLE Nordic UART Service (NUS) for ultra-low latency, battery-efficient telemetry streaming, with Wi-Fi UDP socket as a high-bandwidth alternative.
 * **Cellular NTRIP Client:** Connects over mobile cellular data to RTK2go (`rtk2go.com:2101` or `3.14.70.106:2101`), pulls mountpoint `STANDISH_ME_FN43ur`, verifies RTCM3 frames (`1006, 1074, 1084, 1094, 1230`), and streams them over BLE/Wi-Fi to the ESP32 bridge $\rightarrow$ UM982 COM2.
 * **Dual RTCM Source Arbitration:** Automatically manages or falls back between Local 900MHz LoRa (E220) and Cellular NTRIP (RTK2go) based on differential age and link health.
-* **Full Survey Navigation Suite (Ported from Firmware v0.7.3):**
+* **Full Survey Navigation Suite (Ported from Firmware v0.7.5):**
   * **Persistent Top Status Header Bar:** Date/time, power, ANT1 fix mode, SVs, precision, RTCM age, ANT2 heading fix, baseline length, true heading, and ground-tip coordinates.
   * **Tactical Guidance & Bullseye Stakeout:** Course-Up vector guidance with concentric centimeter rings ($1\text{ m}$, $20\text{ cm}$, $2\text{ cm}$) and proximity Geiger audio cues.
   * **Cadastral Line Stakeout:** Stationing ($S$), lateral offset ($O$), steer cues (`<<<`/`>>>`), and quadrant deed bearings ($S 62^\circ 15' 12" W$).
@@ -55,13 +55,16 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
 ### Component 2: ESP32 Hardware Bridge Firmware
 * **Current Board:** Waveshare ESP32-S3-Touch-LCD-3.5B (acts as the bridge, with optional status readout on LCD).
 * **Future Migration Compatibility:** Waveshare ESP32-S3-LCD-1.47B (21x52mm slim stick) or ESP32-S3-DEV-KIT-N32R16V (headless).
-* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.3`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics, and power management, while adding a BLE NUS / Wi-Fi bidirectional bridge service.
+* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.5`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics, and power management, while adding a BLE NUS / Wi-Fi bidirectional bridge service.
+* **CRITICAL ESP32-S3 Memory Guardrail (`DRAM0` vs. Octal PSRAM):**
+  * Prebuilt Arduino-ESP32 (`3.3.x`, `qio_opi`) sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0`. Wireless stacks (`esp_wifi_init()` + BLE controller) strictly require contiguous internal 8-bit/DMA SRAM (`DRAM0`) and fail silently under `DebugLevel=none` (`ESP_ERR_NO_MEM` $\rightarrow$ `WL_STOPPED 254`) if `DRAM0` is exhausted.
+  * Allocate all new bridge TX/RX ring buffers $\ge 1\text{ KB}$ in Octal PSRAM via `heap_caps_malloc(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)` (never in static `.dram0.bss`), prefer lightweight `NimBLE-Arduino` over legacy Bluedroid `BLEDevice`, and verify `[MEM] Post-Setup Heap` internal free SRAM stays healthy.
 
 ---
 
 ## 3. Reference Documentation & Key Artifacts
 Before beginning, review these technical specifications in the workspace:
-* **Firmware Master Docs:** `RTK_Rover/README.md`, `RTK_Rover/docs/project_overview.md`, `RTK_Rover/docs/session_handoff.md`, `RTK_Rover/docs/user_manual.md`.
+* **Firmware Master Docs:** `RTK_Rover/README.md`, `RTK_Rover/GEMINI.md`, `RTK_Rover/docs/project_overview.md`, `RTK_Rover/docs/hyper-context-anchor.md`, `RTK_Rover/docs/session_handoff.md`, `RTK_Rover/docs/user_manual.md`.
 * **Smart Pole & App Architecture:** Artifact `plan_headless_smart_pole_and_android_app.md`.
 * **Cellular NTRIP Bridge Architecture:** Artifact `plan_phase7_cellular_ntrip_bridge.md`.
 * **Cadastral Schema & COGO Engine:** `RTK_Rover/scripts/cogo_solver.py v1.1.0` and `RTK_Rover/docs/schemas/cadastral_schema.json`.

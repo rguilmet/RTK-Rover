@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.7.2`  
-**Firmware Version:** `v0.7.3`  
+**Document Version:** `v1.7.3`  
+**Firmware Version:** `v0.7.5`  
 **Last Updated:** November 6, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
@@ -394,7 +394,7 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
 *Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
 
 ### Pinned Top Control Deck & Elevated RF Survey Card
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.6.0"` in Montserrat 16 White (`#FFFFFF`).
+* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.7.5"` in Montserrat 16 White (`#FFFFFF`).
 * **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
   * Live ambient noise floor (`Noise: -102dBm`).
   * Last received packet signal strength (`Pkt: -84dBm`).
@@ -496,6 +496,12 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 ### Q5: How do I back up my survey data in the field?
 * Tap `Wi-Fi` on Tile 1, connect with your phone, open `http://<rover-ip>/`, tap `/survey_logged_pins.csv`, and save to your mobile device. You can also power down the rover and remove the MicroSD card to read it directly on a computer.
 
+### Q6: What happens when I tap `WIFI: OFF` on Tile 1, and how do I diagnose router connection issues?
+* **Connection Sequence:** Tapping `WIFI: OFF` (Navy Blue) changes the button to `WIFI: CONN` (Amber) while scanning all 2.4 GHz channels for the `wifi_ssid` in `/settings.json` (up to 20 seconds).
+  * **Router Found (`STA`):** Button turns Emerald Green (`WIFI: STA`) and displays `Portal: http://<router-ip>/`.
+  * **Field / Away from Router (`AP` Fallback):** If the configured router is out of range (or unconfigured), the Rover automatically launches its standalone SoftAP (`SSID: RTK-Rover`, password `12345678`), turns the button Violet (`WIFI: AP`), and serves the portal at `http://192.168.4.1/`.
+* **Serial Diagnostics:** Check the USB Serial log (or `/serial_logs/` on MicroSD) for `[MEM] Post-Setup Heap` and `[WIFI] WiFi.mode(WIFI_STA) -> OK`. Note that ESP32-S3 supports **2.4 GHz** (`802.11b/g/n`) networks only (not 5 GHz-only SSIDs).
+
 ---
 
 ## 13. Bi-Directional LoRa Protocol & Base Station Integration
@@ -525,10 +531,10 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
 * **Zero-Credential Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`), Base replies with `ACK_RADIO_SWITCH` (`0x82`), and both radios reconfigure their registers in Mode 3 simultaneously without restarting the Base systemd service or entering passwords.
 * **Failsafe Rollback:** If communication is silent for 60 seconds after a rate switch, both Rover and Base automatically revert to the $19.2\text{ kbps}$ fallback profile.
 
-### 13.4 Base Station Pacer (`e220_pacer.py` v3.3.1)
-* **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables formatted with clean ASCII `deg` units:
+### 13.4 Base Station Pacer (`e220_pacer.py` v3.4.0)
+* **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables formatted with clean ASCII `deg` units and USB/Battery power state:
   ```text
-  [ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2deg) | Hdg:142.6deg [DUAL_FIX] | Bat:85% (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
+  [ROVER TEL #042] ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2deg) | Hdg:142.6deg [DUAL_FIX] | PWR:USB (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
   ```
 * **Dual-Format Backward-Compatible Decoder:** Supports both legacy 39-byte and expanded 45-byte frames seamlessly during field rollouts.
 * **Atomic RAM State (`/run/rtk_rover_status.json`):** Writes live JSON on RAM tmpfs including `ant2_fix_name`, `baseline_length_cm`, `baseline_pitch_deg`, and `heading_source`.

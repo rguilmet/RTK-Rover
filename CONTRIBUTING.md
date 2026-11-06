@@ -37,7 +37,9 @@ A `platformio.ini` is provided for VSCode/PlatformIO users. It automatically res
 
 - **RTOS Tasks:** Long-running operations MUST be placed in dedicated FreeRTOS tasks (Core 0 for UARTs/Sensors/SD, Core 1 for LVGL UI/Web).
 - **LVGL Thread Safety:** Any interaction with the LVGL UI outside of `lv_timer_handler` must be wrapped in `rover_lvgl_lock()` and `rover_lvgl_unlock()`.
-- **Heap Allocations:** Avoid dynamic memory allocation (`malloc`, `new`) inside hot paths (e.g. high-speed UART RTCM/NMEA loops). Use stack allocation or statically sized buffers to prevent fragmentation.
+- **Heap Allocations & ESP32-S3 Memory Tiers:**
+  - Avoid dynamic memory allocation (`malloc`, `new`) inside hot paths (e.g. high-speed UART RTCM/NMEA loops) to prevent heap fragmentation.
+  - **Preserve Internal `DRAM0` for Radio & DMA:** Any non-DMA buffer, cache, or table $\ge 1\text{ KB}$ must be allocated in Octal PSRAM at initialization using `heap_caps_malloc(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)` rather than declared in static `.dram0.bss`. Because prebuilt Arduino-ESP32 sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `RESERVE_INTERNAL = 0`, exhausting internal `DRAM0` silently breaks `esp_wifi_init()` / BLE initialization under `DebugLevel=none`.
 - **Versioning:** Any modification to code should bump `ROVER_FIRMWARE_VERSION` in `user_config.h` per SemVer rules (`vMajor.Minor.Patch`).
 
 ## Reporting Bugs

@@ -1,7 +1,7 @@
 # Critical Design Review (CDR) - RTK Rover
 
-**Document Version:** `v2.1.0`  
-**Firmware Baseline:** `v0.7.3`  
+**Document Version:** `v2.2.0`  
+**Firmware Baseline:** `v0.7.5`  
 **Companion Software:** `e220_pacer.py v3.4.0` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
 **Date:** November 6, 2026  
 **Status:** Approved & Field Proven  
@@ -116,6 +116,11 @@ This Critical Design Review provides a rigorous audit of the system's hardware, 
 * **The Root Cause:** `LVGL_TASK_MAX_DELAY_MS` was set to 500 ms, and button callbacks performed synchronous MicroSD file reads to compute next-label stem numbers.
 * **The Resolution (`v0.6.0`):** Reduced LVGL task delay to 20 ms and implemented an in-memory RAM stem cache (`s_next_seq_cache`), delivering instantaneous sub-25ms touch response.
 
+### 4.6. Silent Wi-Fi Radio Starvation via Internal `DRAM0` Exhaustion (`WL_STOPPED 254`)
+* **The Problem:** Wi-Fi Station and SoftAP modes worked reliably in `v0.2.49` (`e96f17f`), then silently regressed by `v0.7.0`: tapping `WIFI` left `WiFi.status()` stuck at `254` (`WL_STOPPED`), `WiFi.scanNetworks()` returned `-2` (`WIFI_SCAN_FAILED`), `WiFi.begin()` returned `4` (`WL_CONNECT_FAILED`), zero `[WIFI EVENT]` callbacks ever fired, and even SoftAP returned `0.0.0.0`.
+* **The Root Cause:** Although the ESP32-S3 has **8 MB of Octal PSRAM** (~6.5 MB free), `esp_wifi_init()` / `esp_wifi_start()` and LwIP RX/TX DMA descriptors strictly require $\ge 60\text{--}75\text{ KB}$ of contiguous internal 8-bit/DMA SRAM (`DRAM0`). Binary inspection (`xtensa-esp32s3-elf-size`) of `v0.7.4` revealed static `DRAM0` usage before `setup()` had reached **213.3 KB** (`.dram0.bss = 120,032 B`, `44%` global dynamic RAM), while ~400+ LVGL 9 widgets (`~50 KB`) and a 48-line QSPI DMA bounce strip (`30,720 B`) consumed the remaining internal heap. Serial timestamp subtraction in `test/_033` proved `WiFi.mode(WIFI_STA)` + `WiFi.begin()` aborted in **46 ms** (before reaching `STAClass::begin()`'s 1000 ms netif startup wait) with `ESP_ERR_NO_MEM` (`0x101`) — completely invisible because `DebugLevel=none` stripped `log_e()` output.
+* **The Resolution (`v0.7.5`):** Migrated `82,944 B` of non-DMA `.dram0.bss` buffers (`serial_logger`, `g_waypoints`, `rtcm_logger`, `nmea_logger`) into Octal PSRAM (`MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT`), scoped `heap_caps_malloc_extmem_enable(64)` around `create_rover_ui()` (offloading `~50 KB` of LVGL widget structs to PSRAM while restoring `4096` immediately afterward for hardware DMA drivers), and trimmed `LVGL_DMA_BUFF_LEN` to 24 lines (`15,360 B`). Static `.dram0.bss` dropped by **69.1%** (`120,032 B` $\rightarrow$ `37,104 B`, `18%` global dynamic RAM), reclaiming **~148 KB of internal SRAM** with zero feature loss.
+
 ---
 
 ## 5. The Ugly: Silicon Quirks & Physical Compromises
@@ -133,6 +138,10 @@ This Critical Design Review provides a rigorous audit of the system's hardware, 
 ### 5.3. ESP32-S3 Internal SPI-Flash Erase vs. UART FIFO Overrun
 * **The Quirk:** Writing or erasing internal SPI Flash (`FFat` / `NVS`) disables non-IRAM interrupts for $35\text{--}60\text{ ms}$, overflowing the ESP32-S3's 128-byte hardware UART FIFO during active $115,200\text{ baud}$ reception.
 * **The Workaround:** Flash writes are strictly barred during active surveying; high-rate logging is routed to MicroSD (SD_MMC), with settings committed to FFat only on explicit user actions. The Store-and-Verify Gatekeeper silently rescues frames following any rare erase-induced byte clips.
+
+### 5.4. Prebuilt Arduino-ESP32 `sdkconfig` PSRAM Thresholds (`RESERVE_INTERNAL = 0`)
+* **The Quirk:** Prebuilt Arduino-ESP32 `3.3.12` (`qio_opi`) compiles with `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` (routing every `malloc()` $\le 4\text{ KB}$ into internal `DRAM0`), `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0` (reserving **zero** internal SRAM for on-demand Wi-Fi/BLE startup), and `CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY` disabled (`EXT_RAM_BSS_ATTR` is ineffective).
+* **The Workaround:** Enforced explicit `heap_caps_malloc(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)` for all non-DMA ring buffers and tables $\ge 1\text{ KB}$, scoped `heap_caps_malloc_extmem_enable(64)` strictly around bulk LVGL UI construction, and added `[MEM] Post-Setup Heap` + `WiFi.mode()` diagnostics so internal `DRAM0` headroom remains permanently observable.
 
 ---
 
@@ -159,4 +168,4 @@ Data collected during rigorous boundary survey field trials in Standish, ME, and
 
 The RTK Rover architecture has achieved complete hardware, firmware, and mathematical convergence. The system fulfills all design criteria for high-precision cadastral surveying, property pin recovery, and boundary navigation under challenging forest canopy.
 
-All identified architectural traps—including I2C bus contention, LVGL float format panics, open-M0 WOR sleep states, AUX pacing misconceptions, Core 0/Core 1 telemetry desynchronization, and terminal encoding artifacts—have been systematically eliminated, verified, and regression-tested in firmware baseline **`v0.6.2`** and companion software **`e220_pacer.py v3.3.1`**. The platform stands ready for sustained production field deployment.
+All identified architectural traps—including I2C bus contention, LVGL float format panics, open-M0 WOR sleep states, AUX pacing misconceptions, Core 0/Core 1 telemetry desynchronization, terminal encoding artifacts, and internal `DRAM0` wireless stack starvation—have been systematically eliminated, verified, and regression-tested in firmware baseline **`v0.7.5`** and companion software **`e220_pacer.py v3.4.0`**. The platform stands ready for sustained production field deployment.

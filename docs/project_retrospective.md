@@ -1,7 +1,7 @@
 # Project Retrospective: RTK Rover Development & AI Pair Programming
 
-**Document Version:** `v2.1.0`  
-**Firmware Baseline:** `v0.7.3`  
+**Document Version:** `v2.2.0`  
+**Firmware Baseline:** `v0.7.5`  
 **Companion Software:** `e220_pacer.py v3.4.0` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
 **Date:** November 6, 2026  
 **Status:** Completed & Field Proven  
@@ -51,6 +51,10 @@ timeline
       : Deep-Woods Heading Fallback (Walk 3 Steps + Gyro)
       : 45-Byte Telemetry Frame with Full ANT2 Observables
       : Core 1 Sensor Fusion Synchronization (v0.6.2 / pacer v3.3.1)
+    section Phase 6 & 6.1 : UPS & Memory Discipline (Nov 5-6)
+      : Dual-Power Hot-Swap UPS via AXP2101 (v0.7.0 / pacer v3.4.0)
+      : Multi-State Wi-Fi Cues & Stationary Gyro Freeze (v0.7.1-v0.7.2)
+      : ELF DRAM0 Exhaustion Audit & Octal PSRAM Offload (v0.7.5)
 ```
 
 ---
@@ -84,6 +88,7 @@ timeline
 | • Decoupled legal data architecture| • Missing secondary coordinates  |                            |
 | • Deep-woods heading fallback      | • 9.6k channel saturation math   | • Flash erase UART FIFO hit|
 | • Dual-format telemetry pacer      | • Core 0/1 telemetry desync      | • 320x480 screen budgeting |
+| • Hot-swap LiPo UPS architecture   | • Silent DRAM0 Wi-Fi starvation  | • DebugLevel=none OOM mask |
 +------------------------------------+----------------------------------+----------------------------+
 ```
 
@@ -97,9 +102,11 @@ timeline
 * **Debugging Hardware Quirk Remote Diagnostics:** Diagnosing that an open `M0` wire caused the radio to silently enter WOR Mode 1 (500 ms sleep) required painstaking correlation of packet arrival intervals and spectrum scan data. The lesson: always implement active hardware continuity verification in software at boot.
 * **Hidden Library Macro Traps:** The Arduino LVGL 9 library's `#define LV_USE_FLOAT 0` was an invisible landmine that produced null-pointer panics instead of compiler warnings. Establishing the rule "never use `%f` in `lv_label_set_text_fmt`" permanently resolved it.
 * **Telemetry Core Desynchronization:** Placing the telemetry feed call on Core 0 before Core 1 attached PMIC battery and woods fallback heading led to confusing `Bat:0%` and `[NONE]` logs. The lesson: telemetry frames must always be fed from the final sensor-fusion core immediately prior to display updates.
+* **Chasing API Symptoms Instead of Memory Physics (`WL_STOPPED 254`):** When Wi-Fi regressed between `v0.2.49` and `v0.7.0`, four consecutive iterations tweaked `scanNetworks()`, WPA security thresholds, settling delays, and task affinity under the assumption that the radio was running—because the board had 6.5 MB of free PSRAM! Only when we measured the exact 46 ms execution window in `test/_033` and inspected `RTK_Rover.ino.elf` with `xtensa-esp32s3-elf-size` did the real culprit emerge: `.dram0.bss` (`120,032 B`) + ~400 LVGL widgets (`<= 4 KB` each) had starved internal `DRAM0`, causing `esp_wifi_init()` to return `ESP_ERR_NO_MEM` (`0x101`) silently under `DebugLevel=none`. The lesson: when multiple unrelated radio operations (`STA`, `scanNetworks`, `SoftAP`, event callbacks) all fail simultaneously with zero events, inspect ELF sections and internal DMA heap *first*.
 
 ### 4.3. The Ugly
 * **Ebyte Silicon Realities vs. Datasheet Claims:** The official Ebyte manuals claimed `AUX` stayed low during RF transmission and that EEPROM writes acknowledged with `0xC1`. In reality, `AUX` stays high on `<= 200 B` packets, rises when Subpacket 2 *starts* airing on `201..400 B` packets, and certain firmware versions echo `0xC0`. Only oscilloscope traces and microsecond-level timing loops revealed the truth.
+* **Prebuilt Arduino-ESP32 `sdkconfig` PSRAM Illusion:** Having 8 MB of Octal PSRAM creates a false sense of infinite memory. Because prebuilt Arduino-ESP32 sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0` (and disables `EXT_RAM_BSS_ATTR`), every static array and small UI widget quietly erodes the ~320 KB internal `DRAM0` pool until late-initialized wireless drivers (`WiFi` / `BLE`) fail to allocate DMA descriptors.
 
 ---
 
@@ -110,6 +117,7 @@ timeline
 3. **Principle 3: Zero Disk I/O in UI Loops:** Never perform filesystem reads (SD card or flash) inside periodic rendering loops. All file-derived metadata must be cached in memory on dirty events.
 4. **Principle 4: Hardware Pacing Over Software Polling:** Never poll UART buffers in tight loops. Use silicon-calibrated Time-on-Air and hardware edge interrupts to govern radio pacing with microsecond precision.
 5. **Principle 5: Documentation is Executable Architecture:** High-quality living documentation (`e220-reference.md`, `hyper-context-anchor.md`, `user_manual.md`) is not an afterthought—it is the operational specification that keeps human and AI aligned across complex, multi-week engineering campaigns.
+6. **Principle 6: Explicit Memory-Tier Discipline on PSRAM SoCs:** Treat internal `DRAM0` (`MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA`) as sacred silicon reserved strictly for wireless MAC/PHY stacks (`WiFi`/`BLE`), hardware peripheral DMA (`QSPI`, `SD_MMC`, `I2S`), and RTOS task stacks. Route all non-DMA ring buffers, waypoint tables, and bulk UI widget trees explicitly into Octal PSRAM (`MALLOC_CAP_SPIRAM`).
 
 ---
 
@@ -117,4 +125,4 @@ timeline
 
 The RTK Rover project stands as a benchmark of modern collaborative engineering. By combining deep domain surveying knowledge, practical field testing in rugged Maine timber, and relentless agentic coding rigor, the platform successfully transformed commodity hardware into an ultra-high-precision surveying instrument that rivals commercial GNSS equipment costing ten times as much.
 
-The baseline at **Firmware `v0.6.2`** and **`e220_pacer.py v3.3.1`** is mathematically sound, field-proven, secure, and ready for long-term production use.
+The baseline at **Firmware `v0.7.5`** and **`e220_pacer.py v3.4.0`** is mathematically sound, field-proven, secure, and ready for long-term production use.
