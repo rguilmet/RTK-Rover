@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.4] - 2026-11-06
+
+### Fixed
+- **Wi-Fi Station Mode Task Affinity & Radio State Machine Resolution:**
+  - Pinned background Wi-Fi connection worker task (`wifi_connect`) to **Core 1** at Priority **3**, co-locating it with the application UI and Arduino network event loop (`arduino_events` on Core 1). This completely eliminates CPU starvation and task priority inversion previously caused by running at Priority 1 on Core 0 underneath `task_rover_core0` (Priority 4).
+  - Resolved `WL_CONNECT_FAILED (4)` and `WIFI_SCAN_FAILED (-2)` by removing premature `WiFi.scanNetworks(false, false)` and improper security overrides (`WIFI_ALL_CHANNEL_SCAN` / `WIFI_AUTH_WPA_PSK`).
+  - Added dedicated 150ms settling delay after `WiFi.mode(WIFI_STA)` to ensure the Station netif and Wi-Fi PHY radio state machine have fully started before issuing `WiFi.begin()`.
+  - Removed aggressive loop re-triggering of `WiFi.begin()` that was repeatedly aborting the ESP32 4-way WPA/WPA2/WPA3 handshake while in the initial transient `WL_STOPPED (254)` state.
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.7.4`.
+
 ## [v0.7.3] - 2026-11-06
 
 ### Added

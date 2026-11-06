@@ -481,17 +481,16 @@ extern "C" void start_wifi(void) {
     
     update_wifi_ip_label("Connecting...");
     
-    // Non-blocking connection task so UI stays responsive
+    // Non-blocking connection task pinned to Core 1 (UI & Event Core) at Priority 3
+    // Leaves Core 0 100% dedicated to real-time UART bridge (E220 & UM982)
     xTaskCreatePinnedToCore([](void* arg){
-        WiFi.persistent(false);
-
         static wifi_event_id_t s_wifi_event_id = 0;
         if (s_wifi_event_id == 0) {
             s_wifi_event_id = WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
                 if (event == ARDUINO_EVENT_WIFI_STA_START) {
-                    Serial.println("[WIFI EVENT] STA Interface Started!");
+                    Serial.println("[WIFI EVENT] STA Interface Started");
                 } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
-                    Serial.println("[WIFI EVENT] STA Associated with AP!");
+                    Serial.println("[WIFI EVENT] STA Associated with AP");
                 } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
                     uint8_t reason = info.wifi_sta_disconnected.reason;
                     Serial.printf("[WIFI EVENT] STA Disconnected (Reason: %u - %s)\n",
@@ -500,7 +499,7 @@ extern "C" void start_wifi(void) {
                     Serial.printf("[WIFI EVENT] STA Got IP: %s\n",
                                   IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
                 } else if (event == ARDUINO_EVENT_WIFI_AP_START) {
-                    Serial.println("[WIFI EVENT] SoftAP Started!");
+                    Serial.println("[WIFI EVENT] SoftAP Started");
                 }
             });
         }
@@ -521,69 +520,26 @@ extern "C" void start_wifi(void) {
             // If SoftAP was running, tear it down cleanly before switching to STA
             if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
                 WiFi.softAPdisconnect(true);
-                vTaskDelay(pdMS_TO_TICKS(50));
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
             
+            WiFi.disconnect(false, false);
+            vTaskDelay(pdMS_TO_TICKS(100));
             WiFi.mode(WIFI_STA);
             WiFi.setSleep(false);
             WiFi.setAutoReconnect(true);
 
-            // Diagnostic 2.4GHz Wi-Fi Scan to locate target AP channel, RSSI, and auth mode
-            Serial.println("[WIFI] Scanning visible 2.4GHz networks...");
-            update_wifi_ip_label("Scanning Wi-Fi...");
-            int n = WiFi.scanNetworks(false, false);
-            Serial.printf("[WIFI] Scan found %d networks:\n", n);
-            int target_ch = 0;
-            int target_rssi = -999;
-            wifi_auth_mode_t target_auth = WIFI_AUTH_OPEN;
-            for (int i = 0; i < n; i++) {
-                String s = WiFi.SSID(i);
-                int ch = WiFi.channel(i);
-                int r = WiFi.RSSI(i);
-                wifi_auth_mode_t auth = (wifi_auth_mode_t)WiFi.encryptionType(i);
-                const char *auth_str = (auth == WIFI_AUTH_OPEN) ? "OPEN" :
-                                       (auth == WIFI_AUTH_WEP) ? "WEP" :
-                                       (auth == WIFI_AUTH_WPA_PSK) ? "WPA" :
-                                       (auth == WIFI_AUTH_WPA2_PSK) ? "WPA2" :
-                                       (auth == WIFI_AUTH_WPA_WPA2_PSK) ? "WPA/WPA2" :
-                                       (auth == WIFI_AUTH_WPA2_ENTERPRISE) ? "WPA2-ENT" :
-                                       (auth == WIFI_AUTH_WPA3_PSK) ? "WPA3" :
-                                       (auth == WIFI_AUTH_WPA2_WPA3_PSK) ? "WPA2/WPA3" :
-                                       (auth == WIFI_AUTH_WAPI_PSK) ? "WAPI" : "OTHER";
-                Serial.printf("  [%d] SSID: '%s' | Ch: %2d | RSSI: %3d dBm | Auth: %s (%d)\n",
-                              i, s.c_str(), ch, r, auth_str, (int)auth);
-                if (s.equals(current_settings.wifi_ssid)) {
-                    target_ch = ch;
-                    target_rssi = r;
-                    target_auth = auth;
-                }
-            }
-            WiFi.scanDelete();
-
-            if (target_ch > 0) {
-                Serial.printf("[WIFI] Target AP '%s' DETECTED on Channel %d (RSSI: %d dBm, Auth: %d)!\n",
-                              current_settings.wifi_ssid, target_ch, target_rssi, (int)target_auth);
-            } else {
-                Serial.printf("[WIFI] Target AP '%s' NOT seen in 2.4GHz scan. Attempting blind all-channel connect...\n",
-                              current_settings.wifi_ssid);
-            }
-
-            WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
-            WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-            WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
+            // Allow station netif and Wi-Fi PHY radio to complete startup
+            vTaskDelay(pdMS_TO_TICKS(150));
 
             update_wifi_ip_label("Connecting...");
-            wl_status_t begin_res;
-            if (target_ch > 0) {
-                begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
-            } else {
-                begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
-            }
-            Serial.printf("[WIFI] WiFi.begin() initiated (immediate status=%d)\n", (int)begin_res);
+            wl_status_t begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+            Serial.printf("[WIFI] WiFi.begin('%s') returned status: %d\n",
+                          current_settings.wifi_ssid, (int)begin_res);
 
             int attempts = 0;
-            const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
-            wl_status_t last_status = WL_IDLE_STATUS;
+            const int max_attempts = 30; // 15 seconds timeout (30 * 500ms)
+            wl_status_t last_status = (wl_status_t)999;
 
             while ((WiFi.status() != WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0)) && attempts < max_attempts) {
                 vTaskDelay(pdMS_TO_TICKS(500));
@@ -598,29 +554,12 @@ extern "C" void start_wifi(void) {
                                           (cur_status == WL_CONNECT_FAILED)  ? "CONNECT_FAILED" :
                                           (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
                                           (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" :
-                                          ((int)cur_status == 254)           ? "STOPPED" : "UNKNOWN";
+                                          ((int)cur_status == 254)           ? "INITIALIZING" : "UNKNOWN";
                     Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
                                   st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
                     char prog[32];
                     snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
                     update_wifi_ip_label(prog);
-                }
-                
-                // If radio remained in STOPPED state after 2 seconds, re-issue WiFi.begin()
-                if ((int)cur_status == 254 && (attempts == 4 || attempts == 8)) {
-                    Serial.println("[WIFI] Re-triggering WiFi.begin() from stopped state...");
-                    WiFi.mode(WIFI_STA);
-                    if (target_ch > 0) {
-                        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
-                    } else {
-                        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
-                    }
-                }
-                
-                // If stuck disconnected after 10 attempts (5s), actively re-trigger connection
-                if (cur_status == WL_DISCONNECTED && (attempts == 10 || attempts == 20 || attempts == 30)) {
-                    Serial.printf("[WIFI] Re-triggering connection attempt (%d/%d)...\n", attempts, max_attempts);
-                    WiFi.reconnect();
                 }
             }
             sta_connected = (WiFi.status() == WL_CONNECTED || WiFi.localIP() != IPAddress(0, 0, 0, 0));
@@ -656,7 +595,7 @@ extern "C" void start_wifi(void) {
             }
             update_wifi_ip_label("Starting AP...");
             WiFi.disconnect(false, false);
-            vTaskDelay(pdMS_TO_TICKS(50));
+            vTaskDelay(pdMS_TO_TICKS(100));
             WiFi.mode(WIFI_AP);
             
             IPAddress ap_local_ip(192, 168, 4, 1);
@@ -689,7 +628,7 @@ extern "C" void start_wifi(void) {
         }
         s_wifi_starting = false;
         vTaskDelete(NULL);
-    }, "wifi_connect", 8192, NULL, 1, NULL, 0);
+    }, "wifi_connect", 8192, NULL, 3, NULL, 1);
 }
 
 extern "C" void stop_wifi(void) {
