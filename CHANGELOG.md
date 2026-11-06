@@ -5,6 +5,15 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.3] - 2026-11-06
+
+### Added
+- **2.4GHz Wi-Fi Pre-Connection Diagnostic Spectrum Scanner & Channel Lock:**
+  - Performs active pre-connection scan via `WiFi.scanNetworks(false, false)` logging all visible SSIDs, channels, RSSI signal strengths, and authentication types.
+  - Automatically identifies whether target router SSID is detected, logs its exact channel and signal strength, and passes `target_ch` directly to `WiFi.begin(ssid, password, target_ch)` for immediate channel-locked association.
+  - Sets `WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN)` and `WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK)` to support mixed WPA2/WPA3 and legacy authentication modes.
+  - Guarantees the ESP32 Wi-Fi PHY radio and Station interface are actively powered up out of `WL_STOPPED (254)` prior to association.
+
 ## [v0.7.2] - 2026-11-06
 
 ### Added

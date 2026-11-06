@@ -528,8 +528,58 @@ extern "C" void start_wifi(void) {
             WiFi.setSleep(false);
             WiFi.setAutoReconnect(true);
 
-            // Connect using native multi-mode security (WPA, WPA2, WPA3)
-            WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+            // Diagnostic 2.4GHz Wi-Fi Scan to locate target AP channel, RSSI, and auth mode
+            Serial.println("[WIFI] Scanning visible 2.4GHz networks...");
+            update_wifi_ip_label("Scanning Wi-Fi...");
+            int n = WiFi.scanNetworks(false, false);
+            Serial.printf("[WIFI] Scan found %d networks:\n", n);
+            int target_ch = 0;
+            int target_rssi = -999;
+            wifi_auth_mode_t target_auth = WIFI_AUTH_OPEN;
+            for (int i = 0; i < n; i++) {
+                String s = WiFi.SSID(i);
+                int ch = WiFi.channel(i);
+                int r = WiFi.RSSI(i);
+                wifi_auth_mode_t auth = (wifi_auth_mode_t)WiFi.encryptionType(i);
+                const char *auth_str = (auth == WIFI_AUTH_OPEN) ? "OPEN" :
+                                       (auth == WIFI_AUTH_WEP) ? "WEP" :
+                                       (auth == WIFI_AUTH_WPA_PSK) ? "WPA" :
+                                       (auth == WIFI_AUTH_WPA2_PSK) ? "WPA2" :
+                                       (auth == WIFI_AUTH_WPA_WPA2_PSK) ? "WPA/WPA2" :
+                                       (auth == WIFI_AUTH_WPA2_ENTERPRISE) ? "WPA2-ENT" :
+                                       (auth == WIFI_AUTH_WPA3_PSK) ? "WPA3" :
+                                       (auth == WIFI_AUTH_WPA2_WPA3_PSK) ? "WPA2/WPA3" :
+                                       (auth == WIFI_AUTH_WAPI_PSK) ? "WAPI" : "OTHER";
+                Serial.printf("  [%d] SSID: '%s' | Ch: %2d | RSSI: %3d dBm | Auth: %s (%d)\n",
+                              i, s.c_str(), ch, r, auth_str, (int)auth);
+                if (s.equals(current_settings.wifi_ssid)) {
+                    target_ch = ch;
+                    target_rssi = r;
+                    target_auth = auth;
+                }
+            }
+            WiFi.scanDelete();
+
+            if (target_ch > 0) {
+                Serial.printf("[WIFI] Target AP '%s' DETECTED on Channel %d (RSSI: %d dBm, Auth: %d)!\n",
+                              current_settings.wifi_ssid, target_ch, target_rssi, (int)target_auth);
+            } else {
+                Serial.printf("[WIFI] Target AP '%s' NOT seen in 2.4GHz scan. Attempting blind all-channel connect...\n",
+                              current_settings.wifi_ssid);
+            }
+
+            WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+            WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+            WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
+
+            update_wifi_ip_label("Connecting...");
+            wl_status_t begin_res;
+            if (target_ch > 0) {
+                begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
+            } else {
+                begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+            }
+            Serial.printf("[WIFI] WiFi.begin() initiated (immediate status=%d)\n", (int)begin_res);
 
             int attempts = 0;
             const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
@@ -560,7 +610,11 @@ extern "C" void start_wifi(void) {
                 if ((int)cur_status == 254 && (attempts == 4 || attempts == 8)) {
                     Serial.println("[WIFI] Re-triggering WiFi.begin() from stopped state...");
                     WiFi.mode(WIFI_STA);
-                    WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+                    if (target_ch > 0) {
+                        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password, target_ch);
+                    } else {
+                        WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
+                    }
                 }
                 
                 // If stuck disconnected after 10 attempts (5s), actively re-trigger connection

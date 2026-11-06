@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
 **Document Version:** `v1.7.2`  
-**Firmware Version:** `v0.7.2`  
+**Firmware Version:** `v0.7.3`  
 **Last Updated:** November 6, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 

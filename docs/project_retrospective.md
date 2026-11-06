@@ -1,7 +1,7 @@
 # Project Retrospective: RTK Rover Development & AI Pair Programming
 
 **Document Version:** `v2.1.0`  
-**Firmware Baseline:** `v0.7.2`  
+**Firmware Baseline:** `v0.7.3`  
 **Companion Software:** `e220_pacer.py v3.4.0` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
 **Date:** November 6, 2026  
 **Status:** Completed & Field Proven  
