@@ -13,16 +13,20 @@
 
 #define SERIAL_RING_BUF_SIZE 32768
 
-static bool s_serial_active = false;
+extern SemaphoreHandle_t fs_mux;
+
+static volatile bool s_serial_active = false;
 static uint32_t s_bytes_logged = 0;
 static char s_serial_filename[64] = {0};
 static File s_serial_file;
 static SemaphoreHandle_t s_serial_mux = NULL;
+static SemaphoreHandle_t s_serial_file_mux = NULL;
 
 static uint8_t *s_ring_buf = NULL;
-static size_t s_ring_head = 0;
-static size_t s_ring_tail = 0;
-static bool s_in_logger = false;
+static volatile size_t s_ring_head = 0;
+static volatile size_t s_ring_tail = 0;
+static volatile TaskHandle_t s_io_owner_task = NULL;
+static uint32_t s_last_sd_flush_ms = 0;
 static bool s_timestamp_enabled = true;
 static bool s_at_start_of_line = true;
 
@@ -43,6 +47,9 @@ void SerialLoggerClass::begin(unsigned long baud) {
     ::Serial.begin(baud);
     if (!s_serial_mux) {
         s_serial_mux = xSemaphoreCreateRecursiveMutex();
+    }
+    if (!s_serial_file_mux) {
+        s_serial_file_mux = xSemaphoreCreateMutex();
     }
     ensure_serial_ring_buf();
 }
@@ -143,7 +150,10 @@ size_t SerialLoggerClass::write(uint8_t c) {
 size_t SerialLoggerClass::write(const uint8_t *buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
-    if (s_in_logger) {
+    // Only skip ring-buffer capture if the exact task currently inside SD/FFat VFS I/O
+    // triggers a re-entrant print; all other tasks always capture to s_ring_buf.
+    TaskHandle_t owner = s_io_owner_task;
+    if (owner != NULL && owner == xTaskGetCurrentTaskHandle()) {
         return ::Serial.write(buffer, size);
     }
 
@@ -151,7 +161,7 @@ size_t SerialLoggerClass::write(const uint8_t *buffer, size_t size) {
         s_serial_mux = xSemaphoreCreateRecursiveMutex();
     }
 
-    if (s_serial_mux && xSemaphoreTakeRecursive(s_serial_mux, pdMS_TO_TICKS(20)) == pdTRUE) {
+    if (s_serial_mux && xSemaphoreTakeRecursive(s_serial_mux, pdMS_TO_TICKS(50)) == pdTRUE) {
         if (!s_timestamp_enabled) {
             ::Serial.write(buffer, size);
             serial_logger_feed_locked(buffer, size);
@@ -221,24 +231,43 @@ uint32_t SerialLoggerClass::getBytesLogged() const {
     return serial_logger_get_bytes_logged();
 }
 
-static void serial_logger_flush_locked(void) {
-    if (s_serial_file && s_ring_buf && s_ring_head != s_ring_tail) {
-        uint8_t write_buf[1024];
-        s_in_logger = true;
-        while (s_ring_tail != s_ring_head) {
-            size_t bytes_to_write = 0;
+// Drain ring buffer to SD/FFat WITHOUT holding s_serial_mux across slow VFS write/flush calls.
+// Caller must already hold s_serial_file_mux and (if initialized) fs_mux.
+static void serial_logger_drain_to_file(bool force_sync) {
+    if (!s_serial_file || !s_ring_buf) return;
+
+    uint8_t write_buf[1024];
+    bool wrote_any = false;
+
+    for (;;) {
+        size_t bytes_to_write = 0;
+        if (s_serial_mux && xSemaphoreTakeRecursive(s_serial_mux, pdMS_TO_TICKS(20)) == pdTRUE) {
             while (s_ring_tail != s_ring_head && bytes_to_write < sizeof(write_buf)) {
                 write_buf[bytes_to_write++] = s_ring_buf[s_ring_tail];
                 s_ring_tail = (s_ring_tail + 1) % SERIAL_RING_BUF_SIZE;
             }
-
-            if (bytes_to_write > 0) {
-                s_serial_file.write(write_buf, bytes_to_write);
-                s_bytes_logged += bytes_to_write;
-            }
+            xSemaphoreGiveRecursive(s_serial_mux);
+        } else {
+            break;
         }
+
+        if (bytes_to_write == 0) {
+            break;
+        }
+
+        s_io_owner_task = xTaskGetCurrentTaskHandle();
+        s_serial_file.write(write_buf, bytes_to_write);
+        s_io_owner_task = NULL;
+        s_bytes_logged += bytes_to_write;
+        wrote_any = true;
+    }
+
+    uint32_t now_ms = millis();
+    if (force_sync || (wrote_any && (now_ms - s_last_sd_flush_ms >= 500))) {
+        s_last_sd_flush_ms = now_ms;
+        s_io_owner_task = xTaskGetCurrentTaskHandle();
         s_serial_file.flush();
-        s_in_logger = false;
+        s_io_owner_task = NULL;
     }
 }
 
@@ -246,18 +275,23 @@ extern "C" bool serial_logger_start(void) {
     if (!s_serial_mux) {
         s_serial_mux = xSemaphoreCreateRecursiveMutex();
     }
-    if (s_serial_mux) xSemaphoreTakeRecursive(s_serial_mux, portMAX_DELAY);
+    if (!s_serial_file_mux) {
+        s_serial_file_mux = xSemaphoreCreateMutex();
+    }
+    if (s_serial_file_mux) xSemaphoreTake(s_serial_file_mux, portMAX_DELAY);
 
     if (s_serial_active) {
-        if (s_serial_mux) xSemaphoreGiveRecursive(s_serial_mux);
+        if (s_serial_file_mux) xSemaphoreGive(s_serial_file_mux);
         return true;
     }
 
+    if (fs_mux) xSemaphoreTake(fs_mux, portMAX_DELAY);
+
+    s_io_owner_task = xTaskGetCurrentTaskHandle();
     if (s_serial_file) {
         s_serial_file.close();
     }
 
-    s_in_logger = true;
     if (!get_active_fs().exists("/serial")) {
         get_active_fs().mkdir("/serial");
     }
@@ -272,41 +306,47 @@ extern "C" bool serial_logger_start(void) {
         snprintf(s_serial_filename, sizeof(s_serial_filename), "/serial-log_%s.txt", ts);
         s_serial_file = get_active_fs().open(s_serial_filename, FILE_WRITE);
     }
-    s_in_logger = false;
+    s_io_owner_task = NULL;
 
     if (!s_serial_file) {
         ::Serial.printf("[SERIAL LOG] Failed to open %s for write\n", s_serial_filename);
         s_serial_active = false;
-        if (s_serial_mux) xSemaphoreGiveRecursive(s_serial_mux);
+        if (fs_mux) xSemaphoreGive(fs_mux);
+        if (s_serial_file_mux) xSemaphoreGive(s_serial_file_mux);
         return false;
     }
 
     s_bytes_logged = 0;
+    s_last_sd_flush_ms = millis();
     s_serial_active = true;
     ::Serial.printf("[SERIAL LOG] Started recording to %s\n", s_serial_filename);
 
     // Flush any power-up messages that were accumulated before logger start
-    serial_logger_flush_locked();
+    serial_logger_drain_to_file(true);
 
-    if (s_serial_mux) xSemaphoreGiveRecursive(s_serial_mux);
+    if (fs_mux) xSemaphoreGive(fs_mux);
+    if (s_serial_file_mux) xSemaphoreGive(s_serial_file_mux);
     return true;
 }
 
 extern "C" void serial_logger_stop(void) {
-    if (s_serial_mux) xSemaphoreTakeRecursive(s_serial_mux, portMAX_DELAY);
+    if (!s_serial_file_mux) return;
+    xSemaphoreTake(s_serial_file_mux, portMAX_DELAY);
     if (s_serial_active) {
-        serial_logger_flush_locked();
-        s_in_logger = true;
+        if (fs_mux) xSemaphoreTake(fs_mux, portMAX_DELAY);
+        serial_logger_drain_to_file(true);
+        s_io_owner_task = xTaskGetCurrentTaskHandle();
         if (s_serial_file) {
             s_serial_file.flush();
             s_serial_file.close();
         }
-        s_in_logger = false;
+        s_io_owner_task = NULL;
         s_serial_active = false;
+        if (fs_mux) xSemaphoreGive(fs_mux);
         ::Serial.printf("[SERIAL LOG] Stopped. Total logged: %lu bytes to %s\n",
                         (unsigned long)s_bytes_logged, s_serial_filename);
     }
-    if (s_serial_mux) xSemaphoreGiveRecursive(s_serial_mux);
+    xSemaphoreGive(s_serial_file_mux);
 }
 
 extern "C" bool serial_logger_is_active(void) {
@@ -322,11 +362,25 @@ extern "C" uint32_t serial_logger_get_bytes_logged(void) {
 }
 
 extern "C" void serial_logger_flush(void) {
-    if (!s_serial_active) return;
-    if (s_serial_mux && xSemaphoreTakeRecursive(s_serial_mux, pdMS_TO_TICKS(5)) == pdTRUE) {
-        serial_logger_flush_locked();
-        xSemaphoreGiveRecursive(s_serial_mux);
+    if (!s_serial_active || !s_ring_buf) return;
+    bool has_data = (s_ring_head != s_ring_tail);
+    bool needs_periodic_sync = (millis() - s_last_sd_flush_ms >= 500);
+    if (!has_data && !needs_periodic_sync) return;
+
+    if (!s_serial_file_mux || xSemaphoreTake(s_serial_file_mux, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return;
     }
+    if (fs_mux && xSemaphoreTake(fs_mux, pdMS_TO_TICKS(15)) != pdTRUE) {
+        xSemaphoreGive(s_serial_file_mux);
+        return;
+    }
+
+    if (s_serial_active) {
+        serial_logger_drain_to_file(false);
+    }
+
+    if (fs_mux) xSemaphoreGive(fs_mux);
+    xSemaphoreGive(s_serial_file_mux);
 }
 
 extern "C" void serial_logger_set_timestamp_enabled(bool enabled) {

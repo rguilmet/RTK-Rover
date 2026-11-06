@@ -510,6 +510,8 @@ static void nav_next_screen_btn_cb(lv_event_t *e)
 }
 
 static uint8_t s_tile0_nav_mode = 0; // 0 = Tactical Guidance, 1 = Line Stakeout, 2 = Map View
+static RoverUIData_t s_last_ui_data = {0};
+static bool s_has_last_ui_data = false;
 
 uint8_t rover_get_tile0_nav_mode(void)
 {
@@ -517,6 +519,7 @@ uint8_t rover_get_tile0_nav_mode(void)
 }
 
 static void update_t0_target_label(void);
+static void refresh_t0_guidance_readout_immediately(void);
 
 static void t0_map_zoom_in_cb(lv_event_t *e) {
     (void)e;
@@ -656,6 +659,7 @@ static void update_t0_target_label(void)
                 lv_label_set_text(t0_notes_lbl, nbuf);
             }
         }
+        refresh_t0_guidance_readout_immediately();
         return;
     }
 
@@ -688,6 +692,7 @@ static void update_t0_target_label(void)
                 lv_label_set_text(t0_notes_lbl, "Touch Map to Pan | Zoom with Buttons");
             }
         }
+        refresh_t0_guidance_readout_immediately();
         return;
     }
 
@@ -716,6 +721,168 @@ static void update_t0_target_label(void)
         const char *cur_notes = lv_label_get_text(t0_notes_lbl);
         if (!cur_notes || strcmp(cur_notes, "---") != 0) {
             lv_label_set_text(t0_notes_lbl, "---");
+        }
+    }
+    refresh_t0_guidance_readout_immediately();
+}
+
+// Recompute and update Tile 0 guidance readouts on the exact same LVGL frame as a button tap
+// so distance, bearing, steering, and dN/dE offsets snap simultaneously with the waypoint name.
+static void refresh_t0_guidance_readout_immediately(void)
+{
+    if (!s_has_last_ui_data) return;
+
+    char buf[128];
+    WaypointRecord_t active_wp;
+    bool has_wp = waypoint_get_active(&active_wp);
+
+    double dist_m = 0.0;
+    float brg_deg = 0.0f, rel_deg = 0.0f, dn_m = 0.0f, de_m = 0.0f;
+    if (has_wp) {
+        nav_compute_target_guidance(s_last_ui_data.tip_lat,
+                                    s_last_ui_data.tip_lon,
+                                    s_last_ui_data.heading_valid ? s_last_ui_data.true_heading_deg : 0.0f,
+                                    active_wp.latitude,
+                                    active_wp.longitude,
+                                    &dist_m,
+                                    &brg_deg,
+                                    &rel_deg,
+                                    &dn_m,
+                                    &de_m);
+    }
+
+    if (t0_tgt_hdg_lbl) {
+        if (has_wp) {
+            snprintf(buf, sizeof(buf), "Tgt: %05.1f deg", brg_deg);
+            lv_label_set_text(t0_tgt_hdg_lbl, buf);
+            if ((s_last_ui_data.heading_valid && fabsf(rel_deg) <= 3.0f) || (dist_m <= 0.05)) {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0);
+            } else if (s_last_ui_data.heading_valid && fabsf(rel_deg) <= 15.0f) {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFB800), 0);
+            } else {
+                lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
+            }
+        } else {
+            lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+            lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
+        }
+    }
+
+    if (s_tile0_nav_mode == 1) {
+        WaypointRecord_t wp_a, wp_b;
+        int16_t idx_a = -1, idx_b = -1;
+        waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+        if (idx_a >= 0 && idx_b >= 0) {
+            NavLineStakeout_t stakeout;
+            nav_compute_line_stakeout(s_last_ui_data.tip_lat, s_last_ui_data.tip_lon,
+                                      wp_a.latitude, wp_a.longitude,
+                                      wp_b.latitude, wp_b.longitude,
+                                      &stakeout);
+            bool on_line = (fabs(stakeout.offset_m) <= 0.02);
+            char off_val_str[24];
+            nav_format_offset((float)fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
+            if (t0_dist_lbl) {
+                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
+                if (on_line) {
+                    snprintf(buf, sizeof(buf), "[OK] ON LINE (%s)", off_val_str);
+                    lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF88), 0);
+                } else if (stakeout.offset_m < 0.0) {
+                    snprintf(buf, sizeof(buf), "%s LEFT", off_val_str);
+                    lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+                } else {
+                    snprintf(buf, sizeof(buf), "%s RIGHT", off_val_str);
+                    lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
+                }
+                lv_label_set_text(t0_dist_lbl, buf);
+            }
+            if (t0_steer_lbl) {
+                if (on_line) {
+                    snprintf(buf, sizeof(buf), "[OK] ON LINE - PROCEED ON BEARING");
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
+                } else if (stakeout.offset_m < 0.0) {
+                    snprintf(buf, sizeof(buf), "MOVE RIGHT TO LINE >>>");
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+                } else {
+                    snprintf(buf, sizeof(buf), "<<< MOVE LEFT TO LINE");
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+                }
+                lv_label_set_text(t0_steer_lbl, buf);
+            }
+            if (t0_offsets_lbl) {
+                char sta_str[32], rem_str[24];
+                nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
+                nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
+                snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
+                lv_label_set_text(t0_offsets_lbl, buf);
+            }
+        }
+    } else if (s_tile0_nav_mode == 2) {
+        char dist_str[24];
+        nav_format_distance(dist_m, dist_str, sizeof(dist_str));
+        if (t0_dist_lbl) {
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
+            if (has_wp) {
+                snprintf(buf, sizeof(buf), "%s @ %05.1f deg", dist_str, brg_deg);
+            } else {
+                snprintf(buf, sizeof(buf), "--- m @ --- deg");
+            }
+            lv_label_set_text(t0_dist_lbl, buf);
+        }
+        if (t0_steer_lbl) {
+            if (has_wp) {
+                snprintf(buf, sizeof(buf), "TGT: %s (%d/%d)",
+                         active_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
+            } else {
+                snprintf(buf, sizeof(buf), "No Target Active");
+            }
+            lv_label_set_text(t0_steer_lbl, buf);
+        }
+    } else if (has_wp) {
+        char dist_str[24], dn_str[24], de_str[24];
+        nav_format_distance(dist_m, dist_str, sizeof(dist_str));
+        nav_format_offset(dn_m, dn_str, sizeof(dn_str));
+        nav_format_offset(de_m, de_str, sizeof(de_str));
+
+        if (t0_dist_lbl) {
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
+            lv_label_set_text(t0_dist_lbl, dist_str);
+            lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
+        }
+        if (t0_scale_lbl && dist_m > 1.5) {
+            snprintf(buf, sizeof(buf), "Range: %s", dist_str);
+            lv_label_set_text(t0_scale_lbl, buf);
+        }
+        if (t0_steer_lbl) {
+            if (dist_m <= 1.5) {
+                if (dist_m < 0.02) {
+                    snprintf(buf, sizeof(buf), "[OK] PIN ACQUIRED! (Acc: %.1f cm)", s_last_ui_data.h_acc_m * 100.0f);
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
+                } else {
+                    snprintf(buf, sizeof(buf), "Stakeout: Align Tip to Crosshair");
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
+                }
+            } else if (s_last_ui_data.heading_valid) {
+                float abs_turn = fabsf(rel_deg);
+                if (abs_turn <= 3.0f) {
+                    snprintf(buf, sizeof(buf), "[OK] ON TRACK - Aimed at Pin");
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
+                } else if (abs_turn <= 15.0f) {
+                    snprintf(buf, sizeof(buf), (rel_deg > 0.0f) ? ">>> Turn Right %.0f deg" : "<<< Turn Left %.0f deg", abs_turn);
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFB800), 0);
+                } else {
+                    snprintf(buf, sizeof(buf), (rel_deg > 0.0f) ? ">>> Turn Right %.0f deg" : "<<< Turn Left %.0f deg", abs_turn);
+                    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
+                }
+            } else {
+                snprintf(buf, sizeof(buf), "Brg: %.1f deg | Acquiring Heading...", brg_deg);
+                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFF8800), 0);
+            }
+            lv_label_set_text(t0_steer_lbl, buf);
+        }
+        if (t0_offsets_lbl) {
+            snprintf(buf, sizeof(buf), "dN: %s   dE: %s", dn_str, de_str);
+            lv_label_set_text(t0_offsets_lbl, buf);
+            lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
         }
     }
 }
@@ -1141,8 +1308,8 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
 static void wifi_toggle_btn_cb(lv_event_t *e)
 {
     (void)e;
-    bool was_active = is_wifi_active();
-    if (was_active) {
+    bool was_running = (is_wifi_active() || is_wifi_starting());
+    if (was_running) {
         stop_wifi();
         play_rover_beep(1200, 30);
     } else {
@@ -1152,15 +1319,17 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Wi-Fi clicked -> %s\n",
-                     was_active ? "Stopping" : "Starting");
+                     was_running ? "Stopping" : "Starting");
     }
 }
 
+static portMUX_TYPE s_wifi_lbl_mux = portMUX_INITIALIZER_UNLOCKED;
 static char s_pending_wifi_status[64] = "Wi-Fi Inactive";
-static bool s_wifi_status_dirty = true;
+static volatile bool s_wifi_status_dirty = true;
 
 void update_wifi_ip_label(const char* ip)
 {
+    portENTER_CRITICAL(&s_wifi_lbl_mux);
     if (ip && ip[0]) {
         strncpy(s_pending_wifi_status, ip, sizeof(s_pending_wifi_status) - 1);
         s_pending_wifi_status[sizeof(s_pending_wifi_status) - 1] = '\0';
@@ -1169,6 +1338,7 @@ void update_wifi_ip_label(const char* ip)
         s_pending_wifi_status[sizeof(s_pending_wifi_status) - 1] = '\0';
     }
     s_wifi_status_dirty = true;
+    portEXIT_CRITICAL(&s_wifi_lbl_mux);
 }
 
 static void prefix_dd_cb(lv_event_t *e)
@@ -2338,6 +2508,9 @@ void update_rover_ui(const RoverUIData_t *d)
     if (!d) return;
     if (!rover_lvgl_lock(100)) return;
 
+    s_last_ui_data = *d;
+    s_has_last_ui_data = true;
+
     char buf[512];
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
@@ -2390,14 +2563,20 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
-    // Tile 1 Wi-Fi Status Label
+    // Tile 1 Wi-Fi Status Label (synchronized cross-task copy)
     if (s_wifi_status_dirty && t1_wifi_status_lbl) {
+        char ip[64];
+        portENTER_CRITICAL(&s_wifi_lbl_mux);
         s_wifi_status_dirty = false;
-        const char *ip = s_pending_wifi_status;
+        strncpy(ip, s_pending_wifi_status, sizeof(ip) - 1);
+        ip[sizeof(ip) - 1] = '\0';
+        portEXIT_CRITICAL(&s_wifi_lbl_mux);
+
         if (ip[0] && strcmp(ip, "Wi-Fi Off") != 0 && strcmp(ip, "Wi-Fi Failed") != 0 &&
-            strcmp(ip, "Connecting...") != 0 && strcmp(ip, "Starting AP...") != 0 &&
-            strcmp(ip, "0.0.0.0") != 0 && strstr(ip, "...") == NULL) {
-            char ip_buf[64];
+            strcmp(ip, "Wi-Fi Inactive") != 0 && strcmp(ip, "Connecting...") != 0 &&
+            strcmp(ip, "Starting AP...") != 0 && strcmp(ip, "0.0.0.0") != 0 &&
+            strstr(ip, "...") == NULL) {
+            char ip_buf[80];
             snprintf(ip_buf, sizeof(ip_buf), "Portal: http://%s/", ip);
             lv_label_set_text(t1_wifi_status_lbl, ip_buf);
             lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x00FF88), 0);
@@ -3390,25 +3569,36 @@ void update_rover_ui(const RoverUIData_t *d)
     }
 
 
-    // 3. Update Tile 1: Field Survey Logger
-    char next_id[WAYPOINT_LABEL_LEN];
-    waypoint_format_next_survey_label(next_id, sizeof(next_id));
-    snprintf(buf, sizeof(buf), "ID: %s", next_id);
-    lv_label_set_text(t1_next_lbl, buf);
+    // 3. Update Tile 1: Field Survey Logger (only query survey stem when Tile 1 is visible or survey is active)
+    if (active_tile_col == 1 || d->survey_in_progress) {
+        char next_id[WAYPOINT_LABEL_LEN];
+        waypoint_format_next_survey_label(next_id, sizeof(next_id));
+        snprintf(buf, sizeof(buf), "ID: %s", next_id);
+        const char *cur_next = lv_label_get_text(t1_next_lbl);
+        if (!cur_next || strcmp(cur_next, buf) != 0) {
+            lv_label_set_text(t1_next_lbl, buf);
+        }
 
-    lv_bar_set_value(t1_prog_bar, d->survey_progress_pct, LV_ANIM_OFF);
-    if (d->survey_in_progress) {
-        snprintf(buf, sizeof(buf), "AVERAGING RTK... %u%% (%u pts)",
-                 d->survey_progress_pct, d->survey_epochs_collected);
-        lv_label_set_text(t1_log_btn_lbl, buf);
-        lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
-    } else {
-        lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
-        lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
+        lv_bar_set_value(t1_prog_bar, d->survey_progress_pct, LV_ANIM_OFF);
+        if (d->survey_in_progress) {
+            snprintf(buf, sizeof(buf), "AVERAGING RTK... %u%% (%u pts)",
+                     d->survey_progress_pct, d->survey_epochs_collected);
+            lv_label_set_text(t1_log_btn_lbl, buf);
+            lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
+        } else {
+            const char *cur_btn = lv_label_get_text(t1_log_btn_lbl);
+            if (!cur_btn || strcmp(cur_btn, "LOG PIN NOW") != 0) {
+                lv_label_set_text(t1_log_btn_lbl, "LOG PIN NOW");
+                lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
+            }
+        }
+        snprintf(buf, sizeof(buf), "Logged: %s  |  /survey_logged_pins.csv",
+                 d->last_logged_label);
+        const char *cur_stat = lv_label_get_text(t1_status_lbl);
+        if (!cur_stat || strcmp(cur_stat, buf) != 0) {
+            lv_label_set_text(t1_status_lbl, buf);
+        }
     }
-    snprintf(buf, sizeof(buf), "Logged: %s  |  /survey_logged_pins.csv",
-             d->last_logged_label);
-    lv_label_set_text(t1_status_lbl, buf);
 
     // 4. Update Tile 3: Dual-Antenna Compass & Bubble Level
     if (d->heading_valid) {

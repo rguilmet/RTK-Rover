@@ -11,6 +11,7 @@ extern "C" {
 extern WaypointRecord_t *g_waypoints;
 extern int16_t          g_waypoint_count;
 extern int16_t          g_active_waypoint_idx;
+extern volatile uint32_t g_waypoint_change_seq;
 
 void waypoint_manager_init(void);
 bool waypoint_load_csv(const char *filepath);

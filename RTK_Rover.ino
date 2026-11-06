@@ -122,6 +122,40 @@ extern "C" void trigger_tare_pole_level(void)
 }
 
 // =========================================================================
+// Dedicated Core 1 Real-Time Audio Task (Priority 4)
+// Immediately synthesizes button-press and proximity tones via I2S DMA so UI
+// tactile audio never lags behind LVGL rendering, SD card, or flash I/O.
+// =========================================================================
+void task_audio_beep(void *pvParameters)
+{
+    (void)pvParameters;
+    static int16_t s_beep_pcm[256 * 2];
+    RoverBeep_t beep_req;
+
+    for (;;) {
+        if (beepQueue && xQueueReceive(beepQueue, &beep_req, portMAX_DELAY) == pdPASS) {
+            if (playback_handle && !current_settings.is_muted && beep_req.freq_hz > 0 && beep_req.duration_ms > 0) {
+                uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)beep_req.duration_ms) / 1000;
+                float phase = 0.0f;
+                float phase_inc = 2.0f * (float)M_PI * (float)beep_req.freq_hz / (float)AUDIO_SAMPLE_RATE;
+                uint32_t written = 0;
+                while (written < total_samples) {
+                    for (int i = 0; i < 256; i++) {
+                        int16_t s = (phase < (float)M_PI) ? 6000 : -6000;
+                        s_beep_pcm[i * 2]     = s;
+                        s_beep_pcm[i * 2 + 1] = s;
+                        phase += phase_inc;
+                        if (phase >= 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
+                    }
+                    esp_codec_dev_write(playback_handle, s_beep_pcm, sizeof(s_beep_pcm));
+                    written += 256;
+                }
+            }
+        }
+    }
+}
+
+// =========================================================================
 // Core 0 Task: Real-Time UART Bridge (E220 <-> UM982 COM2) & Geodesic Math
 // NOTE: Core 0 performs ZERO I2C bus transactions. All I2C0 peripherals live
 // exclusively on Core 1 to eliminate cross-core I2C bus contention.
@@ -132,6 +166,7 @@ void task_rover_core0(void *pvParameters)
     RoverUIData_t state = {};
     uint32_t last_ui_push_ms   = 0;
     uint32_t last_telem_log_ms = 0;
+    uint32_t last_wp_seq       = g_waypoint_change_seq;
 
     for (;;) {
         // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM2 (IO47/48)
@@ -142,10 +177,13 @@ void task_rover_core0(void *pvParameters)
         um982_poll_com2();
 
         uint32_t now = millis();
+        uint32_t cur_wp_seq = g_waypoint_change_seq;
+        bool wp_changed = (cur_wp_seq != last_wp_seq);
 
-        // 3. At ~30Hz, fuse GNSS lever-arm kinematics and active target guidance
-        if (now - last_ui_push_ms >= 33) {
+        // 3. At ~30Hz (or immediately within <=2ms when active waypoint/file changes), fuse GNSS kinematics & guidance
+        if (wp_changed || (now - last_ui_push_ms >= 33)) {
             last_ui_push_ms = now;
+            last_wp_seq     = cur_wp_seq;
 
             um982_get_latest_state(&state);
             um982_get_port_stats(&state.um982_stats);
@@ -343,36 +381,9 @@ void task_display_and_audio(void *pvParameters)
             }
         }
 
-        // 4. Persist dirty settings after 4s debounce
-        if (settings_dirty && (now - last_settings_change_ms > 4000)) {
-            save_settings();
-            settings_dirty = false;
-        }
-
-        // 5. Audio Beep Synthesis on Core 1 (Queue-driven: reliable, never dropped or overwritten)
-        RoverBeep_t beep_req;
-        while (beepQueue && xQueueReceive(beepQueue, &beep_req, 0) == pdPASS) {
-            if (playback_handle && !current_settings.is_muted && beep_req.freq_hz > 0 && beep_req.duration_ms > 0) {
-                int16_t buf[256 * 2];
-                uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)beep_req.duration_ms) / 1000;
-                float phase = 0.0f;
-                float phase_inc = 2.0f * (float)M_PI * (float)beep_req.freq_hz / (float)AUDIO_SAMPLE_RATE;
-                uint32_t written = 0;
-                while (written < total_samples) {
-                    for (int i = 0; i < 256; i++) {
-                        int16_t s = (phase < (float)M_PI) ? 6000 : -6000;
-                        buf[i * 2]     = s;
-                        buf[i * 2 + 1] = s;
-                        phase += phase_inc;
-                        if (phase >= 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
-                    }
-                    esp_codec_dev_write(playback_handle, buf, sizeof(buf));
-                    written += 256;
-                }
-            }
-        }
-
-        // 6. Receive latest GNSS/Nav state from Core 0, attach Core 1 IMU/PMIC data, and update UI
+        // 4. Receive latest GNSS/Nav state from Core 0, attach Core 1 IMU/PMIC data, and update UI
+        // (Note: Dirty settings persistence runs in background loop() and audio beeps run in task_audio_beep
+        //  so UI rendering and IMU updates are never stalled by flash/SD writes or audio synthesis.)
         if (xQueueReceive(roverStateQueue, &ui_state, pdMS_TO_TICKS(33)) == pdPASS) {
             ui_state.imu_pitch_deg     = cached_imu_pitch;
             ui_state.imu_roll_deg      = cached_imu_roll;
@@ -425,6 +436,11 @@ void task_display_and_audio(void *pvParameters)
                 ui_state.distance_to_target_m > 0.0) {
 
                 static uint32_t s_last_audio_ms = 0;
+                static int16_t  s_last_audio_target_idx = -1;
+                if (ui_state.active_target_idx != s_last_audio_target_idx) {
+                    s_last_audio_target_idx = ui_state.active_target_idx;
+                    s_last_audio_ms = 0;
+                }
                 double d = ui_state.distance_to_target_m;
                 if (rover_get_tile0_nav_mode() == 1) {
                     WaypointRecord_t wp_a, wp_b;
@@ -669,9 +685,10 @@ void setup()
 
     // 7. Launch FreeRTOS Tasks
     roverStateQueue = xQueueCreate(1, sizeof(RoverUIData_t));
-    beepQueue       = xQueueCreate(8, sizeof(RoverBeep_t));
-    xTaskCreatePinnedToCore(task_rover_core0, "RoverCore0", 8192, NULL, 4, NULL, 0);
-    xTaskCreatePinnedToCore(task_display_and_audio, "RoverUI", 8192, NULL, 2, NULL, 1);
+    beepQueue       = xQueueCreate(12, sizeof(RoverBeep_t));
+    xTaskCreatePinnedToCore(task_audio_beep,        "RoverAudio", 3072, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(task_rover_core0,       "RoverCore0", 8192, NULL, 4, NULL, 0);
+    xTaskCreatePinnedToCore(task_display_and_audio, "RoverUI",    8192, NULL, 2, NULL, 1);
 
     Serial.printf("[MEM] Post-Setup Heap -> Internal Free: %u B (Largest: %u B, DMA: %u B) | PSRAM Free: %u KB\n",
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
@@ -698,6 +715,16 @@ void loop()
     // Flush pending serial monitor logs to active storage medium
     if (serial_logger_is_active()) {
         serial_logger_flush();
+    }
+
+    // Persist dirty settings in Priority-1 background task after 5s quiet debounce
+    if (settings_dirty) {
+        uint32_t dirty_ts = last_settings_change_ms;
+        uint32_t now_ms   = millis();
+        if ((int32_t)(now_ms - dirty_ts) >= 5000) {
+            settings_dirty = false;
+            save_settings();
+        }
     }
 
     // =====================================================================

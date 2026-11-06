@@ -9,12 +9,16 @@
 #include <SD_MMC.h>
 #include <FFat.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include "esp_heap_caps.h"
+
+extern SemaphoreHandle_t fs_mux;
 
 WaypointRecord_t *g_waypoints          = NULL;
 int16_t          g_waypoint_count      = 0;
 int16_t          g_active_waypoint_idx = 0;
+volatile uint32_t g_waypoint_change_seq = 0;
 
 static bool ensure_waypoints_buf(void)
 {
@@ -102,12 +106,64 @@ static void create_default_sample_waypoints_if_missing(void)
     Serial.println("Created sample /waypoints.csv with 4 generic property pins.");
 }
 
+static char* csv_trim_in_place(char *s)
+{
+    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
+        s[--len] = '\0';
+    }
+    if (len >= 2 && s[0] == '"' && s[len - 1] == '"') {
+        s[len - 1] = '\0';
+        s++;
+    }
+    return s;
+}
+
+static int csv_split_cols_in_place(char *line, char **cols, int max_cols)
+{
+    int cnt = 0;
+    char *p = line;
+    while (cnt < max_cols) {
+        char *start = p;
+        bool in_quotes = false;
+        while (*p != '\0') {
+            if (*p == '"') {
+                in_quotes = !in_quotes;
+            } else if (*p == ',' && !in_quotes) {
+                break;
+            }
+            p++;
+        }
+        bool at_end = (*p == '\0');
+        if (!at_end) {
+            *p = '\0';
+            p++;
+        }
+        cols[cnt++] = csv_trim_in_place(start);
+        if (at_end) break;
+    }
+    return cnt;
+}
+
+static bool str_contains_icase(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle || !needle[0]) return false;
+    size_t nlen = strlen(needle);
+    for (const char *p = haystack; *p != '\0'; p++) {
+        if (strncasecmp(p, needle, nlen) == 0) return true;
+    }
+    return false;
+}
+
 extern "C" bool waypoint_load_csv(const char *filepath)
 {
     if (!ensure_waypoints_buf()) {
         Serial.println("waypoint_load_csv: Failed to allocate waypoint buffer!");
         return false;
     }
+
+    if (fs_mux) xSemaphoreTake(fs_mux, portMAX_DELAY);
 
     File f = get_active_fs().open(filepath, "r");
     if (!f && sd_card_mounted) {
@@ -119,6 +175,7 @@ extern "C" bool waypoint_load_csv(const char *filepath)
         if (!f && sd_card_mounted) f = FFat.open("/waypoints.csv", "r");
     }
     if (!f) {
+        if (fs_mux) xSemaphoreGive(fs_mux);
         Serial.printf("waypoint_load_csv: Could not open %s\n", filepath);
         return false;
     }
@@ -127,112 +184,131 @@ extern "C" bool waypoint_load_csv(const char *filepath)
     bool first_line = true;
     int col_label = 0, col_lat = 1, col_lon = 2, col_elev = 3, col_notes = 4, col_poly = -1;
 
-    while (f.available() && g_waypoint_count < MAX_WAYPOINTS) {
-        String line = f.readStringUntil('\n');
-        line.trim();
-        if (line.length() == 0 || line.startsWith("#")) continue;
+    uint8_t rbuf[512];
+    char line_buf[512];
+    size_t line_len = 0;
 
-        // Split CSV columns (supporting up to 24 columns for extended logs)
-        String cols[24];
-        int col_cnt = 0;
-        int start = 0;
-        int len = line.length();
-        for (int i = 0; i <= len && col_cnt < 24; i++) {
-            if (i == len || line.charAt(i) == ',') {
-                cols[col_cnt] = line.substring(start, i);
-                cols[col_cnt].trim();
-                col_cnt++;
-                start = i + 1;
-            }
-        }
+    for (;;) {
+        int n = f.read(rbuf, sizeof(rbuf));
+        if (n <= 0 && line_len == 0) break;
 
-        if (first_line) {
-            first_line = false;
-            String line_lower = line;
-            line_lower.toLowerCase();
-            if (line_lower.indexOf("label") >= 0 || line_lower.indexOf("name") >= 0 || line_lower.indexOf("id") >= 0 || line_lower.indexOf("lat") >= 0 || line_lower.indexOf("time") >= 0) {
-                col_elev = -1;
-                col_notes = -1;
-                col_poly = -1;
-                for (int c = 0; c < col_cnt; c++) {
-                    String h = cols[c];
-                    h.toLowerCase();
-                    if (h.indexOf("label") >= 0 || h.indexOf("name") >= 0) col_label = c;
-                    else if (h.indexOf("lat") >= 0) col_lat = c;
-                    else if (h.indexOf("lon") >= 0) col_lon = c;
-                    else if (h.indexOf("elev") >= 0 || h.indexOf("alt") >= 0 || h.indexOf("height") >= 0) col_elev = c;
-                    else if (h.indexOf("note") >= 0 || h.indexOf("desc") >= 0) col_notes = c;
-                    else if (h.indexOf("poly") >= 0 || h.indexOf("order") >= 0 || h.indexOf("seq") >= 0) col_poly = c;
+        int limit = (n > 0) ? n : 1;
+        for (int bi = 0; bi < limit; bi++) {
+            char ch = (n > 0) ? (char)rbuf[bi] : '\n';
+            if (ch == '\n') {
+                line_buf[line_len] = '\0';
+                line_len = 0;
+
+                char *trimmed = csv_trim_in_place(line_buf);
+                if (trimmed[0] == '\0' || trimmed[0] == '#') {
+                    continue;
                 }
-                continue;
-            }
-        }
 
-        if (col_cnt <= col_label || col_cnt <= col_lat || col_cnt <= col_lon) continue;
-        if (cols[col_label].length() == 0 || cols[col_lat].length() == 0 || cols[col_lon].length() == 0) continue;
+                // Check header detection before splitting modifies commas
+                bool looks_like_hdr = false;
+                if (first_line) {
+                    looks_like_hdr = str_contains_icase(trimmed, "label") ||
+                                     str_contains_icase(trimmed, "name")  ||
+                                     str_contains_icase(trimmed, "id")    ||
+                                     str_contains_icase(trimmed, "lat")   ||
+                                     str_contains_icase(trimmed, "time");
+                }
 
-        WaypointRecord_t *wp = &g_waypoints[g_waypoint_count];
-        memset(wp, 0, sizeof(WaypointRecord_t));
-        strncpy(wp->label, cols[col_label].c_str(), WAYPOINT_LABEL_LEN - 1);
-        wp->latitude  = strtod(cols[col_lat].c_str(), NULL);
-        wp->longitude = strtod(cols[col_lon].c_str(), NULL);
+                char *cols[24];
+                int col_cnt = csv_split_cols_in_place(trimmed, cols, 24);
 
-        if (col_elev >= 0 && col_elev < col_cnt && cols[col_elev].length() > 0) {
-            wp->elevation_m   = (float)atof(cols[col_elev].c_str());
-            wp->has_elevation = true;
-        }
-        if (col_notes >= 0 && col_notes < col_cnt && cols[col_notes].length() > 0) {
-            strncpy(wp->notes, cols[col_notes].c_str(), WAYPOINT_NOTES_LEN - 1);
-        }
+                if (first_line) {
+                    first_line = false;
+                    if (looks_like_hdr) {
+                        col_elev = -1;
+                        col_notes = -1;
+                        col_poly = -1;
+                        for (int c = 0; c < col_cnt; c++) {
+                            const char *h = cols[c];
+                            if (str_contains_icase(h, "label") || str_contains_icase(h, "name")) col_label = c;
+                            else if (str_contains_icase(h, "lat")) col_lat = c;
+                            else if (str_contains_icase(h, "lon")) col_lon = c;
+                            else if (str_contains_icase(h, "elev") || str_contains_icase(h, "alt") || str_contains_icase(h, "height")) col_elev = c;
+                            else if (str_contains_icase(h, "note") || str_contains_icase(h, "desc")) col_notes = c;
+                            else if (str_contains_icase(h, "poly") || str_contains_icase(h, "order") || str_contains_icase(h, "seq")) col_poly = c;
+                        }
+                        continue;
+                    }
+                }
 
-        // Phase 5 Cadastral Classification (poly_order):
-        if (col_poly >= 0 && col_poly < col_cnt && cols[col_poly].length() > 0) {
-            String pstr = cols[col_poly];
-            pstr.trim();
-            String pupper = pstr;
-            pupper.toUpperCase();
-            if (pupper.startsWith("TIE:")) {
-                int t_val = atoi(pupper.substring(4).c_str());
-                wp->poly_order = (t_val > 0) ? (int16_t)(-t_val) : (int16_t)(-1);
-                wp->is_boundary = false;
-                wp->tie_to_poly_order = (t_val > 0) ? (int16_t)t_val : 1;
-            } else if (pupper == "TIE" || pupper == "REF" || pupper == "CONTROL") {
-                wp->poly_order = 0;
-                wp->is_boundary = false;
-                wp->tie_to_poly_order = 0;
-            } else if (pupper == "PIN" || pupper == "BOUNDARY") {
-                wp->poly_order = (int16_t)(g_waypoint_count + 1);
-                wp->is_boundary = true;
-                wp->tie_to_poly_order = 0;
-            } else {
-                int val = atoi(pstr.c_str());
-                wp->poly_order = (int16_t)val;
-                if (val > 0) {
+                if (col_cnt <= col_label || col_cnt <= col_lat || col_cnt <= col_lon) continue;
+                if (cols[col_label][0] == '\0' || cols[col_lat][0] == '\0' || cols[col_lon][0] == '\0') continue;
+
+                WaypointRecord_t *wp = &g_waypoints[g_waypoint_count];
+                memset(wp, 0, sizeof(WaypointRecord_t));
+                strncpy(wp->label, cols[col_label], WAYPOINT_LABEL_LEN - 1);
+                wp->latitude  = strtod(cols[col_lat], NULL);
+                wp->longitude = strtod(cols[col_lon], NULL);
+
+                if (col_elev >= 0 && col_elev < col_cnt && cols[col_elev][0] != '\0') {
+                    wp->elevation_m   = (float)atof(cols[col_elev]);
+                    wp->has_elevation = true;
+                }
+                if (col_notes >= 0 && col_notes < col_cnt && cols[col_notes][0] != '\0') {
+                    strncpy(wp->notes, cols[col_notes], WAYPOINT_NOTES_LEN - 1);
+                }
+
+                // Phase 5 Cadastral Classification (poly_order):
+                if (col_poly >= 0 && col_poly < col_cnt && cols[col_poly][0] != '\0') {
+                    const char *pstr = cols[col_poly];
+                    if (strncasecmp(pstr, "TIE:", 4) == 0) {
+                        int t_val = atoi(pstr + 4);
+                        wp->poly_order = (t_val > 0) ? (int16_t)(-t_val) : (int16_t)(-1);
+                        wp->is_boundary = false;
+                        wp->tie_to_poly_order = (t_val > 0) ? (int16_t)t_val : 1;
+                    } else if (strcasecmp(pstr, "TIE") == 0 || strcasecmp(pstr, "REF") == 0 || strcasecmp(pstr, "CONTROL") == 0) {
+                        wp->poly_order = 0;
+                        wp->is_boundary = false;
+                        wp->tie_to_poly_order = 0;
+                    } else if (strcasecmp(pstr, "PIN") == 0 || strcasecmp(pstr, "BOUNDARY") == 0) {
+                        wp->poly_order = (int16_t)(g_waypoint_count + 1);
+                        wp->is_boundary = true;
+                        wp->tie_to_poly_order = 0;
+                    } else {
+                        int val = atoi(pstr);
+                        wp->poly_order = (int16_t)val;
+                        if (val > 0) {
+                            wp->is_boundary = true;
+                            wp->tie_to_poly_order = 0;
+                        } else if (val < 0) {
+                            wp->is_boundary = false;
+                            wp->tie_to_poly_order = (int16_t)(-val);
+                        } else {
+                            wp->is_boundary = false;
+                            wp->tie_to_poly_order = 0;
+                        }
+                    }
+                } else {
+                    // Backward compatibility when no poly_order column is in CSV:
+                    // All points sequentially form the closed boundary polygon
+                    wp->poly_order = (int16_t)(g_waypoint_count + 1);
                     wp->is_boundary = true;
                     wp->tie_to_poly_order = 0;
-                } else if (val < 0) {
-                    wp->is_boundary = false;
-                    wp->tie_to_poly_order = (int16_t)(-val);
-                } else {
-                    wp->is_boundary = false;
-                    wp->tie_to_poly_order = 0;
+                }
+
+                g_waypoint_count++;
+                if (g_waypoint_count >= MAX_WAYPOINTS) break;
+            } else if (ch != '\r') {
+                if (line_len < sizeof(line_buf) - 1) {
+                    line_buf[line_len++] = ch;
                 }
             }
-        } else {
-            // Backward compatibility when no poly_order column is in CSV:
-            // All points sequentially form the closed boundary polygon
-            wp->poly_order = (int16_t)(g_waypoint_count + 1);
-            wp->is_boundary = true;
-            wp->tie_to_poly_order = 0;
         }
-
-        g_waypoint_count++;
+        if (n <= 0 || g_waypoint_count >= MAX_WAYPOINTS) break;
     }
     f.close();
+    if (fs_mux) xSemaphoreGive(fs_mux);
 
     if (g_active_waypoint_idx >= g_waypoint_count) {
         g_active_waypoint_idx = 0;
     }
+    waypoint_invalidate_survey_cache();
+    g_waypoint_change_seq++;
     Serial.printf("Loaded %d waypoints from %s\n", g_waypoint_count, filepath);
     return g_waypoint_count > 0;
 }
@@ -402,6 +478,7 @@ extern "C" void waypoint_select_next(void)
     if (g_waypoint_count <= 0) return;
     g_active_waypoint_idx = (g_active_waypoint_idx + 1) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
+    g_waypoint_change_seq++;
     mark_settings_dirty();
     waypoint_invalidate_survey_cache();
 }
@@ -411,6 +488,7 @@ extern "C" void waypoint_select_prev(void)
     if (g_waypoint_count <= 0) return;
     g_active_waypoint_idx = (g_active_waypoint_idx - 1 + g_waypoint_count) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
+    g_waypoint_change_seq++;
     mark_settings_dirty();
     waypoint_invalidate_survey_cache();
 }
@@ -420,6 +498,7 @@ extern "C" void waypoint_select_index(int16_t idx)
     if (idx >= 0 && idx < g_waypoint_count) {
         g_active_waypoint_idx = idx;
         current_settings.active_waypoint_index = g_active_waypoint_idx;
+        g_waypoint_change_seq++;
         mark_settings_dirty();
         waypoint_invalidate_survey_cache();
     }
@@ -540,6 +619,7 @@ extern "C" void waypoint_line_stakeout_swap(void)
     // Align active target to new destination (Point B)
     g_active_waypoint_idx = cur_a;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
+    g_waypoint_change_seq++;
     mark_settings_dirty();
 }
 
@@ -551,6 +631,7 @@ extern "C" void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b)
         g_stakeout_custom_pair = true;
         g_active_waypoint_idx = idx_b;
         current_settings.active_waypoint_index = g_active_waypoint_idx;
+        g_waypoint_change_seq++;
         mark_settings_dirty();
     }
 }
@@ -604,12 +685,14 @@ static void get_current_survey_stem(char *stem_out, size_t max_len)
 }
 
 // Phase 5 In-Memory Fast Stem Number Cache (eliminates slow SD card scans on navigation taps)
+#define MAX_STEM_CACHE 64
 struct StemCacheEntry {
     char stem[WAYPOINT_LABEL_LEN];
     uint16_t next_num;
 };
-static StemCacheEntry s_stem_cache[16];
+static StemCacheEntry s_stem_cache[MAX_STEM_CACHE];
 static int s_stem_cache_cnt = 0;
+static int s_stem_cache_evict_idx = 0;
 
 static uint16_t find_next_available_suffix(const char *stem)
 {
@@ -621,61 +704,75 @@ static uint16_t find_next_available_suffix(const char *stem)
     }
 
     uint16_t max_num = 0;
-    if (!get_active_fs().exists("/survey_logged_pins.csv")) {
-        max_num = 0;
-    } else {
+    if (fs_mux) xSemaphoreTake(fs_mux, portMAX_DELAY);
+    if (get_active_fs().exists("/survey_logged_pins.csv")) {
         File f = get_active_fs().open("/survey_logged_pins.csv", "r");
         if (f) {
             size_t stem_len = strlen(stem);
+            uint8_t rbuf[512];
             char line[384];
+            size_t line_len = 0;
+            bool skip_header = true;
 
-            // Skip CSV header
-            if (f.available()) {
-                f.readBytesUntil('\n', line, sizeof(line));
-            }
+            for (;;) {
+                int n = f.read(rbuf, sizeof(rbuf));
+                if (n <= 0 && line_len == 0) break;
 
-            while (f.available()) {
-                int bytes = f.readBytesUntil('\n', line, sizeof(line) - 1);
-                if (bytes <= 0) continue;
-                line[bytes] = '\0';
-                if (line[bytes - 1] == '\r') line[bytes - 1] = '\0';
+                int limit = (n > 0) ? n : 1;
+                for (int bi = 0; bi < limit; bi++) {
+                    char ch = (n > 0) ? (char)rbuf[bi] : '\n';
+                    if (ch == '\n') {
+                        line[line_len] = '\0';
+                        line_len = 0;
 
-                // Column 0: timestamp, Column 1: firmware_ver, Column 2: label (0-indexed)
-                char *p = line;
-                p = strchr(p, ',');
-                if (!p) continue;
-                p++; // Start of col 1
-                p = strchr(p, ',');
-                if (!p) continue;
-                p++; // Start of col 2 (label)
+                        if (skip_header) {
+                            skip_header = false;
+                            continue;
+                        }
 
-                char *end_label = strchr(p, ',');
-                if (end_label) {
-                    *end_label = '\0';
-                }
+                        // Column 0: timestamp, Column 1: firmware_ver, Column 2: label (0-indexed)
+                        char *p = strchr(line, ',');
+                        if (!p) continue;
+                        p = strchr(p + 1, ',');
+                        if (!p) continue;
+                        p++; // Start of col 2 (label)
 
-                // Check if label matches current stem
-                if (strncmp(p, stem, stem_len) == 0) {
-                    const char *num_part = p + stem_len;
-                    if (*num_part >= '0' && *num_part <= '9') {
-                        uint16_t num = (uint16_t)atoi(num_part);
-                        if (num > max_num) {
-                            max_num = num;
+                        char *end_label = strchr(p, ',');
+                        if (end_label) *end_label = '\0';
+
+                        if (strncmp(p, stem, stem_len) == 0) {
+                            const char *num_part = p + stem_len;
+                            if (*num_part >= '0' && *num_part <= '9') {
+                                uint16_t num = (uint16_t)atoi(num_part);
+                                if (num > max_num) {
+                                    max_num = num;
+                                }
+                            }
+                        }
+                    } else if (ch != '\r') {
+                        if (line_len < sizeof(line) - 1) {
+                            line[line_len++] = ch;
                         }
                     }
                 }
+                if (n <= 0) break;
             }
             f.close();
         }
     }
+    if (fs_mux) xSemaphoreGive(fs_mux);
 
     uint16_t next = max_num + 1;
-    if (s_stem_cache_cnt < 16) {
-        strncpy(s_stem_cache[s_stem_cache_cnt].stem, stem, WAYPOINT_LABEL_LEN - 1);
-        s_stem_cache[s_stem_cache_cnt].stem[WAYPOINT_LABEL_LEN - 1] = '\0';
-        s_stem_cache[s_stem_cache_cnt].next_num = next;
-        s_stem_cache_cnt++;
+    int slot = 0;
+    if (s_stem_cache_cnt < MAX_STEM_CACHE) {
+        slot = s_stem_cache_cnt++;
+    } else {
+        slot = s_stem_cache_evict_idx;
+        s_stem_cache_evict_idx = (s_stem_cache_evict_idx + 1) % MAX_STEM_CACHE;
     }
+    strncpy(s_stem_cache[slot].stem, stem, WAYPOINT_LABEL_LEN - 1);
+    s_stem_cache[slot].stem[WAYPOINT_LABEL_LEN - 1] = '\0';
+    s_stem_cache[slot].next_num = next;
     return next;
 }
 
@@ -717,12 +814,17 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
                                       float heading_deg, float pole_tilt_deg,
                                       uint16_t samples)
 {
+    char label[WAYPOINT_LABEL_LEN];
+    waypoint_format_next_survey_label(label, sizeof(label));
+
+    if (fs_mux) xSemaphoreTake(fs_mux, portMAX_DELAY);
     bool exists = get_active_fs().exists("/survey_logged_pins.csv");
     File f = get_active_fs().open("/survey_logged_pins.csv", FILE_APPEND);
     if (!f) {
         f = get_active_fs().open("/survey_logged_pins.csv", FILE_WRITE);
     }
     if (!f) {
+        if (fs_mux) xSemaphoreGive(fs_mux);
         Serial.println("Failed to open /survey_logged_pins.csv");
         return;
     }
@@ -731,9 +833,6 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     if (!exists) {
         f.println("timestamp,firmware_ver,label,latitude,longitude,elevation,pos_fix,hdg_fix,h_acc_m,v_acc_m,hdop,sats,slave_sats,diff_age_s,base_id,true_heading_deg,pole_tilt_deg,samples,notes");
     }
-
-    char label[WAYPOINT_LABEL_LEN];
-    waypoint_format_next_survey_label(label, sizeof(label));
 
     // Standardized ISO / MFS timestamp format matching route logger
     RtcDateTime_t lt;
@@ -782,6 +881,7 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
              note_buf);
     f.println(row);
     f.close();
+    if (fs_mux) xSemaphoreGive(fs_mux);
 
     strncpy(last_logged_label, label, sizeof(last_logged_label) - 1);
     last_logged_label[sizeof(last_logged_label) - 1] = '\0';

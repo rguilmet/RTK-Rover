@@ -59,9 +59,49 @@ struct SystemSettings current_settings = {
 volatile bool settings_dirty = false;
 volatile uint32_t last_settings_change_ms = 0;
 
+static SystemSettings s_last_ffat_mirrored = {};
+static bool s_ffat_mirror_valid = false;
+
+static bool non_index_settings_equal(const SystemSettings &a, const SystemSettings &b) {
+    return a.minutesOffsetToUTC        == b.minutesOffsetToUTC &&
+           strcmp(a.timezone_label, b.timezone_label) == 0 &&
+           a.use_imperial_units        == b.use_imperial_units &&
+           a.antenna_height_m          == b.antenna_height_m &&
+           a.antenna_spacing_m         == b.antenna_spacing_m &&
+           a.baseline_mount_offset_deg == b.baseline_mount_offset_deg &&
+           a.apply_lever_arm           == b.apply_lever_arm &&
+           a.pole_tilt_tare_pitch_deg  == b.pole_tilt_tare_pitch_deg &&
+           a.pole_tilt_tare_roll_deg   == b.pole_tilt_tare_roll_deg &&
+           a.e220_profile_rev          == b.e220_profile_rev &&
+           a.e220_uart_baud            == b.e220_uart_baud &&
+           a.e220_channel              == b.e220_channel &&
+           a.e220_air_rate_kbps        == b.e220_air_rate_kbps &&
+           a.e220_tx_power_dbm         == b.e220_tx_power_dbm &&
+           a.e220_subpacket_bytes      == b.e220_subpacket_bytes &&
+           a.e220_lbt_enable           == b.e220_lbt_enable &&
+           a.survey_avg_seconds        == b.survey_avg_seconds &&
+           strcmp(a.default_label_prefix, b.default_label_prefix) == 0 &&
+           strcmp(a.active_waypoint_file, b.active_waypoint_file) == 0 &&
+           a.brightness                == b.brightness &&
+           a.volume                    == b.volume &&
+           a.is_muted                  == b.is_muted &&
+           a.audio_nav_mode            == b.audio_nav_mode &&
+           strcmp(a.wifi_ssid, b.wifi_ssid) == 0 &&
+           strcmp(a.wifi_password, b.wifi_password) == 0 &&
+           a.enable_serial_logging     == b.enable_serial_logging &&
+           a.enable_nmea_logging       == b.enable_nmea_logging &&
+           a.enable_rtcm_logging       == b.enable_rtcm_logging &&
+           a.enable_imu_logging        == b.enable_imu_logging &&
+           a.enable_telemetry_logging  == b.enable_telemetry_logging &&
+           a.enable_touch_logging      == b.enable_touch_logging &&
+           a.map_show_route_trail      == b.map_show_route_trail &&
+           a.auto_shutdown_battery_min == b.auto_shutdown_battery_min;
+}
+
 extern "C" void mark_settings_dirty(void) {
-    settings_dirty = true;
     last_settings_change_ms = millis();
+    __sync_synchronize();
+    settings_dirty = true;
 }
 
 extern "C" void init_settings_manager(void) {
@@ -97,7 +137,7 @@ static void backup_file(fs::FS &fs, const char *src_path, const char *bak_path) 
         src.close();
         return;
     }
-    uint8_t buf[256];
+    uint8_t buf[1024];
     while (src.available()) {
         size_t n = src.read(buf, sizeof(buf));
         if (n > 0) dst.write(buf, n);
@@ -354,8 +394,13 @@ extern "C" void load_settings(void) {
             serializeJsonPretty(doc, ffat_file);
             ffat_file.flush();
             ffat_file.close();
+            s_last_ffat_mirrored = current_settings;
+            s_ffat_mirror_valid  = true;
             Serial.println("[SETTINGS] Mirrored SD Card settings.json to internal FFat.");
         }
+    } else if (!sd_card_mounted) {
+        s_last_ffat_mirrored = current_settings;
+        s_ffat_mirror_valid  = true;
     }
 
     if (fs_mux) xSemaphoreGive(fs_mux);
@@ -440,15 +485,26 @@ extern "C" void save_settings(void) {
     }
 
     if (sd_card_mounted) {
-        backup_file(FFat, "/settings.json", "/settings.json.bak");
-        File ffat_file = FFat.open("/settings.json", "w");
-        if (ffat_file) {
-            ffat_file.print(output);
-            ffat_file.flush();
-            ffat_file.close();
+        // Only rewrite internal SPI Flash FFat mirror when configuration fields (other than
+        // active_waypoint_index) actually changed, avoiding 1.5-2.0s SPI Flash wear-leveling stalls
+        // and flash wear when stepping through SD waypoints.
+        if (!s_ffat_mirror_valid || !non_index_settings_equal(current_settings, s_last_ffat_mirrored)) {
+            backup_file(FFat, "/settings.json", "/settings.json.bak");
+            File ffat_file = FFat.open("/settings.json", "w");
+            if (ffat_file) {
+                ffat_file.print(output);
+                ffat_file.flush();
+                ffat_file.close();
+                s_last_ffat_mirrored = current_settings;
+                s_ffat_mirror_valid  = true;
+            }
+            Serial.println("[SETTINGS] Settings saved to SD Card & FFat mirror (with .bak backups).");
+        } else {
+            Serial.println("[SETTINGS] Active waypoint index saved to SD Card (/settings.json).");
         }
-        Serial.println("[SETTINGS] Settings saved to SD Card & FFat mirror (with .bak backups).");
     } else {
+        s_last_ffat_mirrored = current_settings;
+        s_ffat_mirror_valid  = true;
         Serial.println("[SETTINGS] Settings saved to FFat (with .bak backup).");
     }
 

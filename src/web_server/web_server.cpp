@@ -19,8 +19,10 @@
 extern bool sd_card_mounted;
 extern bool sd_card_use_spi;
 
-static bool wifi_active = false;
-static bool s_wifi_starting = false;
+static volatile bool wifi_active = false;
+static volatile bool s_wifi_starting = false;
+static volatile bool s_wifi_abort_requested = false;
+static volatile bool s_wifi_stop_pending = false;
 static char s_wifi_ip[32] = {0};
 static WebServer server(80);
 
@@ -478,6 +480,7 @@ static void setup_web_routes(void) {
 
 extern "C" void start_wifi(void) {
     if (wifi_active || s_wifi_starting) return;
+    s_wifi_abort_requested = false;
     s_wifi_starting = true;
     
     update_wifi_ip_label("Connecting...");
@@ -485,6 +488,20 @@ extern "C" void start_wifi(void) {
     // Non-blocking connection task pinned to Core 1 (UI & Event Core) at Priority 3
     // Leaves Core 0 100% dedicated to real-time UART bridge (E220 & UM982)
     xTaskCreatePinnedToCore([](void* arg){
+        // If a previous Wi-Fi stop teardown is still completing in loop(), wait briefly for clean state
+        int stop_wait = 0;
+        while (s_wifi_stop_pending && stop_wait < 30) {
+            vTaskDelay(pdMS_TO_TICKS(15));
+            stop_wait++;
+        }
+        if (s_wifi_abort_requested) {
+            s_wifi_starting = false;
+            update_wifi_ip_label("Wi-Fi Off");
+            Serial.println("[WIFI] Connection cancelled before init.");
+            vTaskDelete(NULL);
+            return;
+        }
+
         Serial.printf("[WIFI] Pre-Init Heap -> Internal Free: %u B (Largest: %u B, DMA: %u B) | PSRAM Free: %u KB\n",
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                       (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
@@ -552,15 +569,17 @@ extern "C" void start_wifi(void) {
             Serial.printf("[WIFI] WiFi.begin('%s') returned status: %d\n",
                           current_settings.wifi_ssid, (int)begin_res);
 
-            int attempts = 0;
-            const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
+            int polls = 0;
+            const int max_polls = 200; // 20 seconds timeout (200 * 100ms)
             wl_status_t last_status = (wl_status_t)999;
 
-            while ((WiFi.status() != WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0)) && attempts < max_attempts) {
-                vTaskDelay(pdMS_TO_TICKS(500));
-                attempts++;
+            while (!s_wifi_abort_requested &&
+                   (WiFi.status() != WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0)) &&
+                   polls < max_polls) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                polls++;
                 wl_status_t cur_status = WiFi.status();
-                if (cur_status != last_status || (attempts % 4 == 0)) {
+                if (cur_status != last_status || (polls % 20 == 0)) {
                     last_status = cur_status;
                     const char* st_name = (cur_status == WL_IDLE_STATUS)     ? "IDLE" :
                                           (cur_status == WL_NO_SSID_AVAIL)   ? "NO_SSID_AVAIL" :
@@ -570,38 +589,57 @@ extern "C" void start_wifi(void) {
                                           (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
                                           (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" :
                                           ((int)cur_status == 254)           ? "INITIALIZING" : "UNKNOWN";
-                    Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
-                                  st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
+                    Serial.printf("[WIFI] Status: %s (%d) | %.1fs / 20.0s\n",
+                                  st_name, (int)cur_status, polls * 0.1f);
                     char prog[32];
-                    snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
+                    snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(polls / 10));
                     update_wifi_ip_label(prog);
                 }
             }
-            sta_connected = (WiFi.status() == WL_CONNECTED || WiFi.localIP() != IPAddress(0, 0, 0, 0));
+            sta_connected = (!s_wifi_abort_requested &&
+                             (WiFi.status() == WL_CONNECTED || WiFi.localIP() != IPAddress(0, 0, 0, 0)));
         } else {
             Serial.println("[WIFI] No valid STA credentials configured in settings.json. Launching SoftAP hotspot immediately...");
         }
 
-        if (sta_connected) {
-            wifi_active = true;
+        if (s_wifi_abort_requested) {
+            if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
+                WiFi.softAPdisconnect(true);
+            }
+            WiFi.disconnect(false, false);
+            WiFi.mode(WIFI_OFF);
+            wifi_active = false;
             s_wifi_starting = false;
+            s_wifi_ip[0] = '\0';
+            update_wifi_ip_label("Wi-Fi Off");
+            Serial.println("[WIFI] Connection cancelled by user.");
+            vTaskDelete(NULL);
+            return;
+        }
+
+        if (sta_connected) {
             String ip = WiFi.localIP().toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
             s_wifi_ip[sizeof(s_wifi_ip) - 1] = '\0';
-            update_wifi_ip_label(s_wifi_ip);
-            
-            // Auto-sync NTP to RTC
-            configTime(0, 0, "pool.ntp.org");
-            struct tm timeinfo;
-            if (getLocalTime(&timeinfo, 10000)) {
-                i2c_rtc_setTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-                Serial.println("[WIFI] RTC synced via NTP!");
-            }
-            
+
+            // Bring up Web Portal & WIFI: STA badge immediately upon DHCP IP assignment
             setup_web_routes();
             server.begin();
+            wifi_active = true;
+            s_wifi_starting = false;
+            update_wifi_ip_label(s_wifi_ip);
             Serial.printf("[WIFI] Connected to '%s'! Web Portal: http://%s/\n", current_settings.wifi_ssid, s_wifi_ip);
+
+            // Best-effort NTP RTC sync afterwards so offline field routers never delay portal readiness
+            if (!s_wifi_abort_requested && !s_wifi_stop_pending) {
+                configTime(0, 0, "pool.ntp.org");
+                struct tm timeinfo;
+                if (getLocalTime(&timeinfo, 2500)) {
+                    i2c_rtc_setTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                                    timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+                    Serial.println("[WIFI] RTC synced via NTP!");
+                }
+            }
         } else {
             // STA failed or unconfigured in field: Launch local SoftAP hotspot fallback
             if (has_valid_ssid) {
@@ -620,9 +658,21 @@ extern "C" void start_wifi(void) {
             
             // Wait up to 1 second for AP netif to bring up IP
             int ap_wait = 0;
-            while (WiFi.softAPIP() == IPAddress(0, 0, 0, 0) && ap_wait < 10) {
+            while (!s_wifi_abort_requested && WiFi.softAPIP() == IPAddress(0, 0, 0, 0) && ap_wait < 10) {
                 vTaskDelay(pdMS_TO_TICKS(100));
                 ap_wait++;
+            }
+
+            if (s_wifi_abort_requested) {
+                WiFi.softAPdisconnect(true);
+                WiFi.mode(WIFI_OFF);
+                wifi_active = false;
+                s_wifi_starting = false;
+                s_wifi_ip[0] = '\0';
+                update_wifi_ip_label("Wi-Fi Off");
+                Serial.println("[WIFI] SoftAP startup cancelled by user.");
+                vTaskDelete(NULL);
+                return;
             }
             
             IPAddress apIP = WiFi.softAPIP();
@@ -632,12 +682,11 @@ extern "C" void start_wifi(void) {
             String ip = apIP.toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);
             s_wifi_ip[sizeof(s_wifi_ip) - 1] = '\0';
+            setup_web_routes();
+            server.begin();
             wifi_active = true;
             s_wifi_starting = false;
             update_wifi_ip_label(s_wifi_ip);
-            
-            setup_web_routes();
-            server.begin();
             Serial.printf("[WIFI] SoftAP Active! Connect phone to SSID 'RTK-Rover' (pwd: 12345678) -> http://%s/\n", s_wifi_ip);
         }
         s_wifi_starting = false;
@@ -646,21 +695,38 @@ extern "C" void start_wifi(void) {
 }
 
 extern "C" void stop_wifi(void) {
-    s_wifi_starting = false;
-    if (!wifi_active) return;
-    server.stop();
-    if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
-        WiFi.softAPdisconnect(true);
+    s_wifi_abort_requested = true;
+    bool was_active   = wifi_active;
+    bool was_starting = s_wifi_starting;
+    s_wifi_starting   = false;
+
+    if (was_active) {
+        wifi_active  = false;
+        s_wifi_ip[0] = '\0';
+        update_wifi_ip_label("Stopping Wi-Fi...");
+        // Defer server.stop() and WiFi.mode(WIFI_OFF) to loop() (handle_wifi_server)
+        // so LVGL UI never stalls and WebServer teardown is serialized with handleClient().
+        s_wifi_stop_pending = true;
+    } else if (was_starting) {
+        update_wifi_ip_label("Stopping Wi-Fi...");
     }
-    WiFi.disconnect(false, false);
-    WiFi.mode(WIFI_OFF);
-    wifi_active = false;
-    s_wifi_ip[0] = '\0';
-    update_wifi_ip_label("Wi-Fi Off");
-    Serial.println("[WIFI] Web Portal Stopped.");
 }
 
 extern "C" void handle_wifi_server(void) {
+    if (s_wifi_stop_pending) {
+        s_wifi_stop_pending = false;
+        server.stop();
+        if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
+            WiFi.softAPdisconnect(true);
+        }
+        WiFi.disconnect(false, false);
+        WiFi.mode(WIFI_OFF);
+        wifi_active  = false;
+        s_wifi_ip[0] = '\0';
+        update_wifi_ip_label("Wi-Fi Off");
+        Serial.println("[WIFI] Web Portal Stopped.");
+        return;
+    }
     if (wifi_active) {
         server.handleClient();
     }
