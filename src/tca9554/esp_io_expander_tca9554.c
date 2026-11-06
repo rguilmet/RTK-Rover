@@ -12,9 +12,12 @@
 #include "esp_log.h"
 #include "esp_io_expander.h"
 #include "esp_io_expander_tca9554.h"
+#include "../i2c_bsp/i2c_bsp.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 /* I2C communication related */
-#define I2C_TIMEOUT_MS          (1000)
+#define I2C_TIMEOUT_MS          (250)
 #define I2C_CLK_SPEED           (400000)
 
 #define IO_COUNT                (8)
@@ -34,6 +37,7 @@
  */
 typedef struct {
     esp_io_expander_t base;
+    i2c_master_bus_handle_t i2c_bus;
     i2c_master_dev_handle_t i2c_handle;
     struct {
         uint8_t direction;
@@ -59,11 +63,15 @@ esp_err_t esp_io_expander_new_i2c_tca9554(i2c_master_bus_handle_t i2c_bus, uint3
     esp_io_expander_tca9554_t *tca9554 = (esp_io_expander_tca9554_t *)calloc(1, sizeof(esp_io_expander_tca9554_t));
     ESP_RETURN_ON_FALSE(tca9554 != NULL, ESP_ERR_NO_MEM, TAG, "Malloc failed");
 
-    // Add new I2C device
+    tca9554->i2c_bus = i2c_bus;
+
+    // Add new I2C device (explicitly configure 20ms scl_wait_us to match shared I2C0 bus clock-stretching allowance)
     esp_err_t ret = ESP_OK;
     const i2c_device_config_t i2c_dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = dev_addr,
         .scl_speed_hz = I2C_CLK_SPEED,
+        .scl_wait_us = 20000,
     };
     ESP_GOTO_ON_ERROR(i2c_master_bus_add_device(i2c_bus, &i2c_dev_cfg, &tca9554->i2c_handle), err, TAG, "Add new I2C device failed");
 
@@ -92,11 +100,20 @@ err:
 static esp_err_t read_input_reg(esp_io_expander_handle_t handle, uint32_t *value)
 {
     esp_io_expander_tca9554_t *tca9554 = (esp_io_expander_tca9554_t *)__containerof(handle, esp_io_expander_tca9554_t, base);
+    if (!i2c_bsp_lock(250)) {
+        return ESP_ERR_TIMEOUT;
+    }
 
     uint8_t temp = 0;
-    ESP_RETURN_ON_ERROR(i2c_master_transmit_receive(tca9554->i2c_handle, (uint8_t[]) {
-        INPUT_REG_ADDR
-    }, 1, &temp, sizeof(temp), I2C_TIMEOUT_MS), TAG, "Read input reg failed");
+    uint8_t reg_addr = INPUT_REG_ADDR;
+    esp_err_t ret = i2c_master_transmit_receive(tca9554->i2c_handle, &reg_addr, 1, &temp, sizeof(temp), I2C_TIMEOUT_MS);
+    if (ret != ESP_OK && tca9554->i2c_bus != NULL) {
+        i2c_master_bus_reset(tca9554->i2c_bus);
+        vTaskDelay(pdMS_TO_TICKS(5));
+        ret = i2c_master_transmit_receive(tca9554->i2c_handle, &reg_addr, 1, &temp, sizeof(temp), I2C_TIMEOUT_MS);
+    }
+    i2c_bsp_unlock();
+    ESP_RETURN_ON_ERROR(ret, TAG, "Read input reg failed");
     *value = temp;
     return ESP_OK;
 }
@@ -105,9 +122,19 @@ static esp_err_t write_output_reg(esp_io_expander_handle_t handle, uint32_t valu
 {
     esp_io_expander_tca9554_t *tca9554 = (esp_io_expander_tca9554_t *)__containerof(handle, esp_io_expander_tca9554_t, base);
     value &= 0xff;
+    if (!i2c_bsp_lock(250)) {
+        return ESP_ERR_TIMEOUT;
+    }
 
-    uint8_t data[] = {OUTPUT_REG_ADDR, value};
-    ESP_RETURN_ON_ERROR(i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS), TAG, "Write output reg failed");
+    uint8_t data[] = {OUTPUT_REG_ADDR, (uint8_t)value};
+    esp_err_t ret = i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS);
+    if (ret != ESP_OK && tca9554->i2c_bus != NULL) {
+        i2c_master_bus_reset(tca9554->i2c_bus);
+        vTaskDelay(pdMS_TO_TICKS(5));
+        ret = i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS);
+    }
+    i2c_bsp_unlock();
+    ESP_RETURN_ON_ERROR(ret, TAG, "Write output reg failed");
     tca9554->regs.output = value;
     return ESP_OK;
 }
@@ -124,9 +151,19 @@ static esp_err_t write_direction_reg(esp_io_expander_handle_t handle, uint32_t v
 {
     esp_io_expander_tca9554_t *tca9554 = (esp_io_expander_tca9554_t *)__containerof(handle, esp_io_expander_tca9554_t, base);
     value &= 0xff;
+    if (!i2c_bsp_lock(250)) {
+        return ESP_ERR_TIMEOUT;
+    }
 
-    uint8_t data[] = {DIRECTION_REG_ADDR, value};
-    ESP_RETURN_ON_ERROR(i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS), TAG, "Write direction reg failed");
+    uint8_t data[] = {DIRECTION_REG_ADDR, (uint8_t)value};
+    esp_err_t ret = i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS);
+    if (ret != ESP_OK && tca9554->i2c_bus != NULL) {
+        i2c_master_bus_reset(tca9554->i2c_bus);
+        vTaskDelay(pdMS_TO_TICKS(5));
+        ret = i2c_master_transmit(tca9554->i2c_handle, data, sizeof(data), I2C_TIMEOUT_MS);
+    }
+    i2c_bsp_unlock();
+    ESP_RETURN_ON_ERROR(ret, TAG, "Write direction reg failed");
     tca9554->regs.direction = value;
     return ESP_OK;
 }

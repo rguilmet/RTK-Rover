@@ -3,6 +3,9 @@
 #include "../../user_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_rom_sys.h"
 
 i2c_master_bus_handle_t user_i2c_port0_handle = NULL;
 i2c_master_dev_handle_t disp_touch_dev_handle = NULL;
@@ -60,15 +63,70 @@ static void i2c_bus_recover_locked(const char *action, i2c_master_dev_handle_t d
     }
 }
 
+// NXP I2C Spec UM10204 Section 3.1.16 Bus Clear:
+// Because the AXP2101 LiPo UPS keeps all 6 I2C0 slave chips continuously powered across
+// ESP32 warm resets (esptool flash reset, RTC_SW_CPU_RST, or RST button), a reset mid-read
+// leaves a slave holding SDA (GPIO 8) LOW waiting for SCL clocks. Clocking 18 SCL pulses
+// with SDA released HIGH followed by an explicit STOP cleanly releases any wedged slave.
+void i2c_bsp_gpio_bus_clear(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << ROVER_PIN_I2C0_SCL) | (1ULL << ROVER_PIN_I2C0_SDA),
+        .mode = GPIO_MODE_INPUT_OUTPUT_OD,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(ROVER_PIN_I2C0_SCL, 1);
+    gpio_set_level(ROVER_PIN_I2C0_SDA, 1);
+    esp_rom_delay_us(200);
+
+    // Clock up to 18 SCL pulses (~50 kHz) so any interrupted slave shifts out remaining bits + NACK
+    for (int i = 0; i < 18; i++) {
+        gpio_set_level(ROVER_PIN_I2C0_SCL, 0);
+        esp_rom_delay_us(10);
+        gpio_set_level(ROVER_PIN_I2C0_SCL, 1);
+        esp_rom_delay_us(10);
+    }
+
+    // Generate explicit I2C STOP condition (SDA LOW -> SCL HIGH -> SDA HIGH)
+    gpio_set_level(ROVER_PIN_I2C0_SCL, 0);
+    esp_rom_delay_us(10);
+    gpio_set_level(ROVER_PIN_I2C0_SDA, 0);
+    esp_rom_delay_us(10);
+    gpio_set_level(ROVER_PIN_I2C0_SCL, 1);
+    esp_rom_delay_us(10);
+    gpio_set_level(ROVER_PIN_I2C0_SDA, 1);
+    esp_rom_delay_us(200);
+}
+
+void i2c_bsp_recover_bus(void)
+{
+    if (!i2c_bsp_lock(250)) {
+        return;
+    }
+    if (user_i2c_port0_handle != NULL) {
+        i2c_master_bus_reset(user_i2c_port0_handle);
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    i2c_bsp_unlock();
+}
+
 void i2c_master_Init(void)
 {
     if (user_i2c_port0_handle != NULL) {
         return;
     }
-    i2c_bus_mutex = xSemaphoreCreateRecursiveMutex();
+    if (i2c_bus_mutex == NULL) {
+        i2c_bus_mutex = xSemaphoreCreateRecursiveMutex();
+    }
     // Fast 25ms timeout prevents noticeable UI stutter if a transient bus stretch occurs
     i2c_data_pdMS_TICKS = 25;
     i2c_done_pdMS_TICKS = 25;
+
+    // Clear any slave holding SDA low across warm/UPS reset before attaching hardware I2C master
+    i2c_bsp_gpio_bus_clear();
 
     // ESP32-S3-Touch-LCD-3.5B shares I2C_NUM_0 on IO7 (SCL) and IO8 (SDA)
     i2c_master_bus_config_t i2c_bus_config = {
@@ -84,6 +142,8 @@ void i2c_master_Init(void)
         },
     };
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &user_i2c_port0_handle));
+    i2c_master_bus_reset(user_i2c_port0_handle);
+    vTaskDelay(pdMS_TO_TICKS(10));
 
     // Match Waveshare 01_factory 400 kHz across all I2C0 devices so i2c_master never reconfigures bus clock mid-stream
     i2c_device_config_t dev_cfg = {
@@ -102,6 +162,21 @@ void i2c_master_Init(void)
 
     dev_cfg.device_address = ROVER_I2C_ADDR_AXP2101;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &axp2101_dev_handle));
+}
+
+void i2c_bsp_reinit_bus(void)
+{
+    if (!i2c_bsp_lock(500)) {
+        return;
+    }
+    if (rtc_dev_handle)        { i2c_master_bus_rm_device(rtc_dev_handle);        rtc_dev_handle = NULL; }
+    if (imu_dev_handle)        { i2c_master_bus_rm_device(imu_dev_handle);        imu_dev_handle = NULL; }
+    if (disp_touch_dev_handle) { i2c_master_bus_rm_device(disp_touch_dev_handle); disp_touch_dev_handle = NULL; }
+    if (axp2101_dev_handle)    { i2c_master_bus_rm_device(axp2101_dev_handle);    axp2101_dev_handle = NULL; }
+    if (user_i2c_port0_handle) { i2c_del_master_bus(user_i2c_port0_handle);      user_i2c_port0_handle = NULL; }
+    vTaskDelay(pdMS_TO_TICKS(10));
+    i2c_master_Init();
+    i2c_bsp_unlock();
 }
 
 bool i2c_bsp_probe_addr(uint8_t addr_7bit)

@@ -55,7 +55,7 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
 ### Component 2: ESP32 Hardware Bridge Firmware
 * **Current Board:** Waveshare ESP32-S3-Touch-LCD-3.5B (acts as the bridge, with optional status readout on LCD).
 * **Future Migration Compatibility:** Waveshare ESP32-S3-LCD-1.47B (21x52mm slim stick) or ESP32-S3-DEV-KIT-N32R16V (headless).
-* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.5`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics, and power management, while adding a BLE NUS / Wi-Fi bidirectional bridge service.
+* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.6`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics, and power management, while adding a BLE NUS / Wi-Fi bidirectional bridge service.
 * **CRITICAL ESP32-S3 Memory Guardrail (`DRAM0` vs. Octal PSRAM):**
   * Prebuilt Arduino-ESP32 (`3.3.x`, `qio_opi`) sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0`. Wireless stacks (`esp_wifi_init()` + BLE controller) strictly require contiguous internal 8-bit/DMA SRAM (`DRAM0`) and fail silently under `DebugLevel=none` (`ESP_ERR_NO_MEM` $\rightarrow$ `WL_STOPPED 254`) if `DRAM0` is exhausted.
   * Allocate all new bridge TX/RX ring buffers $\ge 1\text{ KB}$ in Octal PSRAM via `heap_caps_malloc(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)` (never in static `.dram0.bss`), prefer lightweight `NimBLE-Arduino` over legacy Bluedroid `BLEDevice`, and verify `[MEM] Post-Setup Heap` internal free SRAM stays healthy.

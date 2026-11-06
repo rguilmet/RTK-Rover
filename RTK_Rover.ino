@@ -523,12 +523,6 @@ void setup()
     Serial.setTxTimeoutMs(0); // Critical: non-blocking USB CDC writes so app never stalls when USB disconnected
     pinMode(ROVER_PIN_BOOT_BTN, INPUT_PULLUP);
 
-    // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA) & TCA9554 IO Expander
-    // Match Waveshare 01_factory: leave EXIO3 (ROVER_EXIO_SD_CS) as Input/High-Z initially
-    i2c_master_Init();
-    ESP_ERROR_CHECK(esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander));
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
-
     // Wait for native USB Serial to connect, with a 3 second timeout 
     // so the wand still boots instantly on battery power without a PC!
     unsigned long start_ms = millis();
@@ -543,6 +537,28 @@ void setup()
     Serial.printf("\n====================================================\n");
     Serial.printf("   RTK Rover %s -- Power-Up Diagnostics\n", ROVER_FIRMWARE_VERSION);
     Serial.printf("====================================================\n");
+
+    // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA) & TCA9554 IO Expander
+    // Match Waveshare 01_factory: leave EXIO3 (ROVER_EXIO_SD_CS) as Input/High-Z initially.
+    // Retry with full GPIO SCL bus-clear recovery so a slave holding SDA low across a warm/UPS reset never causes a panic loop.
+    i2c_master_Init();
+    esp_err_t exio_err = ESP_FAIL;
+    for (int attempt = 1; attempt <= 5; attempt++) {
+        exio_err = esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander);
+        if (exio_err == ESP_OK && io_expander != NULL) {
+            break;
+        }
+        Serial.printf("[I2C WARN] TCA9554 init attempt %d/5 failed (err=0x%X) -> running GPIO bus-clear & reinit\n",
+                      attempt, (unsigned int)exio_err);
+        i2c_bsp_reinit_bus();
+        delay(30);
+    }
+    if (io_expander != NULL) {
+        esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT);
+    } else {
+        Serial.printf("[I2C ERROR] TCA9554 (0x20) unresponsive after 5 bus-clear attempts (err=0x%X); continuing degraded boot\n",
+                      (unsigned int)exio_err);
+    }
 
     // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard Peripherals
     Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s\n",
@@ -573,7 +589,9 @@ void setup()
     vTaskDelay(pdMS_TO_TICKS(50));
 
     // Stage 1: Native 1-bit SD_MMC with EXIO3 High-Z (Input with 100k internal pull-up, matching Waveshare 01_factory)
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_INPUT));
+    if (io_expander != NULL) {
+        esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_INPUT);
+    }
     vTaskDelay(pdMS_TO_TICKS(20));
     SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
     if (SD_MMC.begin("/sdcard", true, false, 20000) && SD_MMC.cardType() != CARD_NONE) {
@@ -583,8 +601,10 @@ void setup()
     } else {
         SD_MMC.end();
         // Stage 2: Native 1-bit SD_MMC with EXIO3 driven LOW (in case EXIO3 drives a P-MOSFET high-side SD power switch)
-        ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_OUTPUT));
-        ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0));
+        if (io_expander != NULL) {
+            esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_OUTPUT);
+            esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0);
+        }
         vTaskDelay(pdMS_TO_TICKS(60));
         gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_SCLK);
         gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MOSI);

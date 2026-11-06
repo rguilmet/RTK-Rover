@@ -5,10 +5,11 @@
  */
 #include "../interface/audio_codec_ctrl_if.h"
 #include "../include/esp_codec_dev_defaults.h"
+#include "../../i2c_bsp/i2c_bsp.h"
 #include "esp_log.h"
 #include "esp_idf_version.h"
 #define TICK_PER_MS portTICK_PERIOD_MS
-#define DEFAULT_I2C_CLOCK         (100000)
+#define DEFAULT_I2C_CLOCK         (400000)
 #define DEFAULT_I2C_TRANS_TIMEOUT (100)
 
 #include "driver/i2c_master.h"
@@ -42,6 +43,7 @@ static int _i2c_ctrl_open(const audio_codec_ctrl_if_t *ctrl, void *cfg, int cfg_
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = (i2c_cfg->addr >> 1),
         .scl_speed_hz = DEFAULT_I2C_CLOCK,
+        .scl_wait_us = 20000,
     };
     int ret = i2c_master_bus_add_device(i2c_cfg->bus_handle, &dev_cfg, &i2c_ctrl->dev_handle);
     return (ret == ESP_OK) ? 0 : ESP_CODEC_DEV_DRV_ERR;
@@ -69,10 +71,15 @@ static int _i2c_master_read_reg(i2c_ctrl_t *i2c_ctrl, int addr, int addr_len, vo
     } else {
         addr_data[0] = addr & 0xff;
     }
+    if (!i2c_bsp_lock(200)) {
+        return ESP_CODEC_DEV_READ_FAIL;
+    }
     int ret = i2c_master_transmit_receive(i2c_ctrl->dev_handle, addr_data, addr_len, data, data_len, DEFAULT_I2C_TRANS_TIMEOUT);
     if (ret != ESP_OK) {
+        i2c_bsp_recover_bus();
         ESP_LOGE(TAG, "Fail to read from dev %x", i2c_ctrl->addr);
     }
+    i2c_bsp_unlock();
     return ret ? ESP_CODEC_DEV_READ_FAIL : ESP_CODEC_DEV_OK;
 }
 
@@ -94,7 +101,14 @@ static int _i2c_master_write_reg(i2c_ctrl_t *i2c_ctrl, int addr, int addr_len, v
         while (i < len) {
             write_data[i++] = *(w++);
         }
+        if (!i2c_bsp_lock(200)) {
+            return ESP_CODEC_DEV_WRITE_FAIL;
+        }
         ret = i2c_master_transmit(i2c_ctrl->dev_handle, write_data, len, DEFAULT_I2C_TRANS_TIMEOUT);
+        if (ret != ESP_OK) {
+            i2c_bsp_recover_bus();
+        }
+        i2c_bsp_unlock();
     }
     if (ret != 0) {
         ESP_LOGE(TAG, "Fail to write to dev %x", i2c_ctrl->addr);

@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.6] - 2026-11-06
+
+### Fixed
+- **Boot Kernel Panic Loop on UPS-Backed Warm Reset (`I2C transaction timeout detected` / `TCA9554` `ESP_ERROR_CHECK`):**
+  - Resolved continuous 30 ms `RTC_SW_CPU_RST` reboot loop (`esp_io_expander_new_i2c_tca9554` failing with `0x103 ESP_ERR_INVALID_STATE` at `RTK_Rover.ino:529`) triggered when `esptool` or a warm reset interrupts an active `I2C_NUM_0` multi-byte read while the AXP2101 1S LiPo UPS battery keeps all 6 onboard I2C slave chips continuously powered and holding `SDA` (`GPIO 8`) LOW.
+  - Implemented NXP UM10204 Section 3.1.16 GPIO open-drain bus-clear (`i2c_bsp_gpio_bus_clear()` in `src/i2c_bsp/i2c_bsp.c`): clocks 18 `SCL` pulses (`GPIO 7` @ 50 kHz) with `SDA` released HIGH followed by an explicit I2C `STOP` condition prior to `i2c_new_master_bus()`, cleanly releasing any wedged I2C slave state machine across warm resets.
+  - Fixed uninitialized `.scl_wait_us = 0` hardware timeout in `src/tca9554/esp_io_expander_tca9554.c` and `src/esp_codec_dev/platform/audio_codec_ctrl_i2c.c`: aligned both `TCA9554` (`0x20`) and `ES8311` (`0x18`) to `400 kHz` with `.scl_wait_us = 20000` (20 ms slave clock-stretching allowance), serialized all transfers under `i2c_bsp_lock()`, and added automatic `i2c_master_bus_reset()` retry.
+  - Replaced fatal `ESP_ERROR_CHECK(esp_io_expander_...)` `abort()` macros in `RTK_Rover.ino` and `src/lvgl_port/lvgl_port.c` with a 5-attempt `i2c_bsp_reinit_bus()` recovery loop after USB CDC initialization and safe `io_expander != NULL` guards so transient I2C bus contention can never brick USB Serial in a panic loop.
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.7.6`.
+
 ## [v0.7.5] - 2026-11-06
 
 ### Fixed

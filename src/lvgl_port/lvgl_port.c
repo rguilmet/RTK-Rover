@@ -428,23 +428,29 @@ static void rover_lcd_pwm_off_early(void)
 static void rover_lcd_exio_init(void)
 {
     if (io_expander == NULL) {
-        ESP_ERROR_CHECK(esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander));
+        esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander);
+    }
+    if (io_expander == NULL) {
+        return;
     }
 
     // Leave EXIO3 (SD_CS / DAT3) untouched here so SD_MMC / SPI setup remains undisturbed
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_TP_INT | ROVER_EXIO_RTC_INT | ROVER_EXIO_AXP_IRQ | ROVER_EXIO_SYS_OUT, IO_EXPANDER_INPUT));
-    ESP_ERROR_CHECK(esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT));
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_CAM_PWDN, 1)); // Power down unused camera
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1));
+    esp_io_expander_set_dir(io_expander, ROVER_EXIO_TP_INT | ROVER_EXIO_RTC_INT | ROVER_EXIO_AXP_IRQ | ROVER_EXIO_SYS_OUT, IO_EXPANDER_INPUT);
+    esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT);
+    esp_io_expander_set_level(io_expander, ROVER_EXIO_CAM_PWDN, 1); // Power down unused camera
+    esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1);
 }
 
 static void rover_lcd_reset(void)
 {
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1));
+    if (io_expander == NULL) {
+        return;
+    }
+    esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(30));
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 0));
+    esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(150));
-    ESP_ERROR_CHECK(esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1));
+    esp_io_expander_set_level(io_expander, ROVER_EXIO_LCD_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(30));
 }
 
