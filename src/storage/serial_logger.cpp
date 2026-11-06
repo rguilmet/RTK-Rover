@@ -5,9 +5,11 @@
 #include <Arduino.h>
 #include <FS.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include <stdarg.h>
 #include <sys/time.h>
 #include <time.h>
+#include <stdlib.h>
 
 #define SERIAL_RING_BUF_SIZE 32768
 
@@ -17,12 +19,21 @@ static char s_serial_filename[64] = {0};
 static File s_serial_file;
 static SemaphoreHandle_t s_serial_mux = NULL;
 
-static uint8_t s_ring_buf[SERIAL_RING_BUF_SIZE];
+static uint8_t *s_ring_buf = NULL;
 static size_t s_ring_head = 0;
 static size_t s_ring_tail = 0;
 static bool s_in_logger = false;
 static bool s_timestamp_enabled = true;
 static bool s_at_start_of_line = true;
+
+static bool ensure_serial_ring_buf(void) {
+    if (s_ring_buf) return true;
+    s_ring_buf = (uint8_t *)heap_caps_malloc(SERIAL_RING_BUF_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_ring_buf) {
+        s_ring_buf = (uint8_t *)malloc(SERIAL_RING_BUF_SIZE);
+    }
+    return (s_ring_buf != NULL);
+}
 
 SerialLoggerClass SerialLogger;
 
@@ -33,6 +44,7 @@ void SerialLoggerClass::begin(unsigned long baud) {
     if (!s_serial_mux) {
         s_serial_mux = xSemaphoreCreateRecursiveMutex();
     }
+    ensure_serial_ring_buf();
 }
 
 void SerialLoggerClass::end() {
@@ -96,7 +108,7 @@ static size_t format_record_timestamp(char *buf, size_t max_len) {
 }
 
 static void serial_logger_feed_locked(const uint8_t *data, size_t len) {
-    if (!data || len == 0) return;
+    if (!data || len == 0 || !ensure_serial_ring_buf()) return;
     for (size_t i = 0; i < len; i++) {
         size_t next_head = (s_ring_head + 1) % SERIAL_RING_BUF_SIZE;
         if (next_head != s_ring_tail) {
@@ -210,7 +222,7 @@ uint32_t SerialLoggerClass::getBytesLogged() const {
 }
 
 static void serial_logger_flush_locked(void) {
-    if (s_serial_file && s_ring_head != s_ring_tail) {
+    if (s_serial_file && s_ring_buf && s_ring_head != s_ring_tail) {
         uint8_t write_buf[1024];
         s_in_logger = true;
         while (s_ring_tail != s_ring_head) {

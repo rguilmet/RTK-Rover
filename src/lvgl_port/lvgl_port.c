@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "../../user_config.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
@@ -3901,7 +3902,11 @@ void lvgl_port_init(void)
     assert(lvgl_mux);
 
     if (rover_lvgl_lock(-1)) {
+        // Route LVGL widget/style/table allocations (>=64B) into Octal PSRAM so internal
+        // 8-bit/DMA SRAM remains completely free & unfragmented for the ESP32-S3 Wi-Fi stack
+        heap_caps_malloc_extmem_enable(64);
         create_rover_ui();
+        heap_caps_malloc_extmem_enable(4096);
         rover_lvgl_unlock();
     }
 

@@ -10,6 +10,7 @@
 #include <FFat.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <esp_heap_caps.h>
 #include <vector>
 #include <algorithm>
 #include <ctype.h>
@@ -484,6 +485,14 @@ extern "C" void start_wifi(void) {
     // Non-blocking connection task pinned to Core 1 (UI & Event Core) at Priority 3
     // Leaves Core 0 100% dedicated to real-time UART bridge (E220 & UM982)
     xTaskCreatePinnedToCore([](void* arg){
+        Serial.printf("[WIFI] Pre-Init Heap -> Internal Free: %u B (Largest: %u B, DMA: %u B) | PSRAM Free: %u KB\n",
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                      (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                      (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+
+        WiFi.persistent(false);
+
         static wifi_event_id_t s_wifi_event_id = 0;
         if (s_wifi_event_id == 0) {
             s_wifi_event_id = WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -521,16 +530,22 @@ extern "C" void start_wifi(void) {
             if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
                 WiFi.softAPdisconnect(true);
                 vTaskDelay(pdMS_TO_TICKS(100));
+            } else if ((WiFi.getMode() & WIFI_MODE_STA) != 0) {
+                WiFi.disconnect(false, false);
+                vTaskDelay(pdMS_TO_TICKS(50));
             }
             
-            WiFi.disconnect(false, false);
-            vTaskDelay(pdMS_TO_TICKS(100));
-            WiFi.mode(WIFI_STA);
+            bool mode_ok = WiFi.mode(WIFI_STA);
+            Serial.printf("[WIFI] WiFi.mode(WIFI_STA) -> %s | Internal Free: %u B (Largest: %u B)\n",
+                          mode_ok ? "OK" : "FAIL",
+                          (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+
             WiFi.setSleep(false);
             WiFi.setAutoReconnect(true);
-
-            // Allow station netif and Wi-Fi PHY radio to complete startup
-            vTaskDelay(pdMS_TO_TICKS(150));
+            WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+            WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+            WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
 
             update_wifi_ip_label("Connecting...");
             wl_status_t begin_res = WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
@@ -538,7 +553,7 @@ extern "C" void start_wifi(void) {
                           current_settings.wifi_ssid, (int)begin_res);
 
             int attempts = 0;
-            const int max_attempts = 30; // 15 seconds timeout (30 * 500ms)
+            const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
             wl_status_t last_status = (wl_status_t)999;
 
             while ((WiFi.status() != WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0)) && attempts < max_attempts) {
@@ -594,15 +609,14 @@ extern "C" void start_wifi(void) {
                               current_settings.wifi_ssid, (int)WiFi.status());
             }
             update_wifi_ip_label("Starting AP...");
-            WiFi.disconnect(false, false);
-            vTaskDelay(pdMS_TO_TICKS(100));
-            WiFi.mode(WIFI_AP);
-            
-            IPAddress ap_local_ip(192, 168, 4, 1);
-            IPAddress ap_gateway(192, 168, 4, 1);
-            IPAddress ap_subnet(255, 255, 255, 0);
-            WiFi.softAPConfig(ap_local_ip, ap_gateway, ap_subnet);
-            WiFi.softAP("RTK-Rover", "12345678");
+            if ((WiFi.getMode() & WIFI_MODE_STA) != 0) {
+                WiFi.disconnect(false, false);
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+            bool ap_mode_ok = WiFi.mode(WIFI_AP);
+            bool ap_ok = WiFi.softAP("RTK-Rover", "12345678");
+            Serial.printf("[WIFI] SoftAP init -> mode:%s softAP:%s\n",
+                          ap_mode_ok ? "OK" : "FAIL", ap_ok ? "OK" : "FAIL");
             
             // Wait up to 1 second for AP netif to bring up IP
             int ap_wait = 0;
@@ -613,7 +627,7 @@ extern "C" void start_wifi(void) {
             
             IPAddress apIP = WiFi.softAPIP();
             if (apIP == IPAddress(0, 0, 0, 0)) {
-                apIP = ap_local_ip; // Guaranteed fallback: 192.168.4.1
+                apIP = IPAddress(192, 168, 4, 1);
             }
             String ip = apIP.toString();
             strncpy(s_wifi_ip, ip.c_str(), sizeof(s_wifi_ip) - 1);

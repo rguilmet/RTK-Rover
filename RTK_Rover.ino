@@ -5,6 +5,7 @@
 #include <FFat.h>
 #include <SPI.h>
 #include <driver/gpio.h>
+#include <esp_heap_caps.h>
 
 #include "user_config.h"
 #include "src/rover_api.h"
@@ -651,6 +652,12 @@ void setup()
     beepQueue       = xQueueCreate(8, sizeof(RoverBeep_t));
     xTaskCreatePinnedToCore(task_rover_core0, "RoverCore0", 8192, NULL, 4, NULL, 0);
     xTaskCreatePinnedToCore(task_display_and_audio, "RoverUI", 8192, NULL, 2, NULL, 1);
+
+    Serial.printf("[MEM] Post-Setup Heap -> Internal Free: %u B (Largest: %u B, DMA: %u B) | PSRAM Free: %u KB\n",
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                  (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
 }
 
 void loop()

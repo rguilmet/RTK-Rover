@@ -3,6 +3,8 @@
 #include "../rtc_bsp/rtc_bsp.h"
 #include <Arduino.h>
 #include <FS.h>
+#include "esp_heap_caps.h"
+#include <stdlib.h>
 
 #define NMEA_RING_BUF_SIZE 8192
 
@@ -12,9 +14,19 @@ static char s_nmea_filename[64] = {0};
 static File s_nmea_file;
 static SemaphoreHandle_t s_nmea_mux = NULL;
 
-static uint8_t s_ring_buf[NMEA_RING_BUF_SIZE];
+static uint8_t *s_ring_buf = NULL;
 static size_t s_ring_head = 0;
 static size_t s_ring_tail = 0;
+
+static bool ensure_nmea_ring_buf(void)
+{
+    if (s_ring_buf) return true;
+    s_ring_buf = (uint8_t *)heap_caps_malloc(NMEA_RING_BUF_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_ring_buf) {
+        s_ring_buf = (uint8_t *)malloc(NMEA_RING_BUF_SIZE);
+    }
+    return (s_ring_buf != NULL);
+}
 
 extern "C" bool nmea_logger_start(void)
 {
@@ -22,6 +34,11 @@ extern "C" bool nmea_logger_start(void)
         s_nmea_mux = xSemaphoreCreateMutex();
     }
     if (s_nmea_mux) xSemaphoreTake(s_nmea_mux, portMAX_DELAY);
+
+    if (!ensure_nmea_ring_buf()) {
+        if (s_nmea_mux) xSemaphoreGive(s_nmea_mux);
+        return false;
+    }
 
     if (s_nmea_active) {
         if (s_nmea_mux) xSemaphoreGive(s_nmea_mux);
@@ -65,7 +82,7 @@ extern "C" bool nmea_logger_start(void)
 
 static void nmea_logger_flush_locked(void)
 {
-    if (s_nmea_file && s_ring_head != s_ring_tail) {
+    if (s_nmea_file && s_ring_buf && s_ring_head != s_ring_tail) {
         uint8_t write_buf[1024];
         while (s_ring_tail != s_ring_head) {
             size_t bytes_to_write = 0;
@@ -115,7 +132,7 @@ extern "C" uint32_t nmea_logger_get_bytes_logged(void)
 
 extern "C" void nmea_logger_feed(const uint8_t *data, size_t len)
 {
-    if (!s_nmea_active || !data || len == 0) return;
+    if (!s_nmea_active || !s_ring_buf || !data || len == 0) return;
 
     if (s_nmea_mux && xSemaphoreTake(s_nmea_mux, pdMS_TO_TICKS(5)) == pdTRUE) {
         for (size_t i = 0; i < len; i++) {

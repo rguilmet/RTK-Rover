@@ -10,10 +10,21 @@
 #include <FFat.h>
 #include <string.h>
 #include <stdlib.h>
+#include "esp_heap_caps.h"
 
-WaypointRecord_t g_waypoints[MAX_WAYPOINTS];
+WaypointRecord_t *g_waypoints          = NULL;
 int16_t          g_waypoint_count      = 0;
 int16_t          g_active_waypoint_idx = 0;
+
+static bool ensure_waypoints_buf(void)
+{
+    if (g_waypoints) return true;
+    g_waypoints = (WaypointRecord_t *)heap_caps_calloc(MAX_WAYPOINTS, sizeof(WaypointRecord_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!g_waypoints) {
+        g_waypoints = (WaypointRecord_t *)calloc(MAX_WAYPOINTS, sizeof(WaypointRecord_t));
+    }
+    return (g_waypoints != NULL);
+}
 
 #define MAX_WAYPOINT_FILES 16
 static char s_waypoint_files[MAX_WAYPOINT_FILES][48];
@@ -93,6 +104,11 @@ static void create_default_sample_waypoints_if_missing(void)
 
 extern "C" bool waypoint_load_csv(const char *filepath)
 {
+    if (!ensure_waypoints_buf()) {
+        Serial.println("waypoint_load_csv: Failed to allocate waypoint buffer!");
+        return false;
+    }
+
     File f = get_active_fs().open(filepath, "r");
     if (!f && sd_card_mounted) {
         f = FFat.open(filepath, "r");
@@ -366,6 +382,7 @@ extern "C" int16_t waypoint_file_get_count(void)
 
 extern "C" void waypoint_manager_init(void)
 {
+    ensure_waypoints_buf();
     create_default_sample_waypoints_if_missing();
     waypoint_scan_files();
     g_active_waypoint_idx = current_settings.active_waypoint_index;

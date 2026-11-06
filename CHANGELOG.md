@@ -5,6 +5,23 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.5] - 2026-11-06
+
+### Fixed
+- **Wi-Fi Station & SoftAP Radio Initialization Failure (`ESP_ERR_NO_MEM` / `DRAM0` Exhaustion):**
+  - Identified and resolved the root cause of persistent Wi-Fi connection failures (`Status: 254 (WL_STOPPED)`, `WiFi.scanNetworks() -> -2`, `WiFi.begin() -> 4 (WL_CONNECT_FAILED)`, and `WiFi.softAPIP() -> 0.0.0.0`) introduced as features grew across `v0.3.0`–`v0.7.0`.
+  - Binary section analysis (`RTK_Rover.ino.elf`) revealed `.dram0.bss` + `.dram0.data` + `.dram0.dummy` had grown to **213.3 KB**, leaving insufficient contiguous internal 8-bit/DMA SRAM (`DRAM0`) for `esp_wifi_init()` / `esp_wifi_start()` (which silently returned `ESP_ERR_NO_MEM` under `DebugLevel=none` with `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=0`).
+  - Migrated **82,944 B** of non-DMA static `.dram0.bss` buffers into 8MB Octal PSRAM (`MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT` with internal RAM fallback):
+    - `serial_logger` ring buffer (`32,768 B`)
+    - `g_waypoints` table (`25,600 B`)
+    - `rtcm_logger` ring buffer (`16,384 B`)
+    - `nmea_logger` ring buffer (`8,192 B`)
+  - Scoped `heap_caps_malloc_extmem_enable(64)` around `create_rover_ui()` in `lvgl_port_init()` (restoring the `4096 B` hardware driver threshold immediately afterward), routing ~50 KB of LVGL 9 widget/style/table allocations into Octal PSRAM while keeping `SD_MMC`, `FFat`, `I2S`, `SPI`, and `WiFi` driver buffers in internal SRAM.
+  - Optimized QSPI LCD DMA bounce strip height (`LVGL_DMA_BUFF_LEN`) from 48 lines (`30,720 B`) to 24 lines (`15,360 B`, an exact 20-strip divisor of 480px), reclaiming **15,360 B** of contiguous `MALLOC_CAP_DMA` internal SRAM without affecting UI rendering.
+  - Restored `WiFi.persistent(false)`, `WIFI_ALL_CHANNEL_SCAN`, `WIFI_CONNECT_AP_BY_SIGNAL`, `WIFI_AUTH_WPA_PSK`, and a 20-second association window matching proven `v0.2.49` router behavior.
+  - Added `[MEM] Post-Setup Heap`, `[WIFI] Pre-Init Heap`, and explicit `WiFi.mode(WIFI_STA)` / `WiFi.softAP()` return-status diagnostics to the boot and Wi-Fi connection logs.
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.7.5`.
+
 ## [v0.7.4] - 2026-11-06
 
 ### Fixed

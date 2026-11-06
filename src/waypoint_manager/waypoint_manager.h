@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-extern WaypointRecord_t g_waypoints[MAX_WAYPOINTS];
+extern WaypointRecord_t *g_waypoints;
 extern int16_t          g_waypoint_count;
 extern int16_t          g_active_waypoint_idx;
 
