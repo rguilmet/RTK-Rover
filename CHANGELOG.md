@@ -5,18 +5,27 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.7.1] - 2026-11-06
+## [v0.7.2] - 2026-11-06
+
+### Added
+- **Wi-Fi Multi-State Button & Icon Color Visual Cues:**
+  - **Connecting State:** Button turns Vivid Amber/Orange (`#D97706`) with text `"WIFI: CONN"`; Row 1 Wi-Fi icon illuminates Amber (`#F59E0B`).
+  - **Connected (Local Router / STA):** Button turns Emerald Green (`#107C41`) with text `"WIFI: STA"`; Row 1 Wi-Fi icon illuminates Cyan (`#22D3EE`).
+  - **Connected (Access Point / SoftAP Hotspot):** Button turns Vivid Violet/Purple (`#7C3AED`) with text `"WIFI: AP"`; Row 1 Wi-Fi icon illuminates Violet (`#A855F7`).
+  - **Inactive / OFF:** Button turns Navy Blue (`#1B6CA8`) with text `"WIFI: OFF"`; Row 1 Wi-Fi icon dims to Slate (`#475569`).
+  - Added `is_wifi_starting()` query exported via `src/web_server/web_server.h` for instantaneous UI state reflection.
 
 ### Fixed
-- **Wi-Fi Station Mode Connection & Authentication Failure:**
-  - Resolved failure to associate with local home Wi-Fi routers even with valid credentials in `settings.json`.
-  - Fixed `WL_STOPPED (254)` state in Arduino-ESP32 v3.3.12 caused by `WiFi.disconnect(true)` tearing down the netif and deinitializing the driver. Replaced with clean SoftAP teardown and mode transitions.
+- **Wi-Fi Station Mode Connection & Authentication Failure (ESP32 Core v3.3.12):**
+  - Resolved `WL_STOPPED (254)` state in Arduino-ESP32 v3.3.12 caused by `WiFi.disconnect(true)` tearing down the netif and halting the driver. Replaced with non-destructive `WiFi.disconnect(false, false)` and `WiFi.mode(WIFI_OFF)` when stopping.
+  - Added clean SoftAP teardown (`WiFi.softAPdisconnect(true)`) when switching from Hotspot AP to Station mode.
   - Added dual check for connection success: `(WiFi.status() == WL_CONNECTED || WiFi.localIP() != IPAddress(0, 0, 0, 0))` to prevent false timeouts from `WiFi.status()` latency in v3.x.
   - Enhanced Wi-Fi event logger to capture `ARDUINO_EVENT_WIFI_STA_START` and status code 254 (`STOPPED`).
   - Fixed cosmetic UI log bug in `wifi_toggle_btn_cb` where starting Wi-Fi logged `[TOUCH BTN] Wi-Fi clicked -> Stopping`.
-  - Removed restrictive `WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK)` that forced legacy WPA1 negotiation and caused association rejection on standard WPA2-PSK and mixed WPA2/WPA3 access points. Restored native ESP32 multi-mode authentication.
-  - Removed `WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN)` and `WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL)` which prolonged channel dwelling and caused probe timeouts during association. Restored default Fast Scan.
-  - Added periodic active re-trigger (`WiFi.reconnect()`) at 5s, 10s, and 15s if the driver remains in `WL_DISCONNECTED`.
+
+## [v0.7.1] - 2026-11-06
+
+### Fixed
 - **Wi-Fi Portal Mode IP Resolution (`http://0.0.0.0/` Bug):**
   - Resolved issue where SoftAP fallback returned `0.0.0.0` on Tile 1 and Tile 4 when Station mode timed out or credentials were unconfigured.
   - Added explicit static AP IP configuration (`WiFi.softAPConfig(192.168.4.1, 192.168.4.1, 255.255.255.0)`), interface readiness polling loop, and guaranteed `192.168.4.1` fallback.

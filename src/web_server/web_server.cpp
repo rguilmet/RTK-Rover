@@ -33,6 +33,10 @@ extern "C" bool is_wifi_softap(void) {
     return wifi_active && ((WiFi.getMode() & WIFI_AP) != 0);
 }
 
+extern "C" bool is_wifi_starting(void) {
+    return s_wifi_starting;
+}
+
 extern "C" const char* get_wifi_ip(void) {
     return s_wifi_ip;
 }

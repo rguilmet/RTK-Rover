@@ -131,6 +131,9 @@ static lv_obj_t *t0_grid_v[T0_GRID_V_LINES] = {0};
 #define COLOR_BTN_INACTIVE_BLUE lv_color_hex(0x1B6CA8)
 #define COLOR_UNIT_SI_TEAL      lv_color_hex(0x0284C7)
 #define COLOR_UNIT_IMP_AMBER    lv_color_hex(0xD97706)
+#define COLOR_BTN_WIFI_CONN     lv_color_hex(0xD97706) // Vivid Amber / Orange (Connecting)
+#define COLOR_BTN_WIFI_STA      lv_color_hex(0x107C41) // Emerald Green (Local Router STA)
+#define COLOR_BTN_WIFI_AP       lv_color_hex(0x7C3AED) // Vivid Violet / Purple (Hotspot SoftAP)
 
 static lv_obj_t *t0_dist_lbl        = NULL;
 static lv_obj_t *t0_steer_lbl       = NULL;
@@ -892,13 +895,29 @@ static void update_all_control_buttons(void)
         }
     }
 
-    // Row 4, Col 0: WIFI: ON / WIFI: OFF
-    int cur_wifi = is_wifi_active() ? 1 : 0;
+    // Row 4, Col 0: WIFI (Multi-State: 0=OFF, 1=Connecting, 2=Router STA, 3=Access Point)
+    int cur_wifi = 0;
+    if (is_wifi_active()) {
+        cur_wifi = is_wifi_softap() ? 3 : 2;
+    } else if (is_wifi_starting()) {
+        cur_wifi = 1;
+    }
     if (cur_wifi != s_last_wifi) {
         s_last_wifi = cur_wifi;
         if (t1_wifi_btn && t1_wifi_btn_lbl) {
-            lv_label_set_text(t1_wifi_btn_lbl, cur_wifi ? "WIFI: ON" : "WIFI: OFF");
-            lv_obj_set_style_bg_color(t1_wifi_btn, cur_wifi ? COLOR_BTN_ACTIVE_GREEN : COLOR_BTN_INACTIVE_BLUE, 0);
+            if (cur_wifi == 1) {
+                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: CONN");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_CONN, 0); // Amber / Orange
+            } else if (cur_wifi == 2) {
+                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: STA");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_STA, 0);  // Emerald Green
+            } else if (cur_wifi == 3) {
+                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: AP");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_AP, 0);   // Vivid Violet / Purple
+            } else {
+                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: OFF");
+                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_INACTIVE_BLUE, 0); // Navy Blue
+            }
         }
     }
 
@@ -2348,13 +2367,19 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_obj_set_style_text_color(hdr_batt_lbl, bat_col, 0);
     }
 
-    // Wi-Fi Status Badge in Row 1 (Icon only)
+    // Wi-Fi Status Badge in Row 1 (Icon only: Slate=OFF, Amber=Connecting, Cyan=Router STA, Purple=AP)
     if (hdr_wifi_lbl) {
         lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
         if (is_wifi_active()) {
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x22D3EE), 0); // Cyan
+            if (is_wifi_softap()) {
+                lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xA855F7), 0); // Purple / Violet (AP)
+            } else {
+                lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x22D3EE), 0); // Cyan (Router STA)
+            }
+        } else if (is_wifi_starting()) {
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xF59E0B), 0);     // Amber (Connecting)
         } else {
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0); // Dim slate
+            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);     // Dim slate (OFF)
         }
     }
 
