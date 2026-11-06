@@ -484,12 +484,14 @@ extern "C" void start_wifi(void) {
         static wifi_event_id_t s_wifi_event_id = 0;
         if (s_wifi_event_id == 0) {
             s_wifi_event_id = WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-                if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+                if (event == ARDUINO_EVENT_WIFI_STA_START) {
+                    Serial.println("[WIFI EVENT] STA Interface Started!");
+                } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+                    Serial.println("[WIFI EVENT] STA Associated with AP!");
+                } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
                     uint8_t reason = info.wifi_sta_disconnected.reason;
                     Serial.printf("[WIFI EVENT] STA Disconnected (Reason: %u - %s)\n",
                                   reason, WiFi.disconnectReasonName((wifi_err_reason_t)reason));
-                } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
-                    Serial.println("[WIFI EVENT] STA Associated with AP!");
                 } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
                     Serial.printf("[WIFI EVENT] STA Got IP: %s\n",
                                   IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
@@ -512,21 +514,24 @@ extern "C" void start_wifi(void) {
             Serial.printf("[WIFI] Connecting to '%s' (password len=%d)...\n",
                           current_settings.wifi_ssid, (int)strlen(current_settings.wifi_password));
             
-            // Clean reset of Wi-Fi subsystem before entering STA mode
-            WiFi.disconnect(true);
-            vTaskDelay(pdMS_TO_TICKS(100));
+            // If SoftAP was running, tear it down cleanly before switching to STA
+            if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
+                WiFi.softAPdisconnect(true);
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+            
             WiFi.mode(WIFI_STA);
             WiFi.setSleep(false);
             WiFi.setAutoReconnect(true);
 
-            // Use standard Fast Scan & native security negotiation (supports WPA, WPA2, WPA3)
+            // Connect using native multi-mode security (WPA, WPA2, WPA3)
             WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
 
             int attempts = 0;
             const int max_attempts = 40; // 20 seconds timeout (40 * 500ms)
             wl_status_t last_status = WL_IDLE_STATUS;
 
-            while (WiFi.status() != WL_CONNECTED && attempts < max_attempts) {
+            while ((WiFi.status() != WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0)) && attempts < max_attempts) {
                 vTaskDelay(pdMS_TO_TICKS(500));
                 attempts++;
                 wl_status_t cur_status = WiFi.status();
@@ -538,12 +543,20 @@ extern "C" void start_wifi(void) {
                                           (cur_status == WL_CONNECTED)       ? "CONNECTED" :
                                           (cur_status == WL_CONNECT_FAILED)  ? "CONNECT_FAILED" :
                                           (cur_status == WL_CONNECTION_LOST) ? "CONNECTION_LOST" :
-                                          (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" : "UNKNOWN";
+                                          (cur_status == WL_DISCONNECTED)    ? "DISCONNECTED" :
+                                          ((int)cur_status == 254)           ? "STOPPED" : "UNKNOWN";
                     Serial.printf("[WIFI] Status: %s (%d) | %d/%d (%.1fs)\n",
                                   st_name, (int)cur_status, attempts, max_attempts, attempts * 0.5f);
                     char prog[32];
                     snprintf(prog, sizeof(prog), "Connecting (%ds)...", (int)(attempts * 0.5f));
                     update_wifi_ip_label(prog);
+                }
+                
+                // If radio remained in STOPPED state after 2 seconds, re-issue WiFi.begin()
+                if ((int)cur_status == 254 && (attempts == 4 || attempts == 8)) {
+                    Serial.println("[WIFI] Re-triggering WiFi.begin() from stopped state...");
+                    WiFi.mode(WIFI_STA);
+                    WiFi.begin(current_settings.wifi_ssid, current_settings.wifi_password);
                 }
                 
                 // If stuck disconnected after 10 attempts (5s), actively re-trigger connection
@@ -552,7 +565,7 @@ extern "C" void start_wifi(void) {
                     WiFi.reconnect();
                 }
             }
-            sta_connected = (WiFi.status() == WL_CONNECTED);
+            sta_connected = (WiFi.status() == WL_CONNECTED || WiFi.localIP() != IPAddress(0, 0, 0, 0));
         } else {
             Serial.println("[WIFI] No valid STA credentials configured in settings.json. Launching SoftAP hotspot immediately...");
         }
@@ -584,8 +597,8 @@ extern "C" void start_wifi(void) {
                               current_settings.wifi_ssid, (int)WiFi.status());
             }
             update_wifi_ip_label("Starting AP...");
-            WiFi.disconnect(true);
-            vTaskDelay(pdMS_TO_TICKS(100));
+            WiFi.disconnect(false, false);
+            vTaskDelay(pdMS_TO_TICKS(50));
             WiFi.mode(WIFI_AP);
             
             IPAddress ap_local_ip(192, 168, 4, 1);
@@ -625,7 +638,11 @@ extern "C" void stop_wifi(void) {
     s_wifi_starting = false;
     if (!wifi_active) return;
     server.stop();
-    WiFi.disconnect(true);
+    if ((WiFi.getMode() & WIFI_MODE_AP) != 0) {
+        WiFi.softAPdisconnect(true);
+    }
+    WiFi.disconnect(false, false);
+    WiFi.mode(WIFI_OFF);
     wifi_active = false;
     s_wifi_ip[0] = '\0';
     update_wifi_ip_label("Wi-Fi Off");

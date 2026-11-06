@@ -1115,7 +1115,8 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
 static void wifi_toggle_btn_cb(lv_event_t *e)
 {
     (void)e;
-    if (is_wifi_active()) {
+    bool was_active = is_wifi_active();
+    if (was_active) {
         stop_wifi();
         play_rover_beep(1200, 30);
     } else {
@@ -1125,7 +1126,7 @@ static void wifi_toggle_btn_cb(lv_event_t *e)
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Wi-Fi clicked -> %s\n",
-                     is_wifi_active() ? "Starting" : "Stopping");
+                     was_active ? "Stopping" : "Starting");
     }
 }
 
