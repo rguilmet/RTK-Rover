@@ -1,11 +1,11 @@
 # Plan Smart Pole and Android App
 
-**Document Version:** `2.4.0`  
+**Document Version:** `2.5.0`  
 **Date:** November 7, 2026  
 **Firmware Baseline:** `v0.7.7`  
 **System Class:** Modular High-Precision Dual-Antenna RTK Cadastral Platform  
 **Smart-Pole Target Hardware:** **Waveshare ESP32-S3-Touch-LCD-3.49-V2** (`172 × 640` 3.49" IPS Display, Integrated 18650 Battery Holder & USB-C Charger, MicroSD Card, QMI8658A 6-DOF IMU, PCF85063A RTC) + **Discrete High-Side Switch (`NDP6020P` + `2N3904`) & `MT3608` 5.0V Boost Converter** + **Holybro H-RTK Unicore UM982** (Dual-Helix GNSS, `24"`–`30"` / `610`–`762 mm` Removable 1" Aluminum Beam) + **Ebyte E220-900T30S** 1W LoRa  
-**Consolidated Shared Library & Resource Repo:** **`Field_Instrument_Core`** (`Documents/Arduino/libraries/Field_Instrument_Core` $\leftrightarrow$ `github.com/rguilmet/Field-Instrument-Core` — Single Unified Repository for All Board BSPs, `um982_driver`, `e220_driver`, `nav_engine`, Storage/Audio/LVGL Services, Datasheets, Schematics & CAD)  
+**Consolidated Shared Library & Resource Repo:** **`Field_Instrument_Core`** (`Documents/Arduino/libraries/Field_Instrument_Core` $\leftrightarrow$ `github.com/rguilmet/Field-Instrument-Core` — Single Unified Repository for All Board BSPs, `um982_driver`, `e220_driver`, `nav_engine`, Storage/Audio/LVGL Services, Shared Python/Base Scripts, Datasheets, Schematics & CAD)  
 **Field Controller Target:** **Android Smartphone (`RTK-Rover-Mobile`)** via **Bluetooth Low Energy (BLE 5.0 NUS)**  
 **Companion Base Station:** `e220_pacer.py v3.4.0` (900 MHz LoRa 1W) & Public NTRIP Caster (`rtk2go.com:2101`)
 
@@ -382,10 +382,25 @@ Documents/Arduino/libraries/Field_Instrument_Core/   # Single Shared Git Repo ->
 ├── library.properties                               # Standard Arduino Library manifest (SemVer v1.0.0+)
 ├── README.md                                        # Master architecture, API reference & board matrix
 ├── GEMINI.md                                        # Memory (DRAM0/PSRAM), I2C bus-clear & FreeRTOS rules
-├── scripts/
-│   ├── check_secrets.py                             # Pre-push security & PII scanner (v1.1.1)
-│   └── install_git_hooks.py                         # Installs .git/hooks/pre-push guard
+├── examples/
+│   └── subdivision_demo.json                        # Clean reference cadastral dataset for cogo_solver.py
+├── scripts/                                         # SHARED PYTHON & SHELL SCRIPTS (Ignored by Arduino C++ Compiler)
+│   ├── e220_pacer.py                                # Base Station RTCM3 pacer & 45B uplink telemetry daemon (v3.4.0)
+│   ├── e220-pacer.service & update_e220_pacer.sh    # Base Station systemd service & deployment helper
+│   ├── setup_e220.py & set_e220_power.py            # E220 LoRa register provisioning utilities
+│   ├── scan_e220_channels.py & test_e220_link.py    # 900MHz ISM spectrum scanner & RF link tester
+│   ├── test_rover_telemetry.py                      # 45B/64B telemetry frame unit tester
+│   ├── setup_um98x.py, setup_um980.py, setup_unicore.py # Unicore UM982/UM980 receiver provisioning tools
+│   ├── cogo_solver.py                               # Schema-driven Cadastral COGO & Bowditch Traverse Engine (v1.1.0)
+│   ├── kml_to_waypoints.py & validate_waypoints.py  # 19-column waypoints.csv converter & leg validator
+│   ├── convert_deeds_to_markdown.py                 # Deed OCR/Markdown preparation utility
+│   ├── analyze_field_test.py & analyze_rtk_log.py   # NMEA/RTCM/telemetry field log analyzers
+│   ├── test_line_stakeout.py                        # Geodesic line stakeout math verifier
+│   ├── check_secrets.py & install_git_hooks.py      # Central pre-push security scanner & multi-repo hook installer
+│   └── md_to_pdf.py & scale_images.py               # Shared documentation publishing & image utilities
 ├── docs/                                            # SINGLE REPOSITORY FOR ALL SHARED HARDWARE DOCS & DATASHEETS
+│   ├── schemas/
+│   │   └── cadastral_schema.json                    # JSON schema for cogo_solver.py parcel definitions
 │   ├── boards/
 │   │   ├── ESP32-S3-Touch-LCD-3.5B/                 # 3.5B V1/V2 Schematics, Pinout PNGs, Case .stp/.dwg/.pdf
 │   │   └── ESP32-S3-Touch-LCD-3.49-V2/              # 3.49-V2 Schematic PDF, gpio_pin_mapping.csv, Case CAD
@@ -438,18 +453,18 @@ Documents/Arduino/libraries/Field_Instrument_Core/   # Single Shared Git Repo ->
 
 ### 7.3 Multi-Repository Git & GitHub Ecosystem Map
 
-With `Field_Instrument_Core` holding all shared C/C++ drivers, navigation engines, and hardware datasheets/schematics in `Documents/Arduino/libraries/Field_Instrument_Core`, each sketch repository stays ultra-clean and focused strictly on its top-level application and UI:
+With `Field_Instrument_Core` holding all shared C/C++ drivers, navigation engines, shared Python/Base Station scripts, and hardware datasheets/schematics in `Documents/Arduino/libraries/Field_Instrument_Core`, each sketch repository stays ultra-clean and focused strictly on its top-level application and UI:
 
 ```mermaid
 flowchart TD
-    subgraph SharedLib["Single Shared Library & Hardware Docs Repo"]
-        CORE["1. Field-Instrument-Core\n(Documents/Arduino/libraries/Field_Instrument_Core)\n• Board BSPs (3.5B & 3.49-V2), I2C, Audio, LVGL, Storage\n• um982_driver, e220_driver, nav_engine, waypoint_manager\n• ALL Datasheets, Schematics, Pinouts, CAD & Articles"]
+    subgraph SharedLib["Single Shared Library, Scripts & Hardware Docs Repo"]
+        CORE["1. Field-Instrument-Core\n(Documents/Arduino/libraries/Field_Instrument_Core)\n• Board BSPs (3.5B & 3.49-V2), I2C, Audio, LVGL, Storage\n• um982_driver, e220_driver, nav_engine, waypoint_manager\n• Shared Scripts: e220_pacer.py, cogo_solver.py, check_secrets.py\n• ALL Datasheets, Schematics, Pinouts, CAD & Articles"]
     end
 
     subgraph SketchRepos["Arduino Sketch & Mobile App Repositories (github.com/rguilmet/*)"]
-        ROVER["2. RTK-Rover\n(Arduino/RTK_Rover)\n• 3.5B Handheld 5-Tile Survey Sketch\n• Base Pacer (e220_pacer.py) & COGO Solver"]
+        ROVER["2. RTK-Rover\n(Arduino/RTK_Rover)\n• 3.5B Handheld 5-Tile Survey Sketch"]
         POLE["3. RTK-Smart-Pole\n(Arduino/RTK_Smart_Pole)\n• 3.49-V2 Beam Box Sketch\n• 640x172 4-Row Status HUD & BLE 5.0 NUS Bridge"]
-        MFS["4. Magnetic-Field-Scanner\n(Arduino/Magnetic_Field_Scanner)\n• 3.49-V2 RM3100 Fluxgate Scanner Sketch"]
+        MFS["4. Magnetic-Field-Scanner\n(Arduino/Magnetic_Field_Scanner)\n• 3.49-V2 RM3100 Fluxgate Scanner Sketch\n• Domain Scripts: calibrate_wand.py, plot_*.py"]
         MOBILE["5. RTK-Rover-Mobile\n(Android Studio Project)\n• Native Kotlin / Jetpack Compose App\n• BLE 5.0 NUS & Cellular NTRIP Client"]
     end
 
@@ -457,7 +472,7 @@ flowchart TD
         PRIV["6. RTK_Rover_Private\n(Arduino/RTK_Rover_Private)\n• Homestead Deed PDFs & Parcel JSONs\n• Raw Field Wiretaps & .secrets.local"]
     end
 
-    CORE ==>|#include <Field_Instrument_Core.h>\n+ All Shared Docs/Datasheets| ROVER & POLE & MFS
+    CORE ==>|#include <Field_Instrument_Core.h>\n+ Shared Scripts & Docs| ROVER & POLE & MFS
     POLE <===>|BLE 5.0 NUS Protocol| MOBILE
     ROVER <-.->|Optional BLE/Wi-Fi Bridge| MOBILE
     PRIV -.->|cogo_solver.py Input / Output| ROVER & POLE & MOBILE
@@ -465,22 +480,23 @@ flowchart TD
 
 | Repository Name | Local Workspace Path | GitHub Remote | Scope & Contents |
 | :--- | :--- | :--- | :--- |
-| **`Field-Instrument-Core`** | `Arduino/libraries/Field_Instrument_Core` | `github.com/rguilmet/Field-Instrument-Core` | **Single Consolidated Library & Hardware Reference Repository:**<br>• All shared drivers (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `i2c_bsp`, `tca9554`, `esp_codec_dev`, `axs15231b`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `pmu_bsp`, `storage_bsp`, `settings_manager`, `matrix_math`, `sensor_fusion`).<br>• **All datasheets, schematics, pinout CSVs, mechanical CAD, and technical articles** across all projects (`docs/`). |
-| **`RTK-Rover`** | `Arduino/RTK_Rover` | `github.com/rguilmet/RTK-Rover` | **3.5B Handheld RTK Rover Sketch + Python Tooling:**<br>• `RTK_Rover.ino`, `user_config.h` (`BOARD_WAVESHARE_S3_35B`), 5-tile `320 × 480` LVGL UI, `scripts/e220_pacer.py`, `scripts/cogo_solver.py`, and project docs. |
+| **`Field-Instrument-Core`** | `Arduino/libraries/Field_Instrument_Core` | `github.com/rguilmet/Field-Instrument-Core` | **Single Consolidated Library, Shared Scripts & Hardware Reference Repository:**<br>• All shared C/C++ drivers (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `i2c_bsp`, `tca9554`, `esp_codec_dev`, `axs15231b`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `pmu_bsp`, `storage_bsp`, `settings_manager`, `matrix_math`, `sensor_fusion`).<br>• **All shared RTK, Radio, Cadastral & Security Python scripts (`scripts/`):** `e220_pacer.py`, `cogo_solver.py`, `kml_to_waypoints.py`, `validate_waypoints.py`, `setup_e220.py`, `setup_um98x.py`, `analyze_rtk_log.py`, `check_secrets.py`, `install_git_hooks.py`, `md_to_pdf.py`, `scale_images.py`.<br>• **All datasheets, schematics, pinout CSVs, mechanical CAD, and technical articles** across all projects (`docs/`). |
+| **`RTK-Rover`** | `Arduino/RTK_Rover` | `github.com/rguilmet/RTK-Rover` | **3.5B Handheld RTK Rover Sketch:**<br>• `RTK_Rover.ino`, `user_config.h` (`BOARD_WAVESHARE_S3_35B`), 5-tile `320 × 480` LVGL UI, and handheld rover user/design docs. |
 | **`RTK-Smart-Pole`** | `Arduino/RTK_Smart_Pole` | `github.com/rguilmet/RTK-Smart-Pole` | **3.49-V2 Smart-Pole Beam Sketch:**<br>• `RTK_Smart_Pole.ino`, `user_config.h` (`BOARD_WAVESHARE_S3_349_V2`), `640 × 172` 4-row wide bar Status HUD, BLE 5.0 NUS peripheral bridge, and Dual-Source RTCM Arbiter (`LoRa` + `BLE NTRIP`). |
 | **`RTK-Rover-Mobile`** | `Arduino/RTK_Rover_Mobile` *(or `AndroidStudioProjects/RTK_Rover_Mobile`)* | `github.com/rguilmet/RTK-Rover-Mobile` | **Android Field Controller Application:**<br>• Standalone Kotlin / Jetpack Compose Gradle project (`BLE 5.0 NUS` client, `rtk2go.com:2101` NTRIP client, 5-screen cadastral stakeout & satellite map suite, Room SQLite point logger). |
-| **`Magnetic-Field-Scanner`** | `Arduino/Magnetic_Field_Scanner` | `github.com/rguilmet/Magnetic-Field-Scanner` | **3.49-V2 Magnetic Field Scanner Sketch:**<br>• `Magnetic_Field_Scanner.ino`, `user_config.h` (`BOARD_WAVESHARE_S3_349_V2`), RM3100 scanner UI, and characterization reports (linking against `Field_Instrument_Core`). |
+| **`Magnetic-Field-Scanner`** | `Arduino/Magnetic_Field_Scanner` | `github.com/rguilmet/Magnetic-Field-Scanner` | **3.49-V2 Magnetic Field Scanner Sketch + Magnetometry Scripts:**<br>• `Magnetic_Field_Scanner.ino`, `user_config.h` (`BOARD_WAVESHARE_S3_349_V2`), RM3100 scanner UI, and magnetometry-specific calibration/plotting scripts (`calibrate_wand.py`, `characterize_system.py`, `analyze_scan.py`, `plot_*.py`, `visualize_3d.py`). |
 | **`RTK_Rover_Private`** | `Arduino/RTK_Rover_Private` | *None (Local Private Git Only)* | **Private Survey & Homestead Data:**<br>• Registered deed PDFs, `homestead_parcels.json`, raw field wiretaps, and `.secrets.local` tokens. |
 
-### 7.4 Repository Maintenance, Versioning & Security Governance Rules
-1. **Zero Code or Datasheet Duplication:**
+### 7.4 Repository Maintenance, Script Placement & Security Governance Rules
+1. **Zero Code, Script, or Datasheet Duplication:**
    * All C/C++ drivers (`um982_driver`, `e220_driver`, `nav_engine`, `i2c_bsp`, etc.) and all hardware PDFs/CAD/schematics live **exclusively** in `Documents/Arduino/libraries/Field_Instrument_Core/`.
-   * Whenever a driver improvement or bug fix is made (for example, an `i2c_bsp` or `um982_driver` enhancement), it is committed once to `Field_Instrument_Core` and immediately benefits `RTK_Rover`, `RTK_Smart_Pole`, and `Magnetic_Field_Scanner` on their next compile.
+   * **Why Shared Python Scripts Live in `Field_Instrument_Core/scripts/`:** Because Arduino IDE (`library.properties` rev 2.x) only compiles C/C++ files inside `src/`, placing shared Python tools in `Field_Instrument_Core/scripts/` adds zero overhead to Arduino builds while keeping `e220_pacer.py` lockstep with `e220_driver`, `setup_um98x.py` lockstep with `um982_driver`, and `cogo_solver.py` / `validate_waypoints.py` lockstep with `nav_engine` and `waypoint_manager` across `RTK_Rover`, `RTK_Smart_Pole`, and `RTK-Rover-Mobile`.
+   * **Single-Project Domain Scripts Stay with Their Project:** Scripts that only apply to one instrument's domain science (such as `calibrate_wand.py`, `characterize_system.py`, and `plot_saturation_3200.py` in `Magnetic_Field_Scanner/scripts/`) remain in that project's `scripts/` folder.
 2. **Independent SemVer & Compile-Time Version Guard:**
    * `Field_Instrument_Core` is versioned in `library.properties` and `Field_Instrument_Core.h` (`v1.0.0`, `v1.1.0`, etc.) and tagged in Git (`git tag v1.0.0`).
    * Each sketch (`RTK_Rover.ino`, `RTK_Smart_Pole.ino`, `Magnetic_Field_Scanner.ino`) checks `#if FIELD_INSTRUMENT_CORE_VERSION_INT < ...` at compile time so version mismatches are caught immediately.
 3. **Universal Pre-Push Secret Scanning (`check_secrets.py`):**
-   * Every public repository (`Field-Instrument-Core`, `RTK-Rover`, `RTK-Smart-Pole`, `RTK-Rover-Mobile`, `Magnetic-Field-Scanner`) installs `scripts/check_secrets.py` + `.git/hooks/pre-push` reading from the unversioned `.secrets.local` file so zero personal coordinates, callsigns, LAN hostnames, or local Windows user paths ever reach GitHub.
+   * `Field_Instrument_Core/scripts/install_git_hooks.py` can be run against any repository in the workspace to install `.git/hooks/pre-push` pointing to the central `Field_Instrument_Core/scripts/check_secrets.py` scanner (reading `.secrets.local`), ensuring zero personal coordinates, callsigns, LAN hostnames, or local Windows user paths ever reach GitHub.
 
 ---
 
@@ -488,15 +504,15 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    Stage0["Stage 0: Create Field-Instrument-Core\n(All Drivers, Engines & Datasheets in Arduino/libraries)"] --> Stage1["Stage 1: Android App & BLE/NTRIP Bridge\n(Create RTK-Rover-Mobile Repo)"]
+    Stage0["Stage 0: Create Field-Instrument-Core\n(All Drivers, Engines, Shared Scripts & Docs)"] --> Stage1["Stage 1: Android App & BLE/NTRIP Bridge\n(Create RTK-Rover-Mobile Repo)"]
     Stage1 --> Stage2["Stage 2: RTK_Smart_Pole Sketch on 3.49-V2\n(Using Field-Instrument-Core + 640x172 HUD)"]
     Stage2 --> Stage3["Stage 3: Full Android Cadastral Survey Suite\n(Tactical, Bullseye, Line, Map & Logger)"]
     Stage3 --> Stage4["Stage 4: 1 in Aluminum Beam & Power Box Build\n(NDP6020P + 2N3904 + MT3608 + 24-30 in Helix)"]
 ```
 
-### Stage 0: Create `Field-Instrument-Core` Library & Consolidate All Shared Drivers/Docs
+### Stage 0: Create `Field-Instrument-Core` Library & Consolidate All Shared Drivers, Scripts & Docs
 * Initialize `Documents/Arduino/libraries/Field_Instrument_Core` (`github.com/rguilmet/Field-Instrument-Core`) with `check_secrets.py` pre-push protection.
-* Consolidate **all** shared hardware documentation (`datasheets`, `schematics`, `boards`, `mechanical`, `articles` from both `RTK_Rover` and `Magnetic_Field_Scanner`, plus `NDP6020P` and `MT3608` datasheets) into `Field_Instrument_Core/docs/`.
+* Consolidate **all** shared hardware documentation (`datasheets`, `schematics`, `boards`, `mechanical`, `articles` from both `RTK_Rover` and `Magnetic_Field_Scanner`, plus `NDP6020P` and `MT3608` datasheets) into `Field_Instrument_Core/docs/`, and move all shared RTK/LoRa/COGO/security Python scripts (`e220_pacer.py`, `cogo_solver.py`, `kml_to_waypoints.py`, `validate_waypoints.py`, `setup_e220.py`, `setup_um98x.py`, `analyze_rtk_log.py`, `check_secrets.py`, `install_git_hooks.py`, `md_to_pdf.py`, `scale_images.py`) into `Field_Instrument_Core/scripts/`.
 * Move the hardened **`RTK_Rover v0.7.7`** modules (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `i2c_bsp`, `tca9554`, `esp_codec_dev`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `pmu_bsp`, `storage_bsp`, `settings_manager`, `screenshot_bsp`, `web_server_bsp`) and **`Magnetic_Field_Scanner`** modules (`board_ws_s3_349_v2.h`, `172 × 640` QSPI init, `GPIO 4` 18650 `VBAT` ADC, `matrix_math`, `sensor_fusion`) into `Field_Instrument_Core/src/`.
 * Verify clean compilation and zero regressions across `RTK_Rover` (`3.5B`), `RTK_Smart_Pole` (`3.49-V2`), and `Magnetic_Field_Scanner` (`3.49-V2`).
 
