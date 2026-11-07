@@ -5,6 +5,26 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.7] - 2026-11-07
+
+### Fixed
+- **Sub-Millisecond Tactile Audio & Elimination of Waypoint/File Selection Lag (`test/_034`):**
+  - Resolved the ~0.9–1.9s delay between tapping waypoint (`<` / `>`) or file navigation buttons and hearing the confirmation beep / seeing updated target guidance metrics (`Dist`, `Steer`, `dN/dE` offsets).
+  - **Root Cause 1 — Timestamp Race & Synchronous 4-File `FFat` Flash Stall on UI Thread:** Button callbacks run on `lvgl_port_task` (Priority 3), which set `settings_dirty = true` before writing `last_settings_change_ms = millis()`. When `task_display_and_audio` (Priority 2) woke up with an older `now_ms`, unsigned subtraction `(uint32_t)(now_ms - last_settings_change_ms)` underflowed to `~4,294,967,290 >= 4000`, firing `save_settings()` **immediately on the button press** (writing `/settings.json.tmp` and `/settings.json` to both MicroSD and internal SPI Flash `FFat`, stalling `task_display_and_audio` for `800–2,180 ms` before `beepQueue` was drained).
+  - **Root Cause 2 — Audio Coupled to `RoverUI` Task:** `beepQueue` was drained at the bottom of `task_display_and_audio` (Priority 2), so any LVGL mutex wait or SD/flash write delayed physical I2S tone generation.
+  - **Root Cause 3 — Cross-Core Guidance Readout Delay & 1-Byte CSV Reads:** `wp_prev_cb` / `wp_next_cb` updated `t0_target_lbl` immediately in the callback, but `t0_dist_lbl`, `t0_steer_lbl`, and `t0_offsets_lbl` waited for `task_rover_core0` and `update_rover_ui()` on a subsequent cycle; meanwhile `waypoint_load_csv()` used byte-by-byte `f.readStringUntil('\n')` heap `String` allocations.
+  - **Dedicated Priority-4 Real-Time Audio Task (`task_audio_beep` / `"RoverAudio"`):** Extracted `beepQueue` servicing into a dedicated Core 1 task at Priority 4 (above `lvgl_port_task` Priority 3 and `RoverUI` Priority 2). Tactile button presses now wake `RoverAudio` immediately via `xQueueReceive(..., portMAX_DELAY)` and synthesize ES8311 I2S DMA audio within **`< 1 ms`**.
+  - **Same-Frame (`0 ms`) Guidance Readout & `<= 2 ms` Core 0 Wakeup:** Added `refresh_t0_guidance_readout_immediately()` inside `src/lvgl_port/lvgl_port.c` so `t0_dist_lbl`, `t0_steer_lbl`, `t0_offsets_lbl`, `t0_scale_lbl`, and `t0_tgt_hdg_lbl` recompute on the **exact same LVGL frame** as `t0_target_lbl` / `t2_file_lbl`. Added `g_waypoint_change_seq` so `task_rover_core0` wakes within `<= 2 ms` to push updated canvas vectors and resets `s_last_audio_ms` proximity audio cadence on target switch.
+  - **Background Settings Persistence & Smart `FFat` Mirror Skip (`settings_manager.cpp`, `RTK_Rover.ino`):** Moved debounced `save_settings()` out of `RoverUI` into the Priority-1 background `loop()` with a signed 5-second quiet debounce (`(int32_t)(now_ms - dirty_ts) >= 5000`) and ordered `last_settings_change_ms` write before `settings_dirty = true` (`__sync_synchronize()`). Added `non_index_settings_equal()` so stepping through `active_waypoint_index` when MicroSD is mounted saves only to SD `/settings.json` (`< 35 ms`) and skips redundant 1.5s internal SPI Flash `FFat` wear-leveling erases unless configuration parameters or `active_waypoint_file` changed.
+  - **Zero-Allocation `512 B` Chunked CSV Loader & 64-Entry Ring Stem Cache (`waypoint_manager.cpp`):** Rewrote `waypoint_load_csv()` and `find_next_available_suffix()` to use `fs_mux`-protected `512 B` stack chunk reads (`< 5 ms`, zero `String` heap fragmentation), expanded `s_stem_cache` from 16 to 64 entries with ring eviction, and gated Tile 1 stem formatting in `update_rover_ui()` to execute only when Tile 1 is visible (`active_tile_col == 1`) or a survey is active.
+- **Lossless Non-Blocking SD Serial Logger (`serial_logger.cpp`):**
+  - Replaced process-wide `s_in_logger` boolean (which dropped `[TOUCH]` and `[WIFI]` log lines on `lvgl_port_task` / `wifi_connect` whenever `loop()` was flushing to SD) with task-scoped `s_io_owner_task` recursive VFS re-entrancy protection, decoupled `s_serial_mux` (`< 15 us` PSRAM ring copy) from SD VFS writes (`s_serial_file_mux` + `fs_mux`), and throttled physical FAT `s_serial_file.flush()` from `66 Hz` (`15 ms`) to `2 Hz` (`500 ms`).
+- **Wi-Fi Toggle Cancellation, Instant Portal Readiness & Single-Threaded Teardown (`web_server.cpp`, `lvgl_port.c`):**
+  - Updated `wifi_toggle_btn_cb()` to check `(is_wifi_active() || is_wifi_starting())` so tapping `WIFI: CONN` cleanly aborts an in-flight connection (`s_wifi_abort_requested`) within `<= 100 ms` instead of ignoring the tap or spawning duplicate tasks.
+  - Configured `start_wifi()` to bring up `server.begin()` and transition the UI to `WIFI: STA` immediately upon DHCP `GOT_IP` *before* attempting a shortened `2.5 s` best-effort NTP sync.
+  - Deferred `server.stop()` and `WiFi.mode(WIFI_OFF)` in `stop_wifi()` to `handle_wifi_server()` on `loop()` to eliminate cross-task LwIP races.
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.7.7`.
+
 ## [v0.7.6] - 2026-11-06
 
 ### Fixed

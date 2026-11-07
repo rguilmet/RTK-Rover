@@ -1,8 +1,8 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.7.3`  
-**Firmware Version:** `v0.7.5`  
-**Last Updated:** November 6, 2026  
+**Document Version:** `v1.8.0`  
+**Firmware Version:** `v0.7.7`  
+**Last Updated:** November 7, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
 
 ---
@@ -193,6 +193,10 @@ Tile 0 features an interactive tri-state navigation badge in the top-left corner
 ---
 
 ### Line Stakeout Mode (Station & Offset)
+
+![Tile 0: Line Stakeout Mode](docs/images/screenshot_tile0_line_stakeout.png)
+*Figure 2C: Line Stakeout mode showing Point A to Point B deed baseline, perpendicular offset tie-line, stationing, and quadrant bearing.*
+
 When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
 * **Baseline Definition ($A \rightarrow B$):** Directs the surveyor along the boundary line between Point A (Station $0+00$) and Point B (Target).
   * **Auto-Pairing:** By default, Point B is the actively selected target (`Index`), and Point A is the preceding waypoint (`Index - 1`, wrapping around to close parcels).
@@ -218,6 +222,10 @@ When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
 ---
 
 ### Mode 2: Map View (Cadastral 2D Canvas with Zoom, Pan & Tie-Lines)
+
+![Tile 0: 2D Cadastral Map View](docs/images/screenshot_tile0_map_view.png)
+*Figure 2D: 2D Cadastral Map View rendering closed parcel boundary polygon, dashed reference tie-lines, HUD zoom controls, and rover heading beam.*
+
 When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
 * **Geodetic Tangent-Plane Canvas:** Projects real-world WGS84 coordinates onto a 2D local equirectangular plane centered on the map viewport.
 * **Interactive Zoom & Pan:**
@@ -312,9 +320,9 @@ The bottom deck provides instantaneous touch control over hardware preferences i
   * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic serial output.
   * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.
   * `TOUCH: ON/OFF`: Toggles touch coordinate serial debugging.
-  * `WIFI: CONN/STA/AP/OFF`: Controls the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal with live multi-state color coding:
-    * `WIFI: CONN` (Vivid Amber `#D97706`): Actively connecting to local router SSID.
-    * `WIFI: STA` (Emerald Green `#107C41`): Connected to local router (`http://<local-ip>/`).
+  * `WIFI: CONN/STA/AP/OFF`: Controls the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal with live multi-state color coding and instant cancellation:
+    * `WIFI: CONN` (Vivid Amber `#D97706`): Actively connecting to local router SSID. Tapping the button again while in `WIFI: CONN` immediately aborts the connection attempt (`<= 100 ms`) and powers off the radio.
+    * `WIFI: STA` (Emerald Green `#107C41`): Connected to local router (`http://<local-ip>/`). The web portal becomes immediately accessible upon DHCP IP acquisition prior to background NTP clock synchronization.
     * `WIFI: AP` (Vivid Violet `#7C3AED`): Standalone SoftAP hotspot active (`http://192.168.4.1/`, SSID `RTK-Rover`).
     * `WIFI: OFF` (Navy Blue `#1B6CA8`): Wi-Fi radio powered off.
   * `UNITS: IMP/SI`: Toggles between Imperial (feet/inches) and Metric (meters/centimeters).
@@ -337,8 +345,8 @@ Tile 2 enables operators to manage, browse, and switch between multiple project 
 
 ### Interactive Waypoint Table
 * **Table Rows:** Displays point ID, target Latitude, Longitude, Elevation, and feature notes.
-* **Tap-to-Target Selection:** Tapping any row instantly selects that waypoint as the active navigation target for Tile 0 and derives the naming stem for Tile 1.
-* **Instant Touch Response (Sub-25ms):** Optimized with a 20 ms LVGL polling loop and in-memory suffix stem cache, completely eliminating touch latency and audio beeping lag.
+* **Tap-to-Target Selection:** Tapping any row (or stepping with `<` / `>`) selects that waypoint as the active navigation target for Tile 0 and derives the naming stem for Tile 1.
+* **Sub-Millisecond Tactile Audio & Same-Frame (`0 ms`) Readout Response (`v0.7.7`):** Powered by a dedicated Priority-4 real-time audio synthesizer task (`RoverAudio`), synchronous same-frame guidance readout calculation (`refresh_t0_guidance_readout_immediately()`), `512 B` chunked CSV loading (`< 5 ms`), a 64-entry RAM stem cache (`s_stem_cache`), and background debounced settings persistence with smart `FFat` flash-wear skip.
 
 ### Waypoint CSV Format & Cadastral Ordering Schema
 The Rover natively loads standard 19-column and 20-column survey CSV files. The 20-column schema introduces the `poly_order` column for cadastral mapping:
@@ -394,7 +402,7 @@ Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and se
 *Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
 
 ### Pinned Top Control Deck & Elevated RF Survey Card
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.7.5"` in Montserrat 16 White (`#FFFFFF`).
+* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.7.7"` in Montserrat 16 White (`#FFFFFF`).
 * **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
   * Live ambient noise floor (`Noise: -102dBm`).
   * Last received packet signal strength (`Pkt: -84dBm`).

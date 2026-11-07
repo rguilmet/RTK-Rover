@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.4.0`  
-**Last Updated:** November 6, 2026  
-**Firmware Target:** `v0.7.6`  
+**Document Version:** `v2.5.0`  
+**Last Updated:** November 7, 2026  
+**Firmware Target:** `v0.7.7`  
 **Python Ecosystem Target:** `v3.4.0`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -39,7 +39,7 @@ This document serves as the master technical specification for the **RTK Rover**
      * **Target EEPROM Profile:** `ADDH=0x00 ADDL=0x00 REG0=0xE6 REG1=0x23 CHAN=0x4B REG3=0x00`.
    * **Base Station Software & Datasheet Section 5.6.2 Pacing Architecture:**
      * **RTKBase Stream Filtering:** RTKBase port `5016` is filtered via `str2str` to `"1006(5),1074,1084,1094,1230(10)"`, producing a lean, high-fidelity stream of ~625-650 Bytes/s (GPS MSM4, GLONASS MSM4, Galileo MSM4, Base ARP, and GLONASS biases).
-     * **Two-Regime AUX + Hardware-Calibrated Time-on-Air Pacing (`scripts/e220_pacer.py v3.2.0`):**
+     * **Two-Regime AUX + Hardware-Calibrated Time-on-Air Pacing (`scripts/e220_pacer.py v3.4.0`):**
        * Per E220-900T30S Manual Section 5.6.2, `AUX=1` indicates the 400-byte UART buffer emptied into the LLCC68 transceiver, **not** that over-the-air RF transmission has completed.
        * **Single-Subpacket Frames (`<= 200B`, e.g., `1006`, `1230`, `1084`):** Transfer straight into an idle LLCC68 FIFO without holding `AUX` LOW; paced deterministically by silicon-calibrated LoRa Time-on-Air (`82.2 ms` for `200B`, `58.3 ms` for `122B` @ `38.4k`) plus a `35 ms` receiver UART drain guard delay.
        * **Two-Subpacket Frames (`201..400B`, e.g., `1074`, `1094`):** Hold `AUX` LOW (~82 ms @ 38.4k) while Subpacket 1 (`200B`) transmits on air, then raise `AUX` HIGH the instant Subpacket 2 (`len - 200`) enters the LLCC68 FIFO and **begins** RF TX; paced by waiting for `AUX` rising edge plus `estimate_subpacket_air_s(len - 200) + 35 ms` guard delay.
@@ -111,25 +111,24 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 ## 5. FreeRTOS & LVGL 9 Firmware Architecture
 
 ### Core Separation
-* **Core 0 (`task_rover_core0`, Priority 4 — Zero I2C Access):**
+* **Core 0 (`task_rover_core0` / `"RoverCore0"`, Priority 4 — Zero I2C Access):**
   * Polls `E220` (`Serial0`), logs raw wire-tap bytes to `rtcm-base_*.txt`, stages incoming bytes in a 1,536-byte **Sliding-Window Store-and-Verify RTCM3 Gatekeeper** (`0xD3` + `CRC24Q == 0`), and forwards **only verified intact RTCM3 frames** atomically to `UM982 COM2` (`Serial2`) while tracking `IO21` `AUX` falling-edge interrupts and 5-second Mode 0 `Noise/Pkt RSSI` (`dBm`).
   * Polls `UM982 COM1` (`Serial1`) to parse `$GPGGA` (2 Hz), `$GPRMC` (1 Hz), `$GPGST` (2 Hz), `$GPGSV` (1 Hz), `$GNGGAH` (1 Hz slave data), `#BASEINFOA` (1 Hz base station data), and `#UNIHEADINGA` (2 Hz).
-  * Runs 30Hz lever-arm kinematic projection and geodesic target guidance (`nav_engine`).
-* **Core 1 (`rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2 — Exclusive I2C0 Owner):**
-  * Exclusively owns `I2C_NUM_0` (`400 kHz`, serialized via `i2c_bus_mutex` with automatic `i2c_master_bus_reset()` recovery): polls `AXS15231B` touch (`30 Hz`), `QMI8658` IMU (`10 Hz` independent of LVGL mutex), `PCF85063` RTC (`1 Hz` cached + one-shot GNSS UTC sync), and `AXP2101` battery telemetry (`0.5 Hz`).
-  * Renders the `320x480` Portrait LVGL 9 interface protected by `rover_lvgl_lock()` / `rover_lvgl_unlock()`.
-  * Multi-tone audio beep synthesis via FreeRTOS `beepQueue` driving the ES8311 codec.
-  * Debounced `settings.json` persistence (4s debounce after changes).
-  * Hardware screenshot generation directly to MicroSD card.
+  * Runs 30Hz lever-arm kinematic projection and geodesic target guidance (`nav_engine`), waking within `<= 2 ms` via `g_waypoint_change_seq` whenever the operator selects a new waypoint or file.
+* **Core 1 (`task_audio_beep` Priority 4, `rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2, `loopTask` Priority 1 — Exclusive I2C0 Owner):**
+  * **`task_audio_beep` (`"RoverAudio"`, Priority 4):** Dedicated real-time audio synthesizer blocking on `beepQueue` (`portMAX_DELAY`) and driving the ES8311 I2S codec within `< 1 ms` of touch contact, completely decoupled from UI rendering and filesystem writes.
+  * **`rover_lvgl_port_task` (Priority 3):** Renders the `320x480` Portrait LVGL 9 interface protected by `rover_lvgl_lock()` / `rover_lvgl_unlock()`, executing `0 ms` same-frame target guidance readout updates (`refresh_t0_guidance_readout_immediately()`) inside button callbacks.
+  * **`task_display_and_audio` (`"RoverUI"`, Priority 2):** Exclusively owns `I2C_NUM_0` (`400 kHz`, `.scl_wait_us = 20000`, serialized via `i2c_bus_mutex` with 18-clock GPIO SCL warm-reset bus-clear `i2c_bsp_gpio_bus_clear()` and automatic `i2c_master_bus_reset()` recovery): polls `AXS15231B` touch (`30 Hz`), `QMI8658` IMU (`10-50 Hz` independent of LVGL mutex), `PCF85063` RTC (`1 Hz` cached + one-shot GNSS UTC sync), and `AXP2101` battery/VBUS telemetry (`0.5 Hz`). Synthesizes distance-proportional proximity Geiger/Beep events into `beepQueue` and generates hardware BMP screenshots on `GPIO 0` long-press.
+  * **`loopTask` (Priority 1):** Executes 5-second quiet-debounced `save_settings()` with smart `FFat` mirror skip (`non_index_settings_equal()`, avoiding 1.5s internal flash erases when stepping `active_waypoint_index` with MicroSD mounted), services the HTTP web portal (`handle_wifi_server()`), and flushes PSRAM ring buffers (`serial_logger`, `nmea_logger`, `rtcm_logger`) to MicroSD with task-scoped `s_io_owner_task` re-entrancy protection.
 
-### Memory Partitioning: Internal `DRAM0` vs. 8 MB Octal PSRAM (`v0.7.5`)
+### Memory Partitioning: Internal `DRAM0` vs. 8 MB Octal PSRAM (`v0.7.5` - `v0.7.7`)
 Because prebuilt Arduino-ESP32 (`v3.3.x`, `qio_opi`) compiles with `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0`, explicit memory-tier partitioning is enforced so `esp_wifi_init()` / `esp_wifi_start()` (and future BLE NUS stacks) always retain $\ge 150\text{ KB}$ of contiguous internal 8-bit/DMA SRAM:
 * **8 MB Octal PSRAM (`MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT`):**
   * Dual full-frame LVGL 9 RGB565 framebuffers (`2 x 307,200 B = 614.4 KB`).
   * `serial_logger` (`32,768 B`), `rtcm_logger` (`16,384 B`), and `nmea_logger` (`8,192 B`) ring buffers (`57.3 KB` total).
   * `g_waypoints` survey table (`MAX_WAYPOINTS = 80`, `25,600 B`).
   * ~400+ LVGL 9 UI widget, style, table, and canvas objects (`~50 KB`), routed via scoped `heap_caps_malloc_extmem_enable(64)` strictly around `create_rover_ui()` (immediately restored to `4096` afterward).
-* **Internal `DRAM0` / `MALLOC_CAP_DMA` SRAM (Static `.dram0.bss = 37,104 B` / `18%` global dynamic RAM):**
+* **Internal `DRAM0` / `MALLOC_CAP_DMA` SRAM (Static `.dram0.bss = 37,120 B` / `20%` global dynamic RAM):**
   * 24-line QSPI LCD DMA bounce strip (`LVGL_DMA_BUFF_LEN = 15,360 B`, exact 20-strip divisor of 480 px).
   * `SD_MMC` IDMAC descriptors, `FFat` sector buffers, `ES8311` I2S DMA buffers, FreeRTOS task stacks, and the ESP32-S3 Wi-Fi MAC/PHY + LwIP RX/TX DMA pools.
 
@@ -178,7 +177,7 @@ Because prebuilt Arduino-ESP32 (`v3.3.x`, `qio_opi`) compiles with `CONFIG_SPIRA
   * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
   * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
 * **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.7.5` in Montserrat 16 White).
+  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.7.7` in Montserrat 16 White).
   * **Dual-Power & UPS Card:** Displays external VBUS line voltage, 5V rail status, internal battery voltage/percentage, charging/float status, and auto-shutdown timer countdown.
   * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI, AUX edges, RTCM message counters, and truncation drops.
   * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:

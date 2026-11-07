@@ -1,9 +1,9 @@
 # Project Retrospective: RTK Rover Development & AI Pair Programming
 
-**Document Version:** `v2.2.0`  
-**Firmware Baseline:** `v0.7.5`  
+**Document Version:** `v2.3.0`  
+**Firmware Baseline:** `v0.7.7`  
 **Companion Software:** `e220_pacer.py v3.4.0` | `cogo_solver.py v1.1.0` | `check_secrets.py v1.1.1`  
-**Date:** November 6, 2026  
+**Date:** November 7, 2026  
 **Status:** Completed & Field Proven  
 **Participants:** Lead Systems Engineer & Antigravity AI Pair Programmer  
 
@@ -51,10 +51,12 @@ timeline
       : Deep-Woods Heading Fallback (Walk 3 Steps + Gyro)
       : 45-Byte Telemetry Frame with Full ANT2 Observables
       : Core 1 Sensor Fusion Synchronization (v0.6.2 / pacer v3.3.1)
-    section Phase 6 & 6.1 : UPS & Memory Discipline (Nov 5-6)
+    section Phase 6 & 6.1 : UPS, Memory & Real-Time UI (Nov 5-7)
       : Dual-Power Hot-Swap UPS via AXP2101 (v0.7.0 / pacer v3.4.0)
       : Multi-State Wi-Fi Cues & Stationary Gyro Freeze (v0.7.1-v0.7.2)
       : ELF DRAM0 Exhaustion Audit & Octal PSRAM Offload (v0.7.5)
+      : UPS Warm-Reset 18-Clock I2C0 Bus-Clear Recovery (v0.7.6)
+      : Priority-4 RoverAudio Task, 0ms Guidance & Smart FFat Skip (v0.7.7)
 ```
 
 ---
@@ -89,6 +91,7 @@ timeline
 | • Deep-woods heading fallback      | • 9.6k channel saturation math   | • Flash erase UART FIFO hit|
 | • Dual-format telemetry pacer      | • Core 0/1 telemetry desync      | • 320x480 screen budgeting |
 | • Hot-swap LiPo UPS architecture   | • Silent DRAM0 Wi-Fi starvation  | • DebugLevel=none OOM mask |
+| • <1ms Priority-4 tactile audio    | • Unsigned debounce underflow    | • UPS warm-reset stuck SDA |
 +------------------------------------+----------------------------------+----------------------------+
 ```
 
@@ -103,10 +106,12 @@ timeline
 * **Hidden Library Macro Traps:** The Arduino LVGL 9 library's `#define LV_USE_FLOAT 0` was an invisible landmine that produced null-pointer panics instead of compiler warnings. Establishing the rule "never use `%f` in `lv_label_set_text_fmt`" permanently resolved it.
 * **Telemetry Core Desynchronization:** Placing the telemetry feed call on Core 0 before Core 1 attached PMIC battery and woods fallback heading led to confusing `Bat:0%` and `[NONE]` logs. The lesson: telemetry frames must always be fed from the final sensor-fusion core immediately prior to display updates.
 * **Chasing API Symptoms Instead of Memory Physics (`WL_STOPPED 254`):** When Wi-Fi regressed between `v0.2.49` and `v0.7.0`, four consecutive iterations tweaked `scanNetworks()`, WPA security thresholds, settling delays, and task affinity under the assumption that the radio was running—because the board had 6.5 MB of free PSRAM! Only when we measured the exact 46 ms execution window in `test/_033` and inspected `RTK_Rover.ino.elf` with `xtensa-esp32s3-elf-size` did the real culprit emerge: `.dram0.bss` (`120,032 B`) + ~400 LVGL widgets (`<= 4 KB` each) had starved internal `DRAM0`, causing `esp_wifi_init()` to return `ESP_ERR_NO_MEM` (`0x101`) silently under `DebugLevel=none`. The lesson: when multiple unrelated radio operations (`STA`, `scanNetworks`, `SoftAP`, event callbacks) all fail simultaneously with zero events, inspect ELF sections and internal DMA heap *first*.
+* **Cross-Task Timestamp Ordering & Unsigned Debounce Underflow (`test/_034` Waypoint Button Lag):** When tapping `<` or `>` to step waypoints, the target text updated immediately on screen, yet the confirmation beep and distance/steer readout lagged by `0.9–1.9 seconds`. Furthermore, `[TOUCH]` logs vanished from the SD serial log whenever a button was pressed! Trace analysis of `test/_034` uncovered a classic multi-task interaction: `lvgl_port_task` (Priority 3) set `settings_dirty = true` before updating `last_settings_change_ms = millis()`. When `RoverUI` (Priority 2) checked `(uint32_t)(now_ms - last_settings_change_ms) >= 4000` using a timestamp sampled milliseconds earlier, unsigned subtraction underflowed to `~4,294,967,290 >= 4000`, firing a synchronous 4-file `save_settings()` (including 1.5s internal SPI Flash `FFat` wear-leveling erases) right on the UI/audio thread before `beepQueue` was drained. Simultaneously, a process-wide `s_in_logger` boolean dropped `lvgl_port_task`'s `[TOUCH]` logs whenever `loop()` was flushing to SD. Decoupling `beepQueue` into a Priority-4 `RoverAudio` task (`< 1 ms`), moving `save_settings()` to Priority-1 `loop()` with signed debounce + smart `FFat` skip, recomputing guidance readouts on the same LVGL frame (`0 ms`), and using task-scoped `s_io_owner_task` re-entrancy permanently eliminated every source of UI latency.
 
 ### 4.3. The Ugly
 * **Ebyte Silicon Realities vs. Datasheet Claims:** The official Ebyte manuals claimed `AUX` stayed low during RF transmission and that EEPROM writes acknowledged with `0xC1`. In reality, `AUX` stays high on `<= 200 B` packets, rises when Subpacket 2 *starts* airing on `201..400 B` packets, and certain firmware versions echo `0xC0`. Only oscilloscope traces and microsecond-level timing loops revealed the truth.
 * **Prebuilt Arduino-ESP32 `sdkconfig` PSRAM Illusion:** Having 8 MB of Octal PSRAM creates a false sense of infinite memory. Because prebuilt Arduino-ESP32 sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0` (and disables `EXT_RAM_BSS_ATTR`), every static array and small UI widget quietly erodes the ~320 KB internal `DRAM0` pool until late-initialized wireless drivers (`WiFi` / `BLE`) fail to allocate DMA descriptors.
+* **UPS-Powered I2C Slaves Holding `SDA` LOW Across Warm Resets (`v0.7.6`):** Adding an always-on 1S LiPo UPS via the AXP2101 PMIC means the 6 internal I2C0 peripherals (`TCA9554`, `AXP2101`, `AXS15231B`, `PCF85063`, `QMI8658`, `ES8311`) never power-cycle when the ESP32-S3 resets. If a flash upload or warm reset interrupts Core 1 mid-way through a 12-byte IMU burst read while a slave is driving a `0` data bit on `SDA` (`GPIO 8`), that slave remains frozen waiting for `SCL` clocks and holds `SDA` LOW indefinitely—causing `esp_io_expander_new_i2c_tca9554()` to panic in a 30 ms reboot loop on every boot. Implementing an 18-clock open-drain GPIO `SCL` bus-clear + `STOP` sequence (`i2c_bsp_gpio_bus_clear()`) before `i2c_new_master_bus()` resolved the hardware deadlock cleanly in silicon.
 
 ---
 
@@ -125,4 +130,4 @@ timeline
 
 The RTK Rover project stands as a benchmark of modern collaborative engineering. By combining deep domain surveying knowledge, practical field testing in rugged Maine timber, and relentless agentic coding rigor, the platform successfully transformed commodity hardware into an ultra-high-precision surveying instrument that rivals commercial GNSS equipment costing ten times as much.
 
-The baseline at **Firmware `v0.7.5`** and **`e220_pacer.py v3.4.0`** is mathematically sound, field-proven, secure, and ready for long-term production use.
+The baseline at **Firmware `v0.7.7`** and **`e220_pacer.py v3.4.0`** is mathematically sound, field-proven, secure, and ready for long-term production use.

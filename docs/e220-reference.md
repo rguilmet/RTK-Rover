@@ -1,8 +1,8 @@
 # Ebyte E220-900T30S Practical Engineering Reference
 
-**Document Version:** 2.1  
-**Last Updated:** November 6, 2026  
-**Firmware Target:** `v0.7.5`  
+**Document Version:** 2.2  
+**Last Updated:** November 7, 2026  
+**Firmware Target:** `v0.7.7`  
 **Companion Software:** `e220_pacer.py v3.4.0`  
 **Target Hardware:** Ebyte `E220-900T30S` (`850.125 - 930.125 MHz`, `1 W` / `+30 dBm` SMD UART LoRa Module)  
 **Applicability:** Directly applies to `E220-900T30S` / `E220-900T30D` (`1 W`) and `E220-900T22S` / `E220-900T22D` (`160 mW`, noting TX power bit differences in Section 4.4).  
