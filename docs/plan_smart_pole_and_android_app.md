@@ -1,11 +1,11 @@
 # Plan Smart Pole and Android App
 
-**Document Version:** `2.2.0`  
+**Document Version:** `2.3.0`  
 **Date:** November 7, 2026  
 **Firmware Baseline:** `v0.7.7`  
 **System Class:** Modular High-Precision Dual-Antenna RTK Cadastral Platform  
 **Smart-Pole Target Hardware:** **Waveshare ESP32-S3-Touch-LCD-3.49-V2** (`172 × 640` 3.49" IPS Display, Integrated 18650 Battery Holder & USB-C Charger, MicroSD Card, QMI8658A 6-DOF IMU, PCF85063A RTC) + **Discrete High-Side Switch (`NDP6020P` + `2N3904`) & `MT3608` 5.0V Boost Converter** + **Holybro H-RTK Unicore UM982** (Dual-Helix GNSS, `24"`–`30"` / `610`–`762 mm` Removable 1" Aluminum Beam) + **Ebyte E220-900T30S** 1W LoRa  
-**Shared Library Target:** **`Waveshare_S3_BSP`** (Unified Arduino/ESP-IDF Hardware Driver & System Services Library for `3.5B`, `3.49-V2`, `RTK_Rover`, Smart Pole, and `Magnetic_Field_Scanner`)  
+**Shared Library & Docs Repo:** **`Waveshare-S3-BSP`** (`Arduino/libraries/Waveshare_S3_BSP` — Unified Hardware Driver Library + Shared Board Schematics, Pinouts, CAD & Onboard IC Datasheets)  
 **Field Controller Target:** **Android Smartphone (`RTK-Rover-Mobile`)** via **Bluetooth Low Energy (BLE 5.0 NUS)**  
 **Companion Base Station:** `e220_pacer.py v3.4.0` (900 MHz LoRa 1W) & Public NTRIP Caster (`rtk2go.com:2101`)
 
@@ -369,27 +369,95 @@ Crucially, **`RTK_Rover v0.7.5`–`v0.7.7` contains significantly newer, product
 | **Power & Battery Monitor (`pmu_bsp`)** | **Merged (`RTK_Rover v0.7.7` + `MFS`)** | Unified power telemetry interface supporting both **`AXP2101` PMIC** (`3.5B` 14-bit VBUS/VBAT ADC + hot-swap UPS) and **`GPIO 4` (`ADC_INT`) `3.0x` 18650 voltage divider** (`3.49-V2` + low-battery `< 3.40 V` SD auto-flush). | Selected via board profile (`BOARD_WAVESHARE_S3_35B` vs. `BOARD_WAVESHARE_S3_349_V2`). |
 | **`e220_driver`, `um982_driver` & `nav_engine`** | **`RTK_Rover v0.7.7`** | **100% Reused** across `3.5B` handheld and `3.49-V2` Smart Pole (Store-and-Verify CRC24Q gatekeeper, AUX ISR, 45B Base uplink, COM1/COM2 parser, 3D midpoint lever-arm projection). | UART & GPIO pins passed via board config struct (`J3` header pins on `3.49-V2`). |
 
-### 7.2 Standard Library Directory Structure (`Arduino/libraries/Waveshare_S3_BSP`)
+### 7.2 Standard Library & Shared Documentation Directory Structure (`Arduino/libraries/Waveshare_S3_BSP`)
+
+**Yes — `Waveshare_S3_BSP` will be maintained in its own dedicated Git & GitHub repository (`github.com/rguilmet/Waveshare-S3-BSP`)** cloned directly into `Documents/Arduino/libraries/Waveshare_S3_BSP/`.
+
+By placing the repository in `Arduino/libraries/Waveshare_S3_BSP/`, the Arduino IDE automatically discovers `#include <Waveshare_S3_BSP.h>` for every sketch in your workspace (`RTK_Rover`, Smart Pole, and `Magnetic_Field_Scanner`) without copying files or using fragile OS symlinks. Furthermore, **`Waveshare_S3_BSP/docs/` becomes the single authoritative home for all shared Waveshare board schematics, pinout CSVs, mechanical CAD files, and onboard IC datasheets**, eliminating `80+ MB` of duplicate PDFs across application repositories:
 
 ```text
-Arduino/libraries/Waveshare_S3_BSP/
-├── library.properties              # Standard Arduino Library manifest (v1.0.0)
+Arduino/libraries/Waveshare_S3_BSP/     # Dedicated Git Repo -> github.com/rguilmet/Waveshare-S3-BSP
+├── library.properties                  # Standard Arduino Library manifest (SemVer v1.0.0+)
+├── README.md                           # Board comparison, API reference & wiring guide
+├── GEMINI.md                           # Memory (DRAM0/PSRAM), I2C bus-clear & FreeRTOS rules
+├── scripts/
+│   ├── check_secrets.py                # Pre-push security & PII scanner (v1.1.1)
+│   └── install_git_hooks.py            # Installs .git/hooks/pre-push guard
+├── docs/                               # SINGLE SOURCE OF TRUTH FOR SHARED BOARD HARDWARE DOCS
+│   ├── boards/
+│   │   ├── ESP32-S3-Touch-LCD-3.5B/    # 3.5B V1/V2 Schematics, Pinout PNGs, Case .stp/.dwg/.pdf
+│   │   └── ESP32-S3-Touch-LCD-3.49-V2/ # 3.49-V2 Schematic PDF, gpio_pin_mapping.csv, Case CAD
+│   ├── datasheets/                     # Shared Onboard IC Datasheets (Used by Both Boards)
+│   │   ├── ESP32-S3/                   # esp32-s3_datasheet_en.pdf, technical_reference_manual.pdf
+│   │   ├── AXS15231B/                  # AXS15231B QSPI Display & Touch Controller specs
+│   │   ├── AXP2101/                    # AXP2101 PMIC datasheet (3.5B)
+│   │   ├── ETA6098_SY8089A/            # 18650 Charger & 3.3V Buck datasheets (3.49-V2)
+│   │   ├── TCA9554/                    # TCA9554PWR I2C I/O Expander datasheet
+│   │   ├── ES8311_ES7210/              # ES8311 Audio Codec & User Guide
+│   │   ├── QMI8658/                    # QMI8658A/C 6-DOF IMU datasheet
+│   │   ├── PCF85063/                   # PCF85063A Hardware RTC datasheet
+│   │   └── W25Q128JV/                  # 16MB SPI Flash datasheet
+│   └── articles/
+│       └── I2C/                        # TI I2C Bus Specification & Pull-up/Recovery App Notes
 └── src/
-    ├── Waveshare_S3_BSP.h          # Master include + Board Profile selector
+    ├── Waveshare_S3_BSP.h              # Master include + Board Profile selector
     ├── boards/
-    │   ├── board_ws_s3_35b.h       # Pinout, 320x480 geometry & AXP2101 profile
-    │   └── board_ws_s3_349_v2.h    # Pinout, 172x640 geometry, J3 header & GPIO4 VBAT profile
-    ├── i2c_bsp/                    # v0.7.6+ 18-clock GPIO bus-clear, 400kHz, i2c_bsp_lock()
-    ├── tca9554/                    # v0.7.6+ thread-safe 400kHz I/O expander driver
-    ├── esp_codec_dev/              # v0.7.7+ ES8311 + Priority-4 RoverAudio tone task
-    ├── axs15231b/                  # Unified QSPI display & touch driver (3.5B & 3.49-V2)
-    ├── lvgl_port/                  # v0.7.7+ PSRAM widget routing + 24-line DMA port
-    ├── imu_bsp/                    # v0.7.7+ QMI8658 50Hz FIFO + axis remap matrix
-    ├── rtc_bsp/                    # v0.7.7+ PCF85063 hardware RTC driver
-    ├── pmu_bsp/                    # Unified AXP2101 (3.5B) & GPIO4 18650 ADC (3.49-V2)
-    ├── storage_bsp/                # v0.7.7+ PSRAM ring buffers + task-scoped SD/FFat logger
-    └── screenshot_bsp/             # Shared RGB565 BMP/PNG framebuffer capture
+    │   ├── board_ws_s3_35b.h           # Pinout, 320x480 geometry & AXP2101 profile
+    │   └── board_ws_s3_349_v2.h        # Pinout, 172x640 geometry, J3 header & GPIO4 VBAT profile
+    ├── i2c_bsp/                        # v0.7.6+ 18-clock GPIO bus-clear, 400kHz, i2c_bsp_lock()
+    ├── tca9554/                        # v0.7.6+ thread-safe 400kHz I/O expander driver
+    ├── esp_codec_dev/                  # v0.7.7+ ES8311 + Priority-4 RoverAudio tone task
+    ├── axs15231b/                      # Unified QSPI display & touch driver (3.5B & 3.49-V2)
+    ├── lvgl_port/                      # v0.7.7+ PSRAM widget routing + 24-line DMA port
+    ├── imu_bsp/                        # v0.7.7+ QMI8658 50Hz FIFO + axis remap matrix
+    ├── rtc_bsp/                        # v0.7.7+ PCF85063 hardware RTC driver
+    ├── pmu_bsp/                        # Unified AXP2101 (3.5B) & GPIO4 18650 ADC (3.49-V2)
+    ├── storage_bsp/                    # v0.7.7+ PSRAM ring buffers + task-scoped SD/FFat logger
+    └── screenshot_bsp/                 # Shared RGB565 BMP/PNG framebuffer capture
 ```
+
+### 7.3 Multi-Repository Git & GitHub Ecosystem Map
+
+To keep build tooling clean (Arduino IDE vs. Android Studio Gradle), avoid duplicating shared drivers or `80+ MB` datasheet trees, and maintain strict public/private security boundaries, the ecosystem is organized into **4 Public GitHub Repositories** and **1 Private Local/Sibling Repository**:
+
+```mermaid
+flowchart TD
+    subgraph GitHubPublic["Public GitHub Repositories (github.com/rguilmet/*)"]
+        BSP["1. Waveshare-S3-BSP\n(Arduino/libraries/Waveshare_S3_BSP)\n• Unified Drivers (3.5B & 3.49-V2)\n• Board Schematics, CAD & Onboard IC Datasheets"]
+        ROVER["2. RTK-Rover\n(Arduino/RTK_Rover)\n• Handheld (3.5B) & Smart-Pole (3.49-V2) Firmware\n• UM982, E220, Nav Engine, Pacer & COGO Solver\n• Domain Datasheets: UM982, E220, NDP6020P, MT3608"]
+        MOBILE["3. RTK-Rover-Mobile\n(Android Studio Project)\n• Native Kotlin / Jetpack Compose App\n• BLE 5.0 NUS & Cellular NTRIP Client\n• Cadastral Map, Stakeout & Room SQLite DB"]
+        MFS["4. Magnetic-Field-Scanner\n(Arduino/Magnetic_Field_Scanner)\n• 3.49-V2 Fluxgate/RM3100 Scanner Firmware\n• Domain Datasheets: RM3100, GA-72Cd & Mag Articles"]
+    end
+
+    subgraph PrivateRepo["Isolated Private Repository (Local Git Only)"]
+        PRIV["5. RTK_Rover_Private\n(Arduino/RTK_Rover_Private)\n• Homestead Deed PDFs & Parcel JSONs\n• Raw Field Wiretaps & .secrets.local"]
+    end
+
+    BSP ==>|#include <Waveshare_S3_BSP.h>\n+ Shared Board Docs| ROVER
+    BSP ==>|#include <Waveshare_S3_BSP.h>\n+ Shared Board Docs| MFS
+    ROVER <===>|BLE 5.0 NUS Protocol Spec| MOBILE
+    PRIV -.->|cogo_solver.py Input / Output| ROVER & MOBILE
+```
+
+| Repository Name | Local Workspace Path | GitHub Remote | Scope, Firmware Targets & Documentation Owned |
+| :--- | :--- | :--- | :--- |
+| **`Waveshare-S3-BSP`** | `Arduino/libraries/Waveshare_S3_BSP` | `github.com/rguilmet/Waveshare-S3-BSP` | **Shared Hardware BSP Library & Board Documentation:**<br>• Hardened drivers (`i2c_bsp`, `tca9554`, `esp_codec_dev`, `axs15231b`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `pmu_bsp`, `storage_bsp`).<br>• **All Waveshare `3.5B` & `3.49-V2` schematics, pinout CSVs, mechanical CAD (`.stp`/`.dwg`), and onboard IC datasheets** (`ESP32-S3`, `AXS15231B`, `TCA9554`, `ES8311`, `QMI8658`, `PCF85063`, `AXP2101`). |
+| **`RTK-Rover`** | `Arduino/RTK_Rover` | `github.com/rguilmet/RTK-Rover` | **ESP32-S3 RTK Firmware, Base Station Pacer & COGO Tools:**<br>• Supports **both** the `3.5B` Handheld Rover (`ROVER_TARGET_35B_HANDHELD`) and the `3.49-V2` Smart Pole (`ROVER_TARGET_349V2_SMART_POLE`) in one repository so `um982_driver`, `e220_driver`, `nav_engine`, `e220_pacer.py`, and `cogo_solver.py` never diverge.<br>• **RTK/RF/Power Domain Datasheets only:** Unicore `UM982`, Holybro `H-RTK`, Ebyte `E220-900T30S`, `NDP6020P` P-FET, `2N3904`, `MT3608`, and Smart-Pole power box schematic. |
+| **`RTK-Rover-Mobile`** | `Arduino/RTK_Rover_Mobile` *(or `AndroidStudioProjects/RTK_Rover_Mobile`)* | `github.com/rguilmet/RTK-Rover-Mobile` | **Android Field Controller Application:**<br>• Standalone Kotlin / Jetpack Compose Gradle project.<br>• BLE 5.0 NUS Central manager, `rtk2go.com:2101` NTRIP client, 5-screen cadastral stakeout & satellite map suite, Room SQLite point logger, and Android user manual. |
+| **`Magnetic-Field-Scanner`** | `Arduino/Magnetic_Field_Scanner` | `github.com/rguilmet/Magnetic-Field-Scanner` | **Magnetic Field Scanner Firmware (`3.49-V2`):**<br>• Links against `Waveshare_S3_BSP` (`BOARD_WAVESHARE_S3_349_V2`), automatically gaining the `v0.7.6`–`v0.7.7` I2C bus-clear, PSRAM widget routing, and SD logger fixes.<br>• **Magnetometry Domain Datasheets only:** PNI `RM3100`, Schoenstedt `GA-72Cd`, and calibration papers. |
+| **`RTK_Rover_Private`** | `Arduino/RTK_Rover_Private` | *None (Local Private Git Only)* | **Private Survey & Homestead Data:**<br>• Registered deed PDFs, `homestead_parcels.json`, raw field wiretaps, and `.secrets.local` tokens. |
+
+### 7.4 Repository Maintenance, Versioning & Security Governance Rules
+1. **Why Handheld (`3.5B`) and Smart-Pole (`3.49-V2`) Firmware Stay in `RTK-Rover`:**
+   * Rather than splitting the ESP32 RTK firmware into two separate repositories that would require cherry-picking every `um982_driver`, `e220_driver`, or `nav_engine` update, `RTK-Rover` remains the single firmware repository for both the `3.5B` handheld unit and the `3.49-V2` Smart Pole (selectable via `#define ROVER_BOARD_PROFILE` in `user_config.h`).
+2. **Independent SemVer & Git Tagging Across Repositories:**
+   * `Waveshare-S3-BSP` is versioned in `library.properties` and `Waveshare_S3_BSP.h` (`v1.0.0`, `v1.1.0`, etc.) and tagged in Git (`git tag v1.0.0`).
+   * Each application repository (`RTK-Rover`, `RTK-Rover-Mobile`, `Magnetic-Field-Scanner`) documents its required minimum `Waveshare-S3-BSP` version in `README.md` and enforces a `#if WAVESHARE_S3_BSP_VERSION_INT < ...` compile-time check.
+3. **Datasheet & Schematic De-Duplication Rule:**
+   * **Board-level & Onboard IC PDFs/CAD** (`ESP32-S3`, `3.5B`, `3.49-V2`, `AXS15231B`, `TCA9554`, `ES8311`, `QMI8658`, `PCF85063`, `AXP2101`, I2C app notes) live **exclusively** in `Waveshare-S3-BSP/docs/`. Application repos link to them via relative workspace paths (`../libraries/Waveshare_S3_BSP/docs/...`) and GitHub URLs.
+   * **External Sensor / Peripheral PDFs** (`UM982`, `E220`, `NDP6020P`, `MT3608` in `RTK-Rover`; `RM3100` in `Magnetic-Field-Scanner`) live in their respective domain repository's `docs/datasheets/` folder.
+4. **Universal Pre-Push Secret Scanning (`check_secrets.py`):**
+   * Every public repository (`Waveshare-S3-BSP`, `RTK-Rover`, `RTK-Rover-Mobile`, `Magnetic-Field-Scanner`) installs `scripts/check_secrets.py` + `.git/hooks/pre-push` reading from the unversioned `.secrets.local` file so zero personal coordinates, callsigns, LAN hostnames, or local Windows user paths ever reach GitHub.
 
 ---
 
@@ -397,15 +465,17 @@ Arduino/libraries/Waveshare_S3_BSP/
 
 ```mermaid
 flowchart LR
-    Stage0["Stage 0: Extract Unified Library\n(Waveshare_S3_BSP from Rover v0.7.7 + MFS)"] --> Stage1["Stage 1: Android App & BLE/NTRIP Bridge\n(Prototype on 3.5B or 3.49-V2)"]
-    Stage1 --> Stage2["Stage 2: Smart-Pole Firmware on\nWaveshare ESP32-S3-Touch-LCD-3.49-V2"]
+    Stage0["Stage 0: Create Waveshare-S3-BSP Repo\n(Drivers + Shared Board Docs/Schematics)"] --> Stage1["Stage 1: Android App & BLE/NTRIP Bridge\n(Create RTK-Rover-Mobile Repo)"]
+    Stage1 --> Stage2["Stage 2: Smart-Pole 3.49-V2 Target\n(In RTK-Rover Repo using Waveshare-S3-BSP)"]
     Stage2 --> Stage3["Stage 3: Full Android Cadastral Survey Suite\n(Tactical, Bullseye, Line, Map & Logger)"]
     Stage3 --> Stage4["Stage 4: 1 in Aluminum Beam & Power Box Build\n(NDP6020P + 2N3904 + MT3608 + 24-30 in Helix)"]
 ```
 
-### Stage 0: Extract Unified `Waveshare_S3_BSP` Standard Arduino Library
-* Create `Arduino/libraries/Waveshare_S3_BSP` using the hardened **`RTK_Rover v0.7.7`** drivers (`i2c_bsp`, `tca9554`, `esp_codec_dev`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `storage`) as the baseline and merging the **`Waveshare ESP32-S3-Touch-LCD-3.49-V2`** board profile (`board_ws_s3_349_v2.h`, `172 × 640` QSPI init, `GPIO 4` 18650 `VBAT` ADC, `button_bsp`) from `Magnetic_Field_Scanner`.
-* Verify clean compilation and zero regressions across `RTK_Rover` (`3.5B`), `Smart_Pole` (`3.49-V2`), and `Magnetic_Field_Scanner` (`3.49-V2`).
+### Stage 0: Create `Waveshare-S3-BSP` GitHub Repository & Consolidate Shared Drivers/Docs
+* Initialize `Arduino/libraries/Waveshare_S3_BSP` (`github.com/rguilmet/Waveshare-S3-BSP`) with `check_secrets.py` pre-push protection.
+* Consolidate all shared Waveshare `3.5B` and `3.49-V2` schematics, pin mapping CSVs, mechanical CAD drawings, and onboard IC datasheets (`ESP32-S3`, `AXS15231B`, `TCA9554`, `ES8311`, `QMI8658`, `PCF85063`, `AXP2101`) into `Waveshare_S3_BSP/docs/`, and add `NDP6020P` + `MT3608` datasheets to `RTK_Rover/docs/datasheets/`.
+* Extract the hardened **`RTK_Rover v0.7.7`** drivers (`i2c_bsp`, `tca9554`, `esp_codec_dev`, `lvgl_port`, `imu_bsp`, `rtc_bsp`, `storage`) and merge the **`3.49-V2`** board profile (`board_ws_s3_349_v2.h`, `172 × 640` QSPI init, `GPIO 4` 18650 `VBAT` ADC, `button_bsp`) from `Magnetic_Field_Scanner`.
+* Verify clean compilation and zero regressions across `RTK_Rover` (`3.5B`) and `Magnetic_Field_Scanner` (`3.49-V2`).
 
 ### Stage 1: Core `RTK-Rover-Mobile` Android App & BLE/NTRIP Bridge
 * Scaffold the `RTK-Rover-Mobile` Kotlin / Jetpack Compose Android project.
