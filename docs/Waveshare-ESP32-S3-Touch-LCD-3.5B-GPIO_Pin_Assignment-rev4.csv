@@ -1,0 +1,44 @@
+GPIO,CAM,LCD,SD_CARD,CODEX,RTC,IMU,AXP2101,PIN_OUT,E220,UM982,MMC5983MA,Note
+IO0,,,,,,,IMU_INT1,,IO0,,,,Boot Switch / Long-Press Screenshot
+IO1,,LCD_QSPI_IO0,,,,,,,,,
+IO2,,LCD_QSPI_IO1,,,,,,,,,
+IO3,,LCD_QSPI_IO2,,,,,,,,,
+IO4,,LCD_QSPI_IO3,,,,,,,,,
+IO5,,LCD_QSPI_SCLK,,,,,,,,,
+IO6,,LCD_BL,,,,,,,,,,
+IO7,TWI_CLK,TP_SCL,,,AU_SCL,RTC_SCL,IMU_SCL,AXP_SCL,ESP_SCL,,,MMC5983MA_SCL,Shared I2C0 SCL (400kHz, 18-clock bus-clear)
+IO8,TWI_SDA,TP_SDA,,,AU_SDA,RTC_SDA,IMU_SDA,AXP_SDA,ESP_SDA,,,MMC5983MA_SDA,Shared I2C0 SDA (400kHz, Addr 0x30 auto-detected)
+IO9,,,,SD_MISO,,,,,ESP_MISO,,,
+IO10,,,,SD_MOSI,,,,,ESP_MOSI,,,
+IO11,,,,SD_SCLK,,,,,ESP_SCLK,,,
+IO12,,LCD_CS,,,,,,,,,,
+IO13,,,,,I2S_SCLK,,,,,,,
+IO14,,,,,I2S_ASDOUT,,,,,,,
+IO15,,,,,I2S_LRCK,,,,,,,
+IO16,,,,,I2S_DSDIN,,,,,,,
+IO17,CAM_VSYNC,,,,,,,,IO17,,UM982_TXD0,,COM1 TX -> Serial1 RX (NMEA + Heading + BASEINFOA + Cmd ACK)
+IO18,CAM_HREF,,,,,,,,IO18,,UM982_RXD0,,COM1 RX <- Serial1 TX (Setup Cmds + RTCM3.x Corrections)
+IO19,,,,,,,,,USB_N,,,USB CDC D-
+IO20,,,,,,,,,USB_P,,,USB CDC D+
+IO21,CAM_D7,,,,,,,,IO21,E220_AUX,,,E220 AUX Interrupt (Busy=LOW, Ready=HIGH)
+IO38,CAM_XCLK,,,,,,,,IO38,E220_RST,,,E220 Hardware Reset (Optional)
+IO39,CAM_D6,,,,,,,,IO39,E220_M0,,,E220 Mode Select 0 (0=Transparent, 1=Config)
+IO40,CAM_D5,,,,,,,,IO40,E220_M1,,,E220 Mode Select 1 (0=Transparent, 1=Config)
+IO41,CAM_PCLK,,,,,,,,IO41,E220_TXD,,,E220 TXD -> Serial0 RX (RTCM3 Downlink + RSSI Reply)
+IO42,CAM_D4,,,,,,,,IO42,E220_RXD,,,E220 RXD <- Serial0 TX (Telemetry Uplink + Rate Cmds)
+IO43,,,,,,,,,ESP_TXD,,,Hardware UART0 TX (USB Serial)
+IO44,,,,,,,,,ESP_RXD,,,Hardware UART0 RX (USB Serial)
+IO45,CAM_D0,,,,,,,,IO45,,,Strapping: VDD_SPI @ Boot
+IO46,CAM_D3,,,,,,,,IO46,,,Strapping: ROM MSG @ Boot
+IO47,CAM_D1,,,,,,,,IO47,,,FREED (NC),Freed in v0.8.0 Single-UART mode (was UM982 COM2 TXD1)
+IO48,CAM_D2,,,,,,,,IO48,,,FREED (NC),Freed in v0.8.0 Single-UART mode (was UM982 COM2 RXD1)
+EXIO01,CAM_PWDN,,,,,,,,,,,Camera Power Down
+EXIO02,,LCD_RST,,,,,,,,,,LCD Hardware Reset
+EXIO03,,TP_INT,,,,,,,,,,Touch Panel Interrupt
+EXIO04,,,,SD_CS,,,,,,,,MicroSD Chip Select (Active LOW)
+EXIO05,,,,,,RTC_INT,,,,,,RTC Alarm Interrupt
+EXIO06,,,,,,,,AXP_IRQ,,,,AXP2101 PMIC Interrupt
+EXIO07,,,,,PA_CTRL,,,SYS_OUT,,,,ES8311 PA Speaker Amp Enable & Power Latch
+3V3,,,,,,,,,,,MMC5983MA_VCC,Regulated +3.3V DC (Qwiic Red Wire)
+5V,,,,,,,,,,5V,5V,,External 5V USB Rail (UM982 5V_IN + E220 VCC + ESP32 VBUS)
+GND,,,,,,,,,,GND,GND,GND,Common System Star Ground

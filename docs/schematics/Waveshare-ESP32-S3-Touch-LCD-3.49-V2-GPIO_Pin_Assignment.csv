@@ -1,0 +1,46 @@
+GPIO,HEADER_PIN,LCD,SD_CARD,IMU_RTC,EXPANDER,E220,UM982,MMC5983MA,POWER_STAGE,Note
+IO0,J6 Pin 1,,,,,,,,,BOOT Switch / Pull-up
+IO1,J6 Pin 2,,,,E220_M1,,,,E220 Mode Select Bit 1 (0=Transparent 1=Config)
+IO2,J6 Pin 3,,,,E220_M0,,,,E220 Mode Select Bit 0 (0=Transparent 1=Config)
+IO3,J6 Pin 4,,,,,,,,,Spare / Available
+IO4,J6 Pin 5,,,,,,,,BAT_ADC,Built-in 200k/100k (3.0x) 18650 VBAT Sense
+IO5,J6 Pin 6,,,,,,,,,Spare / Available
+IO6,,,,I2S_DSOUT,,,,,Audio DAC (Freed from COM2 in Single-UART mode)
+IO7,,,,I2S_MCLK,,,,,Audio Master Clock
+IO8,,,,EXIO_INT,,,,,TCA9554PWR Interrupt Line
+IO9,,LCD_CS,,,,,,,,LCD Chip Select
+IO10,,LCD_PCLK,,,,,,,,LCD Pixel Clock
+IO11,,LCD_DATA0,,,,,,,,QSPI Data 0
+IO12,,LCD_DATA1,,,,,,,,QSPI Data 1
+IO13,,LCD_DATA2,,,,,,,,QSPI Data 2
+IO14,,LCD_DATA3,,,,,,,,QSPI Data 3
+IO15,,,,,,UM982_TXD0,,,Serial1 RX <- UM982 COM1 TX (NMEA + Hdg + BASEINFOA)
+IO16,,,,SYS_OUT,,UM982_RXD0,,,Serial1 TX -> UM982 COM1 RX (Setup Cmds + RTCM3.x)
+IO17,J3 Pin 7,TP_SDA,,,,,,MMC5983MA_SDA,,Shared I2C0 SDA (400kHz Addr 0x30 on Beam)
+IO18,J3 Pin 8,TP_SCL,,,,,,MMC5983MA_SCL,,Shared I2C0 SCL (400kHz 18-clock bus-clear)
+IO19,J6 Pin 7,,,,,,,,,USB_N (Native USB-C D-)
+IO20,J6 Pin 8,,,,,,,,,USB_P (Native USB-C D+)
+IO21,,LCD_TE,,,,,,,,LCD Tearing Effect Line
+IO38,J3 Pin 1,,SD_CS,,,,,,,MicroSD Chip Select (1-bit / SPI)
+IO39,J3 Pin 2,,SD_MOSI,,,,,,,MicroSD MOSI / CMD
+IO40,J3 Pin 3,,SD_MISO,,,,,,,MicroSD MISO / D0
+IO41,J3 Pin 4,,SD_SCLK,,,,,,,MicroSD Clock
+IO42,,LCD_BL,,,,,,,,LCD Backlight PWM Drive
+IO43,J3 Pin 5,,,,E220_RXD,,,,TXD0 -> E220 RXD (Telemetry Uplink + Rate Cmds)
+IO44,J3 Pin 6,,,,E220_TXD,,,,RXD0 <- E220 TXD (RTCM3 Downlink + RSSI Reply)
+IO45,,,,I2S_DSDIN,,,,,Audio Codec Data In
+IO46,,,,I2S_LRCK,,,,,Audio Left/Right Word Clock
+IO47,,,IMU_SDA RTC_SDA,,,MMC5983MA_INT,,Onboard I2C Sensors / Optional Compass DRDY
+IO48,,,IMU_SCL RTC_SCL,,E220_AUX,,,,E220 AUX ISR (Hardware Edge Detection)
+EXIO0,,TP_INT,,,,,,,,Touch Panel Interrupt
+EXIO1,,BL_EN,,,,,,,,LCD Backlight Enable
+EXIO2,,,IMU_INT1,,,,,,QMI8658A IMU Interrupt 1
+EXIO3,,,IMU_INT2,,,,,,QMI8658A IMU Interrupt 2
+EXIO4,,,RTC_INT,,,,,,PCF85063A RTC Alarm Interrupt
+EXIO5,,LCD_RST,,,,,,,,LCD Hardware Reset
+EXIO6,,,,SYS_EN,,,,,Power Latch System Enable
+EXIO7,,,,NS_MODE,,,,,Audio Amp Mode / Mute
+VBAT,J3 Pin 11,,,,,,,,NDP6020P_SOURCE,Unswitched 18650 Battery Rail (3.5V-4.2V)
+3V3,J3 Pin 10 / J6 Pin 10,,,,,,,MMC5983MA_VCC,NDP6020P_GATE_EN,Switched +3.3V (Active-HIGH when board is ON)
+5V_SW,MT3608 VOUT+,,,,E220_VCC,UM982_5V_IN,,MT3608_VOUT,Switched +5.00V Booster Rail (+ 100uF Cap)
+GND,J3 Pin 9 / J6 Pin 9,,,,GND,GND,GND,GND,Common System Star Ground
