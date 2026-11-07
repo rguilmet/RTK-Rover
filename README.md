@@ -6,7 +6,7 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)  
-**Next-Gen Architecture:** [Headless Smart-Pole & Android App Blueprint](docs/plan_headless_smart_pole_and_android_app.md) | [Phase 7 Cellular NTRIP Bridge Plan](docs/plan_phase7_cellular_ntrip_bridge.md)
+**Next-Gen Architecture:** [Plan Smart Pole and Android App](docs/plan_smart_pole_and_android_app.md) | [Phase 7 Cellular NTRIP Bridge Plan](docs/plan_phase7_cellular_ntrip_bridge.md)
 
 ---
 

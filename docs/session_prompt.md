@@ -52,10 +52,10 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
   * **2D Cadastral Map View:** Closed boundary polygons (`poly_order > 0`), dashed tie-lines (`-k`), color-coded pins, historical route breadcrumbs, and live heading beam.
   * **Survey Point Logger:** Symmetrical prefix dropdown (`PIN`, `PIPE`, `MONUMENT`, `<DERIVED>`), multi-epoch averaging ($1\text{s}$, $5\text{s}$, $10\text{s}$, $30\text{s}$), and collision-free `_Lxxx` numbering.
 
-### Component 2: ESP32 Hardware Bridge Firmware
-* **Current Board:** Waveshare ESP32-S3-Touch-LCD-3.5B (acts as the bridge, with optional status readout on LCD).
-* **Future Migration Compatibility:** Waveshare ESP32-S3-LCD-1.47B (21x52mm slim stick) or ESP32-S3-DEV-KIT-N32R16V (headless).
-* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.7`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics, 18-clock GPIO I2C0 warm-reset bus-clear recovery, Priority-4 `RoverAudio` tone synthesizer, and AXP2101 UPS power management, while adding a BLE NUS / Wi-Fi bidirectional bridge service.
+### Component 2: ESP32 Smart-Pole Hardware Bridge Firmware
+* **Initial Prototype Bridge Board:** Waveshare ESP32-S3-Touch-LCD-3.5B (acts as the bridge during initial software bring-up).
+* **Target Smart-Pole Board (Out of the Gate for Pole Assembly):** **Waveshare ESP32-S3-Touch-LCD-1.47B** (integrated MicroSD card slot, 1.47" IPS status LCD displaying the top 4-row summary of Fix/Heading/Baseline/Link/Coords, onboard QMI8658 6-DOF IMU, 16MB Flash, 8MB Octal PSRAM) housed in a beam-mounted electronics box on a removable **1" square aluminum tube crossbar** (`24"` / `610 mm` to `30"` / `762 mm` dual-helix GNSS antenna spacing + 900 MHz LoRa antenna), powered by a **pole-mounted external USB battery pack** with crash-safe zero/minimal data-loss resilience on sudden power loss.
+* **Firmware Baseline:** Forked or integrated from `RTK_Rover v0.7.7`. Retains UM982 COM1/COM2 drivers, E220 LoRa driver, lever-arm kinematics (`610..762 mm` configurable spacing), 18-clock GPIO I2C0 warm-reset bus-clear recovery, Priority-4 `RoverAudio` tone synthesizer, and crash-safe `500 ms` pre-synced MicroSD logging, while adding a BLE 5.0 NUS bidirectional bridge service.
 * **CRITICAL ESP32-S3 Memory Guardrail (`DRAM0` vs. Octal PSRAM):**
   * Prebuilt Arduino-ESP32 (`3.3.x`, `qio_opi`) sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0`. Wireless stacks (`esp_wifi_init()` + BLE controller) strictly require contiguous internal 8-bit/DMA SRAM (`DRAM0`) and fail silently under `DebugLevel=none` (`ESP_ERR_NO_MEM` $\rightarrow$ `WL_STOPPED 254`) if `DRAM0` is exhausted.
   * Allocate all new bridge TX/RX ring buffers $\ge 1\text{ KB}$ in Octal PSRAM via `heap_caps_malloc(..., MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)` (never in static `.dram0.bss`), prefer lightweight `NimBLE-Arduino` over legacy Bluedroid `BLEDevice`, and verify `[MEM] Post-Setup Heap` internal free SRAM stays healthy.
@@ -65,7 +65,7 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
 ## 3. Reference Documentation & Key Artifacts
 Before beginning, review these technical specifications in the workspace:
 * **Firmware Master Docs:** `RTK_Rover/README.md`, `RTK_Rover/GEMINI.md`, `RTK_Rover/docs/project_overview.md`, `RTK_Rover/docs/hyper-context-anchor.md`, `RTK_Rover/docs/session_handoff.md`, `RTK_Rover/docs/user_manual.md`.
-* **Smart Pole & App Architecture:** `RTK_Rover/docs/plan_headless_smart_pole_and_android_app.md`.
+* **Smart Pole & App Architecture:** `RTK_Rover/docs/plan_smart_pole_and_android_app.md`.
 * **Cellular NTRIP Bridge Architecture:** `RTK_Rover/docs/plan_phase7_cellular_ntrip_bridge.md`.
 * **Cadastral Schema & COGO Engine:** `RTK_Rover/scripts/cogo_solver.py v1.1.0` and `RTK_Rover/docs/schemas/cadastral_schema.json`.
 
