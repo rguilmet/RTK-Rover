@@ -53,7 +53,10 @@ struct SystemSettings current_settings = {
     true,             // enable_telemetry_logging (periodic 5s [TELEM] diagnostic heartbeat)
     true,             // enable_touch_logging (log touch events and coordinates to Serial Monitor)
     true,             // map_show_route_trail (render breadcrumb dots of logged route on Map View)
-    5                 // auto_shutdown_battery_min (5 min default timeout on battery only; 0 = disabled)
+    5,                // auto_shutdown_battery_min (5 min default timeout on battery only; 0 = disabled)
+    -14.2f,           // mag_true_north_offset_deg (Default WMM declination for ME/NH until UM982 HDG FIX tares it)
+    52.5f,            // mag_field_ref_uT (Default ambient geomagnetic field magnitude in uT)
+    false             // mag_cal_valid (Set true automatically once UM982 HDG FIX calibrates compass)
 };
 
 volatile bool settings_dirty = false;
@@ -95,7 +98,10 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.enable_telemetry_logging  == b.enable_telemetry_logging &&
            a.enable_touch_logging      == b.enable_touch_logging &&
            a.map_show_route_trail      == b.map_show_route_trail &&
-           a.auto_shutdown_battery_min == b.auto_shutdown_battery_min;
+           a.auto_shutdown_battery_min == b.auto_shutdown_battery_min &&
+           a.mag_true_north_offset_deg == b.mag_true_north_offset_deg &&
+           a.mag_field_ref_uT          == b.mag_field_ref_uT &&
+           a.mag_cal_valid             == b.mag_cal_valid;
 }
 
 extern "C" void mark_settings_dirty(void) {
@@ -385,6 +391,9 @@ extern "C" void load_settings(void) {
     else if (!doc["log_touch_events"].isNull()) current_settings.enable_touch_logging = doc["log_touch_events"];
     if (!doc["map_show_route_trail"].isNull()) current_settings.map_show_route_trail = doc["map_show_route_trail"];
     if (!doc["auto_shutdown_battery_min"].isNull()) current_settings.auto_shutdown_battery_min = doc["auto_shutdown_battery_min"];
+    if (!doc["mag_true_north_offset_deg"].isNull()) current_settings.mag_true_north_offset_deg = doc["mag_true_north_offset_deg"];
+    if (!doc["mag_field_ref_uT"].isNull()) current_settings.mag_field_ref_uT = doc["mag_field_ref_uT"];
+    if (!doc["mag_cal_valid"].isNull()) current_settings.mag_cal_valid = doc["mag_cal_valid"];
 
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
     if (sd_card_mounted && !migrate_e220_profile) {
@@ -470,6 +479,9 @@ extern "C" void save_settings(void) {
     doc["enable_touch_logging"]      = current_settings.enable_touch_logging;
     doc["map_show_route_trail"]      = current_settings.map_show_route_trail;
     doc["auto_shutdown_battery_min"] = current_settings.auto_shutdown_battery_min;
+    doc["mag_true_north_offset_deg"] = current_settings.mag_true_north_offset_deg;
+    doc["mag_field_ref_uT"]          = current_settings.mag_field_ref_uT;
+    doc["mag_cal_valid"]             = current_settings.mag_cal_valid;
 
     String output;
     serializeJsonPretty(doc, output);

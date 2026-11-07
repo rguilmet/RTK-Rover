@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.7.7"
+#define ROVER_FIRMWARE_VERSION "v0.8.0"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -43,6 +43,7 @@
 #define ROVER_PIN_I2C0_SDA        (GPIO_NUM_8)
 
 #define ROVER_I2C_ADDR_TCA9554    0x20
+#define ROVER_I2C_ADDR_MAG        0x30  // SparkFun Qwiic Micro MMC5983MA 3-Axis 18-bit AMR Compass (Auto-Detected)
 #define ROVER_I2C_ADDR_AXP2101    0x34
 #define ROVER_I2C_ADDR_TOUCH      0x3B
 #define ROVER_I2C_ADDR_RTC        0x51
@@ -77,20 +78,22 @@
 #define ROVER_PIN_BOOT_BTN        0
 
 // =========================================================================
-// Holybro H-RTK Unicore UM982 Dual-Antenna GNSS UART Mapping
+// Holybro H-RTK Unicore UM982 Dual-Antenna GNSS Single-UART (COM1) Mapping
 // NOTE: Pin labels in hardware documentation are device-relative:
-//   UM982_TXDn = UM982 Transmit Output -> ESP32 UART RX Input
-//   UM982_RXDn = UM982 Receive Input   <- ESP32 UART TX Output
+//   UM982_TXD0 = UM982 COM1 Transmit Output -> ESP32 UART1 RX Input (IO17)
+//   UM982_RXD0 = UM982 COM1 Receive Input   <- ESP32 UART1 TX Output (IO18)
+// Phase 8 (v0.8.0): Full-duplex COM1 carries NMEA/Heading/Response RX (IO17)
+// and ASCII Setup Commands + CRC24Q-verified Binary RTCM3 TX (IO18).
+// Serial2 (COM2 on IO47/IO48) is disabled, freeing IO47/IO48 and ~6 KB DRAM0.
 // =========================================================================
-// UM982 COM1 (Primary Configuration, Commands, NMEA & Dual-Antenna Heading)
 #define ROVER_UM982_COM1_BAUD     115200
 #define ROVER_PIN_UM982_TXD0      17  // Connected to ESP32 RX (Serial1 RX)
-#define ROVER_PIN_UM982_RXD0      18  // Connected to ESP32 TX (Serial1 TX)
+#define ROVER_PIN_UM982_RXD0      18  // Connected to ESP32 TX (Serial1 TX: Commands + RTCM3)
 
-// UM982 COM2 (Dedicated RTCM3 Correction Stream Input)
+// Legacy COM2 Pin Definitions (Unused / Freed in v0.8.0 Single-UART Mode)
 #define ROVER_UM982_COM2_BAUD     115200
-#define ROVER_PIN_UM982_TXD1      47  // Connected to ESP32 RX (Serial2 RX)
-#define ROVER_PIN_UM982_RXD1      48  // Connected to ESP32 TX (Serial2 TX)
+#define ROVER_PIN_UM982_TXD1      (-1) // Freed (was GPIO 47)
+#define ROVER_PIN_UM982_RXD1      (-1) // Freed (was GPIO 48)
 
 // =========================================================================
 // Ebyte E220-900T30S LoRa Module Mapping & Radio Configuration

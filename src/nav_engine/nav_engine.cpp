@@ -415,7 +415,8 @@ extern "C" bool nav_breadcrumb_get_point(int index, NavBreadcrumb_t *pt_out)
 }
 
 // =========================================================================
-// Phase 5: Deep-Woods Heading Fallback Engine (Kinematic Displacement + Gyro Yaw)
+// Phase 5 & Phase 8: Deep-Woods Heading Fallback Engine
+// (Kinematic Displacement + 9-DOF MMC5983MA/QMI8658 Compass + Gyro Yaw)
 // =========================================================================
 static double   s_anchor_lat       = 0.0;
 static double   s_anchor_lon       = 0.0;
@@ -425,6 +426,22 @@ static bool     s_fused_valid      = false;
 static HeadingSource_t s_fused_src = HDG_SRC_NONE;
 static uint32_t s_last_update_ms   = 0;
 static uint32_t s_last_disp_ms     = 0;
+static uint32_t s_last_tare_save_ms= 0;
+static float    s_last_saved_tare  = -999.0f;
+
+static float wrap_angle_180(float deg)
+{
+    while (deg > 180.0f)  deg -= 360.0f;
+    while (deg < -180.0f) deg += 360.0f;
+    return deg;
+}
+
+static float wrap_angle_360(float deg)
+{
+    while (deg < 0.0f)    deg += 360.0f;
+    while (deg >= 360.0f) deg -= 360.0f;
+    return deg;
+}
 
 extern "C" void nav_heading_displacement_reset(void)
 {
@@ -435,19 +452,71 @@ extern "C" void nav_heading_displacement_reset(void)
     s_last_disp_ms   = 0;
 }
 
-extern "C" void nav_heading_displacement_update(double tip_lat,
-                                               double tip_lon,
-                                               float gyr_z_dps,
-                                               uint32_t now_ms,
-                                               bool dual_antenna_valid,
-                                               bool dual_antenna_fixed,
-                                               float dual_heading_deg,
-                                               bool *heading_valid_out,
-                                               float *true_heading_out,
-                                               HeadingSource_t *heading_src_out,
-                                               float *disp_dist_out)
+extern "C" void nav_heading_9dof_update(double tip_lat,
+                                        double tip_lon,
+                                        float gyr_z_dps,
+                                        float pole_tilt_deg,
+                                        bool mag_present,
+                                        bool mag_valid,
+                                        float raw_mag_heading_deg,
+                                        float mag_total_uT,
+                                        uint32_t now_ms,
+                                        bool dual_antenna_valid,
+                                        bool dual_antenna_fixed,
+                                        float dual_heading_deg,
+                                        bool *heading_valid_out,
+                                        float *true_heading_out,
+                                        HeadingSource_t *heading_src_out,
+                                        float *disp_dist_out,
+                                        float *mag_true_heading_out,
+                                        bool *mag_anomaly_out)
 {
-    // Tier 1: Dual-Antenna Primary Source Available
+    bool  mag_anomaly  = false;
+    float mag_true_hdg = 0.0f;
+
+    // 1. Evaluate Magnetometer Iron-Pipe / Steel Anomaly & True-North Tare Alignment
+    if (mag_present && mag_valid) {
+        bool plausible_earth_field = (mag_total_uT >= 25.0f && mag_total_uT <= 75.0f);
+        float ref_uT = (current_settings.mag_field_ref_uT > 10.0f) ? current_settings.mag_field_ref_uT : 52.5f;
+        bool field_spike = (current_settings.mag_cal_valid && fabsf(mag_total_uT - ref_uT) > 3.5f);
+        mag_anomaly = (!plausible_earth_field || field_spike);
+
+        // Continuous True-North Auto-Calibration whenever UM982 has Integer Dual-Antenna HDG FIX
+        if (dual_antenna_valid && dual_antenna_fixed && plausible_earth_field && pole_tilt_deg < 15.0f) {
+            float measured_offset = wrap_angle_180(dual_heading_deg - raw_mag_heading_deg);
+            if (!current_settings.mag_cal_valid) {
+                current_settings.mag_true_north_offset_deg = measured_offset;
+                current_settings.mag_field_ref_uT          = mag_total_uT;
+                current_settings.mag_cal_valid             = true;
+                s_last_saved_tare                          = measured_offset;
+                s_last_tare_save_ms                        = now_ms;
+                mark_settings_dirty();
+            } else {
+                float err_deg = wrap_angle_180(measured_offset - current_settings.mag_true_north_offset_deg);
+                // Reject sudden magnetic spikes (>15 deg jump in a single epoch) during auto-tare
+                if (fabsf(err_deg) < 15.0f && !field_spike) {
+                    current_settings.mag_true_north_offset_deg =
+                        wrap_angle_180(current_settings.mag_true_north_offset_deg + 0.05f * err_deg);
+                    current_settings.mag_field_ref_uT =
+                        0.95f * current_settings.mag_field_ref_uT + 0.05f * mag_total_uT;
+
+                    if (fabsf(wrap_angle_180(current_settings.mag_true_north_offset_deg - s_last_saved_tare)) >= 0.5f &&
+                        (now_ms - s_last_tare_save_ms >= 60000)) {
+                        s_last_saved_tare   = current_settings.mag_true_north_offset_deg;
+                        s_last_tare_save_ms = now_ms;
+                        mark_settings_dirty();
+                    }
+                }
+            }
+        }
+
+        mag_true_hdg = wrap_angle_360(raw_mag_heading_deg + current_settings.mag_true_north_offset_deg);
+    }
+
+    if (mag_true_heading_out) *mag_true_heading_out = mag_true_hdg;
+    if (mag_anomaly_out)      *mag_anomaly_out      = mag_anomaly;
+
+    // 2. Tier 1: Dual-Antenna Primary Source Available (HDG_SRC_DUAL_FIX / HDG_SRC_DUAL_FLT)
     if (dual_antenna_valid) {
         s_anchor_lat     = tip_lat;
         s_anchor_lon     = tip_lon;
@@ -465,7 +534,7 @@ extern "C" void nav_heading_displacement_update(double tip_lat,
         return;
     }
 
-    // Tier 2 & 3: Woods Fallback (Slave Antenna lock lost)
+    // 3. Tier 2..4: Woods Fallback (Slave Antenna lock lost under canopy)
     if (!s_has_anchor || s_anchor_lat == 0.0 || s_anchor_lon == 0.0) {
         s_anchor_lat     = tip_lat;
         s_anchor_lon     = tip_lon;
@@ -490,7 +559,6 @@ extern "C" void nav_heading_displacement_update(double tip_lat,
 
     // Displacement trigger: Moving >= 0.70m (~2 to 3 paces)
     if (dist_m >= 0.70) {
-        // Compute geodetic azimuth from anchor to current tip position
         double az_rad = atan2(de, dn);
         double az_deg = az_rad * (180.0 / M_PI);
         if (az_deg < 0.0) az_deg += 360.0;
@@ -500,33 +568,39 @@ extern "C" void nav_heading_displacement_update(double tip_lat,
         s_fused_src     = HDG_SRC_DISP;
         s_last_disp_ms  = now_ms;
 
-        // Advance anchor to current position for continuous sliding window
         s_anchor_lat = tip_lat;
         s_anchor_lon = tip_lon;
         dist_m = 0.0;
-    } else if (s_fused_valid) {
-        // Actively walking window: maintain HDG WALK for 3.0s after a valid displacement step
-        bool in_walk_window = (s_last_disp_ms > 0 && (now_ms - s_last_disp_ms <= 3000));
-
-        // Gyro rotation detection: QMI8658 resting zero-rate bias is ~0.4 to 1.0 dps.
-        // Rotation threshold set to 1.5 dps to reject stationary drift.
-        bool is_rotating = (fabsf(gyr_z_dps) >= 1.5f);
+    } else {
+        bool in_walk_window = (s_fused_valid && s_last_disp_ms > 0 && (now_ms - s_last_disp_ms <= 3000));
+        bool is_rotating    = (fabsf(gyr_z_dps) >= 1.5f);
 
         if (in_walk_window) {
-            // Actively walking: maintain HDG WALK continuously without intermediate GYRO drops
             s_fused_src = HDG_SRC_DISP;
-        } else if (is_rotating) {
-            // Stationary in place but actively rotating the pole: integrate gyro yaw
-            if (dt_s > 0.0f && dt_s < 0.5f) {
-                s_fused_heading += gyr_z_dps * dt_s;
-                while (s_fused_heading < 0.0f)   s_fused_heading += 360.0f;
-                while (s_fused_heading >= 360.0f) s_fused_heading -= 360.0f;
+        } else if (mag_present && mag_valid && !mag_anomaly) {
+            // Tier 3: 9-DOF Tilt-Compensated MMC5983MA Compass + QMI8658 Gyro Complementary Filter
+            if (!s_fused_valid) {
+                s_fused_heading = mag_true_hdg;
+                s_fused_valid   = true;
+            } else {
+                float pred = s_fused_heading;
+                if (is_rotating && dt_s > 0.0f && dt_s < 0.5f) {
+                    pred = wrap_angle_360(pred + gyr_z_dps * dt_s);
+                }
+                float mag_err = wrap_angle_180(mag_true_hdg - pred);
+                s_fused_heading = wrap_angle_360(pred + 0.04f * mag_err);
             }
-            s_fused_src = HDG_SRC_GYRO;
-        } else {
-            // Stationary and idle (not rotating): freeze heading completely!
-            // Rock-solid HDG HLD with zero drift.
-            s_fused_src = HDG_SRC_HOLD;
+            s_fused_src = HDG_SRC_COMP;
+        } else if (s_fused_valid) {
+            // Tier 4: 6-DOF Gyro / Hold Fallback (when MMC5983MA not installed or during iron anomaly)
+            if (is_rotating) {
+                if (dt_s > 0.0f && dt_s < 0.5f) {
+                    s_fused_heading = wrap_angle_360(s_fused_heading + gyr_z_dps * dt_s);
+                }
+                s_fused_src = HDG_SRC_GYRO;
+            } else {
+                s_fused_src = HDG_SRC_HOLD;
+            }
         }
     }
 
@@ -534,4 +608,23 @@ extern "C" void nav_heading_displacement_update(double tip_lat,
     if (true_heading_out)  *true_heading_out  = s_fused_heading;
     if (heading_src_out)   *heading_src_out   = s_fused_src;
     if (disp_dist_out)     *disp_dist_out     = (float)dist_m;
+}
+
+extern "C" void nav_heading_displacement_update(double tip_lat,
+                                               double tip_lon,
+                                               float gyr_z_dps,
+                                               uint32_t now_ms,
+                                               bool dual_antenna_valid,
+                                               bool dual_antenna_fixed,
+                                               float dual_heading_deg,
+                                               bool *heading_valid_out,
+                                               float *true_heading_out,
+                                               HeadingSource_t *heading_src_out,
+                                               float *disp_dist_out)
+{
+    nav_heading_9dof_update(tip_lat, tip_lon, gyr_z_dps, 0.0f,
+                            false, false, 0.0f, 0.0f, now_ms,
+                            dual_antenna_valid, dual_antenna_fixed, dual_heading_deg,
+                            heading_valid_out, true_heading_out, heading_src_out, disp_dist_out,
+                            NULL, NULL);
 }

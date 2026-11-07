@@ -7,22 +7,40 @@
 #include <stdlib.h>
 #include <math.h>
 
-static RoverUIData_t   gnss_state = {};
-static Um982PortStats_t port_stats = {};
-static char            com1_line_buf[256];
-static uint16_t        com1_line_pos = 0;
-static char            com2_line_buf[256];
-static uint16_t        com2_line_pos = 0;
-static bool            rtc_synced_from_gnss = false;
-static volatile bool   rtc_sync_pending     = false;
-static uint16_t        pending_rtc_yy       = 2026;
-static uint8_t         pending_rtc_mo       = 1;
-static uint8_t         pending_rtc_dd       = 1;
-static uint8_t         pending_rtc_hh       = 0;
-static uint8_t         pending_rtc_mm       = 0;
-static uint8_t         pending_rtc_ss       = 0;
-static volatile bool   saveconfig_ack_received = false;
-static volatile bool   mode_query_ack_received = false;
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+static RoverUIData_t     gnss_state = {};
+static Um982PortStats_t  port_stats = {};
+static char              com1_line_buf[512];
+static uint16_t          com1_line_pos      = 0;
+static bool              com1_line_overflow = false;
+static SemaphoreHandle_t s_com1_tx_mutex    = NULL;
+static volatile bool     s_com1_tx_boot_complete = false;
+
+static bool              rtc_synced_from_gnss = false;
+static volatile bool     rtc_sync_pending     = false;
+static uint16_t          pending_rtc_yy       = 2026;
+static uint8_t           pending_rtc_mo       = 1;
+static uint8_t           pending_rtc_dd       = 1;
+static uint8_t           pending_rtc_hh       = 0;
+static uint8_t           pending_rtc_mm       = 0;
+static uint8_t           pending_rtc_ss       = 0;
+
+static volatile bool     version_ack_received    = false;
+static volatile bool     saveconfig_ack_received = false;
+static volatile bool     mode_query_ack_received = false;
+static volatile bool     config_query_ack_received  = false;
+static volatile bool     loglist_query_ack_received = false;
+
+static char              s_cfg_pvtalg[16]   = "--";
+static char              s_cfg_hdg_mode[16] = "--";
+static char              s_cfg_hdg_len[24]  = "--";
+static char              s_cfg_hdg_dyn[16]  = "--";
+static char              s_cfg_com1[16]     = "115200";
+static uint8_t           s_loglist_com1_cnt = 0;
+static uint8_t           s_loglist_com2_cnt = 0;
+static uint8_t           s_loglist_mask     = 0; // Bitmask: 0=GGA,1=RMC,2=GST,3=GSV,4=HDG,5=GGAH,6=BASE
 
 static uint8_t  gsv_sats_gp = 0;
 static uint8_t  gsv_sats_gl = 0;
@@ -367,11 +385,199 @@ static void handle_baseinfoa_sentence(char *line)
     }
 }
 
-static void process_com1_line(char *line)
+static bool verify_nmea_xor_checksum(const char *line)
+{
+    if (!line || line[0] != '$') return true;
+    const char *star = strrchr(line, '*');
+    if (!star || !star[1] || !star[2]) return true; // Allow if unchecksummed
+    uint8_t calc = 0;
+    for (const char *p = line + 1; p < star; p++) {
+        calc ^= (uint8_t)(*p);
+    }
+    uint8_t expected = (uint8_t)strtoul(star + 1, NULL, 16);
+    return (calc == expected);
+}
+
+static void strip_checksum_in_place(char *str)
+{
+    if (!str) return;
+    char *star = strrchr(str, '*');
+    if (star) *star = '\0';
+}
+
+static void rebuild_known_state_summary(void)
+{
+    snprintf(port_stats.um982_config_summary, sizeof(port_stats.um982_config_summary),
+             "PVT:%s | HDG:%s %s %s | C1:%s",
+             s_cfg_pvtalg, s_cfg_hdg_mode, s_cfg_hdg_len, s_cfg_hdg_dyn, s_cfg_com1);
+
+    snprintf(port_stats.um982_loglist, sizeof(port_stats.um982_loglist),
+             "COM1(%u):%s%s%s%s%s%s%s | COM2:%u",
+             (unsigned)s_loglist_com1_cnt,
+             (s_loglist_mask & (1U << 0)) ? " GGA"  : "",
+             (s_loglist_mask & (1U << 1)) ? " RMC"  : "",
+             (s_loglist_mask & (1U << 2)) ? " GST"  : "",
+             (s_loglist_mask & (1U << 3)) ? " GSV"  : "",
+             (s_loglist_mask & (1U << 4)) ? " HDG"  : "",
+             (s_loglist_mask & (1U << 5)) ? " GGAH" : "",
+             (s_loglist_mask & (1U << 6)) ? " BASE" : "",
+             (unsigned)s_loglist_com2_cnt);
+
+    bool survey_ok = (strstr(port_stats.um982_mode, "SURVEY") != NULL);
+    bool logs_ok   = (s_loglist_mask == 0x7FU && s_loglist_com2_cnt == 0);
+    port_stats.known_state_ok = (survey_ok && logs_ok);
+}
+
+static void parse_config_response_line(const char *line)
+{
+    if (strstr(line, "CONFIG PVTALG ") != NULL) {
+        const char *p = strstr(line, "CONFIG PVTALG ") + 14;
+        strncpy(s_cfg_pvtalg, p, sizeof(s_cfg_pvtalg) - 1);
+        s_cfg_pvtalg[sizeof(s_cfg_pvtalg) - 1] = '\0';
+        strip_checksum_in_place(s_cfg_pvtalg);
+    } else if (strstr(line, "CONFIG HEADING FIXLENGTH") != NULL) {
+        strncpy(s_cfg_hdg_mode, "FIXLEN", sizeof(s_cfg_hdg_mode) - 1);
+    } else if (strstr(line, "CONFIG HEADING VARLENGTH") != NULL) {
+        strncpy(s_cfg_hdg_mode, "VARLEN", sizeof(s_cfg_hdg_mode) - 1);
+    } else if (strstr(line, "CONFIG HEADING LENGTH ") != NULL) {
+        const char *p = strstr(line, "CONFIG HEADING LENGTH ") + 22;
+        strncpy(s_cfg_hdg_len, p, sizeof(s_cfg_hdg_len) - 1);
+        s_cfg_hdg_len[sizeof(s_cfg_hdg_len) - 1] = '\0';
+        strip_checksum_in_place(s_cfg_hdg_len);
+    } else if (strstr(line, "CONFIG HEADING LOWDYNAMIC") != NULL) {
+        strncpy(s_cfg_hdg_dyn, "LOWDYN", sizeof(s_cfg_hdg_dyn) - 1);
+    } else if (strstr(line, "CONFIG COM1 ") != NULL) {
+        const char *p = strstr(line, "CONFIG COM1 ") + 12;
+        strncpy(s_cfg_com1, p, sizeof(s_cfg_com1) - 1);
+        s_cfg_com1[sizeof(s_cfg_com1) - 1] = '\0';
+        strip_checksum_in_place(s_cfg_com1);
+    }
+    rebuild_known_state_summary();
+}
+
+static void parse_loglist_response_line(const char *line)
+{
+    // Unicore #LOGLIST format:
+    // #LOGLIST,97,GPS,FINE,...;<count>,COM1,GPGGA,ONTIME,0.5,COM1,GPRMC,ONTIME,1,...*XX
+    const char *body = strchr(line, ';');
+    if (!body) body = line;
+    else body++;
+
+    char buf[512];
+    strncpy(buf, body, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    strip_checksum_in_place(buf);
+
+    // If this is the header of a #LOGLIST;count,... dump, reset counters before scanning tokens
+    if (strncmp(line, "#LOGLIST", 8) == 0) {
+        s_loglist_com1_cnt = 0;
+        s_loglist_com2_cnt = 0;
+        s_loglist_mask     = 0;
+    }
+
+    char *tok = strtok(buf, ",");
+    while (tok != NULL) {
+        if (strcmp(tok, "COM1") == 0) {
+            s_loglist_com1_cnt++;
+            char *msg = strtok(NULL, ",");
+            if (msg) {
+                if (strstr(msg, "GGAH") != NULL)           s_loglist_mask |= (1U << 5);
+                else if (strstr(msg, "GGA") != NULL)       s_loglist_mask |= (1U << 0);
+                else if (strstr(msg, "RMC") != NULL)       s_loglist_mask |= (1U << 1);
+                else if (strstr(msg, "GST") != NULL)       s_loglist_mask |= (1U << 2);
+                else if (strstr(msg, "GSV") != NULL)       s_loglist_mask |= (1U << 3);
+                else if (strstr(msg, "UNIHEADING") != NULL)s_loglist_mask |= (1U << 4);
+                else if (strstr(msg, "BASEINFO") != NULL)  s_loglist_mask |= (1U << 6);
+            }
+        } else if (strcmp(tok, "COM2") == 0 || strcmp(tok, "COM3") == 0) {
+            s_loglist_com2_cnt++;
+        }
+        tok = strtok(NULL, ",");
+    }
+    rebuild_known_state_summary();
+}
+
+static void record_cmd_response_line(const char *line)
+{
+    port_stats.cmd_responses_ok++;
+    strncpy(port_stats.last_com2_line, line, sizeof(port_stats.last_com2_line) - 1);
+    port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
+}
+
+static void process_com1_line(char *line, uint16_t line_len)
 {
     if (!line || line[0] == '\0') return;
     port_stats.com1_test_passed = true;
-    
+
+    // =====================================================================
+    // Stream 3: Unicore Command / Query Responses ($command, #VERSIONA, #MODE, $CONFIG, #LOGLIST)
+    // Handled first so command responses NEVER pollute .nmea logs or overwrite last_com1_line!
+    // =====================================================================
+    if (strncmp(line, "#VERSIONA", 9) == 0) {
+        record_cmd_response_line(line);
+        char *semi = strchr(line, ';');
+        if (semi) {
+            strncpy(port_stats.um982_version, semi + 1, sizeof(port_stats.um982_version) - 1);
+            port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
+            strip_checksum_in_place(port_stats.um982_version);
+        } else {
+            strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
+        }
+        version_ack_received = true;
+        Serial.printf("[UM982 CMD RX] %s\n", line);
+        return;
+    }
+
+    if (strncmp(line, "#MODE", 5) == 0 || strncmp(line, "$MODE", 5) == 0) {
+        record_cmd_response_line(line);
+        const char *semi = strchr(line, ';');
+        const char *m_str = semi ? (semi + 1) : (strchr(line, ',') ? strchr(line, ',') + 1 : line);
+        if (strncmp(m_str, "MODE ", 5) == 0) m_str += 5;
+        strncpy(port_stats.um982_mode, m_str, sizeof(port_stats.um982_mode) - 1);
+        port_stats.um982_mode[sizeof(port_stats.um982_mode) - 1] = '\0';
+        strip_checksum_in_place(port_stats.um982_mode);
+        rebuild_known_state_summary();
+        mode_query_ack_received = true;
+        Serial.printf("[UM982 CMD RX] %s\n", line);
+        return;
+    }
+
+    if (strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG,", 8) == 0) {
+        record_cmd_response_line(line);
+        parse_config_response_line(line);
+        config_query_ack_received = true;
+        Serial.printf("[UM982 CMD RX] %s\n", line);
+        return;
+    }
+
+    if (strncmp(line, "#LOGLIST", 8) == 0 || strncmp(line, "$LOGLIST", 8) == 0) {
+        record_cmd_response_line(line);
+        parse_loglist_response_line(line);
+        loglist_query_ack_received = true;
+        Serial.printf("[UM982 CMD RX] %s\n", line);
+        return;
+    }
+
+    if (strncmp(line, "$command,", 9) == 0) {
+        record_cmd_response_line(line);
+        if (strstr(line, "SAVECONFIG") != NULL && strstr(line, "response:") != NULL) {
+            saveconfig_ack_received = true;
+        }
+        Serial.printf("[UM982 CMD RX] %s\n", line);
+        return;
+    }
+
+    // =====================================================================
+    // Stream 1 & 2: Periodic NMEA 0183 & Unicore ASCII Navigation Logs
+    // Only valid navigation sentences reach nmea_logger_feed() and last_com1_line.
+    // =====================================================================
+    if (line[0] == '$' && !verify_nmea_xor_checksum(line)) {
+        return;
+    }
+
+    nmea_logger_feed((const uint8_t *)line, line_len);
+    nmea_logger_feed((const uint8_t *)"\r\n", 2);
+
     strncpy(port_stats.last_com1_line, line, sizeof(port_stats.last_com1_line) - 1);
     port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
 
@@ -400,69 +606,95 @@ static void process_com1_line(char *line)
         handle_uniheadinga_sentence(line);
     } else if (strncmp(line, "#BASEINFOA", 10) == 0) {
         handle_baseinfoa_sentence(line);
-    } else if (strncmp(line, "#VERSIONA", 9) == 0) {
-        char *semi = strchr(line, ';');
-        if (semi) {
-            strncpy(port_stats.um982_version, semi + 1, sizeof(port_stats.um982_version) - 1);
-            port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
-        } else {
-            strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
-        }
-        Serial.printf("[UM982 COM1 RX] %s\n", line);
-    } else if (strncmp(line, "$command,", 9) == 0 ||
-               strncmp(line, "$CONFIG,", 8) == 0 ||
-               strncmp(line, "#CONFIG", 7) == 0 ||
-               strncmp(line, "#MODE", 5) == 0 ||
-               strncmp(line, "$MODE", 5) == 0 ||
-               strstr(line, "MODE") != NULL ||
-               strstr(line, "CONFIG") != NULL ||
-               strstr(line, "response:") != NULL) {
-        if (strstr(line, "SAVECONFIG") != NULL && strstr(line, "response:") != NULL) {
-            saveconfig_ack_received = true;
-        }
-        if (strstr(line, "MODE") != NULL) {
-            mode_query_ack_received = true;
-        }
-        Serial.printf("[UM982 COM1 RX] %s\n", line);
     }
-}
-
-static void process_com2_line(char *line)
-{
-    if (!line || line[0] == '\0') return;
-    port_stats.com2_test_passed = true;
-    strncpy(port_stats.last_com2_line, line, sizeof(port_stats.last_com2_line) - 1);
-    port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
-    if (Serial) Serial.printf("[UM982 COM2 RX] %s\n", line);
 }
 
 extern "C" void send_um982_com1_command(const char *cmd)
 {
     if (!cmd) return;
     size_t len = strlen(cmd);
+    if (s_com1_tx_mutex) xSemaphoreTake(s_com1_tx_mutex, portMAX_DELAY);
     if (Serial) Serial.printf("[UM982 COM1 TX] %s\n", cmd);
     Serial1.write((const uint8_t *)cmd, len);
     Serial1.write((const uint8_t *)"\r\n", 2);
     port_stats.com1_tx_bytes += (uint32_t)(len + 2);
+    if (s_com1_tx_mutex) xSemaphoreGive(s_com1_tx_mutex);
 }
 
 extern "C" void send_um982_com2_test_pulse(void)
 {
-    const char *cmd = "VERSIONA COM2\r\n";
-    size_t len = strlen(cmd);
-    Serial.println("[UM982 COM2 TX] VERSIONA COM2 (Testing COM2 IO47/48 @ 115200)");
-    Serial2.write((const uint8_t *)cmd, len);
-    port_stats.com2_tx_bytes += (uint32_t)len;
+    // Legacy stub: COM2 is consolidated onto Single-UART COM1 in v0.8.0+
+    um982_query_receiver_state();
+}
+
+extern "C" void um982_query_receiver_state(void)
+{
+    Serial.println("\n--- [UM982 Known-State Audit: VERSIONA / MODE / CONFIG / LOGLIST] ---");
+
+    // 1. VERSIONA
+    version_ack_received = false;
+    send_um982_com1_command("VERSIONA");
+    uint32_t t0 = millis();
+    while (!version_ack_received && (millis() - t0 < 500)) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    // 2. MODE
+    mode_query_ack_received = false;
+    send_um982_com1_command("MODE");
+    t0 = millis();
+    while (!mode_query_ack_received && (millis() - t0 < 500)) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    // 3. CONFIG (returns multiple $CONFIG,... lines)
+    config_query_ack_received = false;
+    send_um982_com1_command("CONFIG");
+    t0 = millis();
+    while (millis() - t0 < 600) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    // 4. LOGLIST (verifies all 7 logs on COM1 and 0 logs on COM2/COM3)
+    loglist_query_ack_received = false;
+    send_um982_com1_command("LOGLIST");
+    t0 = millis();
+    while (!loglist_query_ack_received && (millis() - t0 < 600)) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    // Drain any trailing lines
+    t0 = millis();
+    while (millis() - t0 < 100) {
+        um982_poll_com1();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    port_stats.com2_test_passed = port_stats.com1_test_passed;
+    Serial.printf("[UM982 AUDIT SUMMARY] State:%s | Ver:%s | Mode:%s | Cfg:[%s] | Logs:[%s]\n",
+                  port_stats.known_state_ok ? "KNOWN STATE OK" : "CHECK LOGS/MODE",
+                  port_stats.um982_version,
+                  port_stats.um982_mode,
+                  port_stats.um982_config_summary,
+                  port_stats.um982_loglist);
 }
 
 extern "C" void um982_configure_rover_defaults(void)
 {
-    send_um982_com1_command("CONFIG COM2 115200");
+    // Phase 1: Quiet-First Setup (Silence periodic logs on COM1 & COM2 so commands do not collide with NMEA)
+    send_um982_com1_command("CONFIG COM1 115200");
     vTaskDelay(pdMS_TO_TICKS(40));
-	
+
     send_um982_com1_command("UNLOGALL COM1");
     vTaskDelay(pdMS_TO_TICKS(40));
 
+    send_um982_com1_command("UNLOGALL COM2");
+    vTaskDelay(pdMS_TO_TICKS(40));
+
+    // Phase 2: Receiver Algorithm, Mode & Fixed-Baseline Heading Configuration (while COM1 is quiet)
     send_um982_com1_command("CONFIG PVTALG MULTI");
     vTaskDelay(pdMS_TO_TICKS(40));
 
@@ -484,7 +716,8 @@ extern "C" void um982_configure_rover_defaults(void)
     snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.1f 12", spacing_cm);
     send_um982_com1_command(hdg_cmd);
     vTaskDelay(pdMS_TO_TICKS(40));
-  
+
+    // Phase 3: Enable the 7 Required Periodic Logs strictly on COM1
     send_um982_com1_command("GPGGA COM1 0.5");
     vTaskDelay(pdMS_TO_TICKS(40));
     send_um982_com1_command("GPRMC COM1 1");
@@ -499,13 +732,13 @@ extern "C" void um982_configure_rover_defaults(void)
     // GNGGAH provides Slave Antenna (ANT2) fix quality, satellites used, HDOP at 1 Hz
     send_um982_com1_command("GNGGAH COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
-    // BASEINFOA provides base station ID, health status, and ECEF coordinates
-    // Log at 1 Hz so Base Station coordinates are continuously streamed whenever RTCM corrections arrive
+    // BASEINFOA provides base station ID, health status, and ECEF coordinates at 1 Hz
     send_um982_com1_command("BASEINFOA COM1 1");
     vTaskDelay(pdMS_TO_TICKS(40));
+
+    // Phase 4: Persist to UM982 Non-Volatile Flash
     saveconfig_ack_received = false;
     send_um982_com1_command("SAVECONFIG");
-    // Wait for SAVECONFIG flash writing to complete before querying
     uint32_t t_save = millis();
     while (!saveconfig_ack_received && (millis() - t_save < 1500)) {
         um982_poll_com1();
@@ -513,120 +746,92 @@ extern "C" void um982_configure_rover_defaults(void)
     }
     vTaskDelay(pdMS_TO_TICKS(50));
 
-    // Query active mode to confirm in telemetry
-    mode_query_ack_received = false;
-    send_um982_com1_command("MODE");
-    uint32_t t_mode = millis();
-    while (!mode_query_ack_received && (millis() - t_mode < 800)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    vTaskDelay(pdMS_TO_TICKS(50));
-
-    // Query full receiver configuration dump
-    send_um982_com1_command("CONFIG");
-    uint32_t t_cfg = millis();
-    while (millis() - t_cfg < 1200) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    // Phase 5: Execute Full 4-Command Known-State Audit (VERSIONA, MODE, CONFIG, LOGLIST)
+    um982_query_receiver_state();
 }
 
 extern "C" void um982_run_powerup_selftest(void)
 {
-    Serial.println("\n--- [UM982 Dual-Antenna GNSS Power-Up Self-Test] ---");
+    Serial.println("\n--- [UM982 Single-UART (COM1) Power-Up Self-Test] ---");
 
-    Serial.println("[UM982 COM1] Testing UART1 (RX=IO17, TX=IO18 @ 115200) with VERSIONA...");
+    // Silence any warm-boot periodic logs on COM1/COM2 first so VERSIONA response is clean
+    send_um982_com1_command("UNLOGALL COM1");
+    vTaskDelay(pdMS_TO_TICKS(30));
+    send_um982_com1_command("UNLOGALL COM2");
+    vTaskDelay(pdMS_TO_TICKS(30));
+    while (Serial1.available()) Serial1.read();
+
+    Serial.println("[UM982 COM1] Testing Full-Duplex UART1 (RX=IO17, TX=IO18 @ 115200) with VERSIONA...");
+    version_ack_received = false;
     send_um982_com1_command("VERSIONA");
     uint32_t t0 = millis();
-    while (millis() - t0 < 600) {
+    while (!version_ack_received && (millis() - t0 < 600)) {
         um982_poll_com1();
-        if (strncmp(port_stats.um982_version, "Waiting", 7) != 0) {
-            break;
-        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     if (port_stats.com1_test_passed) {
-        Serial.printf("[UM982 COM1 TEST] PASS — RX=%lu B | Version: %s | Last: %s\n",
+        port_stats.com2_test_passed = true;
+        Serial.printf("[UM982 COM1 TEST] PASS — RX=%lu B | Version: %s | Last ACK: %s\n",
                       (unsigned long)port_stats.com1_rx_bytes,
                       port_stats.um982_version,
-                      port_stats.last_com1_line);
-    } else {
-        Serial.println("[UM982 COM1 TEST] FAIL — No response on IO17/18 @ 115200");
-    }
-
-    Serial.println("[UM982 COM2] Testing UART2 (RX=IO47, TX=IO48 @ 115200) with VERSIONA COM2...");
-    while (Serial2.available()) Serial2.read();
-    send_um982_com2_test_pulse();
-    t0 = millis();
-    while (millis() - t0 < 500) {
-        um982_poll_com2();
-        if (port_stats.com2_test_passed && strstr(port_stats.last_com2_line, "VERSION") != NULL) {
-            break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (port_stats.com2_test_passed) {
-        Serial.printf("[UM982 COM2 TEST] PASS — Bidirectional COM2 verified (RX=%lu B, TX=%lu B) | Last: %s\n",
-                      (unsigned long)port_stats.com2_rx_bytes,
-                      (unsigned long)port_stats.com2_tx_bytes,
                       port_stats.last_com2_line);
     } else {
-        Serial.println("[UM982 COM2] No reply to IO48 TX -> Requesting 'VERSIONA COM2' via COM1 to test IO47 RX...");
-        send_um982_com1_command("VERSIONA COM2");
-        t0 = millis();
-        while (millis() - t0 < 500) {
-            um982_poll_com1();
-            um982_poll_com2();
-            if (port_stats.com2_test_passed) break;
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-        if (port_stats.com2_test_passed) {
-            Serial.printf("[UM982 COM2 TEST] PARTIAL — IO47 (UM982_TXD1 RX) OK (%lu B), but IO48 (UM982_RXD1 TX) did not trigger COM2\n",
-                          (unsigned long)port_stats.com2_rx_bytes);
-        } else {
-            Serial.println("[UM982 COM2 TEST] WARN — No RX response on IO47 from COM2 (check IO47/IO48 wiring)");
-        }
+        Serial.println("[UM982 COM1 TEST] FAIL — No response on IO17/18 @ 115200");
     }
 }
 
 extern "C" void um982_driver_init(void)
 {
+    if (s_com1_tx_mutex == NULL) {
+        s_com1_tx_mutex = xSemaphoreCreateMutex();
+    }
+    s_com1_tx_boot_complete = false;
+
     strncpy(port_stats.um982_version, "Waiting COM1...", sizeof(port_stats.um982_version) - 1);
     port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
-    strncpy(port_stats.last_com1_line, "No COM1 RX yet", sizeof(port_stats.last_com1_line) - 1);
+    strncpy(port_stats.um982_mode, "INIT...", sizeof(port_stats.um982_mode) - 1);
+    port_stats.um982_mode[sizeof(port_stats.um982_mode) - 1] = '\0';
+    strncpy(port_stats.um982_config_summary, "Querying CONFIG...", sizeof(port_stats.um982_config_summary) - 1);
+    port_stats.um982_config_summary[sizeof(port_stats.um982_config_summary) - 1] = '\0';
+    strncpy(port_stats.um982_loglist, "Querying LOGLIST...", sizeof(port_stats.um982_loglist) - 1);
+    port_stats.um982_loglist[sizeof(port_stats.um982_loglist) - 1] = '\0';
+    strncpy(port_stats.last_com1_line, "No COM1 NMEA yet", sizeof(port_stats.last_com1_line) - 1);
     port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
-    strncpy(port_stats.last_com2_line, "No COM2 RX yet", sizeof(port_stats.last_com2_line) - 1);
+    strncpy(port_stats.last_com2_line, "No CMD ACK yet", sizeof(port_stats.last_com2_line) - 1);
     port_stats.last_com2_line[sizeof(port_stats.last_com2_line) - 1] = '\0';
 
     pinMode(ROVER_PIN_UM982_TXD0, INPUT_PULLDOWN);
     pinMode(ROVER_PIN_UM982_RXD0, INPUT_PULLDOWN);
-    pinMode(ROVER_PIN_UM982_TXD1, INPUT_PULLDOWN);
-    pinMode(ROVER_PIN_UM982_RXD1, INPUT_PULLDOWN);
     delay(2);
-    Serial.printf("[UM982 LINE PROBE] COM1: IO17(ESP_RX)=%d IO18(ESP_TX)=%d | COM2: IO47(ESP_RX)=%d IO48(ESP_TX)=%d\n",
+    Serial.printf("[UM982 LINE PROBE] Single-UART COM1: IO17(ESP_RX)=%d IO18(ESP_TX)=%d | COM2(IO47/48): FREED\n",
                   digitalRead(ROVER_PIN_UM982_TXD0),
-                  digitalRead(ROVER_PIN_UM982_RXD0),
-                  digitalRead(ROVER_PIN_UM982_TXD1),
-                  digitalRead(ROVER_PIN_UM982_RXD1));
+                  digitalRead(ROVER_PIN_UM982_RXD0));
 
+    // Expand Serial1 TX buffer to 4096B to absorb full-duplex RTCM3 bursts without blocking
     Serial1.setRxBufferSize(4096);
-    Serial1.setTxBufferSize(1024);
+    Serial1.setTxBufferSize(4096);
     Serial1.begin(ROVER_UM982_COM1_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD0, ROVER_PIN_UM982_RXD0);
-
-    Serial2.setRxBufferSize(1024);
-    Serial2.setTxBufferSize(4096);
-    Serial2.begin(ROVER_UM982_COM2_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD1, ROVER_PIN_UM982_RXD1);
 
     um982_run_powerup_selftest();
     um982_configure_rover_defaults();
+
+    // Allow Core 0 to begin forwarding atomic CRC24Q-verified RTCM3 frames onto COM1 (Serial1)
+    s_com1_tx_boot_complete = true;
+}
+
+extern "C" void um982_forward_rtcm(const uint8_t *data, size_t len)
+{
+    if (!s_com1_tx_boot_complete || !data || len == 0) return;
+    if (s_com1_tx_mutex) xSemaphoreTake(s_com1_tx_mutex, portMAX_DELAY);
+    size_t written = Serial1.write(data, len);
+    port_stats.com2_tx_bytes += (uint32_t)written; // Tracks RTCM3 bytes forwarded to UM982
+    port_stats.com1_tx_bytes += (uint32_t)written;
+    if (s_com1_tx_mutex) xSemaphoreGive(s_com1_tx_mutex);
 }
 
 extern "C" void um982_forward_rtcm_to_com2(const uint8_t *data, size_t len)
 {
-    if (!data || len == 0) return;
-    size_t written = Serial2.write(data, len);
-    port_stats.com2_tx_bytes += (uint32_t)written;
+    um982_forward_rtcm(data, len);
 }
 
 extern "C" void um982_poll_com1(void)
@@ -636,39 +841,29 @@ extern "C" void um982_poll_com1(void)
         port_stats.com1_rx_bytes++;
 
         if (c == '\r' || c == '\n') {
-            if (com1_line_pos > 0) {
+            if (com1_line_overflow) {
+                com1_line_overflow = false;
+                com1_line_pos = 0;
+            } else if (com1_line_pos > 0) {
                 com1_line_buf[com1_line_pos] = '\0';
-                nmea_logger_feed((const uint8_t*)com1_line_buf, com1_line_pos);
-                nmea_logger_feed((const uint8_t*)"\r\n", 2);
-                process_com1_line(com1_line_buf);
+                process_com1_line(com1_line_buf, com1_line_pos);
                 com1_line_pos = 0;
             }
-        } else if (com1_line_pos < sizeof(com1_line_buf) - 1) {
-            com1_line_buf[com1_line_pos++] = c;
-        } else {
-            com1_line_pos = 0;
+        } else if (!com1_line_overflow) {
+            if (com1_line_pos < sizeof(com1_line_buf) - 1) {
+                com1_line_buf[com1_line_pos++] = c;
+            } else {
+                // Line exceeded 511 bytes: discard remainder until next \r/\n so tail never masquerades as a new line
+                com1_line_overflow = true;
+                com1_line_pos = 0;
+            }
         }
     }
 }
 
 extern "C" void um982_poll_com2(void)
 {
-    while (Serial2.available() > 0) {
-        char c = (char)Serial2.read();
-        port_stats.com2_rx_bytes++;
-
-        if (c == '\r' || c == '\n') {
-            if (com2_line_pos > 0) {
-                com2_line_buf[com2_line_pos] = '\0';
-                process_com2_line(com2_line_buf);
-                com2_line_pos = 0;
-            }
-        } else if (com2_line_pos < sizeof(com2_line_buf) - 1) {
-            com2_line_buf[com2_line_pos++] = c;
-        } else {
-            com2_line_pos = 0;
-        }
-    }
+    // No-op in v0.8.0+ Single-UART COM1 architecture (Serial2 disabled, freeing IO47/48 & ~6KB DRAM0)
 }
 
 extern "C" void um982_get_latest_state(RoverUIData_t *state_out)

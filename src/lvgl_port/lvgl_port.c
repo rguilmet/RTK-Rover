@@ -2407,19 +2407,19 @@ void create_rover_ui(void)
     lv_obj_set_style_text_color(t4_base_station_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t4_base_station_lbl, &lv_font_montserrat_12, 0);
 
-    // 5. UM982 COM1 Info
+    // 5. UM982 COM1 Full-Duplex Info
     t4_com1_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_com1_lbl, 300);
     lv_label_set_long_mode(t4_com1_lbl, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(t4_com1_lbl, "[UM982 COM1 IO17/18 @ 115200]\nRX: 0 B | TX: 0 B | NMEA: 0 | HDG: 0\nLast: Waiting...");
+    lv_label_set_text(t4_com1_lbl, "[UM982 COM1 IO17/18 @ 115200 Full-Duplex]\nRX: 0 B | TX: 0 B (RTCM: 0 B) | NMEA: 0 | HDG: 0\nLast NMEA: Waiting...");
     lv_obj_set_style_text_color(t4_com1_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t4_com1_lbl, &lv_font_montserrat_12, 0);
 
-    // 6. UM982 COM2 Info
+    // 6. UM982 Receiver State & Loglist Audit (Replaces legacy COM2 card)
     t4_com2_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_com2_lbl, 300);
     lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(t4_com2_lbl, "[UM982 COM2 IO47/48 @ 115200]\nRTCM TX: 0 B | RX: 0 B | Diff Age: -- s\nLast: Waiting...");
+    lv_label_set_text(t4_com2_lbl, "[UM982 RECEIVER STATE & LOGLIST]\nVer: Querying...\nMode: -- | Cfg: --\nLogs: --\nLast ACK: Waiting...");
     lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
     lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
 
@@ -2431,7 +2431,7 @@ void create_rover_ui(void)
     snprintf(init_buf, sizeof(init_buf),
              "[E220 LoRa Hardware IO41/42 @ %lu]\n"
              "AUX:1 Edges:0 | Regs:--\n"
-             "RX:0B -> COM2:0B | OK:0 Err:0\n"
+             "RX:0B -> COM1(RTCM):0B | OK:0 Err:0\n"
              "1006:0 | 74:0 | 84:0 | 94:0 | 1230:0",
              (unsigned long)current_settings.e220_uart_baud);
     lv_label_set_text(t4_e220_lbl, init_buf);
@@ -2660,6 +2660,9 @@ void update_rover_ui(const RoverUIData_t *d)
             } else if (d->heading_source == HDG_SRC_DISP) {
                 hdg_badge_str = "HDG WALK";
                 hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
+            } else if (d->heading_source == HDG_SRC_COMP) {
+                hdg_badge_str = "HDG CMP";
+                hdg_badge_col = lv_color_hex(0x14B8A6); // Vivid Teal for 9-DOF MMC5983MA Compass
             } else if (d->heading_source == HDG_SRC_GYRO) {
                 hdg_badge_str = "HDG GYRO";
                 hdg_badge_col = lv_palette_main(LV_PALETTE_AMBER);
@@ -2698,6 +2701,7 @@ void update_rover_ui(const RoverUIData_t *d)
             const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
                                   (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
                                   (d->heading_source == HDG_SRC_DISP)     ? "WLK" :
+                                  (d->heading_source == HDG_SRC_COMP)     ? "CMP" :
                                   (d->heading_source == HDG_SRC_GYRO)     ? "GYR" :
                                   (d->heading_source == HDG_SRC_COG)      ? "COG" :
                                   (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
@@ -2732,6 +2736,7 @@ void update_rover_ui(const RoverUIData_t *d)
             const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
                                   (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
                                   (d->heading_source == HDG_SRC_DISP)     ? "WLK" :
+                                  (d->heading_source == HDG_SRC_COMP)     ? "CMP" :
                                   (d->heading_source == HDG_SRC_GYRO)     ? "GYR" :
                                   (d->heading_source == HDG_SRC_COG)      ? "COG" :
                                   (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
@@ -3600,11 +3605,12 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
-    // 4. Update Tile 3: Dual-Antenna Compass & Bubble Level
+    // 4. Update Tile 3: Dual-Antenna / 9-DOF Compass & Bubble Level
     if (d->heading_valid) {
         const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
                               (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
                               (d->heading_source == HDG_SRC_DISP)     ? "WALK" :
+                              (d->heading_source == HDG_SRC_COMP)     ? "CMP" :
                               (d->heading_source == HDG_SRC_GYRO)     ? "GYRO" :
                               (d->heading_source == HDG_SRC_COG)      ? "COG" :
                               (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
@@ -3614,9 +3620,23 @@ void update_rover_ui(const RoverUIData_t *d)
     } else {
         lv_label_set_text(t3_hdg_lbl, "Heading: WALK TO ALIGN");
     }
-    snprintf(buf, sizeof(buf), "Baseline: %.3f m | Pitch: %+.1f deg",
-             d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
-             d->baseline_pitch_deg);
+    if (d->mag_present) {
+        if (d->mag_anomaly) {
+            snprintf(buf, sizeof(buf), "BL: %.2fm | Mag: %.1fuT [IRON ANOMALY]",
+                     d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
+                     d->mag_total_uT);
+        } else {
+            snprintf(buf, sizeof(buf), "BL: %.2fm | Mag: %.1fuT (Tare:%+.1f%s)",
+                     d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
+                     d->mag_total_uT,
+                     d->mag_tare_offset_deg,
+                     d->mag_cal_valid ? "*" : "");
+        }
+    } else {
+        snprintf(buf, sizeof(buf), "Baseline: %.3f m | Pitch: %+.1f deg",
+                 d->baseline_length_m > 0.01f ? d->baseline_length_m : current_settings.antenna_spacing_m,
+                 d->baseline_pitch_deg);
+    }
     lv_label_set_text(t3_base_lbl, buf);
 
     const char *pose_str = "Held Flat";
@@ -3759,6 +3779,7 @@ void update_rover_ui(const RoverUIData_t *d)
         if (d->heading_source == HDG_SRC_DUAL_FIX)      s_fix_str = "SLV FIX";
         else if (d->heading_source == HDG_SRC_DUAL_FLT) s_fix_str = "SLV FLT";
         else if (d->heading_source == HDG_SRC_DISP)     s_fix_str = "HDG WALK";
+        else if (d->heading_source == HDG_SRC_COMP)     s_fix_str = "HDG CMP";
         else if (d->heading_source == HDG_SRC_GYRO)     s_fix_str = "HDG GYRO";
         else if (d->heading_source == HDG_SRC_COG)      s_fix_str = "HDG COG";
         else if (d->heading_source == HDG_SRC_HOLD)     s_fix_str = "HDG HLD";
@@ -3857,28 +3878,44 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t4_base_station_lbl, buf);
     }
 
-    // 7. Update Tile 4: Hardware Port Diagnostics
+    // 7. Update Tile 4: Hardware Port & UM982 Known-State Audit Diagnostics
     if (t4_com1_lbl) {
         snprintf(buf, sizeof(buf),
-                 "[UM982 COM1 IO17/18 @ 115200] [%s]\nRX:%lu B | TX:%lu B | NMEA:%lu | HDG:%lu\nLast: %s",
+                 "[UM982 COM1 IO17/18 @ 115200 Full-Duplex] [%s]\n"
+                 "RX:%lu B | TX:%lu B (RTCM:%lu B)\n"
+                 "NMEA:%lu | HDG:%lu | Diff:%.1fs\n"
+                 "Last NMEA: %s",
                  d->um982_stats.com1_test_passed ? "PASS" : "WAIT",
                  (unsigned long)d->um982_stats.com1_rx_bytes,
                  (unsigned long)d->um982_stats.com1_tx_bytes,
+                 (unsigned long)d->um982_stats.com2_tx_bytes,
                  (unsigned long)d->um982_stats.nmea_sentences_ok,
                  (unsigned long)d->um982_stats.heading_sentences_ok,
+                 d->diff_age_s,
                  d->um982_stats.last_com1_line);
         lv_label_set_text(t4_com1_lbl, buf);
     }
 
     if (t4_com2_lbl) {
         snprintf(buf, sizeof(buf),
-                 "[UM982 COM2 IO47/48 @ 115200] [%s]\nRTCM TX:%lu B | RX:%lu B | Diff:%.1fs\nLast: %s",
-                 d->um982_stats.com2_test_passed ? "PASS" : "WAIT",
-                 (unsigned long)d->um982_stats.com2_tx_bytes,
-                 (unsigned long)d->um982_stats.com2_rx_bytes,
-                 d->diff_age_s,
+                 "[UM982 RECEIVER STATE & LOGLIST] [%s]\n"
+                 "Ver: %s\n"
+                 "Mode: %s | %s\n"
+                 "Logs: %s\n"
+                 "Last ACK (%lu): %s",
+                 d->um982_stats.known_state_ok ? "STATE OK" : (d->um982_stats.com1_test_passed ? "CHECK" : "WAIT"),
+                 d->um982_stats.um982_version,
+                 d->um982_stats.um982_mode,
+                 d->um982_stats.um982_config_summary,
+                 d->um982_stats.um982_loglist,
+                 (unsigned long)d->um982_stats.cmd_responses_ok,
                  d->um982_stats.last_com2_line);
         lv_label_set_text(t4_com2_lbl, buf);
+        if (d->um982_stats.known_state_ok) {
+            lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
+        } else {
+            lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0xFFA500), 0);
+        }
     }
 
     if (t4_e220_lbl) {
@@ -3887,7 +3924,7 @@ void update_rover_ui(const RoverUIData_t *d)
         snprintf(buf, sizeof(buf),
                  "[E220 LoRa Hardware IO41/42] [%s]\n"
                  "AUX:%d (Edges:%lu) | M0:%s M1:%s\n"
-                 "Throughput: RX:%lu B -> COM2:%lu B\n"
+                 "Throughput: RX:%lu B -> COM1(RTCM):%lu B\n"
                  "Integrity: OK:%lu | CRC Err:%lu | Trunc:%lu | Orph:%lu B\n"
                  "[RTCM3 Message Audit]\n"
                  "1006 (Base ARP): %u | 1074 (GPS): %u\n"
@@ -3962,14 +3999,32 @@ void update_rover_ui(const RoverUIData_t *d)
         lv_label_set_text(t4_power_lbl, buf);
     }
 
-    // 9. Update Tile 4: IMU & Pole Tilt Diagnostics
+    // 9. Update Tile 4: IMU, Pole Tilt & MMC5983MA 9-DOF Compass Diagnostics
     if (t4_imu_lbl) {
+        char mag_line[128];
+        if (d->mag_present) {
+            snprintf(mag_line, sizeof(mag_line),
+                     "Mag(0x30): %.1fuT (X:%+.1f Y:%+.1f Z:%+.1f) %s\n"
+                     "Compass: %.1f deg | Tare:%+.1f deg [%s] | SR:%lu (%.1fC)",
+                     d->mag_total_uT,
+                     d->mag_uT[0], d->mag_uT[1], d->mag_uT[2],
+                     d->mag_anomaly ? "[IRON!]" : "[OK]",
+                     d->mag_heading_deg,
+                     d->mag_tare_offset_deg,
+                     d->mag_cal_valid ? "AUTO-CAL" : "DEFAULT",
+                     (unsigned long)d->mag_set_reset_count,
+                     d->mag_die_temp_c);
+        } else {
+            snprintf(mag_line, sizeof(mag_line),
+                     "Mag(0x30): MMC5983MA Not Detected (6-DOF Mode)");
+        }
         snprintf(buf, sizeof(buf),
-                 "[IMU & POLE TILT] QMI8658 @ 250Hz\n"
+                 "[IMU & 9-DOF COMPASS] QMI8658 + MMC5983MA\n"
                  "Live: Pitch:%+.1f deg | Roll:%+.1f deg\n"
                  "Acc(g): X:%+.2f Y:%+.2f Z:%+.2f\n"
                  "Gyr(d/s): X:%+.1f Y:%+.1f Z:%+.1f\n"
-                 "Tare: P:%+.1f deg R:%+.1f deg | Lever: %.2fm [%s]",
+                 "Tare: P:%+.1f deg R:%+.1f deg | Lever: %.2fm [%s]\n"
+                 "%s",
                  d->imu_pitch_deg,
                  d->imu_roll_deg,
                  d->imu_acc[0], d->imu_acc[1], d->imu_acc[2],
@@ -3977,7 +4032,8 @@ void update_rover_ui(const RoverUIData_t *d)
                  current_settings.pole_tilt_tare_pitch_deg,
                  current_settings.pole_tilt_tare_roll_deg,
                  current_settings.antenna_height_m,
-                 current_settings.apply_lever_arm ? "ON" : "OFF");
+                 current_settings.apply_lever_arm ? "ON" : "OFF",
+                 mag_line);
         lv_label_set_text(t4_imu_lbl, buf);
     }
 
@@ -4008,9 +4064,11 @@ void update_rover_ui(const RoverUIData_t *d)
 
     // 11. Update Tile 4: I2C Bus Diagnostics
     if (t4_i2c_lbl) {
-        lv_label_set_text(t4_i2c_lbl,
-                          "[I2C0 BUS STATUS]\n"
-                          "TCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK");
+        snprintf(buf, sizeof(buf),
+                 "[I2C0 BUS STATUS @ 400kHz]\n"
+                 "TCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK | MAG(0x30):%s",
+                 d->mag_present ? "OK" : "--");
+        lv_label_set_text(t4_i2c_lbl, buf);
     }
 
     rover_lvgl_unlock();

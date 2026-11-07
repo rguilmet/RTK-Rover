@@ -583,12 +583,12 @@ static void e220_process_rx_stage(void)
             break;
         }
 
-        // 4. Full candidate frame staged -> verify 24-bit CRC24Q before touching UM982 COM2
+        // 4. Full candidate frame staged -> verify 24-bit CRC24Q before touching UM982 COM1
         uint16_t msg_type = ((uint16_t)rx_stage[3] << 4) | ((rx_stage[4] >> 4) & 0x0F);
         uint32_t crc = rtcm_crc24q_compute(rx_stage, total_len);
         if (crc == 0) {
-            // Verified intact RTCM3 frame -> forward atomically to UM982 COM2!
-            um982_forward_rtcm_to_com2(rx_stage, total_len);
+            // Verified intact RTCM3 frame -> forward atomically to UM982 COM1!
+            um982_forward_rtcm(rx_stage, total_len);
 
             rtcm_in_resync = false;
             s_last_valid_rtcm_ms = millis();
@@ -611,7 +611,7 @@ static void e220_process_rx_stage(void)
             }
 
             if (current_settings.enable_serial_logging) {
-                Serial.printf("[RTCM OK -> COM2] Type:%u Frame:%uB | OK:%lu Err:%lu(Trunc:%lu) Orph:%luB\n",
+                Serial.printf("[RTCM OK -> COM1] Type:%u Frame:%uB | OK:%lu Err:%lu(Trunc:%lu) Orph:%luB\n",
                               msg_type,
                               (unsigned int)total_len,
                               (unsigned long)e220_stats.rtcm_frames_ok,
@@ -628,12 +628,12 @@ static void e220_process_rx_stage(void)
             }
         } else {
             // Corrupted frame or truncated head followed immediately by a new 0xD3 frame!
-            // Do NOT forward to UM982 COM2; shift 1 byte so any complete frame inside rx_stage is rescued.
+            // Do NOT forward to UM982 COM1; shift 1 byte so any complete frame inside rx_stage is rescued.
             if (!rtcm_in_resync) {
                 rtcm_in_resync = true;
                 e220_stats.rtcm_crc_errors++;
                 if (current_settings.enable_serial_logging) {
-                    Serial.printf("[RTCM DROP CRC] Type:%u Expected:%uB CRC:0x%06lX (NOT sent to COM2) | OK:%lu Err:%lu\n",
+                    Serial.printf("[RTCM DROP CRC] Type:%u Expected:%uB CRC:0x%06lX (NOT sent to COM1) | OK:%lu Err:%lu\n",
                                   msg_type,
                                   (unsigned int)total_len,
                                   (unsigned long)crc,
@@ -802,7 +802,7 @@ extern "C" void e220_poll_and_forward_rtcm(void)
     }
 
     // 4. Mid-frame truncation timeout: if tail subpacket did not arrive within rate-adaptive timeout,
-    //    quarantine the broken head (never forward to UM982 COM2) and rescan remaining bytes
+    //    quarantine the broken head (never forward to UM982 COM1) and rescan remaining bytes
     //    so any smaller valid frame sitting behind it in rx_stage is rescued.
     uint32_t cur_trunc_timeout_ms = e220_get_trunc_timeout_ms();
     if (rx_stage_len > 0 && (now - last_stage_rx_ms > cur_trunc_timeout_ms)) {
@@ -819,7 +819,7 @@ extern "C" void e220_poll_and_forward_rtcm(void)
                 e220_stats.rtcm_trunc_drops++;
                 logged_trunc = true;
                 if (current_settings.enable_serial_logging) {
-                    Serial.printf("[RTCM DROP TRUNC] Type:%u Got:%u/%uB after %ums (NOT sent to COM2) | OK:%lu Err:%lu(Trunc:%lu)\n",
+                    Serial.printf("[RTCM DROP TRUNC] Type:%u Got:%u/%uB after %ums (NOT sent to COM1) | OK:%lu Err:%lu(Trunc:%lu)\n",
                                   msg_type,
                                   (unsigned int)rx_stage_len,
                                   (unsigned int)(payload_len + 6U),

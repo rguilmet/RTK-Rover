@@ -68,8 +68,8 @@ except ImportError:
 
 
 __app_name__ = "e220_pacer"
-__version__ = "3.4.0"
-__date__ = "2026-11-05"
+__version__ = "3.4.1"
+__date__ = "2026-11-07"
 
 # Force unbuffered output so systemd journalctl displays entries in real time
 if hasattr(sys.stdout, "reconfigure"):
@@ -1009,6 +1009,7 @@ class E220Pacer:
             4: "GYRO",
             5: "COG",
             6: "HOLD",
+            7: "COMP",
         }
 
         if len(cand) == 45:
@@ -1034,7 +1035,7 @@ class E220Pacer:
 
         # High 2 bits of sats_s: bit 6 = heading_valid, bit 7 = heading_is_fixed
         sats_s_clean = sats_s & 0x3F
-        hdg_valid = bool(sats_s & 0x40) or (heading_source in (1, 2, 3, 4, 5, 6))
+        hdg_valid = bool(sats_s & 0x40) or (heading_source in (1, 2, 3, 4, 5, 6, 7))
         hdg_fixed = bool(sats_s & 0x80) or (heading_source == 1)
 
         bat_str = f"PWR:USB ({bat_mv/1000.0:.2f}V)" if bat_pct == 255 else f"Bat:{bat_pct}% ({bat_mv/1000.0:.2f}V)"

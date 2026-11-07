@@ -5,6 +5,25 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.8.0] - 2026-11-07
+
+### Added
+- **Phase 8A: Single-UART `UM982 COM1` Consolidation & Protocol Multiplexing (`um982_driver.cpp`, `user_config.h`, `e220_driver.cpp`):**
+  - Consolidated all Holybro Unicore UM982 communications onto a single full-duplex hardware UART (`Serial1` / `COM1` @ `115200` baud: `GPIO 17` RX / `GPIO 18` TX), transmitting `RTCM3.x` binary differential corrections and ASCII configuration/query commands on `COM1 TX` while receiving `NMEA`, `#UNIHEADINGA`, `#BASEINFOA`, and command responses on `COM1 RX`.
+  - Freed `Serial2` (`COM2`, `GPIO 47` / `GPIO 48`), eliminating 2 inter-module harness wires and reclaiming ~6 KB of internal `DRAM0` UART ring-buffer and driver overhead in preparation for the `ESP32-S3-Touch-LCD-3.49-V2` Smart Pole architecture.
+  - Expanded `Serial1` (`COM1`) TX ring buffer to `4096 B` alongside the `4096 B` RX ring buffer and guarded all `COM1 TX` writes with a FreeRTOS mutex (`s_com1_tx_mutex`) plus a boot-complete gate (`s_com1_tx_boot_complete`) so `RTCM3` binary frames and ASCII commands never interleave mid-packet.
+  - Implemented a 3-way `COM1 RX` line demultiplexer (`512 B` line buffer with `s_com1_rx_overflow` discard guard) that cleanly separates command responses (`$command,...`, `#VERSIONA`, `#MODEA`, `#CONFIGA`, `#LOGLISTA`) from NMEA (`$GNGGA`, `$GNRMC`, etc. with XOR `*HH` checksum verification) and Unicore extended data logs (`#UNIHEADINGA`, `#BASEINFOA`), preventing command responses from polluting `.nmea` SD/FFat log files or overwriting `last_com1_line` on Tile 4.
+  - Adopted a quiet-first boot configuration sequence (`UNLOGALL COM1` + `UNLOGALL COM2` first) so receiver state queries execute deterministically against a quiet stream before enabling 10 Hz / 5 Hz / 1 Hz operational logs and `SAVECONFIG`.
+- **UM982 Receiver State Query & Known-State Audit Engine (`um982_query_receiver_state()`):**
+  - Added `um982_query_receiver_state()` to sequentially query `VERSIONA`, `MODE`, `CONFIG`, and `LOGLIST` on `COM1`, parse the live responses into `Um982PortStats_t` (`um982_version`, `um982_mode`, `um982_config_summary`, `um982_loglist`, `known_state_ok`), print a formatted diagnostic report to the Serial Monitor, and display the receiver state in the Tile 4 `[UM982 RECEIVER STATE & LOGLIST]` card.
+- **Phase 8B: Auto-Detected `MMC5983MA` (`0x30`) 3-Axis 18-Bit AMR Magnetometer & 9-DOF Heading Fusion (`src/mag_bsp/`, `nav_engine.cpp`, `i2c_bsp.c`, `lvgl_port.c`):**
+  - Added `i2c_bsp_probe_optional_addr()` and `src/mag_bsp/mmc5983ma_driver.cpp` supporting non-intrusive boot-time auto-detection of the external `MMC5983MA` (`0x30`, `Product ID 1` register `0x2F == 0x30`) on shared `I2C_NUM_0` (`GPIO 7` SCL / `GPIO 8` SDA @ `400 kHz`). When unplugged, the firmware runs transparently in 6-DOF fallback mode (`MAG: N/A (6-DOF Mode)`).
+  - Implemented hardware `SET` (`0x08`) and `RESET` (`0x10`) degaussing coil pulse calibration (`mmc5983ma_calibrate_bridge_offset()`) on `Internal Control 0` (`0x09`) at boot and every 60 seconds to mathematically eliminate thermal bridge zero-field offset drift ($\mathbf{Offset} = 0.5(\mathbf{M}_{\text{SET}} + \mathbf{M}_{\text{RESET}})$) and read die temperature (`Tout`).
+  - Implemented `nav_heading_9dof_update()` in `src/nav_engine/nav_engine.cpp`: continuously learns and updates the True-North tare offset (`mag_true_north_offset_deg`) and clean reference magnetic field norm (`mag_field_ref_uT`) via a circular EMA filter whenever `UM982` has `HDG FIX` (`SLV_FIX` + valid baseline), rejects localized steel/iron anomalies when $|\|\mathbf{B}\| - B_{\text{ref}}| > 3.5\,\mu\text{T}$, and provides 9-DOF complementary-filtered heading (`HDG_SRC_COMP = 7`, displayed as `HDG CMP` / `[CMP]` in Teal `#14B8A6`) under heavy forest canopy.
+  - Updated Tile 3 (`[2D POLE PLUMB BUBBLE & COMPASS]`) and Tile 4 (`[IMU & 9-DOF COMPASS]`) with live magnetic field vector $(B_x, B_y, B_z)$, total field $\|\mathbf{B}\|$, True-North tare offset, die temperature, `SET/RESET` count, and `[TARE MAG]` button.
+  - Updated `scripts/e220_pacer.py` (`v3.4.1`) to decode `HDG_SRC_COMP = 7` (`[COMP]`).
+  - Bumped `ROVER_FIRMWARE_VERSION` in `user_config.h` to `v0.8.0`.
+
 ## [v0.7.7] - 2026-11-07
 
 ### Fixed

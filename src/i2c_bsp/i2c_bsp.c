@@ -12,6 +12,7 @@ i2c_master_dev_handle_t disp_touch_dev_handle = NULL;
 i2c_master_dev_handle_t rtc_dev_handle        = NULL;
 i2c_master_dev_handle_t imu_dev_handle        = NULL;
 i2c_master_dev_handle_t axp2101_dev_handle    = NULL;
+i2c_master_dev_handle_t mag_dev_handle        = NULL;
 
 static SemaphoreHandle_t i2c_bus_mutex = NULL;
 static uint32_t i2c_data_pdMS_TICKS = 0;
@@ -39,6 +40,7 @@ static const char* i2c_dev_name(i2c_master_dev_handle_t h)
     if (h == imu_dev_handle)        return "IMU(0x6B)";
     if (h == rtc_dev_handle)        return "RTC(0x51)";
     if (h == axp2101_dev_handle)    return "AXP2101(0x34)";
+    if (h == mag_dev_handle)        return "MAG(0x30)";
     return "I2C_DEV";
 }
 
@@ -162,6 +164,9 @@ void i2c_master_Init(void)
 
     dev_cfg.device_address = ROVER_I2C_ADDR_AXP2101;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &axp2101_dev_handle));
+
+    dev_cfg.device_address = ROVER_I2C_ADDR_MAG;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(user_i2c_port0_handle, &dev_cfg, &mag_dev_handle));
 }
 
 void i2c_bsp_reinit_bus(void)
@@ -173,6 +178,7 @@ void i2c_bsp_reinit_bus(void)
     if (imu_dev_handle)        { i2c_master_bus_rm_device(imu_dev_handle);        imu_dev_handle = NULL; }
     if (disp_touch_dev_handle) { i2c_master_bus_rm_device(disp_touch_dev_handle); disp_touch_dev_handle = NULL; }
     if (axp2101_dev_handle)    { i2c_master_bus_rm_device(axp2101_dev_handle);    axp2101_dev_handle = NULL; }
+    if (mag_dev_handle)        { i2c_master_bus_rm_device(mag_dev_handle);        mag_dev_handle = NULL; }
     if (user_i2c_port0_handle) { i2c_del_master_bus(user_i2c_port0_handle);      user_i2c_port0_handle = NULL; }
     vTaskDelay(pdMS_TO_TICKS(10));
     i2c_master_Init();
@@ -187,6 +193,15 @@ bool i2c_bsp_probe_addr(uint8_t addr_7bit)
     if (err != ESP_OK) {
         i2c_bus_recover_locked("Probe", NULL, addr_7bit, err);
     }
+    i2c_bsp_unlock();
+    return (err == ESP_OK);
+}
+
+bool i2c_bsp_probe_optional_addr(uint8_t addr_7bit)
+{
+    if (user_i2c_port0_handle == NULL) return false;
+    if (!i2c_bsp_lock(200)) return false;
+    esp_err_t err = i2c_master_probe(user_i2c_port0_handle, addr_7bit, 25);
     i2c_bsp_unlock();
     return (err == ESP_OK);
 }

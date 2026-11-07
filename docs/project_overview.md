@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.5.0`  
+**Document Version:** `v2.6.0`  
 **Last Updated:** November 7, 2026  
-**Firmware Target:** `v0.7.7`  
-**Python Ecosystem Target:** `v3.4.0`  
+**Firmware Target:** `v0.8.0`  
+**Python Ecosystem Target:** `v3.4.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.

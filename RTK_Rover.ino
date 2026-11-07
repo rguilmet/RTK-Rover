@@ -14,6 +14,7 @@
 #include "src/axp2101_bsp/axp2101_bsp.h"
 #include "src/rtc_bsp/rtc_bsp.h"
 #include "src/imu_bsp/imu_bsp.h"
+#include "src/mag_bsp/mmc5983ma_driver.h"
 #include "src/settings_manager/settings_manager.h"
 #include "src/nav_engine/nav_engine.h"
 #include "src/waypoint_manager/waypoint_manager.h"
@@ -169,12 +170,11 @@ void task_rover_core0(void *pvParameters)
     uint32_t last_wp_seq       = g_waypoint_change_seq;
 
     for (;;) {
-        // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM2 (IO47/48)
+        // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM1 (IO17/18)
         e220_poll_and_forward_rtcm();
 
-        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST/GSV & Heading, and COM2 (IO47/48) for responses
+        // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST/GSV, Heading, and Command Responses
         um982_poll_com1();
-        um982_poll_com2();
 
         uint32_t now = millis();
         uint32_t cur_wp_seq = g_waypoint_change_seq;
@@ -241,6 +241,7 @@ void task_rover_core0(void *pvParameters)
                     if (state.heading_source == HDG_SRC_DUAL_FIX) hdg_mode = "FIX";
                     else if (state.heading_source == HDG_SRC_DUAL_FLT) hdg_mode = "FLT";
                     else if (state.heading_source == HDG_SRC_DISP) hdg_mode = "WALK";
+                    else if (state.heading_source == HDG_SRC_COMP) hdg_mode = "CMP";
                     else if (state.heading_source == HDG_SRC_GYRO) hdg_mode = "GYRO";
                     else if (state.heading_source == HDG_SRC_HOLD) hdg_mode = "HLD";
                     else if (state.heading_source == HDG_SRC_COG) hdg_mode = "COG";
@@ -254,7 +255,7 @@ void task_rover_core0(void *pvParameters)
                 } else {
                     snprintf(rssi_str, sizeof(rssi_str), "Noise:--dBm Pkt:--dBm");
                 }
-                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB NMEA:%lu | COM2 TX:%luB | E220 AUX:%d (Edges:%lu) %s RX:%luB Fwd:%luB OK:%lu (1006:%u 1074:%u 1084:%u 1094:%u 1230:%u) Err:%lu (Trunc:%lu) Orph:%luB\n",
+                Serial.printf("[TELEM] Fix:%d SVs:%u/%u Hdg:%s(%.1f) BL:%.1fcm Spd:%.1fm/s Base:%u Diff:%.1fs | COM1 RX:%luB NMEA:%lu RTCM_TX:%luB | E220 AUX:%d (Edges:%lu) %s RX:%luB Fwd:%luB OK:%lu (1006:%u 1074:%u 1084:%u 1094:%u 1230:%u) Err:%lu (Trunc:%lu) Orph:%luB\n",
                               (int)state.fix_type,
                               state.num_sats,
                               state.sats_in_view,
@@ -294,23 +295,24 @@ void task_rover_core0(void *pvParameters)
 void task_display_and_audio(void *pvParameters)
 {
     (void)pvParameters;
-    RoverUIData_t   ui_state          = {};
-    Axp2101Status_t pwr               = {};
-    uint32_t        last_imu_poll_ms  = 0;
-    uint32_t        last_imu_log_ms   = 0;
-    uint32_t        last_pwr_poll_ms  = 0;
-    float           cached_imu_pitch  = 0.0f;
-    float           cached_imu_roll   = 0.0f;
-    float           cached_bubble_x   = 0.0f;
-    float           cached_bubble_y   = 0.0f;
-    DisplayPose_t   cached_pose       = DISPLAY_POSE_FLAT;
-    float           cached_acc[3]     = {0.0f, 0.0f, 0.0f};
-    float           cached_gyr[3]     = {0.0f, 0.0f, 0.0f};
+    RoverUIData_t    ui_state          = {};
+    Axp2101Status_t  pwr               = {};
+    Mmc5983maState_t cached_mag        = {};
+    uint32_t         last_imu_poll_ms  = 0;
+    uint32_t         last_imu_log_ms   = 0;
+    uint32_t         last_pwr_poll_ms  = 0;
+    float            cached_imu_pitch  = 0.0f;
+    float            cached_imu_roll   = 0.0f;
+    float            cached_bubble_x   = 0.0f;
+    float            cached_bubble_y   = 0.0f;
+    DisplayPose_t    cached_pose       = DISPLAY_POSE_FLAT;
+    float            cached_acc[3]     = {0.0f, 0.0f, 0.0f};
+    float            cached_gyr[3]     = {0.0f, 0.0f, 0.0f};
 
     for (;;) {
         uint32_t now = millis();
 
-        // 1..3: Execute Core 1 I2C transactions (RTC sync, 10 Hz IMU, 0.5 Hz PMIC).
+        // 1..3: Execute Core 1 I2C transactions (RTC sync, 10 Hz IMU + MMC5983MA Compass, 0.5 Hz PMIC).
         // Hardware bus thread-safety across tasks is guaranteed by i2c_bus_mutex in i2c_bsp.
         // No dependency on the LVGL graphics mutex so sensor polling is never starved.
         uint16_t yy; uint8_t mo, dd, hh, mm, ss;
@@ -329,6 +331,9 @@ void task_display_and_audio(void *pvParameters)
                                         &cached_bubble_x,
                                         &cached_bubble_y,
                                         &cached_pose);
+
+            // Poll outboard MMC5983MA 3-Axis 18-bit AMR Compass (if auto-detected at boot)
+            mmc5983ma_poll(cached_bubble_y, cached_bubble_x, &cached_mag);
 
             if (current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
                 last_imu_log_ms = now;
@@ -396,24 +401,46 @@ void task_display_and_audio(void *pvParameters)
             ui_state.imu_gyr[0]        = cached_gyr[0];
             ui_state.imu_gyr[1]        = cached_gyr[1];
             ui_state.imu_gyr[2]        = cached_gyr[2];
-            ui_state.battery_voltage   = pwr.battery_voltage_v;
-            ui_state.battery_percent   = pwr.battery_percent;
-            ui_state.is_charging       = pwr.is_charging;
-            ui_state.vbus_present      = pwr.vbus_good;
-            ui_state.vbus_voltage      = pwr.vbus_voltage_v;
+            ui_state.battery_voltage     = pwr.battery_voltage_v;
+            ui_state.battery_percent     = pwr.battery_percent;
+            ui_state.is_charging         = pwr.is_charging;
+            ui_state.vbus_present        = pwr.vbus_good;
+            ui_state.vbus_voltage        = pwr.vbus_voltage_v;
 
-            // Phase 5: Deep-Woods Heading Fallback (Kinematic Displacement Azimuth & Gyro Yaw)
-            nav_heading_displacement_update(ui_state.tip_lat,
-                                            ui_state.tip_lon,
-                                            cached_gyr[2],
-                                            now,
-                                            (ui_state.heading_valid && (ui_state.heading_source == HDG_SRC_DUAL_FIX || ui_state.heading_source == HDG_SRC_DUAL_FLT)),
-                                            ui_state.heading_is_fixed,
-                                            ui_state.true_heading_deg,
-                                            &ui_state.heading_valid,
-                                            &ui_state.true_heading_deg,
-                                            &ui_state.heading_source,
-                                            &ui_state.displacement_dist_m);
+            // Attach MMC5983MA Magnetometer Telemetry
+            ui_state.mag_present         = cached_mag.present;
+            ui_state.mag_cal_valid       = current_settings.mag_cal_valid;
+            ui_state.mag_uT[0]           = cached_mag.mag_uT[0];
+            ui_state.mag_uT[1]           = cached_mag.mag_uT[1];
+            ui_state.mag_uT[2]           = cached_mag.mag_uT[2];
+            ui_state.mag_total_uT        = cached_mag.total_uT;
+            ui_state.mag_tare_offset_deg = current_settings.mag_true_north_offset_deg;
+            ui_state.mag_die_temp_c      = cached_mag.die_temp_c;
+            ui_state.mag_set_reset_count = cached_mag.set_reset_count;
+
+            float pole_tilt_deg = sqrtf(cached_bubble_x * cached_bubble_x + cached_bubble_y * cached_bubble_y);
+
+            // Phase 5 & Phase 8: Deep-Woods Heading Fallback (Kinematic Displacement + 9-DOF Compass + Gyro Yaw)
+            nav_heading_9dof_update(ui_state.tip_lat,
+                                    ui_state.tip_lon,
+                                    cached_gyr[2],
+                                    pole_tilt_deg,
+                                    cached_mag.present,
+                                    cached_mag.valid,
+                                    cached_mag.raw_mag_heading_deg,
+                                    cached_mag.total_uT,
+                                    now,
+                                    (ui_state.heading_valid && (ui_state.heading_source == HDG_SRC_DUAL_FIX || ui_state.heading_source == HDG_SRC_DUAL_FLT)),
+                                    ui_state.heading_is_fixed,
+                                    ui_state.true_heading_deg,
+                                    &ui_state.heading_valid,
+                                    &ui_state.true_heading_deg,
+                                    &ui_state.heading_source,
+                                    &ui_state.displacement_dist_m,
+                                    &ui_state.mag_heading_deg,
+                                    &ui_state.mag_anomaly);
+            ui_state.mag_cal_valid       = current_settings.mag_cal_valid;
+            ui_state.mag_tare_offset_deg = current_settings.mag_true_north_offset_deg;
 
             if (ui_state.has_active_target && ui_state.heading_valid) {
                 float rel = ui_state.bearing_to_target_deg - ui_state.true_heading_deg;
@@ -576,18 +603,20 @@ void setup()
                       (unsigned int)exio_err);
     }
 
-    // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard Peripherals
-    Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s\n",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TCA9554) ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_AXP2101) ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TOUCH)   ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_RTC)     ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_IMU)     ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_ES8311)  ? "OK" : "--");
+    // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard + Optional Peripherals
+    Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s | MAG(0x30):%s\n",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TCA9554)         ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_AXP2101)         ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TOUCH)           ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_RTC)             ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_IMU)             ? "OK" : "--",
+                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_ES8311)          ? "OK" : "--",
+                  i2c_bsp_probe_optional_addr(ROVER_I2C_ADDR_MAG)    ? "OK" : "--");
 
     axp2101_bsp_init();
     rtc_bsp_init();
     imu_init();
+    mmc5983ma_init();
 
     // 3. Mount Internal FFat & MicroSD Card (CLK=11, CMD=10, D0=9)
     if (!FFat.begin(true)) {

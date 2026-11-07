@@ -2,16 +2,20 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.7.7`  
+**Firmware Version:** `v0.8.0`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md)  
-**Next-Gen Architecture:** [Plan Smart Pole and Android App](docs/plan_smart_pole_and_android_app.md) | [Phase 7 Cellular NTRIP Bridge Plan](docs/plan_phase7_cellular_ntrip_bridge.md)
+**Next-Gen Architecture:** [Plan Smart Pole and Android App](docs/plan_smart_pole_and_android_app.md) | [Phase 8 Single-UART UM982 & MMC5983MA Plan](docs/plan_phase8_single_uart_um982_and_mmc5983ma_compass.md) | [Phase 7 Cellular NTRIP Bridge Plan](docs/plan_phase7_cellular_ntrip_bridge.md)
 
 ---
 
 ## 1. Overview & Key Capabilities
 
+* **Single-UART `UM982 COM1` Consolidation, Receiver State Audit & Auto-Detected 9-DOF `MMC5983MA` Compass (Phase 8 / `v0.8.0`):**
+  * **Single-UART `UM982 COM1` Multiplexing (`Serial1`, `GPIO 17/18` @ `115200` baud):** Consolidates `RTCM3.x` binary corrections + ASCII commands onto `COM1 TX` (guarded by `s_com1_tx_mutex` and a `4096 B` TX ring buffer) and `NMEA`/`#UNIHEADINGA`/`#BASEINFOA` + command responses onto `COM1 RX` (with a 3-way line demultiplexer and XOR checksum verification that prevents command responses from entering `.nmea` logs). Frees `Serial2` (`COM2`, `GPIO 47/48`) and ~6 KB of internal `DRAM0`.
+  * **`um982_query_receiver_state()` (`VERSIONA`, `MODE`, `CONFIG`, `LOGLIST`):** Queries and verifies the live UM982 firmware build, Rover mode, port baud/protocol configuration, and active sentence schedule at boot, printing a structured summary to Serial Monitor and populating the Tile 4 `[UM982 RECEIVER STATE & LOGLIST]` card.
+  * **Auto-Detected `MMC5983MA` (`0x30`) 18-Bit 3-Axis AMR Magnetometer & 9-DOF Heading Fusion:** Non-intrusively probes `0x30` (`Product ID 1 == 0x30`) on `I2C_NUM_0` (`400 kHz`) at boot (`MAG: N/A (6-DOF Mode)` when unplugged). When present, fires hardware `SET`/`RESET` degaussing coil pulses (`mmc5983ma_calibrate_bridge_offset()`) to cancel bridge offset drift, continuously learns True-North tare offset from `UM982 HDG FIX`, rejects localized iron anomalies (`> 3.5 uT`), and provides 9-DOF heading (`HDG CMP` / `[CMP]`, Teal `#14B8A6`) under canopy.
 * **Real-Time Priority-4 Tactile Audio, Zero-Lag Navigation & UPS Bus Recovery (`v0.7.6` - `v0.7.7`):**
   * **Dedicated Priority-4 Audio Synthesizer (`RoverAudio`):** Decoupled ES8311 I2S DMA tone generation (`beepQueue`) from the LVGL UI thread into a dedicated Core 1 FreeRTOS task at Priority 4 (`task_audio_beep`). Tactile button tones fire within **`< 1 ms`** of touch contact, completely immune to display rendering or storage I/O.
   * **Zero-Lag (`0 ms`) Same-Frame Waypoint/File Selection & `<= 2 ms` Core 0 Wakeup:** Tapping `<` or `>` immediately recomputes target distance, steering prompt, cardinal offsets, scale, and line stakeout geometry on the **exact same LVGL frame** (`refresh_t0_guidance_readout_immediately()`) while waking `task_rover_core0` within `<= 2 ms` (`g_waypoint_change_seq`) to push updated canvas vectors.

@@ -92,20 +92,25 @@ typedef struct {
 } E220LinkStats_t;
 
 // =========================================================================
-// UM982 COM1 & COM2 Telemetry
+// UM982 Single-UART (COM1) & Known-State Audit Telemetry
 // =========================================================================
 typedef struct {
     uint32_t com1_rx_bytes;
     uint32_t com1_tx_bytes;
-    uint32_t com2_rx_bytes;     // Bytes received back from UM982 COM2 (IO47)
-    uint32_t com2_tx_bytes;     // RTCM/Command bytes sent to UM982 COM2 (IO48)
+    uint32_t com2_rx_bytes;     // Legacy counter (0 in Single-UART COM1 mode)
+    uint32_t com2_tx_bytes;     // Verified RTCM3 bytes forwarded to UM982 (via COM1 in v0.8.0+)
     uint32_t nmea_sentences_ok;
     uint32_t heading_sentences_ok;
+    uint32_t cmd_responses_ok;  // Count of $command / #VERSIONA / #MODE / $CONFIG / #LOGLIST responses
     bool     com1_test_passed;
-    bool     com2_test_passed;
-    char     last_com1_line[96];
-    char     last_com2_line[64];
-    char     um982_version[48];
+    bool     com2_test_passed;  // True when Single-UART COM1 bidirectional self-test & state audit pass
+    bool     known_state_ok;    // True when MODE == ROVER SURVEY, COM1 has 7 logs, and COM2 has 0 logs
+    char     last_com1_line[96];       // Most recent NMEA / Navigation sentence on COM1
+    char     last_com2_line[64];       // Most recent Command Response / ACK on COM1
+    char     um982_version[48];        // Parsed from #VERSIONA
+    char     um982_mode[32];           // Parsed from #MODE (e.g. "ROVER SURVEY")
+    char     um982_config_summary[96]; // Parsed from $CONFIG (e.g. "MULTI | FIXLEN 55.5/12.0 LOWDYN")
+    char     um982_loglist[112];       // Parsed from #LOGLIST (e.g. "COM1(7): GGA RMC GST GSV HDG GGAH BASE | COM2:0")
 } Um982PortStats_t;
 
 // =========================================================================
@@ -113,12 +118,13 @@ typedef struct {
 // =========================================================================
 typedef enum {
     HDG_SRC_NONE = 0,
-    HDG_SRC_DUAL_FIX,    // Dual-antenna integer carrier phase RTK (NARROW_INT)
-    HDG_SRC_DUAL_FLT,    // Dual-antenna float carrier phase with verified baseline
-    HDG_SRC_DISP,        // Kinematic geodetic displacement from 2-3 paces (>= 0.70m)
-    HDG_SRC_GYRO,        // IMU Gyroscope dead-reckoning hold during pauses (< 60s)
-    HDG_SRC_COG,         // Kinematic Course-Over-Ground from walking motion (> 0.4 m/s)
-    HDG_SRC_HOLD         // Stationary hold of last valid heading (< 0.2 m/s)
+    HDG_SRC_DUAL_FIX,    // 1: Dual-antenna integer carrier phase RTK (NARROW_INT)
+    HDG_SRC_DUAL_FLT,    // 2: Dual-antenna float carrier phase with verified baseline
+    HDG_SRC_DISP,        // 3: Kinematic geodetic displacement from 2-3 paces (>= 0.70m)
+    HDG_SRC_GYRO,        // 4: IMU Gyroscope dead-reckoning hold during pauses (< 60s)
+    HDG_SRC_COG,         // 5: Kinematic Course-Over-Ground from walking motion (> 0.4 m/s)
+    HDG_SRC_HOLD,        // 6: Stationary hold of last valid heading (< 0.2 m/s)
+    HDG_SRC_COMP         // 7: 9-DOF Tilt-Compensated MMC5983MA + QMI8658 Compass Fusion
 } HeadingSource_t;
 
 // =========================================================================
@@ -193,6 +199,17 @@ typedef struct {
     DisplayPose_t    display_pose;
     float            imu_acc[3];         // Accel X, Y, Z (g)
     float            imu_gyr[3];         // Gyro X, Y, Z (deg/s)
+
+    // 3-Axis AMR Magnetometer / 9-DOF Compass (SparkFun MMC5983MA @ 0x30, Auto-Detected)
+    bool             mag_present;        // True if MMC5983MA (0x30, Reg 0x2F == 0x30) detected at boot
+    bool             mag_cal_valid;      // True once True-North tare learned from UM982 HDG FIX or settings.json
+    bool             mag_anomaly;        // True if |B| deviates > 3.5 uT from ambient reference (iron pipe/fence)
+    float            mag_uT[3];          // SET/RESET bridge-offset-cancelled Bx, By, Bz (uT)
+    float            mag_total_uT;       // Total magnetic field magnitude ||B|| (uT)
+    float            mag_heading_deg;    // Tilt-compensated True-North magnetic heading (0..360 deg)
+    float            mag_tare_offset_deg;// Learned True-North tare offset (absorbs declination + mounting angle)
+    float            mag_die_temp_c;     // MMC5983MA internal die temperature (deg C)
+    uint32_t         mag_set_reset_count;// Number of hardware SET/RESET degaussing pulses executed
 
     // Power & Battery (AXP2101)
     float            battery_voltage;

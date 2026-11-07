@@ -68,7 +68,7 @@ void nav_format_distance(double meters, char *buf, int buf_len);
 void nav_format_height(double meters, char *buf, int buf_len);
 void nav_format_offset(float meters, char *buf, int buf_len);
 
-// Phase 5: Woods Heading Fallback Engine (Kinematic Displacement + Gyro Yaw)
+// Phase 5 & Phase 8: Woods Heading Fallback Engine (Kinematic Displacement + 9-DOF Compass + Gyro Yaw)
 void nav_heading_displacement_update(double tip_lat,
                                     double tip_lon,
                                     float gyr_z_dps,
@@ -80,6 +80,25 @@ void nav_heading_displacement_update(double tip_lat,
                                     float *true_heading_out,
                                     HeadingSource_t *heading_src_out,
                                     float *disp_dist_out);
+
+void nav_heading_9dof_update(double tip_lat,
+                             double tip_lon,
+                             float gyr_z_dps,
+                             float pole_tilt_deg,
+                             bool mag_present,
+                             bool mag_valid,
+                             float raw_mag_heading_deg,
+                             float mag_total_uT,
+                             uint32_t now_ms,
+                             bool dual_antenna_valid,
+                             bool dual_antenna_fixed,
+                             float dual_heading_deg,
+                             bool *heading_valid_out,
+                             float *true_heading_out,
+                             HeadingSource_t *heading_src_out,
+                             float *disp_dist_out,
+                             float *mag_true_heading_out,
+                             bool *mag_anomaly_out);
 void nav_heading_displacement_reset(void);
 
 // 64-point distance-filtered breadcrumb ring buffer for on-screen coarse navigation

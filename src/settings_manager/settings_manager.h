@@ -48,6 +48,9 @@ struct SystemSettings {
     bool     enable_touch_logging;
     bool     map_show_route_trail;
     uint8_t  auto_shutdown_battery_min;
+    float    mag_true_north_offset_deg; // Auto-calibrated True-North compass tare from UM982 HDG FIX
+    float    mag_field_ref_uT;          // Ambient geomagnetic field reference magnitude (uT)
+    bool     mag_cal_valid;             // True once UM982 HDG FIX has auto-calibrated the compass
 };
 
 extern struct SystemSettings current_settings;
