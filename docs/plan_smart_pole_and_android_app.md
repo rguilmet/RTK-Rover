@@ -97,7 +97,10 @@ flowchart TD
     * At **$30\text{"}$ ($762\text{ mm}$, midpoint $381\text{ mm}$):** $\approx 37\%$ tighter heading sigma ($\approx 0.13^\circ$ RMS) and faster integer ambiguity resolution (`HDG FIX`) under partial canopy.
   * Stored in `settings.json` (`antenna_spacing_m: 0.610` .. `0.762`) and configurable from the `RTK-Rover-Mobile` Android app, so `nav_compute_pole_tip_position()` always projects Master (ANT1) coordinates to the exact pole centerline ($\frac{B}{2}$) with zero rotational orbit.
 * **Outboard `MMC5983MA` 3-Axis AMR Compass Pod & Dual-GNSS Auto-Calibration:**
-  * **Sensor Selection:** **MEMSIC `MMC5983MA`** (`0x30` I2C, `18-bit` / `0.4 mG` / `40 nT` noise floor, integrated hardware **`SET/RESET` degaussing strap** that pulses alternating current to mathematically cancel thermal bridge offset drift).
+  * **Sensor & Breakout (`docs/datasheets/MMC5983MA/`):** **SparkFun Qwiic Micro Magnetometer (`SEN-19921` / MEMSIC `MMC5983MA`)** (`0x30` I2C, `18-bit` / `0.4 mG` / `40 nT` noise floor, onboard `10 µF` `CAP` reservoir capacitor for the hardware **`SET/RESET` degaussing strap** that pulses alternating current to mathematically cancel thermal bridge offset drift).
+  * **Qwiic 4-Pin Wiring & `400 kHz` Pull-Up Matching:**
+    * Qwiic **Pin 1 (`GND` / Black)** $\to$ `J3 Pin 3 (GND)`, **Pin 2 (`3.3V` / Red)** $\to$ `J3 Pin 2 (3V3 Switched)`, **Pin 3 (`SDA` / Blue)** $\to$ `J3 Pin 18 (GPIO 17)`, **Pin 4 (`SCL` / Yellow)** $\to$ `J3 Pin 17 (GPIO 18)`.
+    * The SparkFun board's `2.2 kΩ` pull-ups (`R1/R2`) in parallel with the Waveshare `3.49-V2` onboard `4.7 kΩ` pull-ups yield $R_{\text{eq}} \approx 1.5\text{ k}\Omega$ ($I_{\text{sink}} \approx 2.2\text{ mA}$), providing crisp `400 kHz` rising edges across the `6"`–`10"` outboard cable run without needing to cut the `I2C_PU` jumper.
   * **Outboard Beam Placement (`6"`–`10"` / `15–25 cm` from Electronics Box):** Mounted out on (or inside) the non-ferromagnetic 1" aluminum beam toward `ANT2`, keeping it `15–25 cm` away from the ferromagnetic steel `18650` battery casing and `MT3608` boost inductor (reducing dipole magnetic interference by $\frac{1}{r^3} > 1,000\times$).
   * **Continuous In-Field Auto-Calibration via `UM982` (`HDG FIX`):** Whenever `UNIHEADINGA` has a valid `HDG FIX` ($\sigma_\psi \approx 0.13^\circ\text{--}0.16^\circ$ True North), `nav_engine` continuously learns the exact yaw offset between the tilt-compensated `MMC5983MA` magnetic heading and True North (absorbing local magnetic declination $\approx -14.2^\circ$, mounting alignment, and static hard-iron bias).
   * **Deep-Woods 9-DOF Heading Hierarchy (`HDG COMP`) & Iron-Pipe Gatekeeper:**
@@ -426,7 +429,7 @@ Documents/Arduino/libraries/Field_Instrument_Core/   # Single Shared Git Repo ->
 │   │   ├── Holybro_H-RTK/                           # Holybro H-RTK Unicore UM982 pinout & mechanical specs
 │   │   ├── Ebyte_E220/                              # E220-900T30S & E220-900T22D User Manuals
 │   │   ├── Power_Stage/                             # NDP6020P P-FET, 2N3904 NPN & MT3608 Boost datasheets
-│   │   ├── MEMSIC_MMC5983MA/                        # MMC5983MA 3-Axis AMR Magnetometer datasheet & SET/RESET notes
+│   │   ├── MMC5983MA/                               # MMC5983MA Datasheet Rev A, SparkFun Qwiic Schematic & Hookup Guide
 │   │   ├── PNI_RM3100/                              # RM3100 Magnetometer datasheets & application notes
 │   │   ├── AXS15231B/                               # AXS15231B QSPI Display & Touch Controller specs
 │   │   ├── AXP2101_ETA6098_SY8089A/                 # PMIC (3.5B), 18650 Charger & 3.3V Buck (3.49-V2) specs
