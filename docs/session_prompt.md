@@ -65,8 +65,8 @@ We will use our existing **Waveshare ESP32-S3-Touch-LCD-3.5B** board as the phys
 ## 3. Reference Documentation & Key Artifacts
 Before beginning, review these technical specifications in the workspace:
 * **Firmware Master Docs:** `RTK_Rover/README.md`, `RTK_Rover/GEMINI.md`, `RTK_Rover/docs/project_overview.md`, `RTK_Rover/docs/hyper-context-anchor.md`, `RTK_Rover/docs/session_handoff.md`, `RTK_Rover/docs/user_manual.md`.
-* **Smart Pole & App Architecture:** Artifact `plan_headless_smart_pole_and_android_app.md`.
-* **Cellular NTRIP Bridge Architecture:** Artifact `plan_phase7_cellular_ntrip_bridge.md`.
+* **Smart Pole & App Architecture:** `RTK_Rover/docs/plan_headless_smart_pole_and_android_app.md`.
+* **Cellular NTRIP Bridge Architecture:** `RTK_Rover/docs/plan_phase7_cellular_ntrip_bridge.md`.
 * **Cadastral Schema & COGO Engine:** `RTK_Rover/scripts/cogo_solver.py v1.1.0` and `RTK_Rover/docs/schemas/cadastral_schema.json`.
 
 ---
