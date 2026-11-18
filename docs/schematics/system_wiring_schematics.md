@@ -1,45 +1,51 @@
 # RTK Rover & Smart Pole — System Hardware Wiring Schematics
 
-**Document Version:** `v1.0.0`  
-**Date:** November 7, 2026  
-**Firmware Baseline:** `v0.8.0` (Phase 8 Single-UART `UM982 COM1` Consolidation + Auto-Detected `MMC5983MA` 9-DOF Compass)  
+**Document Version:** `v1.1.0`  
+**Date:** November 18, 2026  
+**Firmware Baseline:** `v0.8.18` (Single-UART `UM982 COM1` + Switched `MT3608` `+5.00V` Boost + `DFRobot SEN0696` 10-DOF Beam IMU)  
 
-This document contains the complete system wiring schematics, RF antenna diagrams, and pin-by-pin interconnect tables for:
-1. **Current Generation Prototype (`v0.8.0`):** **Waveshare ESP32-S3-Touch-LCD-3.5B** + **Holybro H-RTK Unicore UM982** (Single-UART `COM1`) + **Ebyte E220-900T30D / E220-900T30S** (1W 900 MHz LoRa) + **SparkFun Qwiic `MMC5983MA`** 3-Axis 18-Bit AMR Compass (`0x30`).
-2. **Next-Generation Smart Pole:** **Waveshare ESP32-S3-Touch-LCD-3.49-V2** (`J3` 22-Pin Expansion Header + 18650 Battery) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N3904` NPN) & `MT3608` 5.0V Boost Stage** + **Holybro UM982** (Single-UART `COM1`) + **Ebyte E220-900T30D/S** + **SparkFun Qwiic `MMC5983MA` Compass (`0x30`)**.
+This document contains the complete high-level wiring diagram, hardware schematics, RF antenna diagrams, power budget, and pin-by-pin interconnect tables for:
+1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** + **`1S` Li-Ion/LiPo Pack + Discrete High-Side Switch (`NDP6020P` P-FET + `2N2222` NPN) & `MT3608` `+5.00 V` Boost Stage (`470 uF` + `0.1 uF`)** + **Holybro H-RTK Unicore `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30S`** (`1 W` `925.125 MHz` LoRa) + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`).
+2. **Next-Generation Smart Pole:** **Waveshare `ESP32-S3-Touch-LCD-3.49-V2`** (`J3` 22-Pin Expansion Header + `18650` Battery) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N3904` NPN) & `MT3608` `5.0V` Boost Stage** + **Holybro `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30D/S`** + **Outboard Beam Compass (`MMC5983MA` / `SEN0696`)**.
 
 ---
 
-## 1. Current Generation Prototype (`Waveshare ESP32-S3-Touch-LCD-3.5B`, Firmware `v0.8.0`)
+## 1. Current Rover Prototype (`Waveshare ESP32-S3-Touch-LCD-3.5B`, Firmware `v0.8.18`)
 
-![Current Generation RTK Rover v0.8.0 Wiring Schematic (Waveshare ESP32-S3-Touch-LCD-3.5B)](wiring_diagram_3_5B_v0_8_0.png)
-*Figure 1: Complete Hardware & RF Antenna Wiring Schematic for the Current-Generation Waveshare `ESP32-S3-Touch-LCD-3.5B` Prototype (`v0.8.0` Single-UART `UM982 COM1` + Auto-Detected `MMC5983MA` Compass).*  
-*(Vector SVG version: [`wiring_diagram_3_5B_v0_8_0.svg`](wiring_diagram_3_5B_v0_8_0.svg))*
+![RTK Rover v0.8.18 High-Level Wiring Diagram (Waveshare ESP32-S3-Touch-LCD-3.5B)](wiring_diagram_3_5B_current.png)
+*Figure 1: High-Level Hardware Wiring Diagram for the Current `Waveshare ESP32-S3-Touch-LCD-3.5B` Rover (`v0.8.18`) including the Switched `MT3608` `+5.00V` Boost Power Stage, `E220-900T30S` LoRa, Dual-Antenna `UM982 COM1`, and `DFRobot Gravity SEN0696` (`0x4A`) Beam 10-DOF IMU.*  
+*(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | Legacy `v0.8.0` external-USB + `MMC5983MA` block schematic preserved for reference: [`wiring_diagram_3_5B_v0_8_0.png`](wiring_diagram_3_5B_v0_8_0.png) / [`svg`](wiring_diagram_3_5B_v0_8_0.svg))*
 
-### 1.1 Complete Pin-by-Pin Interconnect Table (`ESP32-S3-Touch-LCD-3.5B`)
+### 1.1 Complete Pin-by-Pin Interconnect & Power Stage Table (`ESP32-S3-Touch-LCD-3.5B`)
 
-| Peripheral Module | Module Pin / Port | Direction | `ESP32-S3-Touch-LCD-3.5B` Pin | Signal / Protocol Specification |
+> **CRITICAL POWER & CABLE COLOR WARNINGS:**  
+> * **Never tie `MT3608 VOUT+ (+5.00V)` to `3.5B Header P2 (5V)`:** Keeping `MT3608 +5.00V` isolated on `UM982 5V_IN` and `E220 VCC` prevents backfeeding `VBUS` when running on battery and lets USB-C independently supply `500 mA` `AXP2101` charging on the bench.  
+> * **Gravity `SEN0696` vs. Qwiic Color Swap:** On the DFRobot `PH2.0-4P` Gravity cable, **Green (`D/T`) = `SDA`** (`IO8`) and **Blue (`C/R`) = `SCL`** (`IO7`) — opposite to SparkFun Qwiic (**Blue = `SDA`**, **Yellow = `SCL`**). Power `SEN0696` **`+` (Red)** strictly from **`3V3` (`P32`)** so external pull-ups never exceed `3.3 V`.
+
+| Peripheral / Power Stage | Module Pin / Port | Direction | `3.5B` Pin (`GPIO` / Rail) | Wire / Electrical Specification |
 | :--- | :--- | :---: | :--- | :--- |
-| **Holybro UM982 GNSS** | `5V_IN` (`VCC`) | $\longleftarrow$ | `5V` / External USB 5V Rail | `+5.0 V` DC Supply (`~320 mA` incl. active LNA bias) |
-| **Holybro UM982 GNSS** | `GND` | $\longleftrightarrow$ | `GND` | Common System Ground |
-| **Holybro UM982 GNSS** | **`COM1 TX` (`TXD0`)** | $\longrightarrow$ | **`GPIO 17` (`Serial1 RX`)** | `115200 8N1` — `NMEA` (`GGA`, `RMC`, `GST`, `GSV`, `GGAH`) + `#UNIHEADINGA` + `#BASEINFOA` + Command Responses (`VERSIONA`, `MODE`, `CONFIG`, `LOGLIST`) |
-| **Holybro UM982 GNSS** | **`COM1 RX` (`RXD0`)** | $\longleftarrow$ | **`GPIO 18` (`Serial1 TX`)** | `115200 8N1` — Multiplexed ASCII Setup/Query Commands + `CRC24Q`-Verified Binary `RTCM3.x` Corrections (`1006, 1074, 1084, 1094, 1230`) |
-| **Holybro UM982 GNSS** | `COM2 TX/RX` (`TXD1/RXD1`) | — | **`GPIO 47 / 48` (Freed / NC)** | **Disconnected in `v0.8.0`** (saves 2 wires & ~6 KB internal `DRAM0`) |
-| **Holybro UM982 GNSS** | **`ANT1 (MASTER)` MMCX/SMA** | $\longleftrightarrow$ | **Master GNSS Antenna** | $50\,\Omega$ Coax to L1/L2/L5 Master Antenna (Position / PVT) |
-| **Holybro UM982 GNSS** | **`ANT2 (SLAVE)` MMCX/SMA** | $\longleftrightarrow$ | **Slave GNSS Antenna** | $50\,\Omega$ Coax to L1/L2/L5 Slave Antenna (Moving-Baseline Heading, $B = 55.5\text{ cm}$) |
-| **Ebyte E220-900T30D/S** | `VCC` | $\longleftarrow$ | `5V` / External USB 5V Rail | `+5.0 V` DC Supply (with local `100 uF` electrolytic + `0.1 uF` ceramic decoupling) |
-| **Ebyte E220-900T30D/S** | `GND` | $\longleftrightarrow$ | `GND` | Common System Ground |
-| **Ebyte E220-900T30D/S** | **`TXD` (Module Out)** | $\longrightarrow$ | **`GPIO 41` (`Serial0 RX`)** | `115200 8N1` (Mode 0 RTCM3 Downlink + RSSI Reply) / `9600 8N1` (Mode 3 Config) |
-| **Ebyte E220-900T30D/S** | **`RXD` (Module In)** | $\longleftarrow$ | **`GPIO 42` (`Serial0 TX`)** | `115200 8N1` (45-Byte Uplink Telemetry + Rate-Switch Req + RSSI Query) |
-| **Ebyte E220-900T30D/S** | **`AUX`** | $\longrightarrow$ | **`GPIO 21` (ISR Input)** | Hardware Edge Interrupt (`HIGH` = Idle/Ready, `LOW` = RF/UART Busy) |
-| **Ebyte E220-900T30D/S** | **`M0`** | $\longleftarrow$ | **`GPIO 39` (Output)** | Mode Select Bit 0 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
-| **Ebyte E220-900T30D/S** | **`M1`** | $\longleftarrow$ | **`GPIO 40` (Output)** | Mode Select Bit 1 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
-| **Ebyte E220-900T30D/S** | `NRST` *(Optional)* | $\longleftarrow$ | `GPIO 38` (Output) | Optional Hardware Reset |
-| **Ebyte E220-900T30D/S** | **`SMA / IPEX RF Port`** | $\longleftrightarrow$ | **900 MHz LoRa Antenna** | $50\,\Omega$ Coax to 900 MHz ISM Antenna (`CH 75 = 925.125 MHz`) |
-| **SparkFun `MMC5983MA`** | `3.3V` (Qwiic Red) | $\longleftarrow$ | **`3V3` (`+3.3 V` Out)** | `+3.3 V` Regulated Supply (`< 1 mA` average) |
-| **SparkFun `MMC5983MA`** | `GND` (Qwiic Black) | $\longleftrightarrow$ | **`GND`** | Common System Ground |
-| **SparkFun `MMC5983MA`** | **`SCL` (Qwiic Yellow)** | $\longleftarrow$ | **`GPIO 7` (`I2C0_SCL`)** | `400 kHz` Shared I2C0 Clock (with 18-clock GPIO bus-clear & `i2c_bsp_lock()`) |
-| **SparkFun `MMC5983MA`** | **`SDA` (Qwiic Blue)** | $\longleftrightarrow$ | **`GPIO 8` (`I2C0_SDA`)** | `400 kHz` Shared I2C0 Data (I2C Address `0x30`, Auto-Detected via `Reg 0x2F == 0x30`) |
+| **`1S` Li-Ion / LiPo Pack** | **`BAT+` (`3.5V–4.2V`)** | $\longleftrightarrow$ | **`P1` (`BAT`) / `BAT JST`** & **`NDP6020P` Source (Pin 3)** | Dark Red — Unswitched `VBAT` feeding `AXP2101` PMIC (`0x34`) & high-side P-FET Source + `R1` (`10 kOhm` pull-up to Gate) |
+| **High-Side Power Switch** | **`2N2222` Base (via `R2 10 kOhm`)** | $\longleftarrow$ | **`P31` (`3V3` Switched Out)** | Orange — Active `+3.3 V` when powered ON pulls `NDP6020P` Gate LOW via `2N2222`; `0.00 uA` leak when OFF |
+| **High-Side Switch $\to$ Boost** | **`NDP6020P` Drain $\to$ `MT3608 VIN+`** | $\longrightarrow$ | Switched `VBAT` | Orange — Powers `MT3608` DC-DC Boost only while rover is ON |
+| **`MT3608` `+5.00V` Boost** | **`VOUT+` (`+5.00 V`)** | $\longrightarrow$ | **`UM982 5V_IN` & `E220 VCC`** | Red (`+470 uF` low-ESR electrolytic + `0.1 uF` ceramic decoupling caps across `VOUT+` / `GND`) |
+| **Common Star Ground** | **`GND` (`VIN-`/`VOUT-`/Modules)** | $\longleftrightarrow$ | **`P3, P4, P29, P30` (`GND`)** | Black — Common ground tying Battery `-`, `2N2222` Emitter, `MT3608`, `3.5B`, `UM982`, `E220`, and `SEN0696` |
+| **Holybro `UM982` GNSS** | **`5V_IN` (`VCC`)** | $\longleftarrow$ | **`MT3608` `VOUT+ (+5.00 V)`** | Red — `+5.00 V` DC Supply (`~320–350 mA` incl. active dual LNA bias) |
+| **Holybro `UM982` GNSS** | **`COM1 TX` (`TXD0`)** | $\longrightarrow$ | **`P16` (`GPIO 17` / `Serial1 RX`)** | Teal — `115200 8N1` (`NMEA` + `#UNIHEADINGA` + `#BASEINFOA` + Cmd ACKs) |
+| **Holybro `UM982` GNSS** | **`COM1 RX` (`RXD0`)** | $\longleftarrow$ | **`P18` (`GPIO 18` / `Serial1 TX`)** | Cyan — `115200 8N1` (Multiplexed ASCII Setup Cmds + `CRC24Q`-Verified `RTCM3.x` Corrections) |
+| **Holybro `UM982` GNSS** | `COM2 TX/RX` (`TXD1/RXD1`) | — | **`P21 / P23` (`GPIO 47 / 48` Freed)** | **Disconnected in `v0.8.x`** (saves 2 wires & `~6 KB` internal `DRAM0`) |
+| **Holybro `UM982` GNSS** | **`ANT1 (MASTER)` & `ANT2 (SLAVE)`** | $\longleftrightarrow$ | **Dual L1/L2/L5 Antennas** | $50\,\Omega$ MMCX/SMA coax on `55.5 cm` rigid crossbar (Pole Midpoint `27.75 cm`, Height `1.80 m`) |
+| **Ebyte `E220-900T30S`** | **`VCC`** | $\longleftarrow$ | **`MT3608` `VOUT+ (+5.00 V)`** | Red — `+5.00 V` DC Supply (supported by `MT3608` `470 uF` + `0.1 uF` reservoir for `1 W` TX peaks) |
+| **Ebyte `E220-900T30S`** | **`TXD` (Module Out)** | $\longrightarrow$ | **`P13` (`GPIO 41` / `Serial0 RX`)** | Purple — `115200 8N1` (Mode 0 `RTCM3` Downlink + RSSI Reply) / `9600 8N1` (Mode 3 Cfg) |
+| **Ebyte `E220-900T30S`** | **`RXD` (Module In)** | $\longleftarrow$ | **`P15` (`GPIO 42` / `Serial0 TX`)** | Magenta — `115200 8N1` (`48 B` Uplink Telemetry + Rate-Switch Cmds + `C0..C3` RSSI Query) |
+| **Ebyte `E220-900T30S`** | **`AUX`** | $\longrightarrow$ | **`P5` (`GPIO 21` / ISR Input)** | Amber — Hardware Edge Interrupt (`HIGH` = Idle/Ready, `LOW` = Busy) |
+| **Ebyte `E220-900T30S`** | **`M0`** | $\longleftarrow$ | **`P9` (`GPIO 39` / Output)** | Brown — Mode Select Bit 0 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
+| **Ebyte `E220-900T30S`** | **`M1`** | $\longleftarrow$ | **`P11` (`GPIO 40` / Output)** | Olive — Mode Select Bit 1 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
+| **Ebyte `E220-900T30S`** | `NRST` *(Optional)* | $\longleftarrow$ | `P7` (`GPIO 38` / Output) | Gray Dashed — Optional Hardware Reset |
+| **Ebyte `E220-900T30S`** | **`SMA / IPEX RF Port`** | $\longleftrightarrow$ | **900 MHz LoRa Antenna** | $50\,\Omega$ Coax (`CH 75 = 925.125 MHz`, `30 dBm` / `1 W`, `4.8k/9.6k/19.2k` air-rate) |
+| **DFRobot `SEN0696` (`0x4A`)** | **`+` (`VCC`, Gravity Red)** | $\longleftarrow$ | **`P32` (`3V3` Out)** | **Gravity Red** — Regulated `+3.3 V` (`~1 mA`; `BMI323` + `BMM350` + `BMP581` 10-DOF Beam IMU) |
+| **DFRobot `SEN0696` (`0x4A`)** | **`-` (`GND`, Gravity Black)** | $\longleftrightarrow$ | **`P30` (`GND`)** | **Gravity Black** — Common System Ground |
+| **DFRobot `SEN0696` (`0x4A`)** | **`C/R` (`SCL`, Gravity Blue)** | $\longleftarrow$ | **`P26` (`GPIO 7` / `I2C0_SCL`)** | **Gravity Blue** — `400 kHz` Shared `I2C0` Clock (18-clk GPIO bus-clear + optional `4.7 kOhm` pull-up to `3V3`) |
+| **DFRobot `SEN0696` (`0x4A`)** | **`D/T` (`SDA`, Gravity Green)** | $\longleftrightarrow$ | **`P28` (`GPIO 8` / `I2C0_SDA`)** | **Gravity Green** — `400 kHz` Shared `I2C0` Data (`0x4A..0x4D`; optional `4.7 kOhm` pull-up to `3V3` & legacy `MMC5983MA` `0x30` auto-detected) |
 
 ---
 

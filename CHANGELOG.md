@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [generate_wiring_diagrams.py v1.2.0] - 2026-11-18
+### Added & Changed
+- **Current Hardware High-Level Wiring Diagram & Schematics Update ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.2.0`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.1.0`, [`docs/schematics/wiring_diagram_3_5B_current.png`](docs/schematics/wiring_diagram_3_5B_current.png), [`docs/schematics/wiring_diagram_3_5B_current.svg`](docs/schematics/wiring_diagram_3_5B_current.svg)):**
+  - Added `generate_3_5b_current_diagram()` (`300 DPI` PNG + SVG) in a clean white-background Arduino hardware wiring style (`3.5B` 32-pin header breakout + `E220-900T30S` + `UM982` dual-antenna crossbar + `DFRobot Gravity SEN0696` `0x4A` on `3V3` with Gravity wire colors + `1S` Li-Ion/LiPo + `NDP6020P`/`2N2222`/`R1/R2 10K` high-side switch + `MT3608` `+5.00V` boost + `470 uF`/`0.1 uF` decoupling + optional `4.7K` external `I2C0` pull-up hardening & legacy `MMC5983MA` fallback box + monospace pinout legend).
+  - Updated [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) Section 1 (`v1.1.0`) to reflect the `v0.8.18` `MT3608` power stage and `SEN0696` `3V3` wiring while preserving historical `v0.8.0` and `3.49-V2` Smart Pole schematics.
+
 ## [v0.8.18] - 2026-11-17
 
 ### Fixed
