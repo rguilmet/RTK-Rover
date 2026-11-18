@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Circle, Polygon, Rectangle
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.2.0"
+__version__ = "v1.3.0"
 
 
 def draw_chip_box(ax, x, y, w, h, title, subtitle, facecolor="#1E293B", edgecolor="#38BDF8", title_color="#F8FAFC", sub_color="#94A3B8", lw=2.2):
@@ -739,8 +739,8 @@ def _draw_waveshare_35b_pcb(ax, x, y, w, h):
         "2:5V", "4:GND", "6:IO19", "8:IO20", "10:IO11", "12:IO10", "14:IO9", "16:IO17",
         "18:IO18", "20:IO0", "22:RST", "24:PWR", "26:SCL7", "28:SDA8", "30:GND", "32:3V3"
     ]
-    active_odd = {0, 1, 2, 3, 4, 5, 6, 7, 14, 15}
-    active_even = {1, 7, 8, 12, 13, 14, 15}
+    active_odd = {0, 2, 3, 4, 5, 6, 7, 14, 15}
+    active_even = {7, 8, 12, 13, 14, 15}
 
     pin_coords = {}
     px_l = x + 0.16
@@ -769,7 +769,8 @@ def _draw_waveshare_35b_pcb(ax, x, y, w, h):
         pin_coords[2 * r + 1] = (x, ry)
         pin_coords[2 * r + 2] = (x + w, ry)
 
-    pin_coords["BAT_JST"] = (x + 2.24, y + h - 0.44)
+    pin_coords["BAT_JST+"] = (x + 2.06, y + h - 0.18)
+    pin_coords["BAT_JST-"] = (x + 2.42, y + h - 0.18)
     pin_coords["USBC_TOP"] = (x + 3.77, y + h + 0.16)
     return pin_coords
 
@@ -783,31 +784,35 @@ def _draw_e220_module(ax, x, y, w, h):
         facecolor="#1E293B", edgecolor="#0F172A", lw=1.4, zorder=2.5
     )
     ax.add_patch(pcb)
-    # Brushed silver RF shield can (leaves clean margin at top & right for RF ANT and pads)
+    # Brushed silver RF shield can (leaves clean left/top/right PCB border for VCC/GND & signal pads)
     can = FancyBboxPatch(
-        (x + 0.48, y + 0.65), w - 1.38, h - 1.65,
+        (x + 0.85, y + 0.65), w - 1.78, h - 1.65,
         boxstyle="round,pad=0.0,rounding_size=0.08",
         facecolor="#CBD5E1", edgecolor="#64748B", lw=1.2, zorder=3
     )
     ax.add_patch(can)
-    ax.text(x + 0.48 + (w - 1.38) / 2.0, y + 0.65 + (h - 1.65) / 2.0,
+    ax.text(x + 0.85 + (w - 1.78) / 2.0, y + 0.65 + (h - 1.65) / 2.0,
             "EBYTE\nE220-900T30S\n900MHz 1W\nCH75 (925.125M)",
-            color="#1E293B", fontsize=7.4, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.5)
+            color="#1E293B", fontsize=7.0, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.5)
     # Gold coax connector at top
     ant_x = x + 1.90
     ax.add_patch(Rectangle((ant_x - 0.25, y + h - 0.35), 0.50, 0.50, facecolor="#D4AF37", edgecolor="#78350F", lw=1.0, zorder=3.5))
     ax.text(ant_x + 0.38, y + h - 0.32, "RF ANT", color="#FACC15", fontsize=6.4, fontweight="bold", ha="left", va="center", family="monospace", zorder=3.6)
 
     pins = {}
-    # VCC at top-left
+    # Dedicated Power Input Pair on left edge (from Power Module)
     vcc_y = y + h - 0.90
+    gnd_pwr_y = y + h - 1.55
     _pad_hole(ax, x + 0.16, vcc_y, radius=0.08, z=4)
     ax.text(x + 0.34, vcc_y, "VCC", color="#FCA5A5", fontsize=6.6, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
     pins["VCC"] = (x, vcc_y)
 
-    # Right edge header pins aligned 1:1 horizontally with 3.5B pins (24.95 down to 21.95)
+    _pad_hole(ax, x + 0.16, gnd_pwr_y, radius=0.08, z=4)
+    ax.text(x + 0.34, gnd_pwr_y, "GND", color="#CBD5E1", fontsize=6.6, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
+    pins["GND_PWR"] = (x, gnd_pwr_y)
+
+    # Right edge signal pins aligned 1:1 horizontally with 3.5B pins (20.85 down to 18.35 when y=17.0)
     pin_rows = [
-        ("GND",  y + 4.35),
         ("AUX",  y + 3.85),
         ("NRST", y + 3.35),
         ("M0",   y + 2.85),
@@ -824,7 +829,7 @@ def _draw_e220_module(ax, x, y, w, h):
 
 
 def _draw_um982_module(ax, x, y, w, h):
-    """Draws Holybro H-RTK Unicore UM982 receiver housing with dual coax jacks & COM1 JST-GH."""
+    """Draws Holybro H-RTK Unicore UM982 receiver housing with dual coax jacks, COM1 JST-GH & 5V/GND pair."""
     _rect_shadow(ax, x, y, w, h, r=0.18)
     case = FancyBboxPatch(
         (x, y), w, h,
@@ -836,7 +841,7 @@ def _draw_um982_module(ax, x, y, w, h):
     for sx, sy in [(x + 0.30, y + h - 0.30), (x + w - 0.30, y + h - 0.30), (x + 0.30, y + 0.30), (x + w - 0.30, y + 0.30)]:
         ax.add_patch(Circle((sx, sy), 0.09, facecolor="#94A3B8", edgecolor="#334155", lw=0.6, zorder=3))
 
-    ax.text(x + w * 0.57, y + h * 0.62, "Holybro\nH-RTK UM982\nDual-Ant RTK",
+    ax.text(x + w * 0.50, y + h * 0.62, "Holybro\nH-RTK UM982\nDual-Ant RTK",
             color="#F8FAFC", fontsize=8.8, fontweight="bold", ha="center", va="center", family="sans-serif", zorder=3.5)
 
     ant1_x = x + 1.00
@@ -846,9 +851,8 @@ def _draw_um982_module(ax, x, y, w, h):
         ax.text(axp, y + h - 0.55, albl, color="#FDE68A", fontsize=5.8, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.5)
 
     pins = {"ANT1": (ant1_x, y + h + 0.17), "ANT2": (ant2_x, y + h + 0.17)}
-    ax.add_patch(Rectangle((x - 0.04, y + 0.35), 0.30, 4.10, facecolor="#F8FAFC", edgecolor="#64748B", lw=0.9, zorder=3.5))
+    ax.add_patch(Rectangle((x - 0.04, y + 0.25), 0.30, 1.75, facecolor="#F8FAFC", edgecolor="#64748B", lw=0.9, zorder=3.5))
     left_pins = [
-        ("GND", y + 3.95, "#CBD5E1"),
         ("TXD0 (COM1)", y + 0.95, "#5EEAD4"),
         ("RXD0 (COM1)", y + 0.45, "#7DD3FC"),
     ]
@@ -856,12 +860,18 @@ def _draw_um982_module(ax, x, y, w, h):
         _pad_hole(ax, x + 0.14, py, radius=0.075, z=4)
         ax.text(x + 0.36, py, lbl, color=col, fontsize=6.5, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
         pins[lbl.split()[0]] = (x, py)
-    ax.text(x + 0.36, y + 1.60, "COM2 (NC / Freed)", color="#64748B", fontsize=5.8, style="italic", ha="left", va="center", family="monospace", zorder=4)
+    ax.text(x + 0.36, y + 1.55, "COM2 (NC / Freed)", color="#64748B", fontsize=5.8, style="italic", ha="left", va="center", family="monospace", zorder=4)
 
-    p5_y = y + 2.60
+    # Dedicated 5V_IN / GND Power Input Pair on right edge (from Power Module)
+    p5_y = y + 2.95
+    pg_y = y + 2.25
     _pad_hole(ax, x + w - 0.18, p5_y, radius=0.085, z=4)
     ax.text(x + w - 0.36, p5_y, "5V_IN", color="#FCA5A5", fontsize=7.0, fontweight="bold", ha="right", va="center", family="monospace", zorder=4)
     pins["5V_IN"] = (x + w, p5_y)
+
+    _pad_hole(ax, x + w - 0.18, pg_y, radius=0.085, z=4)
+    ax.text(x + w - 0.36, pg_y, "GND", color="#CBD5E1", fontsize=7.0, fontweight="bold", ha="right", va="center", family="monospace", zorder=4)
+    pins["GND"] = (x + w, pg_y)
     return pins
 
 
@@ -903,7 +913,7 @@ def _draw_sen0696_pcb(ax, x, y, w, h):
     return pins
 
 
-def _draw_mt3608_module(ax, x, y, w, h):
+def _draw_mt3608_module(ax, x, y, w, h, flip_lr=False):
     """Draws MT3608 DC-DC Step-Up Boost module PCB with inductor, SS34 diode, and trimpot."""
     _rect_shadow(ax, x, y, w, h, r=0.10)
     pcb = FancyBboxPatch(
@@ -912,41 +922,43 @@ def _draw_mt3608_module(ax, x, y, w, h):
         facecolor="#1D4ED8", edgecolor="#1E3A8A", lw=1.4, zorder=2.5
     )
     ax.add_patch(pcb)
-    # Gray square 220 power inductor
-    ax.add_patch(Rectangle((x + 1.10, y + 1.50), 1.05, 1.05, facecolor="#475569", edgecolor="#94A3B8", lw=1.0, zorder=3))
-    ax.text(x + 1.62, y + 2.02, "220", color="#F8FAFC", fontsize=7.0, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.2)
-    # Blue multi-turn trimmer pot with brass slotted screw
-    ax.add_patch(Rectangle((x + 2.45, y + 1.48), 0.72, 1.05, facecolor="#2563EB", edgecolor="#93C5FD", lw=0.9, zorder=3))
-    ax.add_patch(Circle((x + 2.65, y + 2.30), 0.13, facecolor="#D4AF37", edgecolor="#78350F", lw=0.7, zorder=3.3))
-    # SS34 Schottky diode cleanly centered at top-left away from VIN-/VOUT- text
+    ax.add_patch(Rectangle((x + 1.10, y + h * 0.45), 1.05, 1.05, facecolor="#475569", edgecolor="#94A3B8", lw=1.0, zorder=3))
+    ax.text(x + 1.62, y + h * 0.45 + 0.52, "220", color="#F8FAFC", fontsize=7.0, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.2)
+    ax.add_patch(Rectangle((x + 2.45, y + h * 0.44), 0.72, 1.05, facecolor="#2563EB", edgecolor="#93C5FD", lw=0.9, zorder=3))
+    ax.add_patch(Circle((x + 2.65, y + h * 0.44 + 0.82), 0.13, facecolor="#D4AF37", edgecolor="#78350F", lw=0.7, zorder=3.3))
     ax.add_patch(Rectangle((x + 1.60, y + 0.48), 0.90, 0.50, facecolor="#1E293B", edgecolor="#94A3B8", lw=0.7, zorder=3))
     ax.text(x + 2.05, y + 0.73, "SS34", color="#CBD5E1", fontsize=5.2, ha="center", va="center", family="monospace", zorder=3.2)
 
     ax.text(x + w * 0.50, y + h - 0.34, "MT3608 BOOST -> +5.00V", color="#EFF6FF", fontsize=6.6, fontweight="bold",
             ha="center", va="center", family="monospace", zorder=3.5)
 
-    vin_p_y = y + h - 0.85
-    vin_n_y = y + 0.75
-    vout_p_y = y + h - 0.85
-    vout_n_y = y + 0.75
+    p_top = y + h - 0.90
+    p_bot = y + 0.80
+    x_in = x if flip_lr else x + w
+    x_out = x + w if flip_lr else x
+    px_in = x + 0.22 if flip_lr else x + w - 0.22
+    px_out = x + w - 0.22 if flip_lr else x + 0.22
+    ha_in = "left" if flip_lr else "right"
+    ha_out = "right" if flip_lr else "left"
+
     for px, py, lbl, ha_dir in [
-        (x + w - 0.22, vin_p_y, "VIN+", "right"),
-        (x + w - 0.22, vin_n_y, "VIN-", "right"),
-        (x + 0.22, vout_p_y, "VOUT+", "left"),
-        (x + 0.22, vout_n_y, "VOUT-", "left"),
+        (px_in,  p_top, "VIN+",  ha_in),
+        (px_in,  p_bot, "VIN-",  ha_in),
+        (px_out, p_top, "VOUT+", ha_out),
+        (px_out, p_bot, "VOUT-", ha_out),
     ]:
         _pad_hole(ax, px, py, radius=0.09, z=4)
-        off = -0.18 if ha_dir == "right" else 0.18
+        off = 0.18 if ha_dir == "left" else -0.18
         ax.text(px + off, py, lbl, color="#FFFFFF", fontsize=6.4, fontweight="bold", ha=ha_dir, va="center", family="monospace", zorder=4)
     return {
-        "VIN+": (x + w, vin_p_y),
-        "VIN-": (x + w, vin_n_y),
-        "VOUT+": (x, vout_p_y),
-        "VOUT-": (x, vout_n_y),
+        "VIN+":  (x_in, p_top),
+        "VIN-":  (x_in, p_bot),
+        "VOUT+": (x_out, p_top),
+        "VOUT-": (x_out, p_bot),
     }
 
 
-def _draw_1s_battery(ax, x, y, w, h):
+def _draw_1s_battery(ax, x, y, w, h, top_edge_term=False):
     """Draws 1S 3.7V Li-Ion/LiPo pouch battery pack with Kapton protection strip."""
     _rect_shadow(ax, x, y, w, h, r=0.18)
     cell = FancyBboxPatch(
@@ -955,9 +967,15 @@ def _draw_1s_battery(ax, x, y, w, h):
         facecolor="#E2E8F0", edgecolor="#64748B", lw=1.4, zorder=2.5
     )
     ax.add_patch(cell)
-    ax.add_patch(Rectangle((x + 0.12, y + h - 0.72), w - 0.24, 0.56, facecolor="#D97706", edgecolor="#92400E", lw=0.8, alpha=0.85, zorder=3))
-    ax.text(x + w / 2.0, y + h * 0.42, "1S 3.7V\nLi-Ion / LiPo\n3Ah - 10Ah",
-            color="#1E293B", fontsize=8.0, fontweight="bold", ha="center", va="center", family="sans-serif", zorder=3.5)
+    ax.add_patch(Rectangle((x + 0.12, y + h - 0.62), w - 0.24, 0.48, facecolor="#D97706", edgecolor="#92400E", lw=0.8, alpha=0.85, zorder=3))
+    ax.text(x + w / 2.0, y + h * 0.38, "1S 3.7V\nLi-Ion / LiPo\n3Ah - 10Ah",
+            color="#1E293B", fontsize=7.6, fontweight="bold", ha="center", va="center", family="sans-serif", zorder=3.5)
+    if top_edge_term:
+        p_y = y + h - 0.26
+        n_y = y + h - 0.50
+        ax.text(x + w - 0.16, p_y, "+", color="#991B1B", fontsize=8.0, fontweight="bold", ha="right", va="center", zorder=4)
+        ax.text(x + w - 0.16, n_y, "-", color="#0F172A", fontsize=8.5, fontweight="bold", ha="right", va="center", zorder=4)
+        return {"BAT+": (x + w, p_y), "BAT-": (x + w, n_y)}
     p_y = y + h - 0.30
     n_y = y + h - 0.58
     ax.text(x + w - 0.20, p_y, "+", color="#991B1B", fontsize=8.0, fontweight="bold", ha="right", va="center", zorder=4)
@@ -965,286 +983,429 @@ def _draw_1s_battery(ax, x, y, w, h):
     return {"BAT+": (x + w, p_y), "BAT-": (x + w, n_y)}
 
 
-def _draw_top_antennas(ax, lora_x, ant1_x, ant2_x):
+def _draw_power_module(ax, x, y, w, h):
+    """Draws collapsed Switched +5.00V Boost Power Module for the high-level diagram."""
+    _rect_shadow(ax, x, y, w, h, r=0.16)
+    pcb = FancyBboxPatch(
+        (x, y), w, h,
+        boxstyle="round,pad=0.0,rounding_size=0.16",
+        facecolor="#1E293B", edgecolor="#0F172A", lw=1.5, zorder=2.5
+    )
+    ax.add_patch(pcb)
+    # Teal accent header bar inside module
+    ax.add_patch(Rectangle((x + 0.18, y + h - 0.68), w - 0.36, 0.50, facecolor="#0F766E", edgecolor="#14B8A6", lw=0.8, zorder=3))
+    ax.text(x + w / 2.0, y + h - 0.43, "SWITCHED +5.00V POWER MODULE", color="#F8FAFC",
+            fontsize=7.3, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.5)
+
+    # Internal concise sub-block graphic
+    ax.text(x + w / 2.0, y + h * 0.52,
+            "High-Side Switch:\n  NDP6020P + 2N2222 + 2x10K\n\nBoost & Filter:\n  MT3608 + 470uF + 0.1uF\n\n(See Detail: Fig. 1B)",
+            color="#CBD5E1", fontsize=6.4, ha="center", va="center", family="monospace", linespacing=1.22, zorder=3.5)
+
+    pins = {}
+    # Left edge: Dedicated Output 2 -> E220
+    e_5v_y = y + h - 1.05
+    e_gnd_y = y + h - 1.75
+    for key, py, lbl, col in [
+        ("E220_5V",  e_5v_y,  "E220 +5V", "#FCA5A5"),
+        ("E220_GND", e_gnd_y, "E220 GND", "#E2E8F0"),
+    ]:
+        _pad_hole(ax, x + 0.16, py, radius=0.08, z=4)
+        ax.text(x + 0.34, py, lbl, color=col, fontsize=6.2, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
+        pins[key] = (x, py)
+
+    # Right edge top: Inputs from Waveshare 3.5B Header
+    in_pins = [
+        ("VBAT_IN", y + h - 1.05, "VBAT IN", "#FCA5A5"),
+        ("GND_IN",  y + h - 1.75, "GND IN",  "#E2E8F0"),
+        ("3V3_EN",  y + h - 2.45, "3V3 EN",  "#FDBA74"),
+    ]
+    for key, py, lbl, col in in_pins:
+        _pad_hole(ax, x + w - 0.16, py, radius=0.08, z=4)
+        ax.text(x + w - 0.34, py, lbl, color=col, fontsize=6.2, fontweight="bold", ha="right", va="center", family="monospace", zorder=4)
+        pins[key] = (x + w, py)
+
+    # Right edge bottom: Dedicated Output 1 -> Holybro UM982
+    for key, py, lbl, col in [
+        ("UM_5V",  y + 1.40, "UM982 +5V", "#FCA5A5"),
+        ("UM_GND", y + 0.65, "UM982 GND", "#E2E8F0"),
+    ]:
+        _pad_hole(ax, x + w - 0.16, py, radius=0.08, z=4)
+        ax.text(x + w - 0.34, py, lbl, color=col, fontsize=6.2, fontweight="bold", ha="right", va="center", family="monospace", zorder=4)
+        pins[key] = (x + w, py)
+    return pins
+
+
+def _draw_top_antennas(ax, lora_x, ant1_x, ant2_x, lora_base_y=25.40, bar_y=25.90):
     """Draws realistic LoRa whip antenna and Dual-GNSS T-Bar Crossbar antennas."""
     # LoRa 900MHz Whip Antenna
-    ax.add_patch(Rectangle((lora_x - 0.16, 29.20), 0.32, 0.36, facecolor="#D4AF37", edgecolor="#78350F", lw=0.9, zorder=4))
-    ax.add_patch(FancyBboxPatch((lora_x - 0.14, 29.56), 0.28, 3.05, boxstyle="round,pad=0.0,rounding_size=0.12",
+    ax.add_patch(Rectangle((lora_x - 0.15, lora_base_y), 0.30, 0.32, facecolor="#D4AF37", edgecolor="#78350F", lw=0.9, zorder=4))
+    ax.add_patch(FancyBboxPatch((lora_x - 0.13, lora_base_y + 0.32), 0.26, 2.75, boxstyle="round,pad=0.0,rounding_size=0.11",
                                 facecolor="#1E293B", edgecolor="#0F172A", lw=1.0, zorder=4))
-    ax.text(lora_x + 0.38, 31.35, "900 MHz LoRa Antenna\nCH 75 = 925.125 MHz (30 dBm / 1W)",
-            color="#0F172A", fontsize=9.0, fontweight="bold", ha="left", va="center", zorder=5)
+    ax.text(lora_x + 0.32, lora_base_y + 1.85, "900 MHz LoRa Ant\nCH 75 (925.125 MHz, 1W)",
+            color="#0F172A", fontsize=8.3, fontweight="bold", ha="left", va="center", zorder=5)
 
-    # Aluminum T-Bar Crossbar (widened slightly so text fits comfortably inside metal bar)
-    bar_x0 = ant1_x - 1.95
-    bar_w = (ant2_x + 1.95) - bar_x0
-    _rect_shadow(ax, bar_x0, 29.70, bar_w, 0.66, r=0.08, dx=0.06, dy=-0.06)
-    ax.add_patch(FancyBboxPatch((bar_x0, 29.70), bar_w, 0.66, boxstyle="round,pad=0.0,rounding_size=0.08",
+    # Aluminum T-Bar Crossbar
+    bar_x0 = ant1_x - 1.90
+    bar_w = (ant2_x + 1.90) - bar_x0
+    _rect_shadow(ax, bar_x0, bar_y, bar_w, 0.64, r=0.08, dx=0.06, dy=-0.06)
+    ax.add_patch(FancyBboxPatch((bar_x0, bar_y), bar_w, 0.64, boxstyle="round,pad=0.0,rounding_size=0.08",
                                 facecolor="#E2E8F0", edgecolor="#64748B", lw=1.3, zorder=3))
-    ax.text(0.5 * (ant1_x + ant2_x), 30.03,
+    ax.text(0.5 * (ant1_x + ant2_x), bar_y + 0.32,
             "Aluminum Crossbar (B = 55.5 cm | Mid = 27.75 cm | H = 1.80 m)",
-            color="#1E293B", fontsize=7.0, fontweight="bold", ha="center", va="center", zorder=4)
+            color="#1E293B", fontsize=6.9, fontweight="bold", ha="center", va="center", zorder=4)
 
     for axp, title, sub in [
         (ant1_x, "ANT1: Master (PVT)", "L1/L2/L5 GNSS"),
         (ant2_x, "ANT2: Slave (Hdg)", "Moving-Baseline"),
     ]:
-        ax.add_patch(Rectangle((axp - 0.15, 30.36), 0.30, 0.44, facecolor="#94A3B8", edgecolor="#475569", lw=0.8, zorder=3.5))
-        ax.add_patch(FancyBboxPatch((axp - 0.56, 30.80), 1.12, 1.32, boxstyle="round,pad=0.0,rounding_size=0.30",
+        ax.add_patch(Rectangle((axp - 0.15, bar_y + 0.64), 0.30, 0.42, facecolor="#94A3B8", edgecolor="#475569", lw=0.8, zorder=3.5))
+        ax.add_patch(FancyBboxPatch((axp - 0.54, bar_y + 1.06), 1.08, 1.24, boxstyle="round,pad=0.0,rounding_size=0.28",
                                     facecolor="#F8FAFC", edgecolor="#334155", lw=1.4, zorder=4))
-        ax.add_patch(Rectangle((axp - 0.56, 30.80), 1.12, 0.32, facecolor="#334155", edgecolor="#1E293B", lw=0.9, zorder=4.2))
-        ax.text(axp, 32.75, title, color="#0F172A", fontsize=8.8, fontweight="bold", ha="center", va="center", zorder=5)
-        ax.text(axp, 32.35, sub, color="#475569", fontsize=7.6, ha="center", va="center", zorder=5)
+        ax.add_patch(Rectangle((axp - 0.54, bar_y + 1.06), 1.08, 0.30, facecolor="#334155", edgecolor="#1E293B", lw=0.9, zorder=4.2))
+        ax.text(axp, bar_y + 2.92, title, color="#0F172A", fontsize=8.6, fontweight="bold", ha="center", va="center", zorder=5)
+        ax.text(axp, bar_y + 2.54, sub, color="#475569", fontsize=7.4, ha="center", va="center", zorder=5)
 
 
 def generate_3_5b_current_diagram(out_dir: str):
     """Generates clean white-background Arduino-style high-level wiring diagram for current v0.8.18."""
-    fig, ax = plt.subplots(figsize=(13.5, 17.5), dpi=300)
+    fig, ax = plt.subplots(figsize=(13.5, 15.75), dpi=300)
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
     ax.set_xlim(0, 27.0)
-    ax.set_ylim(0, 35.0)
+    ax.set_ylim(0, 31.5)
     ax.set_aspect("equal")
     ax.axis("off")
 
     # 1. Top-Left Title & Date (Arduino / MFS Style)
-    ax.text(0.9, 34.18, "RTK Rover Wiring Diagram", color="#0F172A", fontsize=22, fontweight="normal",
+    ax.text(0.9, 30.65, "RTK Rover High-Level Wiring Diagram", color="#0F172A", fontsize=21, fontweight="normal",
             ha="left", va="center", family="sans-serif")
-    ax.text(0.9, 33.42, "2026-11-18  |  Firmware v0.8.18  (Waveshare 3.5B + UM982 + E220 + SEN0696 + MT3608)",
-            color="#334155", fontsize=11.0, ha="left", va="center", family="sans-serif")
+    ax.text(0.9, 29.92, "2026-11-18  |  Firmware v0.8.18  (Waveshare 3.5B + UM982 + E220 + SEN0696 + Switched 5V Power Module)",
+            color="#334155", fontsize=10.5, ha="left", va="center", family="sans-serif")
 
-    # 2. Hardware Modules (Aligned 1:1 horizontally with Waveshare 3.5B 32-pin header rows)
-    lora_pins = _draw_e220_module(ax, 1.55, 20.60, 4.35, 6.00)
-    esp_pins = _draw_waveshare_35b_pcb(ax, 9.85, 16.60, 6.40, 11.00)
-    um_pins = _draw_um982_module(ax, 19.00, 21.00, 6.30, 6.00)
-    sen_pins = _draw_sen0696_pcb(ax, 19.45, 16.00, 5.65, 3.80)
-    bat_pins = _draw_1s_battery(ax, 1.65, 12.60, 3.30, 3.80)
-    mt_pins = _draw_mt3608_module(ax, 1.70, 5.10, 4.10, 3.20)
-    _draw_top_antennas(ax, lora_pins["ANT"][0], um_pins["ANT1"][0], um_pins["ANT2"][0])
+    # 2. Hardware Modules (Waveshare y=13.0..24.0; Header pins at y=21.85 down to 14.35)
+    lora_pins = _draw_e220_module(ax, 1.85, 17.00, 4.30, 6.00)
+    esp_pins = _draw_waveshare_35b_pcb(ax, 9.85, 13.00, 6.40, 11.00)
+    um_pins = _draw_um982_module(ax, 19.00, 17.40, 6.20, 6.00)
+    sen_pins = _draw_sen0696_pcb(ax, 19.45, 12.40, 5.65, 3.80)
+    pwr_pins = _draw_power_module(ax, 1.85, 7.20, 5.75, 5.05)
+    bat_pins = _draw_1s_battery(ax, 7.65, 25.05, 3.05, 2.95, top_edge_term=True)
+    _draw_top_antennas(ax, lora_pins["ANT"][0], um_pins["ANT1"][0], um_pins["ANT2"][0], lora_base_y=25.40, bar_y=25.95)
 
     # Module Captions
-    ax.text(3.72, 20.12, "Ebyte E220-900T30S (LoRa 1W)", color="#0F172A", fontsize=9.6, fontweight="bold", ha="center", va="center")
-    ax.text(3.72, 19.68, "115200 Mode0 / 9600 Mode3 Cfg", color="#475569", fontsize=7.8, ha="center", va="center")
+    ax.text(4.00, 16.52, "Ebyte E220-900T30S (LoRa 1W)", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
+    ax.text(4.00, 16.08, "115200 Mode0 / 9600 Mode3 Cfg", color="#475569", fontsize=7.6, ha="center", va="center")
 
-    ax.text(13.45, 16.08, "Waveshare ESP32-S3 Touch LCD 3.5B", color="#0F172A", fontsize=9.8, fontweight="bold", ha="center", va="center")
-    ax.text(13.45, 15.55, "Internal I2C0 (IO7/8): 0x18 ES8311 | 0x20 TCA9554 | 0x34 AXP2101\n0x3B Touch | 0x51 RTC | 0x6B QMI8658",
+    ax.text(13.20, 12.42, "Waveshare ESP32-S3 Touch LCD 3.5B", color="#0F172A", fontsize=9.8, fontweight="bold", ha="center", va="center")
+    ax.text(13.20, 11.88, "Internal I2C0 (IO7/8): 0x18 ES8311 | 0x20 TCA9554 | 0x34 AXP2101\n0x3B Touch | 0x51 RTC | 0x6B QMI8658",
             color="#475569", fontsize=6.6, ha="center", va="center")
 
-    ax.text(22.15, 20.52, "Holybro H-RTK UM982 (Single-UART COM1)", color="#0F172A", fontsize=9.6, fontweight="bold", ha="center", va="center")
-    ax.text(22.27, 15.48, "DFRobot Gravity 10DOF (SEN0696) 0x4A", color="#0F172A", fontsize=9.5, fontweight="bold", ha="center", va="center")
-    ax.text(3.30, 12.15, "1S Li-Ion / LiPo Battery", color="#0F172A", fontsize=9.2, fontweight="bold", ha="center", va="center")
-    ax.text(3.85, 4.62, "MT3608 +5.00V Boost (~85% Eff.)", color="#0F172A", fontsize=8.6, fontweight="bold", ha="center", va="center")
+    ax.text(22.10, 16.92, "Holybro H-RTK UM982 (Single-UART COM1)", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
+    ax.text(22.27, 11.88, "DFRobot Gravity 10DOF (SEN0696) 0x4A", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
+    ax.text(9.18, 24.55, "1S Li-Ion / LiPo Battery\n(Direct to 3.5B BAT JST)", color="#0F172A", fontsize=7.8, fontweight="bold", ha="center", va="center")
+    ax.text(4.72, 6.72, "Custom Switched +5.00V Power Module", color="#0F172A", fontsize=9.0, fontweight="bold", ha="center", va="center")
 
-    # USB-C Note cleanly above 3.5B
-    ax.plot([esp_pins["USBC_TOP"][0], esp_pins["USBC_TOP"][0]], [esp_pins["USBC_TOP"][1], 28.45],
-            color="#64748B", lw=1.6, ls="--", zorder=5)
-    ax.text(esp_pins["USBC_TOP"][0], 28.85, "USB-C: Opt 5V VBUS\n(500 mA Charge / Debug)",
-            color="#334155", fontsize=7.8, fontweight="bold", ha="center", va="center")
+    # 3. Direct 1S LiPo -> Waveshare BAT JST Wires (Uses Onboard AXP2101 Charging)
+    _ortho_wire(ax, [bat_pins["BAT+"], (11.91, bat_pins["BAT+"][1]), esp_pins["BAT_JST+"]], color="#DC2626", lw=2.8, z=6)
+    _ortho_wire(ax, [bat_pins["BAT-"], (12.27, bat_pins["BAT-"][1]), esp_pins["BAT_JST-"]], color="#0F172A", lw=2.8, z=6)
+    ax.text(11.35, 27.95, "JST-PH2.0\nDirect", color="#334155", fontsize=6.6, fontweight="bold", ha="center", va="center")
 
-    # 3. Coax RF Cables
-    _ortho_wire(ax, [lora_pins["ANT"], (lora_pins["ANT"][0], 29.20)], color="#1E293B", lw=3.6, z=5)
-    ax.text(lora_pins["ANT"][0] + 0.15, 28.35, "50 Ohm Coax", color="#334155", fontsize=7.2, ha="left", va="center")
-    _ortho_wire(ax, [um_pins["ANT1"], (um_pins["ANT1"][0], 29.70)], color="#1E293B", lw=3.4, z=5)
-    _ortho_wire(ax, [um_pins["ANT2"], (um_pins["ANT2"][0], 29.70)], color="#1E293B", lw=3.4, z=5)
-    ax.text(0.5 * (um_pins["ANT1"][0] + um_pins["ANT2"][0]), 28.35, "50 Ohm MMCX/SMA Coax", color="#334155", fontsize=7.2, ha="center", va="center")
+    # USB-C Note cleanly top-right of BAT JST
+    _ortho_wire(ax, [esp_pins["USBC_TOP"], (esp_pins["USBC_TOP"][0], 24.75), (14.65, 24.75), (14.65, 25.35)],
+                color="#64748B", lw=1.6, ls="--", z=5)
+    ax.text(14.65, 25.85, "USB-C: 5V VBUS\n(500mA Batt Charge / Debug)",
+            color="#334155", fontsize=7.4, fontweight="bold", ha="center", va="center")
 
-    # 4. E220 <-> Waveshare 3.5B Signal Wires (Left Header Side, Clean Horizontal!)
+    # 4. Coax RF Cables
+    _ortho_wire(ax, [lora_pins["ANT"], (lora_pins["ANT"][0], 25.40)], color="#1E293B", lw=3.6, z=5)
+    ax.text(lora_pins["ANT"][0] + 0.14, 24.25, "50 Ohm Coax", color="#334155", fontsize=7.0, ha="left", va="center")
+    _ortho_wire(ax, [um_pins["ANT1"], (um_pins["ANT1"][0], 25.95)], color="#1E293B", lw=3.4, z=5)
+    _ortho_wire(ax, [um_pins["ANT2"], (um_pins["ANT2"][0], 25.95)], color="#1E293B", lw=3.4, z=5)
+    ax.text(0.5 * (um_pins["ANT1"][0] + um_pins["ANT2"][0]), 24.65, "50 Ohm MMCX/SMA Coax", color="#334155", fontsize=7.2, ha="center", va="center")
+
+    # 5. E220 <-> Waveshare 3.5B Signal Wires (Left Header Side, Clean 1:1 Horizontal!)
     e220_wires = [
-        (lora_pins["AUX"],  esp_pins[5],  "#D97706", "-",  None, "AUX (IO21)"),
-        (lora_pins["NRST"], esp_pins[7],  "#64748B", "--", None, "NRST Opt (IO38)"),
-        (lora_pins["M0"],   esp_pins[9],  "#92400E", "-",  None, "M0 (IO39)"),
-        (lora_pins["M1"],   esp_pins[11], "#4D7C0F", "-",  None, "M1 (IO40)"),
-        (lora_pins["TXD"],  esp_pins[13], "#9333EA", "-",  None, "TXD->RX0 (IO41)"),
-        (lora_pins["RXD"],  esp_pins[15], "#DB2777", "-",  None, "RXD<-TX0 (IO42)"),
+        (lora_pins["AUX"],  esp_pins[5],  "#D97706", "-",  "AUX (IO21)"),
+        (lora_pins["NRST"], esp_pins[7],  "#64748B", "--", "NRST Opt (IO38)"),
+        (lora_pins["M0"],   esp_pins[9],  "#92400E", "-",  "M0 (IO39)"),
+        (lora_pins["M1"],   esp_pins[11], "#4D7C0F", "-",  "M1 (IO40)"),
+        (lora_pins["TXD"],  esp_pins[13], "#9333EA", "-",  "TXD->RX0 (IO41)"),
+        (lora_pins["RXD"],  esp_pins[15], "#DB2777", "-",  "RXD<-TX0 (IO42)"),
     ]
-    for p_lora, p_esp, col, ls, stripe, lbl in e220_wires:
-        _ortho_wire(ax, [p_lora, p_esp], color=col, lw=2.8, ls=ls, stripe_color=stripe, z=6)
-        ax.text(7.20, p_esp[1] + 0.16, lbl, color="#1E293B", fontsize=6.4, fontweight="bold",
-                ha="center", va="center", bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
+    for p_lora, p_esp, col, ls, lbl in e220_wires:
+        _ortho_wire(ax, [p_lora, p_esp], color=col, lw=2.8, ls=ls, z=6)
+        ax.text(7.45, p_esp[1] + 0.16, lbl, color="#1E293B", fontsize=6.3, fontweight="bold",
+                ha="center", va="center", bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
 
-    # 5. UM982 <-> Waveshare 3.5B COM1 Wires (Right Header Side)
+    # 6. UM982 <-> Waveshare 3.5B COM1 Wires (Right Header Side, Clean Horizontal!)
     _ortho_wire(ax, [esp_pins[16], um_pins["TXD0"]], color="#0D9488", lw=3.0, z=6)
-    ax.text(17.62, esp_pins[16][1] + 0.16, "COM1 TX->IO17", color="#0F172A", fontsize=6.6, fontweight="bold",
+    ax.text(17.62, esp_pins[16][1] + 0.16, "COM1 TX->IO17", color="#0F172A", fontsize=6.5, fontweight="bold",
             ha="center", va="center", bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
     _ortho_wire(ax, [esp_pins[18], um_pins["RXD0"]], color="#0284C7", lw=3.0, z=6)
-    ax.text(17.62, esp_pins[18][1] - 0.18, "COM1 RX<-IO18", color="#0F172A", fontsize=6.6, fontweight="bold",
+    ax.text(17.62, esp_pins[18][1] - 0.18, "COM1 RX<-IO18", color="#0F172A", fontsize=6.5, fontweight="bold",
             ha="center", va="center", bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
 
-    # 6. SEN0696 <-> Waveshare 3.5B I2C0 Gravity 4-Pin Cable
+    # 7. SEN0696 <-> Waveshare 3.5B I2C0 Gravity 4-Pin Cable (Straight Horizontal!)
     _ortho_wire(ax, [esp_pins[26], sen_pins["SCL"]], color="#2563EB", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[26][1] + 0.17, "SCL Blu", color="#1E3A8A", fontsize=6.5, fontweight="bold", ha="center", va="center", zorder=7)
+    ax.text(17.05, esp_pins[26][1] + 0.17, "SCL Blu", color="#1E3A8A", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
 
     _ortho_wire(ax, [esp_pins[28], sen_pins["SDA"]], color="#16A34A", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[28][1] + 0.15, "SDA Grn", color="#14532D", fontsize=6.5, fontweight="bold", ha="center", va="center", zorder=7)
+    ax.text(17.05, esp_pins[28][1] + 0.15, "SDA Grn", color="#14532D", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
 
     _ortho_wire(ax, [esp_pins[30], sen_pins["GND"]], color="#0F172A", lw=3.2, z=6)
     _ortho_wire(ax, [esp_pins[32], sen_pins["VCC"]], color="#EF4444", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[32][1] - 0.18, "3V3 Red", color="#991B1B", fontsize=6.5, fontweight="bold", ha="center", va="center", zorder=7)
+    ax.text(17.05, esp_pins[32][1] - 0.18, "3V3 Red", color="#991B1B", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
 
-    # 7. Magenta Box: Optional Bench Hardening (4.7K External I2C0 Pull-Ups + Legacy MMC5983MA)
+    # 8. Magenta Box: Optional Bench Hardening (4.7K External I2C0 Pull-Ups + Legacy MMC5983MA)
     mag_box = FancyBboxPatch(
-        (17.35, 10.15), 8.45, 4.10,
+        (17.35, 7.95), 8.35, 3.55,
         boxstyle="round,pad=0.0,rounding_size=0.14",
         facecolor="#FFFDFE", edgecolor="#EC4899", lw=1.8, zorder=2
     )
     ax.add_patch(mag_box)
-    # Title anchored neatly on right side so SCL/SDA/3V3 drop wires at x=17.95..18.95 never touch it!
-    ax.text(25.55, 13.88, "Optional Bench Hardening / Fallback", color="#DB2777",
-            fontsize=8.8, fontweight="bold", ha="right", va="center", zorder=4)
+    ax.text(25.45, 11.18, "Optional Bench Hardening / Fallback", color="#DB2777",
+            fontsize=8.6, fontweight="bold", ha="right", va="center", zorder=4)
 
     tx_scl, tx_sda, tx_3v3 = 17.95, 18.45, 18.95
     _junc_dot(ax, tx_scl, sen_pins["SCL"][1])
     _junc_dot(ax, tx_sda, sen_pins["SDA"][1])
     _junc_dot(ax, tx_3v3, sen_pins["VCC"][1])
-    _ortho_wire(ax, [(tx_scl, sen_pins["SCL"][1]), (tx_scl, 12.85), (19.55, 12.85)], color="#2563EB", lw=2.2, z=6)
-    _ortho_wire(ax, [(tx_sda, sen_pins["SDA"][1]), (tx_sda, 11.75), (19.55, 11.75)], color="#16A34A", lw=2.2, z=6)
-    _ortho_wire(ax, [(tx_3v3, sen_pins["VCC"][1]), (tx_3v3, 11.00), (21.85, 11.00), (21.85, 12.85)], color="#EF4444", lw=2.2, z=5.5)
-    _resistor_zigzag(ax, 19.55, 12.85, 21.35, 12.85, "4.7K", label_offset=(0.0, 0.30), horizontal=True, z=7)
-    _resistor_zigzag(ax, 19.55, 11.75, 21.35, 11.75, "4.7K", label_offset=(0.0, 0.30), horizontal=True, z=7)
-    ax.plot([21.35, 21.85], [12.85, 12.85], color="#EF4444", lw=2.2, zorder=6)
-    ax.plot([21.35, 21.85], [11.75, 11.75], color="#EF4444", lw=2.2, zorder=6)
-    _junc_dot(ax, 21.85, 11.75)
+    _ortho_wire(ax, [(tx_scl, sen_pins["SCL"][1]), (tx_scl, 10.25), (19.55, 10.25)], color="#2563EB", lw=2.2, z=6)
+    _ortho_wire(ax, [(tx_sda, sen_pins["SDA"][1]), (tx_sda, 9.25),  (19.55, 9.25)],  color="#16A34A", lw=2.2, z=6)
+    _ortho_wire(ax, [(tx_3v3, sen_pins["VCC"][1]), (tx_3v3, 8.55),  (21.85, 8.55), (21.85, 10.25)], color="#EF4444", lw=2.2, z=5.5)
+    _resistor_zigzag(ax, 19.55, 10.25, 21.35, 10.25, "4.7K", label_offset=(0.0, 0.28), horizontal=True, z=7)
+    _resistor_zigzag(ax, 19.55, 9.25,  21.35, 9.25,  "4.7K", label_offset=(0.0, 0.28), horizontal=True, z=7)
+    ax.plot([21.35, 21.85], [10.25, 10.25], color="#EF4444", lw=2.2, zorder=6)
+    ax.plot([21.35, 21.85], [9.25,  9.25],  color="#EF4444", lw=2.2, zorder=6)
+    _junc_dot(ax, 21.85, 9.25)
 
-    ax.text(22.25, 12.05, "4.7K Pull-Ups to 3V3\n(SEN0696 End)\n\nAlt/Legacy Compass:\nQwiic MMC5983MA\n(I2C Addr 0x30)",
-            color="#334155", fontsize=7.4, ha="left", va="center", zorder=5)
+    ax.text(22.25, 9.50, "4.7K Pull-Ups to 3V3\n(SEN0696 End)\n\nAlt/Legacy Compass:\nQwiic MMC5983MA\n(I2C Addr 0x30)",
+            color="#334155", fontsize=7.2, ha="left", va="center", zorder=5)
 
-    # 8. High-Side Switch (NDP6020P P-FET + 2N2222 NPN + R1/R2 10K) + Battery + MT3608 + Caps
-    # VBAT Bus: Battery BAT+ (4.95, 16.10) <-> Node (8.95, 16.10) -> UP to 3.5B Pin 1 BAT & DOWN to NDP6020P Source
-    _ortho_wire(ax, [bat_pins["BAT+"], (8.95, bat_pins["BAT+"][1]), (8.95, esp_pins[1][1]), esp_pins[1]], color="#991B1B", lw=3.2, z=6)
-    _junc_dot(ax, 8.95, bat_pins["BAT+"][1])
-    ax.text(8.78, 19.35, "VBAT\n(3.7V)", color="#991B1B", fontsize=7.3, fontweight="bold", ha="right", va="center",
-            bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
+    # 9. Power Module Inputs (From 3.5B Header Left: P1 VBAT, P29 GND, P31 3V3)
+    _ortho_wire(ax, [esp_pins[1],  (8.85, esp_pins[1][1]),  (8.85, pwr_pins["VBAT_IN"][1]), pwr_pins["VBAT_IN"]], color="#991B1B", lw=3.0, z=6)
+    _ortho_wire(ax, [esp_pins[29], (9.20, esp_pins[29][1]), (9.20, pwr_pins["GND_IN"][1]),  pwr_pins["GND_IN"]],  color="#0F172A", lw=2.8, z=6)
+    _ortho_wire(ax, [esp_pins[31], (9.52, esp_pins[31][1]), (9.52, pwr_pins["3V3_EN"][1]),  pwr_pins["3V3_EN"]],  color="#F97316", lw=2.8, z=6)
+    ax.text(8.68, 16.05, "VBAT\n(P1)", color="#991B1B", fontsize=6.8, fontweight="bold", ha="right", va="center",
+            bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
+    ax.text(8.22, pwr_pins["GND_IN"][1] + 0.18, "GND", color="#0F172A", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
+    ax.text(8.22, pwr_pins["3V3_EN"][1] + 0.18, "3V3", color="#C2410C", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
 
-    # NDP6020P P-FET box cleanly below 3.5B caption (y = 12.15 .. 14.05)
-    pfet_box = FancyBboxPatch((6.10, 12.15), 2.75, 1.90, boxstyle="round,pad=0.0,rounding_size=0.10",
-                              facecolor="#F8FAFC", edgecolor="#334155", lw=1.3, zorder=3)
-    ax.add_patch(pfet_box)
-    ax.text(7.48, 13.78, "NDP6020P (P-FET)", color="#0F172A", fontsize=7.6, fontweight="bold", ha="center", va="center", zorder=4)
-    ax.text(7.48, 13.10, "D(2) <--- S(3)  |  G(1)", color="#334155", fontsize=6.4, fontweight="bold", ha="center", va="center", family="monospace", zorder=4)
-    ax.text(7.48, 12.48, "0.00 uA Off-State Leak", color="#0D9488", fontsize=6.3, style="italic", ha="center", va="center", zorder=4)
+    # 10. Separate Output Harness 1: Power Module -> Ebyte E220 (Dedicated +5.00V & GND Pair)
+    _ortho_wire(ax, [pwr_pins["E220_5V"],  (0.95, pwr_pins["E220_5V"][1]),  (0.95, lora_pins["VCC"][1]),     lora_pins["VCC"]],     color="#DC2626", lw=3.2, z=6)
+    _ortho_wire(ax, [pwr_pins["E220_GND"], (1.32, pwr_pins["E220_GND"][1]), (1.32, lora_pins["GND_PWR"][1]), lora_pins["GND_PWR"]], color="#0F172A", lw=3.0, z=6)
+    ax.text(0.76, 16.80, "E220 +5.00V / GND Pair", color="#991B1B", fontsize=7.6, fontweight="bold", rotation=90, ha="right", va="center", zorder=7)
 
-    # VBAT into NDP6020P Source (8.20) & R1 10K pull-up from VBAT to Gate (9.95)
-    _ortho_wire(ax, [(8.95, bat_pins["BAT+"][1]), (8.95, 14.38), (8.20, 14.38), (8.20, 14.05)], color="#991B1B", lw=3.0, z=6)
-    _junc_dot(ax, 8.95, 14.38)
-    _ortho_wire(ax, [(8.95, 14.38), (9.95, 14.38), (9.95, 14.15)], color="#991B1B", lw=2.2, z=6)
-    _resistor_zigzag(ax, 9.95, 12.90, 9.95, 14.15, "R1: 10K", label_offset=(0.18, 0.0), horizontal=False, z=7)
-    _ortho_wire(ax, [(9.95, 12.90), (9.95, 12.70), (8.85, 12.70)], color="#0F172A", lw=2.2, z=6)
-    _junc_dot(ax, 9.45, 12.70)
-
-    # 2N2222 NPN box (widened so monospace text sits with clean internal margins!)
-    npn_box = FancyBboxPatch((8.95, 10.05), 3.05, 1.80, boxstyle="round,pad=0.0,rounding_size=0.10",
-                             facecolor="#F8FAFC", edgecolor="#334155", lw=1.3, zorder=3)
-    ax.add_patch(npn_box)
-    ax.text(10.48, 11.58, "2N2222 (NPN)", color="#0F172A", fontsize=7.6, fontweight="bold", ha="center", va="center", zorder=4)
-    ax.text(10.48, 10.95, "C -> FET Gate (G)", color="#334155", fontsize=6.1, ha="center", va="center", family="monospace", zorder=4)
-    ax.text(10.48, 10.42, "B <- R2 | E -> GND", color="#334155", fontsize=6.1, ha="center", va="center", family="monospace", zorder=4)
-
-    _ortho_wire(ax, [(9.45, 11.85), (9.45, 12.70)], color="#0F172A", lw=2.2, z=6)
-    # 3V3 (Pin 31, Orange) drops cleanly at x=9.28 -> y=14.85 -> x=12.60 -> R2 10K -> 2N2222 Base
-    _ortho_wire(ax, [esp_pins[31], (9.28, esp_pins[31][1]), (9.28, 14.85), (12.60, 14.85), (12.60, 12.75)],
-                color="#F97316", lw=2.6, z=6)
-    _resistor_zigzag(ax, 12.60, 10.95, 12.60, 12.75, "R2: 10K", label_offset=(0.20, 0.0), horizontal=False, z=7)
-    _ortho_wire(ax, [(12.60, 10.95), (12.00, 10.95)], color="#F97316", lw=2.4, z=6)
-    ax.text(12.75, 13.92, "3V3 Gate\nEnable", color="#C2410C", fontsize=6.8, fontweight="bold", ha="left", va="center", zorder=7)
-
-    # NDP6020P Drain -> Switched VBAT -> MT3608 VIN+
-    _ortho_wire(ax, [(6.10, 12.85), (5.68, 12.85), (5.68, 10.75), (6.35, 10.75), (6.35, mt_pins["VIN+"][1]), mt_pins["VIN+"]],
-                color="#EA580C", lw=3.2, z=6)
-    ax.text(5.86, 11.45, "Switched\nVBAT", color="#C2410C", fontsize=6.8, fontweight="bold", ha="left", va="center", zorder=7)
-
-    # 9. MT3608 +5.00V Output Bus + Decoupling Caps -> E220 VCC (Left) & UM982 5V_IN (Right)
-    v5_y = 9.20
-    _ortho_wire(ax, [mt_pins["VOUT+"], (1.05, mt_pins["VOUT+"][1]), (1.05, v5_y)], color="#DC2626", lw=3.8, z=6)
-    _junc_dot(ax, 1.05, v5_y, r=0.10)
-    _ortho_wire(ax, [(1.05, v5_y), (1.05, lora_pins["VCC"][1]), lora_pins["VCC"]], color="#DC2626", lw=3.6, z=6)
-    ax.text(0.82, 23.20, "+5.00V Bus", color="#B91C1C", fontsize=8.0, fontweight="bold", rotation=90, ha="right", va="center", zorder=7)
-
-    _ortho_wire(ax, [(1.05, v5_y), (26.30, v5_y), (26.30, um_pins["5V_IN"][1]), um_pins["5V_IN"]], color="#DC2626", lw=3.8, z=6)
-    ax.text(14.50, v5_y + 0.24, "+5.00V Regulated Boost Rail (MT3608 -> UM982 5V_IN & E220 VCC)",
-            color="#991B1B", fontsize=7.8, fontweight="bold", ha="center", va="center",
+    # 11. Separate Output Harness 2: Power Module -> Holybro UM982 (Dedicated +5.00V & GND Pair)
+    _ortho_wire(ax, [pwr_pins["UM_5V"],  (8.25, pwr_pins["UM_5V"][1]),  (8.25, 7.08), (26.35, 7.08), (26.35, um_pins["5V_IN"][1]), um_pins["5V_IN"]],
+                color="#DC2626", lw=3.2, z=6)
+    _ortho_wire(ax, [pwr_pins["UM_GND"], (7.95, pwr_pins["UM_GND"][1]), (7.95, 6.58), (25.95, 6.58), (25.95, um_pins["GND"][1]),   um_pins["GND"]],
+                color="#0F172A", lw=3.0, z=6)
+    ax.text(17.10, 7.36, "UM982 Dedicated +5.00V & GND Harness (Separate from E220 Pair)",
+            color="#991B1B", fontsize=7.6, fontweight="bold", ha="center", va="center",
             bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
 
-    # Decoupling Capacitors (470uF Electrolytic + 0.1uF Ceramic) between +5.00V (y=9.20) and Star GND (y=5.85)
-    star_gnd_y = mt_pins["VIN-"][1]
-    cap1_x, cap2_x = 7.65, 9.75
-    for cx, clbl, ha_lbl, off_x, is_elec in [
-        (cap1_x, "470 uF\nElec.",   "right", -0.44, True),
-        (cap2_x, "0.1 uF\nCeramic", "left",   0.44, False),
-    ]:
-        _junc_dot(ax, cx, v5_y)
-        _junc_dot(ax, cx, star_gnd_y)
-        ax.plot([cx, cx], [v5_y, 7.82], color="#DC2626", lw=2.2, zorder=6)
-        ax.plot([cx, cx], [7.26, star_gnd_y], color="#0F172A", lw=2.2, zorder=6)
-        ax.plot([cx - 0.34, cx + 0.34], [7.82, 7.82], color="#0F172A", lw=2.6, zorder=7)
-        ax.plot([cx - 0.34, cx + 0.34], [7.26, 7.26], color="#0F172A", lw=2.6, zorder=7)
-        if is_elec:
-            ax.text(cx - 0.38, 8.05, "+", color="#DC2626", fontsize=8.5, fontweight="bold", ha="center", va="center", zorder=7)
-        ax.text(cx + off_x, 7.54, clbl, color="#1E293B", fontsize=7.0, fontweight="bold",
-                ha=ha_lbl, va="center", bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
-
-    # 10. Common Star Ground Bus (Cleanly routed AROUND MT3608 PCB & 2N2222, zero overlap!)
-    _ortho_wire(ax, [bat_pins["BAT-"], (5.20, bat_pins["BAT-"][1]), (5.20, 9.85), (6.50, 9.85), (6.50, star_gnd_y), mt_pins["VIN-"]],
-                color="#0F172A", lw=3.0, z=5.8)
-    _junc_dot(ax, 6.50, star_gnd_y)
-    # MT3608 VOUT- routes cleanly LEFT -> UNDER MT3608 caption (y=4.05) -> Star GND
-    _ortho_wire(ax, [mt_pins["VOUT-"], (1.28, mt_pins["VOUT-"][1]), (1.28, 4.05), (6.50, 4.05), (6.50, star_gnd_y)],
-                color="#0F172A", lw=2.8, z=5.8)
-    _ortho_wire(ax, [mt_pins["VIN-"], (10.85, star_gnd_y)], color="#0F172A", lw=3.2, z=5.8)
-    # 2N2222 Emitter -> Star GND
-    _ortho_wire(ax, [(10.48, 10.05), (10.48, star_gnd_y)], color="#0F172A", lw=2.4, z=5.8)
-    _junc_dot(ax, 10.48, star_gnd_y)
-    # 3.5B Pin 29 (GND) -> routes around x=14.30 -> y=9.70 -> splices cleanly into 2N2222 Emitter GND!
-    _ortho_wire(ax, [esp_pins[29], (9.54, esp_pins[29][1]), (9.54, 14.55), (14.30, 14.55), (14.30, 9.70), (10.48, 9.70)],
-                color="#0F172A", lw=2.5, z=5.8)
-    _junc_dot(ax, 10.48, 9.70)
-    # Top 3.5B Pin 3 GND -> E220 GND, and Pin 4 GND -> UM982 GND
-    _ortho_wire(ax, [esp_pins[3], lora_pins["GND"]], color="#0F172A", lw=3.0, z=6)
-    _ortho_wire(ax, [esp_pins[4], um_pins["GND"]], color="#0F172A", lw=3.0, z=6)
-    ax.text(9.05, star_gnd_y - 0.44, "Star GND Bus (All Grounds Common)",
-            color="#0F172A", fontsize=7.3, fontweight="bold", ha="center", va="center")
-
-    # 11. Bottom-Left Design Notes Block
+    # 12. Bottom-Left Notes Block
     notes = (
         "POWER & HARDWARE NOTES\n"
         "---------------------------------------------------------------\n"
-        "- NEVER tie MT3608 +5.00V to 3.5B Pin 2 (5V); avoids VBUS backfeed\n"
-        "- Off-State Leak: 0.00 uA (R1 pulls NDP6020P Gate to VBAT)\n"
-        "- Boost Caps: 470 uF electro + 0.1 uF ceramic absorb 1W TX bursts\n"
+        "- 1S LiPo plugs directly into 3.5B BAT JST (AXP2101 500mA Chg)\n"
+        "- NEVER tie +5.00V Boost Output to 3.5B Pin 2 (5V / VBUS)\n"
+        "- Power Module feeds SEPARATE +5V/GND pairs to UM982 & E220\n"
+        "- Off-State Leak: 0.00 uA; see Figure 1B for Module Schematic\n"
         "- Battery Est (1S 3.7V @ ~806mA): 3Ah ~3.2-3.4h | 10Ah ~10.6-11.2h\n"
-        "- COM2 (IO47/48) & IO19/20/43..46: Unconnected / Freed in v0.8.x\n"
-        "- BOOT (IO0): Long-Press >= 1.5s captures BMP screenshot to SD"
+        "- COM2 (IO47/48) Freed | BOOT (IO0) Long-Press >= 1.5s Screenshot"
     )
-    ax.text(0.95, 2.05, notes, color="#1E293B", fontsize=7.5, family="monospace",
-            ha="left", va="center", linespacing=1.34)
+    ax.text(0.95, 3.00, notes, color="#1E293B", fontsize=7.4, family="monospace",
+            ha="left", va="center", linespacing=1.35)
 
-    # 12. Bottom-Right Classic Blue Monospaced Pinout Legend (Exact MFS_Wiring_Diagram.png Style!)
-    ax.text(12.25, 7.80, "Waveshare ESP32-S3 Touch LCD 3.5B (v0.8.18)",
-            color="#0F172A", fontsize=11.0, fontweight="normal", ha="left", va="center", family="sans-serif")
+    # 13. Bottom-Right Blue Monospaced Pinout Legend (Exact MFS_Wiring_Diagram.png Style!)
+    ax.text(12.25, 5.82, "Waveshare ESP32-S3 Touch LCD 3.5B (v0.8.18)",
+            color="#0F172A", fontsize=10.8, fontweight="normal", ha="left", va="center", family="sans-serif")
     pin_table = (
-        "Pin    GPIO    Function         Target / Connection (Color / Note)\n"
-        "------------------------------------------------------------------------\n"
-        "P1     BAT     VBAT (3.7V)      1S LiPo + NDP6020P Src + R1 10K (DkRed)\n"
-        "P3,4   GND     GND              Star GND + E220 GND + UM982 GND (Blk)\n"
-        "P5     IO21    E220_AUX         <- E220 AUX Busy/Ready ISR (Amber)\n"
-        "P7     IO38    E220_NRST        -> E220 Opt Hardware Reset (Gray Dash)\n"
-        "P9     IO39    E220_M0          -> E220 Mode Bit 0 (Brown)\n"
-        "P11    IO40    E220_M1          -> E220 Mode Bit 1 (Olive)\n"
-        "P13    IO41    UART0_RX         <- E220 TXD (115200/9600 Cfg, Purple)\n"
-        "P15    IO42    UART0_TX         -> E220 RXD (Uplink Telem, Magenta)\n"
-        "P16    IO17    UART1_RX         <- UM982 COM1 TXD0 (115200 NMEA, Teal)\n"
-        "P18    IO18    UART1_TX         -> UM982 COM1 RXD0 (RTCM3/Cmds, Cyan)\n"
-        "P26    IO7     I2C0_SCL         SEN0696 C/R SCL (400k, Gravity Blue)\n"
-        "P28    IO8     I2C0_SDA         SEN0696 D/T SDA (400k, Gravity Green)\n"
-        "P29,30 GND     GND              Star GND + SEN0696 - (Gravity Black)\n"
-        "P31    3V3     PWR_EN (+3.3V)   -> R2 10K -> 2N2222 Base (Orange)\n"
-        "P32    3V3     SEN0696_VCC      -> SEN0696 + (3.3V Safe, Gravity Red)\n"
-        "Boost  5.00V   MT3608_VOUT+     -> UM982 5V_IN & E220 VCC (+470uF Red)"
+        "Pin       GPIO       Function      Target / Connection (Color / Note)\n"
+        "-------------------------------------------------------------------------\n"
+        "BAT_JST   VBAT       1S_BATT       1S LiPo Direct (AXP2101 500mA Chg)\n"
+        "P1        BAT        VBAT_OUT      -> Power Module VBAT IN (DkRed)\n"
+        "P5..P15   IO21..42   E220_CTRL     AUX, NRST*, M0, M1, TXD, RXD (Left)\n"
+        "P16,P18   IO17,18    UM982_COM1    <- TXD0 / -> RXD0 @ 115200 (Teal/Cyan)\n"
+        "P26,P28   IO7,8      I2C0_BUS      SEN0696 SCL/SDA 400k (Grav Blu/Grn)\n"
+        "P29,P30   GND        SYS_GND       -> Power Module GND / SEN0696 - (Blk)\n"
+        "P31,P32   3V3        +3.3V_OUT     P31->PwrMod EN (Org) | P32->SEN+ (Red)\n"
+        "PwrMod    +5V/GND    DUAL_5V_OUT   Two Separate 5V/GND Pairs: UM982 & E220"
     )
-    ax.text(12.25, 3.92, pin_table, color="#0018A8", fontsize=7.6, fontweight="bold",
-            ha="left", va="center", family="monospace", linespacing=1.34)
+    ax.text(12.25, 3.25, pin_table, color="#0018A8", fontsize=7.2, fontweight="bold",
+            ha="left", va="center", family="monospace", linespacing=1.36)
 
     plt.tight_layout(pad=0.25)
     svg_path = os.path.join(out_dir, "wiring_diagram_3_5B_current.svg")
     png_path = os.path.join(out_dir, "wiring_diagram_3_5B_current.png")
+    fig.savefig(svg_path, format="svg", facecolor=fig.get_facecolor())
+    fig.savefig(png_path, format="png", dpi=300, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    print(f"[+] Saved: {svg_path}")
+    print(f"[+] Saved: {png_path}")
+
+
+def generate_power_module_diagram(out_dir: str):
+    """Generates clean white-background detail wiring schematic for the Switched +5.00V Power Module."""
+    fig, ax = plt.subplots(figsize=(12.0, 7.6), dpi=300)
+    fig.patch.set_facecolor("#FFFFFF")
+    ax.set_facecolor("#FFFFFF")
+    ax.set_xlim(0, 24.0)
+    ax.set_ylim(0, 15.2)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    # 1. Title Block
+    ax.text(0.8, 14.42, "RTK Rover Switched +5.00V Power Module Wiring Diagram",
+            color="#0F172A", fontsize=17.5, fontweight="normal", ha="left", va="center", family="sans-serif")
+    ax.text(0.8, 13.78, "2026-11-18  |  High-Side Switch (NDP6020P + 2N2222) + MT3608 Boost + 470 uF / 0.1 uF Filter (Fig. 1B)",
+            color="#334155", fontsize=9.8, ha="left", va="center", family="sans-serif")
+
+    # 2. Left Terminal Block: Inputs from Waveshare 3.5B Header
+    _rect_shadow(ax, 0.85, 5.55, 3.45, 7.10, r=0.14)
+    ax.add_patch(FancyBboxPatch((0.85, 5.55), 3.45, 7.10, boxstyle="round,pad=0.0,rounding_size=0.14",
+                                facecolor="#164E96", edgecolor="#0C356A", lw=1.4, zorder=2.5))
+    ax.text(2.57, 12.20, "FROM WAVESHARE\n3.5B HEADER", color="#F8FAFC", fontsize=8.0, fontweight="bold",
+            ha="center", va="center", family="monospace", zorder=3.5)
+
+    in_pts = {}
+    for key, py, lbl, sub, col in [
+        ("VBAT", 11.15, "P1: BAT", "3.5-4.2V", "#FCA5A5"),
+        ("GND",  8.95,  "P29: GND", "Sys Ref",  "#E2E8F0"),
+        ("3V3",  6.55,  "P31: 3V3", "Gate En",  "#FDBA74"),
+    ]:
+        _pad_hole(ax, 4.10, py, radius=0.095, z=4)
+        ax.text(3.86, py + 0.14, lbl, color=col, fontsize=7.6, fontweight="bold", ha="right", va="center", family="monospace", zorder=4)
+        ax.text(3.86, py - 0.24, sub, color="#CBD5E1", fontsize=6.4, ha="right", va="center", zorder=4)
+        in_pts[key] = (4.30, py)
+
+    # 3. High-Side P-FET (NDP6020P) & NPN Driver (2N2222) + R1/R2 10K
+    # NDP6020P TO-220 package diagram (top center-left)
+    _rect_shadow(ax, 6.20, 9.75, 3.30, 2.55, r=0.12)
+    ax.add_patch(FancyBboxPatch((6.20, 9.75), 3.30, 2.55, boxstyle="round,pad=0.0,rounding_size=0.12",
+                                facecolor="#F8FAFC", edgecolor="#334155", lw=1.4, zorder=3))
+    ax.add_patch(Rectangle((7.15, 11.65), 1.40, 0.45, facecolor="#94A3B8", edgecolor="#475569", lw=1.0, zorder=3.5))
+    ax.add_patch(Circle((7.85, 11.88), 0.12, facecolor="#FFFFFF", edgecolor="#475569", lw=0.8, zorder=3.6))
+    ax.add_patch(Rectangle((7.15, 10.65), 1.40, 1.00, facecolor="#1E293B", edgecolor="#0F172A", lw=1.0, zorder=3.5))
+    ax.text(7.85, 11.15, "NDP6020P\nP-FET", color="#F8FAFC", fontsize=6.6, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.8)
+    for px, plbl, pcol in [(6.70, "1:Gate", "#0F172A"), (7.85, "2:Drain", "#C2410C"), (9.00, "3:Source", "#991B1B")]:
+        _pad_hole(ax, px, 10.08, radius=0.075, z=4)
+        ax.text(px, 10.38, plbl, color=pcol, fontsize=6.2, fontweight="bold", ha="center", va="center", family="monospace", zorder=4)
+
+    # VBAT (y=11.15) -> Node (5.20, 11.15) -> top (12.60) -> right outside box (9.80) -> bottom into S(3) (9.00, 10.08) so NO text crossed!
+    _ortho_wire(ax, [in_pts["VBAT"], (5.20, 11.15), (5.20, 12.60), (9.80, 12.60), (9.80, 9.48), (9.00, 9.48), (9.00, 10.08)],
+                color="#991B1B", lw=3.0, z=6)
+    _junc_dot(ax, 5.20, 11.15)
+    # R1: 10K pull-up from VBAT (5.20, 11.15) to Gate (6.70, 9.20) with label placed cleanly ABOVE resistor
+    _ortho_wire(ax, [(5.20, 11.15), (5.20, 9.20), (5.35, 9.20)], color="#991B1B", lw=2.2, z=6)
+    _resistor_zigzag(ax, 5.35, 9.20, 6.50, 9.20, "R1: 10K", label_offset=(-0.05, 0.34), horizontal=True, z=7)
+    _ortho_wire(ax, [(6.50, 9.20), (6.70, 9.20), (6.70, 10.08)], color="#0F172A", lw=2.4, z=6)
+    _junc_dot(ax, 6.70, 9.20)
+
+    # Drain (7.85, 10.08) -> Switched VBAT -> MT3608 VIN+ (11.35, 10.65)
+    _ortho_wire(ax, [(7.85, 10.08), (7.85, 9.10), (10.45, 9.10), (10.45, 10.65), (11.35, 10.65)], color="#EA580C", lw=3.2, z=6)
+    ax.text(10.50, 11.15, "Switched\nVBAT", color="#C2410C", fontsize=7.0, fontweight="bold", ha="center", va="center", zorder=7)
+
+    # 2N2222 NPN Transistor package diagram (bottom center-left)
+    _rect_shadow(ax, 6.50, 5.60, 3.00, 2.25, r=0.12)
+    ax.add_patch(FancyBboxPatch((6.50, 5.60), 3.00, 2.25, boxstyle="round,pad=0.0,rounding_size=0.12",
+                                facecolor="#F8FAFC", edgecolor="#334155", lw=1.4, zorder=3))
+    ax.add_patch(FancyBboxPatch((7.45, 7.05), 1.10, 0.58, boxstyle="round,pad=0.0,rounding_size=0.12",
+                                facecolor="#1E293B", edgecolor="#0F172A", lw=1.0, zorder=3.5))
+    ax.text(8.00, 7.34, "2N2222\nTO-92", color="#F8FAFC", fontsize=6.4, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.8)
+    for px, plbl, pcol in [(7.00, "1:E", "#0F172A"), (8.00, "2:B", "#C2410C"), (9.00, "3:C", "#0F172A")]:
+        _pad_hole(ax, px, 6.00, radius=0.075, z=4)
+        ax.text(px, 6.32, plbl, color=pcol, fontsize=6.5, fontweight="bold", ha="center", va="center", family="monospace", zorder=4)
+
+    # Collector Pin 3 (9.00, 6.00) -> up to Gate junction (6.70, 9.20)
+    _ortho_wire(ax, [(9.00, 6.00), (9.00, 5.80), (9.75, 5.80), (9.75, 8.65), (6.70, 8.65), (6.70, 9.20)], color="#0F172A", lw=2.3, z=6)
+    _junc_dot(ax, 6.70, 8.65)
+    # 3V3_EN (4.30, 6.55) -> R2: 10K -> Base Pin 2 (8.00, 6.00)
+    _ortho_wire(ax, [in_pts["3V3"], (4.65, 6.55)], color="#F97316", lw=2.6, z=6)
+    _resistor_zigzag(ax, 4.65, 6.55, 6.10, 6.55, "R2: 10K", label_offset=(0.0, 0.40), horizontal=True, z=7)
+    _ortho_wire(ax, [(6.10, 6.55), (6.28, 6.55), (6.28, 5.30), (8.00, 5.30), (8.00, 6.00)], color="#F97316", lw=2.4, z=6)
+
+    # 4. Blue MT3608 Boost PCB (Center-Right, Left=VIN+/-, Right=VOUT+/-)
+    mt_pins = _draw_mt3608_module(ax, 11.35, 7.15, 4.35, 4.40, flip_lr=True)
+    ax.text(13.52, 6.70, "Adjust Trimpot -> +5.00V No-Load", color="#1E3A8A", fontsize=7.6, fontweight="bold", ha="center", va="center")
+
+    # 5. Output Bus (+5.00V Rail + 470uF/0.1uF Filter + Separate Twin Harnesses)
+    vout_y = mt_pins["VOUT+"][1]
+    star_gnd_y = 4.75
+
+    # Common Star GND bus across bottom
+    _ortho_wire(ax, [in_pts["GND"], (4.85, 8.95), (4.85, star_gnd_y), (19.95, star_gnd_y)], color="#0F172A", lw=3.2, z=5.8)
+    _ortho_wire(ax, [(7.00, 6.00), (7.00, star_gnd_y)], color="#0F172A", lw=2.4, z=5.8)
+    _junc_dot(ax, 7.00, star_gnd_y)
+    _ortho_wire(ax, [mt_pins["VIN-"], (11.00, mt_pins["VIN-"][1]), (11.00, star_gnd_y)], color="#0F172A", lw=2.8, z=5.8)
+    _junc_dot(ax, 11.00, star_gnd_y)
+    _ortho_wire(ax, [mt_pins["VOUT-"], (16.05, mt_pins["VOUT-"][1]), (16.05, star_gnd_y)], color="#0F172A", lw=3.0, z=5.8)
+    _junc_dot(ax, 16.05, star_gnd_y)
+    ax.text(12.20, star_gnd_y - 0.34, "Internal Common Star GND Bus", color="#0F172A", fontsize=7.4, fontweight="bold", ha="center", va="center")
+
+    # +5.00V Output Bus feeding Caps + Output 1 + Output 2
+    _ortho_wire(ax, [mt_pins["VOUT+"], (19.65, vout_y)], color="#DC2626", lw=3.6, z=6)
+    ax.text(17.70, vout_y + 0.30, "+5.00V Rail", color="#B91C1C", fontsize=8.0, fontweight="bold", ha="center", va="center")
+
+    # 470 uF Electrolytic + 0.1 uF Ceramic Decoupling Caps cleanly placed clear of all bus drops!
+    for cx, clbl, ha_lbl, off_x, is_elec in [
+        (17.15, "470 uF\nElec.",   "right", -0.38, True),
+        (18.25, "0.1 uF\nCeram.",  "left",   0.38, False),
+    ]:
+        _junc_dot(ax, cx, vout_y)
+        _junc_dot(ax, cx, star_gnd_y)
+        ax.plot([cx, cx], [vout_y, 7.80], color="#DC2626", lw=2.2, zorder=6)
+        ax.plot([cx, cx], [7.24, star_gnd_y], color="#0F172A", lw=2.2, zorder=6)
+        ax.plot([cx - 0.30, cx + 0.30], [7.80, 7.80], color="#0F172A", lw=2.6, zorder=7)
+        ax.plot([cx - 0.30, cx + 0.30], [7.24, 7.24], color="#0F172A", lw=2.6, zorder=7)
+        if is_elec:
+            ax.text(cx - 0.36, 8.05, "+", color="#DC2626", fontsize=8.5, fontweight="bold", ha="center", va="center", zorder=7)
+        ax.text(cx + off_x, 7.52, clbl, color="#1E293B", fontsize=6.9, fontweight="bold",
+                ha=ha_lbl, va="center", bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
+
+    # 6. Right Twin Output Connectors: OUT 1 (Holybro UM982) & OUT 2 (Ebyte E220)
+    out_specs = [
+        ("OUT 1: HOLYBRO UM982", 9.65, 12.15, "UM982 5V_IN (~350mA)", "UM982 GND"),
+        ("OUT 2: EBYTE E220",    5.75, 8.25,  "E220 VCC (<=850mA pk)", "E220 GND"),
+    ]
+    for title, oy0, oy1, lbl5, lblg in out_specs:
+        _rect_shadow(ax, 20.40, oy0, 3.05, oy1 - oy0, r=0.12)
+        ax.add_patch(FancyBboxPatch((20.40, oy0), 3.05, oy1 - oy0, boxstyle="round,pad=0.0,rounding_size=0.12",
+                                    facecolor="#1E242B", edgecolor="#0F172A", lw=1.4, zorder=3))
+        ax.text(21.92, oy1 - 0.40, title, color="#F8FAFC", fontsize=6.9, fontweight="bold", ha="center", va="center", family="monospace", zorder=3.5)
+        py5 = oy1 - 1.15
+        pyg = oy0 + 0.55
+        _pad_hole(ax, 20.61, py5, radius=0.085, z=4)
+        _pad_hole(ax, 20.61, pyg, radius=0.085, z=4)
+        ax.text(20.82, py5, lbl5, color="#FCA5A5", fontsize=6.2, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
+        ax.text(20.82, pyg, lblg, color="#E2E8F0", fontsize=6.2, fontweight="bold", ha="left", va="center", family="monospace", zorder=4)
+        # Wire from +5.00V rail & Star GND into Output pads cleanly right of 0.1uF text
+        _junc_dot(ax, 19.65, vout_y)
+        _junc_dot(ax, 19.95, star_gnd_y)
+        _ortho_wire(ax, [(19.65, vout_y), (19.65, py5), (20.40, py5)], color="#DC2626", lw=3.0, z=6)
+        _ortho_wire(ax, [(19.95, star_gnd_y), (19.95, pyg), (20.40, pyg)], color="#0F172A", lw=2.8, z=6)
+
+    # 7. Bottom Classic Blue Monospaced BOM / Assembly Reference Table
+    ax.text(0.90, 3.65, "Power Module BOM & Assembly Checklist", color="#0F172A", fontsize=10.2,
+            fontweight="normal", ha="left", va="center", family="sans-serif")
+    bom_txt = (
+        "Ref        Part / Value           Function / Electrical Notes\n"
+        "-----------------------------------------------------------------------------------------------\n"
+        "Q1         NDP6020P (TO-220)      Logic P-FET High-Side Switch (S=VBAT, G=R1/Q2, D=Switched VBAT)\n"
+        "Q2         2N2222 (TO-92 E-B-C)   NPN Gate Pull-Down (Base via R2=10K from 3.5B P31 3V3)\n"
+        "R1, R2     10 kOhm (1/4W)         R1 holds Q1 OFF (0.00 uA leak); R2 limits 2N2222 Base ~0.26mA\n"
+        "REG1       MT3608 Step-Up Boost   Dial VOUT+ = +5.00V unloaded (~85% typ eff @ 3.7V -> 5.0V)\n"
+        "C1, C2     470 uF + 0.1 uF        Low-ESR Elec (>=10V) + Ceramic decouple 1W E220 TX bursts\n"
+        "OUT1 / 2   Twin +5.00V / GND      Separate power harnesses to UM982 (5V_IN/GND) & E220 (VCC/GND)"
+    )
+    ax.text(0.90, 1.90, bom_txt, color="#0018A8", fontsize=7.6, fontweight="bold",
+            ha="left", va="center", family="monospace", linespacing=1.36)
+
+    plt.tight_layout(pad=0.25)
+    svg_path = os.path.join(out_dir, "wiring_diagram_power_module.svg")
+    png_path = os.path.join(out_dir, "wiring_diagram_power_module.png")
     fig.savefig(svg_path, format="svg", facecolor=fig.get_facecolor())
     fig.savefig(png_path, format="png", dpi=300, facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -1260,3 +1421,4 @@ if __name__ == "__main__":
     generate_3_5b_diagram(schem_dir)
     generate_3_49_v2_diagram(schem_dir)
     generate_3_5b_current_diagram(schem_dir)
+    generate_power_module_diagram(schem_dir)

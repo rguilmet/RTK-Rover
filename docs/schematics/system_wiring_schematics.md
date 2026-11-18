@@ -1,40 +1,46 @@
 # RTK Rover & Smart Pole — System Hardware Wiring Schematics
 
-**Document Version:** `v1.1.0`  
+**Document Version:** `v1.2.0`  
 **Date:** November 18, 2026  
-**Firmware Baseline:** `v0.8.18` (Single-UART `UM982 COM1` + Switched `MT3608` `+5.00V` Boost + `DFRobot SEN0696` 10-DOF Beam IMU)  
+**Firmware Baseline:** `v0.8.18` (Single-UART `UM982 COM1` + Direct-JST `1S` LiPo + Collapsed `Switched +5.00V` Power Module + `DFRobot SEN0696` 10-DOF Beam IMU)  
 
-This document contains the complete high-level wiring diagram, hardware schematics, RF antenna diagrams, power budget, and pin-by-pin interconnect tables for:
-1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** + **`1S` Li-Ion/LiPo Pack + Discrete High-Side Switch (`NDP6020P` P-FET + `2N2222` NPN) & `MT3608` `+5.00 V` Boost Stage (`470 uF` + `0.1 uF`)** + **Holybro H-RTK Unicore `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30S`** (`1 W` `925.125 MHz` LoRa) + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`).
+This document contains the complete high-level wiring diagram, Switched `+5.00V` Power Module internal schematic, RF antenna diagrams, power budget, and pin-by-pin interconnect tables for:
+1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** (`1S` LiPo plugged directly into onboard **`BAT JST`** using `AXP2101` `500 mA` USB-C charging) + **Collapsed Switched `+5.00V` Power Module (`NDP6020P` P-FET + `2N2222` NPN + `2 x 10 kOhm` + `MT3608` Boost + `470 uF / 0.1 uF` Filter)** feeding **separate `+5.00V / GND` pairs** to **Holybro `UM982`** and **Ebyte `E220-900T30S`** + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`).
 2. **Next-Generation Smart Pole:** **Waveshare `ESP32-S3-Touch-LCD-3.49-V2`** (`J3` 22-Pin Expansion Header + `18650` Battery) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N3904` NPN) & `MT3608` `5.0V` Boost Stage** + **Holybro `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30D/S`** + **Outboard Beam Compass (`MMC5983MA` / `SEN0696`)**.
 
 ---
 
 ## 1. Current Rover Prototype (`Waveshare ESP32-S3-Touch-LCD-3.5B`, Firmware `v0.8.18`)
 
+### Figure 1A: High-Level System Wiring Diagram
+
 ![RTK Rover v0.8.18 High-Level Wiring Diagram (Waveshare ESP32-S3-Touch-LCD-3.5B)](wiring_diagram_3_5B_current.png)
-*Figure 1: High-Level Hardware Wiring Diagram for the Current `Waveshare ESP32-S3-Touch-LCD-3.5B` Rover (`v0.8.18`) including the Switched `MT3608` `+5.00V` Boost Power Stage, `E220-900T30S` LoRa, Dual-Antenna `UM982 COM1`, and `DFRobot Gravity SEN0696` (`0x4A`) Beam 10-DOF IMU.*  
+*Figure 1A: High-Level Hardware Wiring Diagram for the Current `Waveshare ESP32-S3-Touch-LCD-3.5B` Rover (`v0.8.18`) showing direct `1S` LiPo connection to `BAT JST`, the collapsed Switched `+5.00V` Power Module with separate `+5.00V / GND` harnesses to `UM982` & `E220`, Single-UART `UM982 COM1`, and `DFRobot Gravity SEN0696` (`0x4A`).*  
 *(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | Legacy `v0.8.0` external-USB + `MMC5983MA` block schematic preserved for reference: [`wiring_diagram_3_5B_v0_8_0.png`](wiring_diagram_3_5B_v0_8_0.png) / [`svg`](wiring_diagram_3_5B_v0_8_0.svg))*
+
+### Figure 1B: Switched `+5.00V` Power Module Internal Wiring Diagram
+
+![RTK Rover Switched +5.00V Power Module Wiring Diagram](wiring_diagram_power_module.png)
+*Figure 1B: Internal Component Wiring Schematic for the Custom Switched `+5.00V` Power Module (`NDP6020P` TO-220 + `2N2222` TO-92 + `2 x 10 kOhm` + `MT3608` Boost + `470 uF` & `0.1 uF` decoupling capacitors), showing the two separate `(+5.00V, GND)` output harnesses to the Holybro `UM982` and Ebyte `E220-900T30S`.*  
+*(Vector SVG version: [`wiring_diagram_power_module.svg`](wiring_diagram_power_module.svg))*
 
 ### 1.1 Complete Pin-by-Pin Interconnect & Power Stage Table (`ESP32-S3-Touch-LCD-3.5B`)
 
 > **CRITICAL POWER & CABLE COLOR WARNINGS:**  
-> * **Never tie `MT3608 VOUT+ (+5.00V)` to `3.5B Header P2 (5V)`:** Keeping `MT3608 +5.00V` isolated on `UM982 5V_IN` and `E220 VCC` prevents backfeeding `VBUS` when running on battery and lets USB-C independently supply `500 mA` `AXP2101` charging on the bench.  
-> * **Gravity `SEN0696` vs. Qwiic Color Swap:** On the DFRobot `PH2.0-4P` Gravity cable, **Green (`D/T`) = `SDA`** (`IO8`) and **Blue (`C/R`) = `SCL`** (`IO7`) — opposite to SparkFun Qwiic (**Blue = `SDA`**, **Yellow = `SCL`**). Power `SEN0696` **`+` (Red)** strictly from **`3V3` (`P32`)** so external pull-ups never exceed `3.3 V`.
+> * **Direct Battery & Charging:** The `1S` Li-Ion/LiPo battery plugs directly into the Waveshare `3.5B` **`BAT JST`** socket so the onboard `AXP2101` PMIC handles `500 mA` charging over `USB-C VBUS` and live battery telemetry (`0x34`). The Power Module taps `VBAT` from Header **`P1 (BAT)`** without external battery splicing.  
+> * **Never tie `MT3608 VOUT+ (+5.00V)` to `3.5B Header P2 (5V)`:** Keeping `+5.00V` isolated on the Power Module outputs prevents backfeeding `VBUS` when running on battery.  
+> * **Gravity `SEN0696` vs. Qwiic Color Swap:** On the DFRobot `PH2.0-4P` Gravity cable, **Green (`D/T`) = `SDA`** (`IO8`) and **Blue (`C/R`) = `SCL`** (`IO7`) — opposite to SparkFun Qwiic (**Blue = `SDA`**, **Yellow = `SCL`**). Power `SEN0696` **`+` (Red)** strictly from **`3V3` (`P32`)**.
 
-| Peripheral / Power Stage | Module Pin / Port | Direction | `3.5B` Pin (`GPIO` / Rail) | Wire / Electrical Specification |
+| Peripheral / Power Stage | Module Pin / Port | Direction | `3.5B` Pin / Source | Wire / Electrical Specification |
 | :--- | :--- | :---: | :--- | :--- |
-| **`1S` Li-Ion / LiPo Pack** | **`BAT+` (`3.5V–4.2V`)** | $\longleftrightarrow$ | **`P1` (`BAT`) / `BAT JST`** & **`NDP6020P` Source (Pin 3)** | Dark Red — Unswitched `VBAT` feeding `AXP2101` PMIC (`0x34`) & high-side P-FET Source + `R1` (`10 kOhm` pull-up to Gate) |
-| **High-Side Power Switch** | **`2N2222` Base (via `R2 10 kOhm`)** | $\longleftarrow$ | **`P31` (`3V3` Switched Out)** | Orange — Active `+3.3 V` when powered ON pulls `NDP6020P` Gate LOW via `2N2222`; `0.00 uA` leak when OFF |
-| **High-Side Switch $\to$ Boost** | **`NDP6020P` Drain $\to$ `MT3608 VIN+`** | $\longrightarrow$ | Switched `VBAT` | Orange — Powers `MT3608` DC-DC Boost only while rover is ON |
-| **`MT3608` `+5.00V` Boost** | **`VOUT+` (`+5.00 V`)** | $\longrightarrow$ | **`UM982 5V_IN` & `E220 VCC`** | Red (`+470 uF` low-ESR electrolytic + `0.1 uF` ceramic decoupling caps across `VOUT+` / `GND`) |
-| **Common Star Ground** | **`GND` (`VIN-`/`VOUT-`/Modules)** | $\longleftrightarrow$ | **`P3, P4, P29, P30` (`GND`)** | Black — Common ground tying Battery `-`, `2N2222` Emitter, `MT3608`, `3.5B`, `UM982`, `E220`, and `SEN0696` |
-| **Holybro `UM982` GNSS** | **`5V_IN` (`VCC`)** | $\longleftarrow$ | **`MT3608` `VOUT+ (+5.00 V)`** | Red — `+5.00 V` DC Supply (`~320–350 mA` incl. active dual LNA bias) |
+| **`1S` Li-Ion / LiPo Pack** | **`BAT+` / `BAT-` (`JST-PH2.0`)** | $\longleftrightarrow$ | **Waveshare `BAT JST` Socket** | **Direct Red/Black JST Lead** — Feeds onboard `AXP2101` PMIC (`0x34`) for `500 mA` USB-C charging & live `VBAT` |
+| **Power Module Inputs** | **`VBAT IN` / `GND IN` / `3V3 EN`** | $\longleftarrow$ | **`P1 (BAT)`, `P29 (GND)`, `P31 (3V3)`** | Dark Red (`VBAT`), Black (`GND`), Orange (`3V3` Enable) — `0.00 uA` off-state leak when powered off |
+| **Power Module $\to$ `UM982`** | **`5V_IN` & `GND` (Output Pair 1)** | $\longrightarrow$ | **Power Module `OUT 1` (`+5.00V / GND`)** | **Dedicated Red/Black Pair** — Switched `+5.00 V` (`~320–350 mA` incl. dual LNA bias) + dedicated ground return |
+| **Power Module $\to$ `E220`** | **`VCC` & `GND` (Output Pair 2)** | $\longrightarrow$ | **Power Module `OUT 2` (`+5.00V / GND`)** | **Dedicated Red/Black Pair** — Switched `+5.00 V` (`~25–40 mA` avg, `<= 850 mA` TX peaks via `470 uF` cap) + dedicated ground return |
 | **Holybro `UM982` GNSS** | **`COM1 TX` (`TXD0`)** | $\longrightarrow$ | **`P16` (`GPIO 17` / `Serial1 RX`)** | Teal — `115200 8N1` (`NMEA` + `#UNIHEADINGA` + `#BASEINFOA` + Cmd ACKs) |
 | **Holybro `UM982` GNSS** | **`COM1 RX` (`RXD0`)** | $\longleftarrow$ | **`P18` (`GPIO 18` / `Serial1 TX`)** | Cyan — `115200 8N1` (Multiplexed ASCII Setup Cmds + `CRC24Q`-Verified `RTCM3.x` Corrections) |
 | **Holybro `UM982` GNSS** | `COM2 TX/RX` (`TXD1/RXD1`) | — | **`P21 / P23` (`GPIO 47 / 48` Freed)** | **Disconnected in `v0.8.x`** (saves 2 wires & `~6 KB` internal `DRAM0`) |
 | **Holybro `UM982` GNSS** | **`ANT1 (MASTER)` & `ANT2 (SLAVE)`** | $\longleftrightarrow$ | **Dual L1/L2/L5 Antennas** | $50\,\Omega$ MMCX/SMA coax on `55.5 cm` rigid crossbar (Pole Midpoint `27.75 cm`, Height `1.80 m`) |
-| **Ebyte `E220-900T30S`** | **`VCC`** | $\longleftarrow$ | **`MT3608` `VOUT+ (+5.00 V)`** | Red — `+5.00 V` DC Supply (supported by `MT3608` `470 uF` + `0.1 uF` reservoir for `1 W` TX peaks) |
 | **Ebyte `E220-900T30S`** | **`TXD` (Module Out)** | $\longrightarrow$ | **`P13` (`GPIO 41` / `Serial0 RX`)** | Purple — `115200 8N1` (Mode 0 `RTCM3` Downlink + RSSI Reply) / `9600 8N1` (Mode 3 Cfg) |
 | **Ebyte `E220-900T30S`** | **`RXD` (Module In)** | $\longleftarrow$ | **`P15` (`GPIO 42` / `Serial0 TX`)** | Magenta — `115200 8N1` (`48 B` Uplink Telemetry + Rate-Switch Cmds + `C0..C3` RSSI Query) |
 | **Ebyte `E220-900T30S`** | **`AUX`** | $\longrightarrow$ | **`P5` (`GPIO 21` / ISR Input)** | Amber — Hardware Edge Interrupt (`HIGH` = Idle/Ready, `LOW` = Busy) |

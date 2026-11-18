@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [generate_wiring_diagrams.py v1.3.0] - 2026-11-18
+### Changed & Added
+- **Direct-JST LiPo Connection, Collapsed Power Module & Standalone Power Module Schematic ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.3.0`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.0`, [`docs/schematics/wiring_diagram_3_5B_current.png`](docs/schematics/wiring_diagram_3_5B_current.png), [`docs/schematics/wiring_diagram_power_module.png`](docs/schematics/wiring_diagram_power_module.png)):**
+  - Updated `generate_3_5b_current_diagram()` (Figure 1A) so the `1S` LiPo battery connects directly to the Waveshare `3.5B` `BAT JST` socket (using onboard `AXP2101` USB-C charging), collapsed `NDP6020P + 2N2222 + 2x10K + MT3608 + 470uF/0.1uF` into a single `Switched +5.00V Power Module`, and routed two separate `(+5.00V, GND)` output harnesses to `UM982` and `E220`.
+  - Added `generate_power_module_diagram()` (`Figure 1B`: [`wiring_diagram_power_module.png`](docs/schematics/wiring_diagram_power_module.png) / [`.svg`](docs/schematics/wiring_diagram_power_module.svg)) detailing the internal high-side switch, `MT3608`, decoupling caps, and twin output pairs.
+
 ## [generate_wiring_diagrams.py v1.2.0] - 2026-11-18
 ### Added & Changed
 - **Current Hardware High-Level Wiring Diagram & Schematics Update ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.2.0`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.1.0`, [`docs/schematics/wiring_diagram_3_5B_current.png`](docs/schematics/wiring_diagram_3_5B_current.png), [`docs/schematics/wiring_diagram_3_5B_current.svg`](docs/schematics/wiring_diagram_3_5B_current.svg)):**
