@@ -27,4 +27,6 @@ output/
 .secrets.local
 docs/mechanical/**/*.log
 docs/mechanical/**/*.cfg
+docs/mechanical/cad/step/*.par
+docs/mechanical/cad/step/*.asm
 
