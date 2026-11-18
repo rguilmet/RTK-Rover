@@ -18,6 +18,7 @@ Author: Roland L. Guilmet & Antigravity
 License: GPL-3.0
 """
 
+import argparse
 import os
 import matplotlib
 matplotlib.use("Agg")
@@ -25,7 +26,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Circle, Polygon, Rectangle
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.3.0"
+__version__ = "v1.3.1"
 
 
 def draw_chip_box(ax, x, y, w, h, title, subtitle, facecolor="#1E293B", edgecolor="#38BDF8", title_color="#F8FAFC", sub_color="#94A3B8", lw=2.2):
@@ -1415,10 +1416,14 @@ def generate_power_module_diagram(out_dir: str):
 
 if __name__ == "__main__":
     print(f"=== {__filename__} {__version__} ===")
+    parser = argparse.ArgumentParser(description="Generate RTK Rover hardware wiring diagrams.")
+    parser.add_argument("--legacy", action="store_true", help="Also generate deprecated v0.8.0 and 3.49-V2 draft diagrams.")
+    args = parser.parse_args()
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     schem_dir = os.path.join(repo_root, "docs", "schematics")
     os.makedirs(schem_dir, exist_ok=True)
-    generate_3_5b_diagram(schem_dir)
-    generate_3_49_v2_diagram(schem_dir)
     generate_3_5b_current_diagram(schem_dir)
     generate_power_module_diagram(schem_dir)
+    if args.legacy:
+        generate_3_5b_diagram(schem_dir)
+        generate_3_49_v2_diagram(schem_dir)

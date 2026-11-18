@@ -1,12 +1,12 @@
 # RTK Rover & Smart Pole — System Hardware Wiring Schematics
 
-**Document Version:** `v1.2.0`  
+**Document Version:** `v1.2.1`  
 **Date:** November 18, 2026  
 **Firmware Baseline:** `v0.8.18` (Single-UART `UM982 COM1` + Direct-JST `1S` LiPo + Collapsed `Switched +5.00V` Power Module + `DFRobot SEN0696` 10-DOF Beam IMU)  
 
 This document contains the complete high-level wiring diagram, Switched `+5.00V` Power Module internal schematic, RF antenna diagrams, power budget, and pin-by-pin interconnect tables for:
-1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** (`1S` LiPo plugged directly into onboard **`BAT JST`** using `AXP2101` `500 mA` USB-C charging) + **Collapsed Switched `+5.00V` Power Module (`NDP6020P` P-FET + `2N2222` NPN + `2 x 10 kOhm` + `MT3608` Boost + `470 uF / 0.1 uF` Filter)** feeding **separate `+5.00V / GND` pairs** to **Holybro `UM982`** and **Ebyte `E220-900T30S`** + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`).
-2. **Next-Generation Smart Pole:** **Waveshare `ESP32-S3-Touch-LCD-3.49-V2`** (`J3` 22-Pin Expansion Header + `18650` Battery) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N3904` NPN) & `MT3608` `5.0V` Boost Stage** + **Holybro `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30D/S`** + **Outboard Beam Compass (`MMC5983MA` / `SEN0696`)**.
+1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** (`1S` LiPo plugged directly into onboard **`BAT JST`** using `AXP2101` `500 mA` USB-C charging) + **Collapsed Switched `+5.00V` Power Module (`NDP6020P` P-FET + `2N2222` NPN + `2 x 10 kOhm` + `MT3608` Boost + `470 uF / 0.1 uF` Filter)** feeding **separate `+5.00V / GND` pairs** to **Holybro `UM982`** and **Ebyte `E220-900T30S`** + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`). Pin assignment sheet: [`Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv`](Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv).
+2. **Next-Generation Smart Pole (`3.49-V2`):** **Waveshare `ESP32-S3-Touch-LCD-3.49-V2`** (`MFS&RSP` unified `J2/J3/J6` header mapping) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N2222`/`2N3904` NPN) & `MT3608` `5.00V` Boost Stage** + **Holybro `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30D/S`** + **Outboard Beam `10DOF` (`SEN0696`)**.
 
 ---
 
@@ -16,7 +16,7 @@ This document contains the complete high-level wiring diagram, Switched `+5.00V`
 
 ![RTK Rover v0.8.18 High-Level Wiring Diagram (Waveshare ESP32-S3-Touch-LCD-3.5B)](wiring_diagram_3_5B_current.png)
 *Figure 1A: High-Level Hardware Wiring Diagram for the Current `Waveshare ESP32-S3-Touch-LCD-3.5B` Rover (`v0.8.18`) showing direct `1S` LiPo connection to `BAT JST`, the collapsed Switched `+5.00V` Power Module with separate `+5.00V / GND` harnesses to `UM982` & `E220`, Single-UART `UM982 COM1`, and `DFRobot Gravity SEN0696` (`0x4A`).*  
-*(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | Legacy `v0.8.0` external-USB + `MMC5983MA` block schematic preserved for reference: [`wiring_diagram_3_5B_v0_8_0.png`](wiring_diagram_3_5B_v0_8_0.png) / [`svg`](wiring_diagram_3_5B_v0_8_0.svg))*
+*(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | Board Schematic PDFs: [`V1.0`](ESP32-S3-Touch-LCD-3.5B_V1.0-schematic.pdf) / [`V2.0`](ESP32-S3-Touch-LCD-3.5B_V2.0-schematic.pdf) | Pin Mapping: [`rev4.csv`](Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv))*
 
 ### Figure 1B: Switched `+5.00V` Power Module Internal Wiring Diagram
 
@@ -57,34 +57,31 @@ This document contains the complete high-level wiring diagram, Switched `+5.00V`
 
 ## 2. Next-Generation Smart Pole (`Waveshare ESP32-S3-Touch-LCD-3.49-V2`, 1" Aluminum Beam)
 
-![Next-Generation Smart Pole Wiring Schematic (Waveshare ESP32-S3-Touch-LCD-3.49-V2)](wiring_diagram_3_49_V2_smart_pole.png)
-*Figure 2: Complete Hardware, Discrete `NDP6020P`/`MT3608` Power Stage, and RF Antenna Wiring Schematic for the Next-Generation `Waveshare ESP32-S3-Touch-LCD-3.49-V2` Smart Pole.*  
-*(Vector SVG version: [`wiring_diagram_3_49_V2_smart_pole.svg`](wiring_diagram_3_49_V2_smart_pole.svg))*
+> **Unified `MFS&RSP` Pin Allocation Reference:** [`Waveshare ESP32-S3-Touch-LCD-3.49-v2_gpio_pin_mapping-MFS&RSP.csv`](Waveshare%20ESP32-S3-Touch-LCD-3.49-v2_gpio_pin_mapping-MFS%26RSP.csv)  
+> The `3.49-V2` Smart Pole reuses the shared `Magnetic Field Scanner` (`MFS`) & `Rover Smart Pole` (`RSP`) `J2`/`J3`/`J6` expansion pinout so a single beam enclosure and `I2C0` bus serve both instruments.
 
-### 2.1 Complete `J3` 22-Pin Header & Power Stage Interconnect Table (`ESP32-S3-Touch-LCD-3.49-V2`)
+### 2.1 Unified `MFS&RSP` Expansion Header & Power Stage Table (`ESP32-S3-Touch-LCD-3.49-V2`)
 
-| `J3` Header Pin | `3.49-V2` Signal | Direction | Connected Subsystem / Pin | Signal / Electrical Specification |
+| Header Pin | `3.49-V2` GPIO / Rail | Direction | Connected Subsystem / Pin | Signal / Electrical Specification |
 | :--- | :--- | :---: | :--- | :--- |
-| **`J3 Pin 1`** | **`VBAT`** (`3.5V–4.2V`) | $\longrightarrow$ | **`NDP6020P` Source (Pin 3)** & **`R1` (`10 kΩ`)** | Unswitched 18650 Li-Ion battery positive rail feeding the high-side P-FET switch |
-| **`J3 Pin 2`** | **`3V3`** (`+3.3V` Switched) | $\longrightarrow$ | **`R2` (`10 kΩ`) $\to$ `2N3904` Base** & **`MMC5983MA` `3.3V`** | Active-HIGH when board is ON (`+3.3 V`), `0 V` when OFF (`0.00 uA` off-state leak) |
-| **`J3 Pins 3, 21, 22`** | **`GND`** | $\longleftrightarrow$ | **Common Star Ground** | Common ground for `2N3904` Emitter, `MT3608`, `UM982`, `E220`, and `MMC5983MA` |
-| **`J3 Pin 4`** | **`GPIO 4` (`ADC_INT`)** | Internal | **Onboard `VBAT` Divider (`200k/100k`)** | `3.0x` hardware voltage divider for live 18650 battery voltage & low-battery SD flush |
-| **`J3 Pin 5`** | **`GPIO 15` (`Serial1 RX`)** | $\longleftarrow$ | **Holybro UM982 `COM1 TX` (`TXD0`)** | `115200 8N1` — `NMEA` + `#UNIHEADINGA` + `#BASEINFOA` + Command Responses |
-| **`J3 Pin 6`** | **`GPIO 16` (`Serial1 TX`)** | $\longrightarrow$ | **Holybro UM982 `COM1 RX` (`RXD0`)** | `115200 8N1` — Multiplexed ASCII Commands + `CRC24Q`-Verified `RTCM3.x` Corrections |
-| **`J3 Pin 9`** | `GPIO 6` | — | **Freed / Spare GPIO** | Freed by Phase 8 Single-UART `UM982 COM1` consolidation |
-| **`J3 Pin 7`** | **`GPIO 43` (`TXD0`)** | $\longrightarrow$ | **Ebyte E220 `RXD` (Module In)** | `115200 8N1` (Mode 0 Uplink Telemetry / RSSI Query) / `9600 8N1` (Mode 3 Config) |
-| **`J3 Pin 8`** | **`GPIO 44` (`RXD0`)** | $\longleftarrow$ | **Ebyte E220 `TXD` (Module Out)** | `115200 8N1` (Mode 0 RTCM3 Downlink + RSSI Reply) / `9600 8N1` (Mode 3 Config) |
-| **`J3 Pin 10`** | **`GPIO 48` (ISR Input)** | $\longleftarrow$ | **Ebyte E220 `AUX`** | Hardware Edge Interrupt (`HIGH` = Idle/Ready, `LOW` = Busy) |
-| **`J3 Pin 15`** | **`GPIO 2` (Output)** | $\longrightarrow$ | **Ebyte E220 `M0`** | Mode Select Bit 0 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
-| **`J3 Pin 16`** | **`GPIO 1` (Output)** | $\longrightarrow$ | **Ebyte E220 `M1`** | Mode Select Bit 1 (`0` = Mode 0 Transparent, `1` = Mode 3 Sleep/Config) |
-| **`J3 Pin 17`** | **`GPIO 18` (`I2C_SCL`)** | $\longrightarrow$ | **SparkFun `MMC5983MA` `SCL` (Yellow)** | `400 kHz` I2C0 Clock to outboard beam compass (`6"`–`10"` along aluminum tube) |
-| **`J3 Pin 18`** | **`GPIO 17` (`I2C_SDA`)** | $\longleftrightarrow$ | **SparkFun `MMC5983MA` `SDA` (Blue)** | `400 kHz` I2C0 Data to outboard beam compass (`0x30`, shared with `0x6B` IMU & `0x51` RTC) |
-| **`J3 Pin 11`** | `GPIO 47` | $\longleftarrow$ | **SparkFun `MMC5983MA` `INT`** *(Optional)* | Optional hardware Data-Ready interrupt from `MMC5983MA` |
+| **`J3-11`** | **`VBAT`** (`3.5V–4.2V`) | $\longrightarrow$ | **`NDP6020P` Source (Pin 3)** & **`R1` (`10 kOhm`)** | Unswitched `1S` battery rail feeding the high-side P-FET switch |
+| **`J3-10` / `J6-10`** | **`3V3`** (`+3.3V` Switched) | $\longrightarrow$ | **`R2` (`10 kOhm`) $\to$ `2N2222`/`2N3904` Base** & **`10DOF` `+` (`3.3V`)** | Active-HIGH when board is ON (`+3.3 V`), `0 V` when OFF (`0.00 uA` off-state leak) |
+| **`J3-9` / `J6-9`** | **`GND`** | $\longleftrightarrow$ | **Common Star Ground** | Common ground for Power Module, `UM982`, `E220`, and `10DOF` |
+| **`J6-5`** | **`GPIO 4` (`BAT_ADC`)** | Internal | **Onboard `VBAT` Divider** | Hardware voltage divider for live battery voltage monitoring |
+| **`J6-1`** | **`GPIO 0` (`BOOT0`)** | $\longleftarrow$ | **External Pushbutton** *(Optional)* | Optional external pushbutton in parallel with `BOOT` (`GPIO 0`) |
+| **`J3-5`** | **`GPIO 43` (`UART TXD`)** | $\longrightarrow$ | **Holybro `UM982` `COM1 RX` (`RXD0`)** | `115200 8N1` — Multiplexed ASCII Commands + `CRC24Q`-Verified `RTCM3.x` Corrections |
+| **`J3-6`** | **`GPIO 44` (`UART RXD`)** | $\longleftarrow$ | **Holybro `UM982` `COM1 TX` (`TXD0`)** | `115200 8N1` — `NMEA` + `#UNIHEADINGA` + `#BASEINFOA` + Command Responses |
+| **`J2-2`** | **`GPIO 1` (UART/GPIO)** | $\longrightarrow$ | **Ebyte `E220` `RXD` (Module In)** | `115200 8N1` (Mode 0 Uplink Telemetry / RSSI Query) / `9600 8N1` (Mode 3 Cfg) |
+| **`J6-3`** | **`GPIO 2` (UART/GPIO)** | $\longleftarrow$ | **Ebyte `E220` `TXD` (Module Out)** | `115200 8N1` (Mode 0 RTCM3 Downlink + RSSI Reply) / `9600 8N1` (Mode 3 Cfg) |
+| **`J6-4`** | **`GPIO 3` (ISR Input)** | $\longleftarrow$ | **Ebyte `E220` `AUX`** | Hardware Edge Interrupt (`HIGH` = Idle/Ready, `LOW` = Busy) |
+| **`J6-6`** | **`GPIO 5` (Output)** | $\longrightarrow$ | **Ebyte `E220` `M1` / `M0`** | Combined Mode Select (`0` = Mode 0 Transparent, `1` = Mode 3 Config) |
+| **`J3-7`** | **`GPIO 47` (`I2C_SDA`)** | $\longleftrightarrow$ | **Outboard `10DOF` `SDA`** (`SEN0696` `0x4A`) | Shared `400 kHz` `I2C0` Data (`TCA9554` `0x20`, `QMI8658` IMU, `PCF85063` RTC, Audio) |
+| **`J3-8`** | **`GPIO 48` (`I2C_SCL`)** | $\longrightarrow$ | **Outboard `10DOF` `SCL`** (`SEN0696` `0x4A`) | Shared `400 kHz` `I2C0` Clock along non-ferromagnetic 1" aluminum beam |
 
-### 2.2 Discrete High-Side Power Switch (`NDP6020P` + `2N3904`) & `MT3608` `+5.00V` Boost Schematic
+### 2.2 Discrete High-Side Power Switch (`NDP6020P` + `2N2222`/`2N3904`) & `MT3608` `+5.00V` Boost Schematic
 
 ```text
-J3 Pin 1 (VBAT: 3.5V - 4.2V from Rear 18650 Holder)
+J3-11 (VBAT: 3.5V - 4.2V from 1S Battery)
   │
   ├──────────────────────┬────────────────────────► NDP6020P Pin 3 (SOURCE)
   │                      │
@@ -92,19 +89,19 @@ J3 Pin 1 (VBAT: 3.5V - 4.2V from Rear 18650 Holder)
   │                      │
   │                      ├────────────────────────► NDP6020P Pin 1 (GATE)
   │                      │
-  │                    2N3904 Collector (Pin 3)
+  │                    2N2222 / 2N3904 Collector (Pin 3)
   │                      │
-J3 Pin 2 (3V3) ──[R2: 10 kOhm]──► 2N3904 Base (Pin 2)
+J3-10 (3V3) ──[R2: 10 kOhm]──► 2N2222 / 2N3904 Base (Pin 2)
   │                      │
-  │                    2N3904 Emitter (Pin 1) ────► J3 Pin 3 (GND)
+  │                    2N2222 / 2N3904 Emitter (Pin 1) ────► J3-9 (GND)
   │
-  └──► SparkFun MMC5983MA 3.3V (Red Wire)
+  └──► Outboard Beam 10DOF 3.3V (Gravity Red Wire)
 
 NDP6020P Pin 2 (DRAIN / Center Pin & Tab)
   │
-  └──► Switched VBAT ──► [MT3608 VIN+] ===> [MT3608 VOUT+ (+5.00V)] ──┬──► Holybro UM982 5V_IN
-                                                                      ├──► Ebyte E220-900T30D/S VCC (5.0V)
-                                                                      └──► [100uF-220uF + 0.1uF Caps] ──► GND
+  └──► Switched VBAT ──► [MT3608 VIN+] ===> [MT3608 VOUT+ (+5.00V)] ──┬──► Holybro UM982 5V_IN (Pair 1)
+                                                                      ├──► Ebyte E220-900T30D/S VCC (Pair 2)
+                                                                      └──► [470uF + 0.1uF Caps] ──► GND
 ```
 
 ---

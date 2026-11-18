@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [generate_wiring_diagrams.py v1.3.1] - 2026-11-18
+### Changed & Cleaned
+- **Docs Folder Reorganization Sync & Schematics Alignment ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.3.1`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.1`):**
+  - Synchronized Git tracking with the reorganized [`docs/`](docs/) directory: moved Arduino setup images (`ESP32-S3-Touch-LCD-3.5-Arduino_Setup.*`) and `SEN0696` / `SEN3126` 4-pin cable diagrams into [`docs/images/`](docs/images/), moved pin assignment files (`Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev3.png`, `rev4.csv`, unified `Waveshare ESP32-S3-Touch-LCD-3.49-v2_gpio_pin_mapping-MFS&RSP.csv`) into [`docs/schematics/`](docs/schematics/), and removed superseded root/legacy wiring files (`v0.8.0` and old `3.49-V2` drafts).
+  - Updated `generate_wiring_diagrams.py` so default runs generate only `wiring_diagram_3_5B_current.*` and `wiring_diagram_power_module.*` (gated legacy generators behind `--legacy`), and updated `system_wiring_schematics.md` (`v1.2.1`) to remove dead links and align Section 2 with the unified `MFS&RSP` `3.49-V2` mapping.
+
 ## [generate_wiring_diagrams.py v1.3.0] - 2026-11-18
 ### Changed & Added
 - **Direct-JST LiPo Connection, Collapsed Power Module & Standalone Power Module Schematic ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.3.0`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.0`, [`docs/schematics/wiring_diagram_3_5B_current.png`](docs/schematics/wiring_diagram_3_5B_current.png), [`docs/schematics/wiring_diagram_power_module.png`](docs/schematics/wiring_diagram_power_module.png)):**

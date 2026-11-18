@@ -1,0 +1,51 @@
+GPIO,Pin,LCD,SD Card,IMU,RTC,UART,I2S,KEY_IO,Other,Magnetic Field Scanner (MFS),Rover Smart Pole (RSP),Note
+IO0,J6-1,-,-,-,-,-,-,BOOT0,-,Readable Pushbutton,Readable Pushbutton,External Pushbutton in Parallel with BOOT?
+IO1,J2-2,-,-,-,-,-,-,-,-,RM3100 DRDY Tip (0x23),E220_RXD,
+IO2,J6-3,-,-,-,-,-,-,-,-,RM3100 DRDY Ref (0x21),E220_TXD,
+IO3,J6-4,-,-,-,-,-,-,-,-,,E220_AUX,
+IO4,J6-5,-,-,-,-,-,-,-,BAT_ADC,Battery Monitor,Battery Monitor,
+IO5,J6-6,-,-,-,-,-,-,-,-,RM3100 DRDY Mid (0x22),E220_M1_M0,
+IO6,-,-,-,-,-,-,I2S_DSOUT,-,-,-,-,NOT AVAILABLE
+IO7,-,-,-,-,-,-,I2S_MCLK,-,-,-,-,NOT AVAILABLE
+IO8,-,-,-,-,-,-,-,-,EXIO_INT,-,-,NOT AVAILABLE
+IO9,-,LCD_CS,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO10,-,LCD_SCL,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO11,-,LCD_D0,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO12,-,LCD_D1,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO13,-,LCD_D2,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO14,-,LCD_D3,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO15,-,-,-,-,-,-,I2S_SCLK,-,-,-,-,NOT AVAILABLE
+IO16,-,-,-,-,-,-,-,-,SYS_OUT,-,-,NOT AVAILABLE
+IO17,-,TP_SDA,-,-,-,-,-,-,,-,-,NOT AVAILABLE
+IO18,-,TP_SCL,-,-,-,-,-,-,,-,-,NOT AVAILABLE
+IO19,J6-7,-,-,-,-,-,-,-,U_N,-,-,NOT AVAILABLE - USB C
+IO20,J6-8,-,-,-,-,-,-,-,U_P,-,-,NOT AVAILABLE - USB C
+IO21,-,LCD_TE,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO38,J3-1,-,SD_CS,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO39,J3-2,-,SD_MOSI,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO40,J3-3,-,SD_MISO,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO41,J3-4,-,SD_SCLK,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO42,-,LCD_BL,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+IO43,J3-5,-,-,-,-,TXD,-,-,-,GPS,UM982_RXD,NOT AVAILABLE - Save for GPS
+IO44,J3-6,-,-,-,-,RXD,-,-,-,GPS,UM982_TXD,NOT AVAILABLE - Save for GPS
+IO45,-,-,-,-,-,-,I2S_DSDIN,-,-,-,-,NOT AVAILABLE
+IO46,-,-,-,-,-,-,I2S_LRCK,-,-,-,-,NOT AVAILABLE
+IO47,J3-7,-,-,IMU_SDA,RTC_SDA,,Audio_SDA,-,-,Wand_SDA,10DOF_SDA,SHARED SDA (expander is 0x20)
+IO48,J3-8,-,-,IMU_SCL,RTC_SCL,,Audio_SCL,-,-,Wand_SCL,10DOF_SCL,SHARED SCL (expander is 0x20)
+RESET,-,-,-,-,-,-,-,RESET,-,-,-,NOT AVAILABLE
+EXIO0,-,TP_INT,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+EXIO1,-,BL_EN,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+EXIO2,-,-,-,IMU_INT1,-,-,-,-,-,-,-,NOT AVAILABLE
+EXIO3,-,-,-,IMU_INT2,-,-,-,-,-,-,-,NOT AVAILABLE
+EXIO4,-,-,-,-,RTC_INT,-,-,-,-,-,-,NOT AVAILABLE
+EXIO5,-,LCD_RST,-,-,-,-,-,-,-,-,-,NOT AVAILABLE
+EXIO6,-,-,-,-,-,-,-,-,SYS_EN,-,-,NOT AVAILABLE
+EXIO7,-,-,-,-,-,-,NS_MODE,-,-,-,-,NOT AVAILABLE
+GND,J3-9,-,-,-,-,-,-,-,-,-,-,Ground
+3V3,J3-10,-,-,-,-,-,-,-,-,-,-,3.3 Volts
+VBAT,J3-11,-,-,-,-,-,-,-,-,-,-,Battery Voltage
+GND,J6-9,-,-,-,-,-,-,-,-,-,-,Ground
+3V3,J6-10,-,-,-,-,-,-,-,-,-,-,3.3 Volts
+VBUS,J6-11,-,-,-,-,-,-,-,-,-,-,Bus Voltage
+,,,,,,,,,,,,
+,,,,,,,,,,,,
