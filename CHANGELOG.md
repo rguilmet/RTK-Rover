@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v1.0.0] - 2026-11-18
+### Added & Organized
+- **Option A Parametric PETG Enclosure CAD Package ([`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md), [`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v1.0.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v1.0.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad)):**
+  - Designed the `118.3 x 182.0 x 39.3 mm` support-free Wide Field Controller housing (`Front_Shell`, `Mid_Frame_Sled`, `Rear_Cover`, Option 3 `Pole_Adapter_Plate`, magnetic detachable `Sun_Shield`, and drop-in `Button_Plungers`) using **Ruthex** `M3` (`Dia 4.0 x 6.7 mm`), `M2` (`Dia 3.2 x 5.0 mm`), and `1/4"-20` (`Dia 8.0 x 13.7 mm` @ `38.1 mm` pitch) heat-set inserts.
+  - Accommodates left-facing `32-pin` DuPont harness (`11.6 mm` past glass edge), `GX-12` `10DOF` top-left bulkhead (`Dia 12.2 / 11.1 D-flat`), `E220` (`40 x 60`) SMA pigtail, Holybro `UM982` (`34.8 x 53.2 x 14.4`) direct-through `Dia 10.5` SMAs + `4` LED light pipes (`1.75 mm` clear PETG) + `SWITCH` pinhole, `20 x 80 x 22H` Power Board, `28 x 28 x 11H` front-firing speaker, `Dia 21 x 4 mm` RTC button cell cradle, and centered `10,000 mAh` LiPo bay (`123.5 x 64.5 x 11.8 mm`).
+  - Exported SolidEdge B-Rep solids (`step/*.step`), flat-on-bed support-free print meshes (`stl/*_print.stl`), AutoCAD LT `R2010` 2D interface drawings (`dxf/RTK_Rover_Interfaces_2D.dxf`), and `5` rendered previews (`previews/cad_preview_*.png`), verified at `0.00 mm^3` overlap across all `19` OpenCASCADE boolean checks (including `ESP32-S3-Touch-LCD-3_5B.stp`).
+- **Mechanical References, Bench Photos & Archive Organization:**
+  - Added board outline drawings (`E220-board-outline-mounting-holes.png`, `power-module-board-outline-mounting-holes.png`), sanitized vector `Holybro-UM982-indicator-switch.dxf` (`R2010`), dimension specs (`GX-12_dimensions.png`, `Holybro_UM982_dimensions.png`, `battery-dimensions.png`), and `5` EXIF-stripped bench module `.jpg` photos in `docs/images/`.
+  - Archived superseded stacked-brick SolidEdge drafts (`Case-part1.par`, `Case-part2.par`) under [`docs/mechanical/archive/`](docs/mechanical/archive/) and linked Mechanical CAD docs in [`README.md`](README.md).
+
 ## [docs/schematics v1.2.2] - 2026-11-18
 ### Changed & Organized
 - **Clarified Vendor Stock vs. Project Connector Naming ([`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.2`):**
