@@ -70,7 +70,9 @@ The **RTK Rover** is a dual-antenna, high-precision centimeter GNSS rover engine
 1. **Mounting:** Mount the crossbar securely to the top of the survey pole. Ensure ANT1 (Master) is on the user's left and ANT2 (Slave) is on the right when viewing the display from behind the rover.
 2. **Antenna Connections:** Connect the Master antenna to UM982 RF1 and the Slave antenna to UM982 RF2.
 3. **LoRa Antenna:** Attach the 900 MHz LoRa antenna to the E220 transceiver SMA connector.
-4. **Power-On:** Connect external USB 5V power pack to supply the UM982 GNSS and E220 1W LoRa radio. The internal 1S LiPo battery serves as an uninterruptible power supply (UPS) floating at $500\text{ mA}$ charge current via the AXP2101 PMIC.
+4. **Power-On:**
+   * **Internal Battery (`MT3608` 5V Boost Mode):** Power on untethered using an internal `1S` Li-Ion/LiPo battery (`~806 mA` / `~3.0 W` typical field draw at `80%` brightness, `Wi-Fi OFF`: expect **~3.2–3.4 hrs** on `3,000 mAh` or **~10.6–11.2 hrs** on `10,000 mAh`; see [Power Budget & Runtime](schematics/system_wiring_schematics.md#3-system-power-budget-mt3608-boost-analysis--battery-runtime-estimates)). Before long battery-only walks, set `auto_shutdown_battery_min` to `0` in `/settings.json` (defaults to `5` minutes idle). Onboard USB-C `AXP2101` charging is capped at $500\text{ mA}$ (~7 hrs for `3,000 mAh`, ~20+ hrs for `10,000 mAh`).
+   * **External USB Mode:** Optionally connect an external USB 5V power pack while floating/charging the internal UPS cell at $500\text{ mA}$ via the AXP2101 PMIC.
 5. **Boot Sequence:**
    * Waveshare boots and initializes SPI Flash, MicroSD card, and I2C peripherals.
    * QSPI Display powers up at default brightness (80%).
