@@ -16,7 +16,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.0"
+__version__ = "v1.1.0"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -188,7 +188,7 @@ def build_front_shell() -> cq.Workplane:
             cq.Workplane("XY")
             .workplane(offset=-4.5)
             .center(px, py)
-            .circle(3.6)
+            .circle(2.6)
             .extrude(4.5)
         )
         shell = shell.union(pad)
@@ -196,8 +196,8 @@ def build_front_shell() -> cq.Workplane:
             cq.Workplane("XY")
             .workplane(offset=0.05)
             .center(px, py)
-            .circle(1.9)
-            .workplane(offset=-2.1)
+            .circle(1.65)
+            .workplane(offset=-1.9)
             .circle(0.2)
             .loft(combine=True)
         )
@@ -260,38 +260,8 @@ def build_front_shell() -> cq.Workplane:
                                   cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_FRONT_INNER - 5.2)
     shell = shell.union(spk_rim_out.cut(spk_rim_in))
 
-    # 6. Power Board 4 x M2 Ruthex Bosses growing from Front_Shell inner wall (-2.4 to -8.4)
-    pb_boss_h = abs(S.PB_PCB_FRONT_Z - S.Z_FRONT_INNER)  # 6.0 mm
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            bx = S.PB_CX + sx * (S.PB_HOLE_DX / 2.0)
-            by = S.PB_CY + sy * (S.PB_HOLE_DY / 2.0)
-            boss = (
-                cq.Workplane("XY")
-                .workplane(offset=S.PB_PCB_FRONT_Z)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
-                .extrude(pb_boss_h)
-            )
-            hole = (
-                cq.Workplane("XY")
-                .workplane(offset=S.PB_PCB_FRONT_Z - 0.1)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_OD / 2.0)
-                .extrude(S.RUTHEX_M2_DEPTH + 0.5)
-            )
-            chamfer = (
-                cq.Workplane("XY")
-                .workplane(offset=S.PB_PCB_FRONT_Z - 0.05)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_OD / 2.0 + 0.5)
-                .workplane(offset=0.55)
-                .circle(S.RUTHEX_M2_OD / 2.0)
-                .loft(combine=True)
-            )
-            shell = shell.union(boss).cut(hole).cut(chamfer)
-
-    # 7. UM982 Front LED Light Pipes (1.75 mm PETG filament -> Ø1.95 mm) + SWITCH Pinhole
+    # 6. UM982 Front LED Light Pipes (1.75 mm PETG filament -> Dia 1.95 mm) + SWITCH Pinhole
+    # (Power Board M2 bosses moved to Rear_Cover in v1.1.0 so Battery & Power remain on one shell)
     for lx_off in S.UM_LED_X_OFFSETS:
         lx = S.UM_LEFT_X + lx_off
         ly = S.UM_TOP_Y - S.UM_LED_TOP_OFFSET
@@ -396,10 +366,10 @@ def build_mid_sled() -> cq.Workplane:
                             cx=0.0, cy=plate_cy, z_min=S.Z_SLED_BACK)
 
     # Open left C-bay on Left Power Bay (square inner corner -> zero floating fillet sliver)
-    pb_win = make_rounded_box(28.0, 90.0, S.Z_SLED_THK + 1.0, 0.0,
-                              cx=-44.5, cy=93.5, z_min=S.Z_SLED_BACK - 0.5)
-    pb_bot_jst = make_rounded_box(16.5, 11.0, S.Z_SLED_THK + 1.0, 0.0,
-                                  cx=-38.75, cy=44.5, z_min=S.Z_SLED_BACK - 0.5)
+    pb_win = make_rounded_box(27.0, 90.0, S.Z_SLED_THK + 1.0, 0.0,
+                              cx=-46.5, cy=93.5, z_min=S.Z_SLED_BACK - 0.5)
+    pb_bot_jst = make_rounded_box(15.0, 11.0, S.Z_SLED_THK + 1.0, 0.0,
+                                  cx=-40.5, cy=44.5, z_min=S.Z_SLED_BACK - 0.5)
     sled = sled.cut(pb_win).cut(pb_bot_jst)
 
     # Clear corner cutouts for the 6 x M3 shell closure bosses (so sled locks flush in seam)
@@ -414,8 +384,8 @@ def build_mid_sled() -> cq.Workplane:
         sled = sled.cut(c_notch)
 
     # Wire Routing Slot behind Waveshare right-angle DuPont tails + top Power harness slot
-    dupont_slot = make_rounded_box(12.0, 44.0, S.Z_SLED_THK + 1.0, 3.0,
-                                   cx=S.WS_DUPONT_TIP_X - 2.0, cy=S.WS_CY,
+    dupont_slot = make_rounded_box(10.0, 44.0, S.Z_SLED_THK + 1.0, 3.0,
+                                   cx=S.WS_DUPONT_TIP_X - 1.0, cy=S.WS_CY,
                                    z_min=S.Z_SLED_BACK - 0.5)
     sled = sled.cut(dupont_slot)
 
@@ -579,6 +549,36 @@ def build_rear_cover() -> cq.Workplane:
             )
             shell = shell.union(boss).cut(hole).cut(cham)
 
+    # 4. Power Board 4 x M2 Ruthex Bosses on Rear_Cover (15 x 75 mm grid, Z=-36.3 up to -29.8)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            bx = S.PB_CX + sx * (S.PB_HOLE_DX / 2.0)
+            by = S.PB_CY + sy * (S.PB_HOLE_DY / 2.0)
+            boss = (
+                cq.Workplane("XY")
+                .workplane(offset=S.Z_REAR_INNER)
+                .center(bx, by)
+                .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
+                .extrude(S.PB_STANDOFF_H)
+            )
+            hole = (
+                cq.Workplane("XY")
+                .workplane(offset=S.PB_PCB_BACK_Z - S.RUTHEX_M2_DEPTH)
+                .center(bx, by)
+                .circle(S.RUTHEX_M2_OD / 2.0)
+                .extrude(S.RUTHEX_M2_DEPTH + 0.1)
+            )
+            cham = (
+                cq.Workplane("XY")
+                .workplane(offset=S.PB_PCB_BACK_Z + 0.05)
+                .center(bx, by)
+                .circle(S.RUTHEX_M2_OD / 2.0 + 0.5)
+                .workplane(offset=-0.55)
+                .circle(S.RUTHEX_M2_OD / 2.0)
+                .loft(combine=True)
+            )
+            shell = shell.union(boss).cut(hole).cut(cham)
+
     return shell
 
 
@@ -631,11 +631,13 @@ def build_pole_adapter() -> cq.Workplane:
 
 
 def build_sun_shield() -> cq.Workplane:
-    """Build Detachable 3-Sided Outdoor Sun Shield (magnet + pin mounted, Z >= 0)."""
-    flange_w = S.WS_GLASS_W + 17.0   # Covers left & right magnet strips cleanly
-    flange_h = S.WS_GLASS_H + 14.0
-    flange_cx = S.WS_CX - 1.5        # Center X = 17.5 -> spans [-21.5, +56.5]
-    flange_cy = S.WS_CY + 1.0        # Y = [6.0, 100.0]
+    """Build Detachable 3-Sided Outdoor Sun Shield (flush X=[-23.5..+58.0], zero wall notches)."""
+    x_min, x_max = -23.5, 58.0       # Covers Left (-16.8) magnets & Right (+54.4) pins with >=2.1 mm edge margin
+    y_min, y_max = 5.5, 111.5        # Covers Top (Y=105) magnets cleanly while leaving UM982 SWITCH free
+    flange_w = x_max - x_min         # 81.5 mm
+    flange_h = y_max - y_min         # 106.0 mm
+    flange_cx = 0.5 * (x_min + x_max) # 17.25 mm
+    flange_cy = 0.5 * (y_min + y_max) # 58.5 mm
 
     base = make_rounded_box(flange_w, flange_h, 3.0, 5.0,
                             cx=flange_cx, cy=flange_cy, z_min=0.0)
@@ -643,8 +645,8 @@ def build_sun_shield() -> cq.Workplane:
     hood_h = 38.0
     hood_outer = make_rounded_box(flange_w, flange_h, hood_h, 5.0,
                                   cx=flange_cx, cy=flange_cy, z_min=0.0)
-    hood_inner = make_rounded_box(S.WS_GLASS_W + 0.6, S.WS_GLASS_H + 2.0, hood_h + 2.0, 4.0,
-                                  cx=S.WS_CX, cy=S.WS_CY - 2.0, z_min=-0.5)
+    hood_inner = make_rounded_box(S.WS_GLASS_W + 0.6, 88.5, hood_h + 2.0, 4.0,
+                                  cx=S.WS_CX, cy=54.75, z_min=-0.5)
     shield = base.union(hood_outer).cut(hood_inner)
 
     # Trim lower portion to 4.5 mm protective bezel only, tapering upward at 45 deg
@@ -652,17 +654,17 @@ def build_sun_shield() -> cq.Workplane:
         cq.Workplane("YZ")
         .workplane(offset=flange_cx - flange_w / 2.0 - 2.0)
         .polyline([
-            (flange_cy - flange_h / 2.0 - 2.0, 4.5),
-            (flange_cy + 5.0, 4.5),
-            (flange_cy + 39.0, hood_h + 1.0),
-            (flange_cy - flange_h / 2.0 - 2.0, hood_h + 1.0),
+            (y_min - 2.0, 4.5),
+            (58.0, 4.5),
+            (92.0, hood_h + 1.0),
+            (y_min - 2.0, hood_h + 1.0),
         ])
         .close()
         .extrude(flange_w + 4.0)
     )
     shield = shield.cut(lower_cut)
 
-    # Magnet holes & registration pins mating into Front_Shell
+    # Magnet holes & slim registration pins mating cleanly inside Front_Shell bezel
     for mx, my in S.SHIELD_MAG_POINTS:
         m_hole = (
             cq.Workplane("XY")
@@ -677,9 +679,9 @@ def build_sun_shield() -> cq.Workplane:
             cq.Workplane("XY")
             .workplane(offset=0.0)
             .center(px, py)
-            .circle(1.7)
-            .workplane(offset=-1.8)
-            .circle(0.4)
+            .circle(1.45)
+            .workplane(offset=-1.6)
+            .circle(0.35)
             .loft(combine=True)
         )
         shield = shield.union(pin)
@@ -718,10 +720,12 @@ def build_hardware_proxies() -> dict:
         ws = cq.importers.importStep(str(STP_WAVESHARE))
         # Shift STEP Z=+1.10 glass face down to Z=0.0, then translate to (WS_CX, WS_CY)
         mods["waveshare_stp"] = ws.translate((S.WS_CX, S.WS_CY, -1.10))
-    mods["power_board"] = make_rounded_box(
-        S.PB_W, S.PB_H, S.PB_Z_THK, 0.5,
-        cx=S.PB_CX, cy=S.PB_CY, z_min=S.PB_PCB_FRONT_Z - S.PB_Z_THK
-    )
+    # Power Board body (Z = PB_PCB_BACK_Z .. +20.0 mm tall parts) + 2.0 mm underside solder envelope (inset inside pads)
+    pb_upper = make_rounded_box(S.PB_W, S.PB_H, 20.0, 0.5,
+                                cx=S.PB_CX, cy=S.PB_CY, z_min=S.PB_PCB_BACK_Z)
+    pb_pins = make_rounded_box(S.PB_W - 8.0, S.PB_H - 12.0, 2.0, 0.2,
+                               cx=S.PB_CX, cy=S.PB_CY, z_min=S.PB_PCB_BACK_Z - 2.0)
+    mods["power_board"] = pb_upper.union(pb_pins)
     mods["e220"] = make_rounded_box(
         S.E220_W, S.E220_H, S.E220_Z_THK, 0.5,
         cx=S.E220_CX, cy=S.E220_CY, z_min=S.Z_SLED_FRONT + S.E220_STANDOFF_H
@@ -786,6 +790,12 @@ def run_audit(parts: dict, mods: dict) -> list:
             issues.append(f"[OVERLAP] {pname} vs {mname}: {vol:.2f} mm^3")
         else:
             print(f"[AUDIT PASS] {pname} vs {mname}: 0.00 mm^3 overlap")
+    # Verify Front_Shell outer envelope stayed exact (zero protruding bosses)
+    fs_bb = parts["Front_Shell"].val().BoundingBox()
+    if abs(fs_bb.xmax - S.CASE_W / 2.0) > 0.05 or abs(fs_bb.xmin + S.CASE_W / 2.0) > 0.05:
+        issues.append(f"[PROTRUSION] Front_Shell X=[{fs_bb.xmin:.2f}, {fs_bb.xmax:.2f}] exceeds +/-{S.CASE_W/2:.2f}")
+    else:
+        print(f"[AUDIT PASS] Front_Shell outer X flush: [{fs_bb.xmin:.2f}, {fs_bb.xmax:.2f}] mm")
     return issues
 
 

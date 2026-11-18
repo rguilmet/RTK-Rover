@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v1.1.0] - 2026-11-18
+### Changed & Fixed
+- **Sun_Shield Right-Side Flush Fit, Rear-Cover Power Board Mount & Symmetric Top-Left Corner Screw ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v1.1.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v1.1.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Relocated the `4` `Sun_Shield` `Dia 6 x 2 mm` N52 magnets onto the wide **Left (`X = -16.8`)** and **Top (`Y = 105.0`, above LCD)** bezel strips and replaced right-side magnets with slim flush `Dia 3.0 mm` registration dimples (`X = +54.4`, `Dia 5.2 mm` internal pads) plus widened `Sun_Shield` (`81.5 x 106.0 mm`, `X=[-23.5..+58.0]`) — eliminating `Front_Shell` side wall protrusions (`exact [-59.00, 59.00] mm` outer flush) and `Sun_Shield` edge notches.
+  - Moved the **`20 x 80 x 22H mm` Power Board** `4 x M2` Ruthex standoffs (`6.5 mm` tall) onto **`Rear_Cover`** (`PB_CX = -45.5`) and shifted the centered Battery bay (`BAT_CX = +9.0`) + Option 3 `ADAPTER_M3` grid (`X = -31.0, +49.0`) so both the Battery and Switched `+5V` Power Board reside on the single Rear Cover.
+  - Moved the Top-Left `M3` cover closure boss up into the symmetric Top-Left corner (`-53.5, 174.5`) and shifted `GX-12` (`GX12_X = -39.0`, `E220_CX = -8.5`) to preserve clean wrench/nut clearance; regenerated all `.step`, `.stl`, `.dxf`, and `previews/*.png` outputs (`0.00 mm^3` overlap across all 20 audit checks).
+
 ## [docs/mechanical/cad v1.0.0] - 2026-11-18
 ### Added & Organized
 - **Option A Parametric PETG Enclosure CAD Package ([`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md), [`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v1.0.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v1.0.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad)):**

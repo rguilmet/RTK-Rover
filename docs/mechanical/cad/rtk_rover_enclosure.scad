@@ -1,6 +1,6 @@
 // =============================================================================
 // RTK Rover Option A Enclosure (Wide Field Controller, PETG Support-Free)
-// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v1.0.0
+// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v1.1.0
 // Coordinate origin: X = centered [-59..+59], Y = [0..182], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -72,15 +72,16 @@ WS_SD_Z_CTR = -8.15;
 
 WS_DUPONT_TIP_X = WS_CX - 30.50 - 11.60; // -23.10
 
-// --- Power Board (20 x 80 x 22H) ---
+// --- Power Board (20 x 80 x 22H, Rear_Cover mounted) ---
 PB_W = 20.0; PB_H = 80.0; PB_Z_THK = 22.0;
-PB_CX = -42.5; PB_CY = 89.0;
+PB_CX = -45.5; PB_CY = 89.0;
 PB_HOLE_DX = 15.0; PB_HOLE_DY = 75.0;
-PB_PCB_FRONT_Z = -6.0;
+PB_STANDOFF_H = 6.5;
+PB_PCB_BACK_Z = Z_REAR_INNER + PB_STANDOFF_H; // -29.8
 
 // --- Speaker (28 x 28 x 11H) ---
 SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 11.0;
-SPK_CX = -37.0; SPK_CY = 24.0;
+SPK_CX = -34.5; SPK_CY = 24.5;
 
 // --- RTC Coin Battery (21 mm dia x 4.0 mm) ---
 RTC_BAT_DIA = 21.4; RTC_BAT_THK = 4.2;
@@ -105,26 +106,26 @@ UM_LED_X_OFFSETS = [9.9, 14.9, 19.9, 24.9];
 // --- E220 (40 x 60 x 15H) ---
 E220_W = 40.0; E220_H = 60.0; E220_Z_THK = 15.0;
 E220_HOLE_DX = 35.0; E220_HOLE_DY = 55.0;
-E220_CX = -9.5; E220_CY = 143.0;
+E220_CX = -8.5; E220_CY = 143.0;
 E220_STANDOFF_H = 4.0;
-E220_SMA_X = -9.5; E220_SMA_Z = UM_SMA_Z;
+E220_SMA_X = -8.5; E220_SMA_Z = UM_SMA_Z;
 E220_SMA_DIA = 6.5; E220_SMA_FLAT = 6.0;
 
 // --- GX-12 (Top-Left) ---
-GX12_X = -43.5; GX12_Z = UM_SMA_Z;
+GX12_X = -39.0; GX12_Z = UM_SMA_Z;
 GX12_HOLE_DIA = 12.2;
 GX12_FLAT_DIST = 11.1;
 GX12_NUT_RECESS_DIA = 17.5;
 
 // --- 10,000 mAh Battery ---
 BAT_POCKET_W = 64.5; BAT_POCKET_H = 123.5;
-BAT_CX = 6.0; BAT_CY = 75.0;
+BAT_CX = 9.0; BAT_CY = 75.0;
 
 // --- Closure & Pole Adapter ---
 COVER_M3_POINTS = [
-    [-53.5, 6.8], [53.8, 7.2],
+    [-54.2, 6.5], [53.8, 7.2],
     [-54.2, 43.5], [54.0, 112.0],
-    [-54.2, 148.0], [53.5, 174.5]
+    [-53.5, 174.5], [53.5, 174.5]
 ];
 ADAPTER_CX = BAT_CX;
 ADAPTER_M3_DX = 80.0; ADAPTER_M3_DY = 58.0; ADAPTER_M3_CY = 83.0;
@@ -133,8 +134,8 @@ POLE_ADAPTER_W = 94.0; POLE_ADAPTER_H = 74.0;
 POLE_ADAPTER_BASE_T = 4.5;
 POLE_ADAPTER_SPINE_W = 24.0; POLE_ADAPTER_SPINE_T = 16.2;
 
-SHIELD_MAG_POINTS = [[-16.8, 22.0], [-16.8, 84.0], [54.6, 20.0], [54.6, 92.0]];
-SHIELD_PIN_POINTS = [[-16.8, 53.0], [54.6, 56.0]];
+SHIELD_MAG_POINTS = [[-16.8, 48.0], [-16.8, 88.0], [4.0, 105.0], [38.0, 105.0]];
+SHIELD_PIN_POINTS = [[-16.8, 68.0], [54.4, 18.0], [54.4, 94.0]];
 
 // =============================================================================
 // Primitives
@@ -180,9 +181,9 @@ module front_shell() {
         union() {
             rrect(CASE_W, CASE_H, abs(Z_PARTING), CORNER_R, 0, CASE_H/2, Z_PARTING);
             for (p = SHIELD_MAG_POINTS)
-                translate([p[0], p[1], -5.0]) cylinder(d=6.2 + 3.6, h=5.0);
+                translate([p[0], p[1], -5.0]) cylinder(d=6.2 + 3.2, h=5.0);
             for (p = SHIELD_PIN_POINTS)
-                translate([p[0], p[1], -4.5]) cylinder(d=7.6, h=4.5);
+                translate([p[0], p[1], -4.5]) cylinder(d=5.2, h=4.5);
         }
         // Main cavity
         rrect(CASE_W - 2*WALL_SIDE, CASE_H - WALL_BOT - WALL_TOP,
@@ -198,7 +199,7 @@ module front_shell() {
         for (p = SHIELD_MAG_POINTS)
             translate([p[0], p[1], -2.2]) cylinder(d=6.2, h=2.4);
         for (p = SHIELD_PIN_POINTS)
-            translate([p[0], p[1], -2.05]) cylinder(d1=0.4, d2=3.8, h=2.1);
+            translate([p[0], p[1], -1.85]) cylinder(d1=0.4, d2=3.3, h=1.9);
         // USB-C tunnel
         translate([WS_CX, -0.5, WS_USBC_Z_CTR])
             rotate([-90, 0, 0])
@@ -247,16 +248,7 @@ module front_shell() {
         rrect(SPK_W + 3.6, SPK_H + 3.6, 5.0, 2.5, SPK_CX, SPK_CY, Z_FRONT_INNER - 5.0);
         rrect(SPK_W + 2*FIT_CLEAR, SPK_H + 2*FIT_CLEAR, 5.6, 1.5, SPK_CX, SPK_CY, Z_FRONT_INNER - 5.2);
     }
-    // Power Board 4 x M2 Ruthex standoffs
-    for (sx = [-1, 1], sy = [-1, 1]) {
-        bx = PB_CX + sx * PB_HOLE_DX/2;
-        by = PB_CY + sy * PB_HOLE_DY/2;
-        difference() {
-            translate([bx, by, PB_PCB_FRONT_Z]) cylinder(d=RUTHEX_M2_BOSS, h=abs(PB_PCB_FRONT_Z - Z_FRONT_INNER));
-            translate([bx, by, PB_PCB_FRONT_Z - 0.1]) cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.5);
-        }
-    }
-    // 6 x M3 Closure Bosses
+    // 6 x M3 Closure Bosses (Power Board M2 bosses moved to Rear_Cover in v1.1.0)
     for (p = COVER_M3_POINTS) {
         difference() {
             translate([p[0], p[1], Z_PARTING + 1.6]) cylinder(d=RUTHEX_M3_BOSS, h=abs(Z_PARTING - Z_FRONT_INNER) - 1.6);
@@ -287,10 +279,10 @@ module mid_sled() {
             }
         }
         // Open Left Power Bay C-cutout (square inner corner -> zero floating fillet sliver)
-        rrect(28.0, 90.0, Z_SLED_THK + 1.0, 0.1, -44.5, 93.5, Z_SLED_BACK - 0.5);
-        rrect(16.5, 11.0, Z_SLED_THK + 1.0, 0.1, -38.75, 44.5, Z_SLED_BACK - 0.5);
+        rrect(27.0, 90.0, Z_SLED_THK + 1.0, 0.1, -46.5, 93.5, Z_SLED_BACK - 0.5);
+        rrect(15.0, 11.0, Z_SLED_THK + 1.0, 0.1, -40.5, 44.5, Z_SLED_BACK - 0.5);
         // DuPont routing trough
-        rrect(12.0, 44.0, Z_SLED_THK + 1.0, 3.0, WS_DUPONT_TIP_X - 2.0, WS_CY, Z_SLED_BACK - 0.5);
+        rrect(10.0, 44.0, Z_SLED_THK + 1.0, 3.0, WS_DUPONT_TIP_X - 1.0, WS_CY, Z_SLED_BACK - 0.5);
         // 6 x M3 Boss clearance notches
         for (p = COVER_M3_POINTS)
             translate([p[0], p[1], Z_SLED_BACK - 0.5]) cylinder(d=RUTHEX_M3_BOSS + 0.8, h=Z_SLED_THK + 1.0);
@@ -334,6 +326,9 @@ module rear_cover() {
             for (sx = [-1, 1], sy = [-1, 1])
                 translate([ADAPTER_CX + sx*ADAPTER_M3_DX/2, ADAPTER_M3_CY + sy*ADAPTER_M3_DY/2, Z_REAR_OUTER])
                     cylinder(d=RUTHEX_M3_BOSS, h=8.4);
+            for (sx = [-1, 1], sy = [-1, 1])
+                translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_REAR_INNER])
+                    cylinder(d=RUTHEX_M2_BOSS, h=PB_STANDOFF_H);
         }
         rrect(BAT_POCKET_W, BAT_POCKET_H, BAT_BAY_Z + 1.0, 2.0, BAT_CX, BAT_CY, Z_REAR_INNER - 0.2);
         rrect(16.0, 8.0, BAT_BAY_Z + 1.0, 1.0, BAT_CX - 18.0, BAT_CY - BAT_POCKET_H/2, Z_REAR_INNER - 0.2);
@@ -342,6 +337,9 @@ module rear_cover() {
         for (sx = [-1, 1], sy = [-1, 1])
             translate([ADAPTER_CX + sx*ADAPTER_M3_DX/2, ADAPTER_M3_CY + sy*ADAPTER_M3_DY/2, Z_REAR_OUTER - 0.1])
                 cylinder(d=RUTHEX_M3_OD, h=RUTHEX_M3_DEPTH + 0.1);
+        for (sx = [-1, 1], sy = [-1, 1])
+            translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, PB_PCB_BACK_Z - RUTHEX_M2_DEPTH])
+                cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.1);
     }
 }
 
@@ -364,27 +362,29 @@ module pole_adapter() {
 }
 
 module sun_shield() {
-    fw = WS_GLASS_W + 17.0;
-    fh = WS_GLASS_H + 14.0;
-    fcx = WS_CX - 1.5;
-    fcy = WS_CY + 1.0;
+    xmin = -23.5; xmax = 58.0;
+    ymin = 5.5; ymax = 111.5;
+    fw = xmax - xmin;
+    fh = ymax - ymin;
+    fcx = 0.5 * (xmin + xmax);
+    fcy = 0.5 * (ymin + ymax);
     hood_h = 38.0;
     difference() {
         union() {
             rrect(fw, fh, 3.0, 5.0, fcx, fcy, 0.0);
             rrect(fw, fh, hood_h, 5.0, fcx, fcy, 0.0);
         }
-        rrect(WS_GLASS_W + 0.6, WS_GLASS_H + 2.0, hood_h + 2.0, 4.0, WS_CX, WS_CY - 2.0, -0.5);
+        rrect(WS_GLASS_W + 0.6, 88.5, hood_h + 2.0, 4.0, WS_CX, 54.75, -0.5);
         translate([fcx - fw/2 - 2, 0, 0])
             rotate([90, 0, 90])
                 linear_extrude(height=fw + 4)
-                    polygon([[fcy - fh/2 - 2, 4.5], [fcy + 5, 4.5],
-                             [fcy + 39, hood_h + 1], [fcy - fh/2 - 2, hood_h + 1]]);
+                    polygon([[ymin - 2, 4.5], [58.0, 4.5],
+                             [92.0, hood_h + 1], [ymin - 2, hood_h + 1]]);
         for (p = SHIELD_MAG_POINTS)
             translate([p[0], p[1], -0.1]) cylinder(d=6.2, h=2.3);
     }
     for (p = SHIELD_PIN_POINTS)
-        translate([p[0], p[1], -1.8]) cylinder(d1=0.8, d2=3.4, h=1.8);
+        translate([p[0], p[1], -1.6]) cylinder(d1=0.7, d2=2.9, h=1.6);
 }
 
 module button_plungers() {
@@ -419,7 +419,7 @@ else {
     color("Gold") translate([0, 0, EXPLODE_MM]) button_plungers();
     if (SHOW_MODULES) {
         %rrect(WS_GLASS_W, WS_GLASS_H, 11.5, WS_GLASS_R, WS_CX, WS_CY, -11.5);
-        %rrect(PB_W, PB_H, PB_Z_THK, 0.5, PB_CX, PB_CY, PB_PCB_FRONT_Z - PB_Z_THK);
+        %rrect(PB_W, PB_H, PB_Z_THK, 0.5, PB_CX, PB_CY, PB_PCB_BACK_Z - 2.0);
         %rrect(E220_W, E220_H, E220_Z_THK, 0.5, E220_CX, E220_CY, Z_SLED_FRONT + E220_STANDOFF_H);
         %rrect(UM_W, UM_H, UM_Z_THK, 1.0, UM_CX, UM_CY, UM_BACK_Z);
         %rrect(63.0, 115.0, 11.0, 1.5, BAT_CX, BAT_CY - 2.0, Z_REAR_INNER + 0.3);

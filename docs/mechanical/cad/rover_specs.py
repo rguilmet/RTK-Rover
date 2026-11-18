@@ -10,7 +10,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.0"
+__version__ = "v1.1.0"
 
 # ==============================================================================
 # Overall Outer Enclosure (Option A: Wide Field Controller, PETG, Zero Supports)
@@ -98,16 +98,17 @@ WS_DUPONT_Y0 = WS_CY - 21.0              # 31.0
 WS_DUPONT_Y1 = WS_CY + 21.0              # 73.0
 
 # ==============================================================================
-# 2. Power Board (20.0 x 80.0 x 22H mm, 4 x M2 @ 2.5 mm corner inset)
+# 2. Power Board (20.0 x 80.0 x 22H mm, mounted to Rear_Cover + 4 x M2 Ruthex)
 # ==============================================================================
 PB_W = 20.0
 PB_H = 80.0
 PB_Z_THK = 22.0
-PB_CX = -42.5           # Spans X = [-52.5, -32.5]; 9.4 mm clear gap left of DuPont tips!
+PB_CX = -45.5           # Spans X = [-55.5, -35.5]; 12.4 mm clear left of DuPont tips!
 PB_CY = 89.0            # Spans Y = [49.0, 129.0]; leaves Y=[38..49] & [129..152] for 4p JSTs
 PB_HOLE_DX = 15.0
 PB_HOLE_DY = 75.0
-PB_PCB_FRONT_Z = -6.0   # Front_Shell inner boss length = 3.6 mm (-2.4 to -6.0), components to -28.0 (clears M3 adapter bosses at -30.4!)
+PB_STANDOFF_H = 6.5     # Rear_Cover inner (-36.3) + 6.5 = -29.8 mm PCB back (clears -30.9 M3 bosses; peak ~-9.8)
+PB_PCB_BACK_Z = Z_REAR_INNER + PB_STANDOFF_H  # -29.8 (PCB grows +Z toward Front_Shell)
 
 # ==============================================================================
 # 3. Speaker (28 x 28 x 11H mm, Lower-Left Front-Firing)
@@ -115,8 +116,8 @@ PB_PCB_FRONT_Z = -6.0   # Front_Shell inner boss length = 3.6 mm (-2.4 to -6.0),
 SPK_W = 28.0
 SPK_H = 28.0
 SPK_Z_THK = 11.0
-SPK_CX = -37.0          # Spans X = [-51.0, -23.0]
-SPK_CY = 24.0           # Spans Y = [10.0, 38.0]; below Power Board + clears Bot-Left M3 boss
+SPK_CX = -34.5          # Spans X = [-48.5, -20.5] (rim -50.3..-18.7, clears Bot-Left & Mid-Left)
+SPK_CY = 24.5           # Spans Y = [10.5, 38.5] (rim 8.7..40.3)
 
 # ==============================================================================
 # 4. RTC Button Cell (CR2032/wrapped pack: 21 mm dia x 4.0 mm thick, Lower-Center)
@@ -168,10 +169,10 @@ E220_H = 60.0
 E220_Z_THK = 15.0
 E220_HOLE_DX = 35.0
 E220_HOLE_DY = 55.0
-E220_CX = -9.5          # X = [-29.5, +10.5]; clears Power Board (-32.5) & UM982 (+13.2)
+E220_CX = -8.5          # X = [-28.5, +11.5]; clears GX-12 (-30.25) & UM982 (+13.2)
 E220_CY = 143.0         # Y = [113.0, 173.0]; 14.8 mm above Waveshare, 6.5 mm top coax room
 E220_STANDOFF_H = 4.0   # Solder clearance above Z_SLED_FRONT (-22.0 -> PCB back at -18.0 -> -3.0 peak)
-E220_SMA_X = -9.5       # Bulkhead SMA centered above E220 (29.95 mm from UM982 Slave, 34.0 mm from GX-12)
+E220_SMA_X = -8.5       # Bulkhead SMA centered above E220 (28.95 mm from UM982 Slave, 30.5 mm from GX-12)
 E220_SMA_Z = UM_SMA_Z   # -11.25 aligned on top crown axis
 E220_SMA_DIA = 6.5
 E220_SMA_FLAT = 6.0
@@ -179,7 +180,7 @@ E220_SMA_FLAT = 6.0
 # ==============================================================================
 # 7. GX-12 4-Pin Bulkhead (10DOF Connector, Top-Left)
 # ==============================================================================
-GX12_X = -43.5          # Centered above Power Board channel, far from E220/GNSS SMAs
+GX12_X = -39.0          # Shifted right to clear symmetric Top-Left corner M3 boss (-53.5, 174.5) by 1.95 mm!
 GX12_Z = UM_SMA_Z       # -11.25
 GX12_HOLE_DIA = 12.2    # M12 x 0.75 barrel clearance
 GX12_FLAT_DIST = 11.1   # Top flat across M12 circle -> prevents rotation + bridges support-free
@@ -194,25 +195,25 @@ BAT_CELL_H = 115.0
 BAT_POCKET_W = 64.5
 BAT_POCKET_H = 123.5    # Includes ~8.5 mm wire bend exit clearance at bottom Kapton PCB
 BAT_POCKET_THK = BAT_BAY_Z
-BAT_CX = 6.0            # Shifted right behind Waveshare -> X=[-26.25..+38.25], clears Power Board (-32.5) by 4.65 mm!
+BAT_CX = 9.0            # X=[-23.25..+41.25] (wall -24.85..+42.85), 10.65 mm clear of Power Board!
 BAT_CY = 75.0           # Y = [13.25, 136.75]
 
 # ==============================================================================
 # 9. Case Closure & Option 3 Pole Adapter Fastener Grids (Ruthex M3 + 1/4"-20)
 # ==============================================================================
-# 6 x M3 Enclosure Closure Bosses (clearing Speaker, Power Board, Waveshare, GX-12, UM982, R6 corners)
+# 6 x M3 Enclosure Closure Bosses (symmetric corners + side mid-clamp points)
 COVER_M3_POINTS = [
-    (-53.5, 6.8),       # Bottom-Left (below Speaker Y=10.0)
-    ( 53.8, 7.2),       # Bottom-Right (clears Waveshare R6 glass corner)
-    (-54.2, 43.5),      # Mid-Left (clear gap between Speaker Y=38 and Power Board Y=49)
+    (-54.2, 6.5),       # Bottom-Left corner (outside Speaker rim X=-50.3)
+    ( 53.8, 7.2),       # Bottom-Right corner (clears Waveshare R6 glass corner)
+    (-54.2, 43.5),      # Mid-Left (clear gap between Speaker Y=40.3 and Power Board Y=49)
     ( 54.0, 112.0),     # Mid-Right (clear gap between Waveshare Y=98.2 and UM982 Y=126.8)
-    (-54.2, 148.0),     # Top-Left (clear gap above Power Board Y=129 and below GX-12 nut)
-    ( 53.5, 174.5),     # Top-Right (clears UM_RIGHT_X=48.0 and R6 top-right corner)
+    (-53.5, 174.5),     # Top-Left corner (symmetric with Top-Right, clears GX-12 nut)
+    ( 53.5, 174.5),     # Top-Right corner (clears UM_RIGHT_X=48.0 and R6 top-right corner)
 ]
 
-# Option 3: 4 x M3 Rear Pole Adapter Grid (flanks BAT_CX=6.0 cleanly!)
-ADAPTER_CX = BAT_CX     # Centered at X = +6.0 behind battery pocket
-ADAPTER_M3_DX = 80.0    # X = -34.0 and +46.0 (2.35 mm clear outside battery wall; above Z=-28 Power Board!)
+# Option 3: 4 x M3 Rear Pole Adapter Grid (flanks BAT_CX=9.0 cleanly!)
+ADAPTER_CX = BAT_CX     # Centered at X = +9.0 behind battery pocket
+ADAPTER_M3_DX = 80.0    # X = -31.0 and +49.0 (2.35 mm clear outside battery wall; clears Power Board X=-35.5)
 ADAPTER_M3_DY = 58.0    # Y = 54.0, 112.0 (centered around Y = 83.0)
 ADAPTER_M3_CY = 83.0
 
@@ -224,16 +225,17 @@ POLE_ADAPTER_BASE_T = 4.5
 POLE_ADAPTER_SPINE_W = 24.0
 POLE_ADAPTER_SPINE_T = 16.2 # >= 13.7 mm insert + 2.5 mm solid closed floor
 
-# Sun Shield Detachable Alignment + Magnet Pockets (Zero fragile snap hooks in PETG)
+# Sun Shield Detachable Magnet & Alignment Pin Pockets (wide Left + Top faces; slim pins on narrow Right rim)
 SHIELD_MAG_DIA = 6.2
 SHIELD_MAG_DEPTH = 2.2
 SHIELD_MAG_POINTS = [
-    (-16.8, 22.0),      # Left strip beside LCD (clears -11.75 glass opening)
-    (-16.8, 84.0),      # Left strip near top of LCD
-    ( 54.6, 20.0),      # Right lower strip (clears +49.75 glass opening)
-    ( 54.6, 92.0),      # Right upper strip above MicroSD notch
+    (-16.8, 48.0),      # Left lower magnet (above Speaker rim Y=40.3, clears -11.75 LCD)
+    (-16.8, 88.0),      # Left upper magnet (clears -11.75 LCD)
+    (  4.0, 105.0),     # Top-left above LCD (clears 98.47 LCD & Y=113 E220)
+    ( 38.0, 105.0),     # Top-right above LCD (clears 98.47 LCD & Y=126.8 UM982)
 ]
 SHIELD_PIN_POINTS = [
-    (-16.8, 53.0),      # Left conical registration dimple
-    ( 54.6, 56.0),      # Right conical registration dimple (between BOOT button & MicroSD)
+    (-16.8, 68.0),      # Left registration dimple
+    ( 54.4, 18.0),      # Right lower dimple (Dia 5.4 pad fits cleanly inside +49.75..+59.0 wall -> zero protrusion!)
+    ( 54.4, 94.0),      # Right upper dimple (above MicroSD, zero wall protrusion!)
 ]

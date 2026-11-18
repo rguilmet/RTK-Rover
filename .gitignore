@@ -25,4 +25,6 @@ __pycache__/
 *.xlsx
 output/
 .secrets.local
+docs/mechanical/**/*.log
+docs/mechanical/**/*.cfg
 
