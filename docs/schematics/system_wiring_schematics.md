@@ -1,12 +1,21 @@
 # RTK Rover & Smart Pole — System Hardware Wiring Schematics
 
-**Document Version:** `v1.2.1`  
+**Document Version:** `v1.2.2`  
 **Date:** November 18, 2026  
 **Firmware Baseline:** `v0.8.18` (Single-UART `UM982 COM1` + Direct-JST `1S` LiPo + Collapsed `Switched +5.00V` Power Module + `DFRobot SEN0696` 10-DOF Beam IMU)  
 
 This document contains the complete high-level wiring diagram, Switched `+5.00V` Power Module internal schematic, RF antenna diagrams, power budget, and pin-by-pin interconnect tables for:
-1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** (`1S` LiPo plugged directly into onboard **`BAT JST`** using `AXP2101` `500 mA` USB-C charging) + **Collapsed Switched `+5.00V` Power Module (`NDP6020P` P-FET + `2N2222` NPN + `2 x 10 kOhm` + `MT3608` Boost + `470 uF / 0.1 uF` Filter)** feeding **separate `+5.00V / GND` pairs** to **Holybro `UM982`** and **Ebyte `E220-900T30S`** + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`). Pin assignment sheet: [`Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv`](Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv).
+1. **Current Rover Prototype (`v0.8.18`):** **Waveshare `ESP32-S3-Touch-LCD-3.5B`** (`1S` LiPo plugged directly into onboard **`BAT JST`** using `AXP2101` `500 mA` USB-C charging) + **Collapsed Switched `+5.00V` Power Module (`NDP6020P` P-FET + `2N2222` NPN + `2 x 10 kOhm` + `MT3608` Boost + `470 uF / 0.1 uF` Filter)** feeding **separate `+5.00V / GND` pairs** to **Holybro `UM982`** and **Ebyte `E220-900T30S`** + **DFRobot Gravity `SEN0696`** 10-DOF IMU (`0x4A`, `3V3` Gravity cable; auto-detects optional legacy `MMC5983MA` `0x30`). Connector wiring guide: [`RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`](RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png) & [`RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv`](RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv).
 2. **Next-Generation Smart Pole (`3.49-V2`):** **Waveshare `ESP32-S3-Touch-LCD-3.49-V2`** (`MFS&RSP` unified `J2/J3/J6` header mapping) + **Discrete High-Side Switch (`NDP6020P` P-FET + `2N2222`/`2N3904` NPN) & `MT3608` `5.00V` Boost Stage** + **Holybro `UM982`** (Single-UART `COM1`) + **Ebyte `E220-900T30D/S`** + **Outboard Beam `10DOF` (`SEN0696`)**.
+
+### Schematic & Pinout Reference Index
+
+| Artifact Role | Files | Scope / Source |
+| :--- | :--- | :--- |
+| **System Wiring Diagrams (`v0.8.18`)** | [`wiring_diagram_3_5B_current.png`](wiring_diagram_3_5B_current.png) ([`.svg`](wiring_diagram_3_5B_current.svg)) & [`wiring_diagram_power_module.png`](wiring_diagram_power_module.png) ([`.svg`](wiring_diagram_power_module.svg)) | Project-wide harness & Switched `+5.00V` Power Module (`Figure 1A / 1B`) |
+| **32-Pin Connector Wiring Guide (`rev4`)** | [`RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`](RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png) & [`RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv`](RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv) | **RTK Rover custom project assignments** on the `3.5B` 2x16 header |
+| **Stock MCU Reference (Vendor)** | [`Waveshare_3.5B_Stock_GPIO_Allocation_Table.png`](../images/Waveshare_3.5B_Stock_GPIO_Allocation_Table.png), [`Waveshare_3.5B_Stock_Header_Pinout.png`](../images/Waveshare_3.5B_Stock_Header_Pinout.png), [`Waveshare_3.5B_Stock_Board_Callouts.png`](../images/Waveshare_3.5B_Stock_Board_Callouts.png), [`V1.0`](ESP32-S3-Touch-LCD-3.5B_V1.0-schematic.pdf) / [`V2.0`](ESP32-S3-Touch-LCD-3.5B_V2.0-schematic.pdf) PDFs | Unmodified Waveshare `3.5B` internal peripheral & hardware reference |
+| **Future `3.49-V2` Smart Pole Mapping** | [`Waveshare ESP32-S3-Touch-LCD-3.49-v2_gpio_pin_mapping-MFS&RSP.csv`](Waveshare%20ESP32-S3-Touch-LCD-3.49-v2_gpio_pin_mapping-MFS%26RSP.csv) | Shared `MFS&RSP` `J2/J3/J6` header allocation (`Section 2`) |
 
 ---
 
@@ -16,13 +25,18 @@ This document contains the complete high-level wiring diagram, Switched `+5.00V`
 
 ![RTK Rover v0.8.18 High-Level Wiring Diagram (Waveshare ESP32-S3-Touch-LCD-3.5B)](wiring_diagram_3_5B_current.png)
 *Figure 1A: High-Level Hardware Wiring Diagram for the Current `Waveshare ESP32-S3-Touch-LCD-3.5B` Rover (`v0.8.18`) showing direct `1S` LiPo connection to `BAT JST`, the collapsed Switched `+5.00V` Power Module with separate `+5.00V / GND` harnesses to `UM982` & `E220`, Single-UART `UM982 COM1`, and `DFRobot Gravity SEN0696` (`0x4A`).*  
-*(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | Board Schematic PDFs: [`V1.0`](ESP32-S3-Touch-LCD-3.5B_V1.0-schematic.pdf) / [`V2.0`](ESP32-S3-Touch-LCD-3.5B_V2.0-schematic.pdf) | Pin Mapping: [`rev4.csv`](Waveshare-ESP32-S3-Touch-LCD-3.5B-GPIO_Pin_Assignment-rev4.csv))*
+*(Vector SVG version: [`wiring_diagram_3_5B_current.svg`](wiring_diagram_3_5B_current.svg) | 32-Pin Connector Guide: [`RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`](RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png) & [`rev4.csv`](RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv))*
 
 ### Figure 1B: Switched `+5.00V` Power Module Internal Wiring Diagram
 
 ![RTK Rover Switched +5.00V Power Module Wiring Diagram](wiring_diagram_power_module.png)
 *Figure 1B: Internal Component Wiring Schematic for the Custom Switched `+5.00V` Power Module (`NDP6020P` TO-220 + `2N2222` TO-92 + `2 x 10 kOhm` + `MT3608` Boost + `470 uF` & `0.1 uF` decoupling capacitors), showing the two separate `(+5.00V, GND)` output harnesses to the Holybro `UM982` and Ebyte `E220-900T30S`.*  
 *(Vector SVG version: [`wiring_diagram_power_module.svg`](wiring_diagram_power_module.svg))*
+
+### Figure 1C: Waveshare `3.5B` 32-Pin Connector Wiring Guide (`rev4`)
+
+![RTK Rover 3.5B 32-Pin Header Wiring Guide (rev4)](RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png)
+*Figure 1C: Project-specific RTK Rover connector wiring assignments overlaid on the `32-pin` expansion header (supersedes `rev3`). Tabular export: [`RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv`](RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv); unmodified vendor allocation matrix: [`Waveshare_3.5B_Stock_GPIO_Allocation_Table.png`](../images/Waveshare_3.5B_Stock_GPIO_Allocation_Table.png).*
 
 ### 1.1 Complete Pin-by-Pin Interconnect & Power Stage Table (`ESP32-S3-Touch-LCD-3.5B`)
 

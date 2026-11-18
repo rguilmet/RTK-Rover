@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/schematics v1.2.2] - 2026-11-18
+### Changed & Organized
+- **Clarified Vendor Stock vs. Project Connector Naming ([`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.2`):**
+  - Renamed vendor reference images in [`docs/images/`](docs/images/) to `Waveshare_3.5B_Stock_GPIO_Allocation_Table.png`, `Waveshare_3.5B_Stock_Header_Pinout.png`, and `Waveshare_3.5B_Stock_Board_Callouts.png`.
+  - Renamed project connector wiring guides in [`docs/schematics/`](docs/schematics/) to [`RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`](docs/schematics/RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png) and [`RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv`](docs/schematics/RTK_Rover_3.5B_Header_Pin_Mapping-rev4.csv), retired the superseded `-rev3.png`, added a Schematic & Pinout Reference Index to `system_wiring_schematics.md`, and embedded Figure 1C (`rev4`).
+
 ## [generate_wiring_diagrams.py v1.3.1] - 2026-11-18
 ### Changed & Cleaned
 - **Docs Folder Reorganization Sync & Schematics Alignment ([`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py) `v1.3.1`, [`docs/schematics/system_wiring_schematics.md`](docs/schematics/system_wiring_schematics.md) `v1.2.1`):**
