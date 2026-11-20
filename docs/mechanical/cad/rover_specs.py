@@ -1,241 +1,272 @@
-"""Shared parametric mechanical dimensions for the RTK Rover Option A enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.0.0 enclosure.
+
+Architecture (v2.0.0 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
+  1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
+     (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
+     Power Board, Speaker pedestal), an integral right-angle Top L-Bulkhead
+     (GX-12, E220 SMA, UM982 Slave/Master SMAs), and an integral right-angle
+     Right Button-Plunger & MicroSD Flange (captive button plungers).
+  2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
+     only flush glass opening, USB-C cutout, speaker acoustic grille slots,
+     4 x UM982 status LED light pipes + SWITCH pinhole, and Option H1 U-groove.
+     Secured by 6 symmetric front-entry M3 CSK screws (4 corners + 2 mid-side).
+  3. External Option B2 Battery & Pole Mount Pods (5000 mAh and 10000 mAh):
+     2-piece support-free stacked pod (Battery_Cradle + Pole_Lid w/ twin 1/4"-20
+     Ruthex inserts) bolting onto the rear via a shared 4 x M3 grid & Bat JST slot.
+  4. Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG tapered hood plugging into
+     the recessed U-groove in Top_Cover (zero magnets, zero protruding side bosses).
 
 Coordinate convention (looking at the front touchscreen in portrait, USB-C down):
-  X: horizontal (+X = right, -X = left), centered at X = 0.0 on the case outer box
-  Y: vertical   (+Y = top RF crown, -Y = bottom USB-C end), outer box spans [0, CASE_H]
-  Z: depth      (Z = 0.0 = outer Front_Shell flat face / Waveshare glass front plane;
-                 -Z goes backward into the enclosure toward Rear_Cover)
+  X: horizontal (+X = right, -X = left), centered at X = 0.0 on outer case
+  Y: vertical   (+Y = top RF crown, -Y = bottom USB-C end), spans [0.0, CASE_H]
+  Z: depth      (Z = 0.0 = outer Top_Cover faceplate / Waveshare glass front;
+                 -Z goes backward toward Back_Chassis_Frame and rear Battery/Pole Pod)
 """
 
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v2.0.0"
 
 # ==============================================================================
-# Overall Outer Enclosure (Option A: Wide Field Controller, PETG, Zero Supports)
+# Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
 # ==============================================================================
-CASE_W = 118.0          # X: [-59.0, +59.0]
-CASE_H = 182.0          # Y: [0.0, 182.0]
+CASE_W = 120.0          # X: [-60.0, +60.0]
+CASE_H = 180.0          # Y: [0.0, 180.0]
 CORNER_R = 6.0
 
-WALL_SIDE = 3.0         # Outer side wall thickness (X_inner = +/-56.0)
+WALL_SIDE = 3.0         # Outer side wall thickness (X_inner = +/-57.0)
 WALL_BOT = 3.0          # Bottom wall thickness (Y_inner_bot = 3.0)
-WALL_TOP = 3.2          # Top bulkhead structural wall (Y_inner_top = 178.8)
-WALL_FRONT = 2.4        # Front faceplate wall thickness (Z = 0.0 .. -2.4)
-WALL_REAR = 3.0         # Rear wall behind battery firewall (Z = -35.8 .. -38.8)
+WALL_TOP = 3.0          # Top L-wall nominal thickness (Y_inner_top = 177.0)
+WALL_FRONT = 2.4        # Top_Cover front faceplate thickness (Z = 0.0..-2.4)
+WALL_BACK = 3.0         # Back_Chassis_Frame floor thickness (Z = -25.0..-28.0)
 
-# Z Stack Planes (Z = 0.0 at front screen plane / build plate for Front_Shell)
+# Z Stack Planes (Z = 0.0 at front screen glass plane)
 Z_FRONT_OUTER = 0.0
-Z_FRONT_INNER = -WALL_FRONT          # -2.4
-Z_SLED_FRONT = -22.0                 # 22.0 mm front bay (clears 18 mm DuPont + 4.0 mm)
-Z_SLED_THK = 2.5
-Z_SLED_BACK = Z_SLED_FRONT - Z_SLED_THK   # -24.5 (flat bed face for Mid_Frame_Sled)
-Z_PARTING = -24.5                    # Front_Shell ends here (flush lip overlap with Rear_Cover)
+Z_FRONT_INNER = -WALL_FRONT             # -2.4
+Z_PLATE_INNER = -25.0                   # 22.6 mm clear bay (clears 20.57 mm Power Board on 3 mm standoffs)
+Z_PLATE_OUTER = Z_PLATE_INNER - WALL_BACK  # -28.0 (flat bed plane for Back_Chassis_Frame)
 
-BAT_BAY_Z = 11.8                     # 11.0 mm LiPo + 0.8 mm foam pad tolerance
-Z_REAR_INNER = Z_SLED_BACK - BAT_BAY_Z    # -36.3 (Rear_Cover interior battery floor)
-Z_REAR_OUTER = Z_REAR_INNER - WALL_REAR   # -39.3 (flat bed face for Rear_Cover)
-
-# Printer Clearance (PETG, 0.4 mm nozzle, 4 perimeters)
-FIT_CLEAR = 0.25        # Per-side XY pocket fit margin
-HOLE_CLEAR_M2 = 2.30    # M2 screw pass-through hole
-HOLE_CLEAR_M3 = 3.40    # M3 screw pass-through hole
+# Fit Clearances (PETG, 0.4 mm nozzle, 4 perimeters)
+FIT_CLEAR = 0.25        # General module XY slip clearance per side
+NOTCH_CLEAR = 0.20      # Top_Cover lap clearance around Back_Chassis_Frame L-wall & right flange
+HOLE_CLEAR_M2 = 2.30    # M2 pass-through bore
+HOLE_CLEAR_M3 = 3.40    # M3 pass-through bore
 
 # Ruthex Heat-Set Insert Specs (user-supplied)
-RUTHEX_M2_OD = 3.2      # Hole diameter for Ruthex M2
+RUTHEX_M2_OD = 3.2
 RUTHEX_M2_DEPTH = 5.0
 RUTHEX_M2_MIN_WALL = 1.3
-RUTHEX_M2_BOSS_OD = 6.2 # >= 3.2 + 2*1.3 = 5.8
+RUTHEX_M2_BOSS_OD = 6.2     # >= 3.2 + 2*1.3 = 5.8
 
-RUTHEX_M3_OD = 4.0      # Hole diameter for Ruthex M3
+RUTHEX_M3_OD = 4.0
 RUTHEX_M3_DEPTH = 6.7
 RUTHEX_M3_MIN_WALL = 1.6
-RUTHEX_M3_BOSS_OD = 7.6 # >= 4.0 + 2*1.6 = 7.2
+RUTHEX_M3_BOSS_OD = 7.8     # >= 4.0 + 2*1.6 = 7.2
 
-RUTHEX_Q20_OD = 8.0     # Hole diameter for Ruthex 1/4"-20
+RUTHEX_Q20_OD = 8.0
 RUTHEX_Q20_DEPTH = 13.7
 RUTHEX_Q20_MIN_WALL = 3.3
-RUTHEX_Q20_BOSS_OD = 15.2 # >= 8.0 + 2*3.3 = 14.6
+RUTHEX_Q20_BOSS_OD = 15.2   # >= 8.0 + 2*3.3 = 14.6
 
 # ==============================================================================
-# 1. Waveshare ESP32-S3-Touch-LCD-3.5B (from ESP32-S3-Touch-LCD-3_5B.stp)
+# 1. Waveshare ESP32-S3-Touch-LCD-3.5B (from REF-ASM-Waveshare-...stp)
 # ==============================================================================
+# Normalized REF-ASM glass front sits at Z = 0.0; datum is center of 61.00 x 92.44 glass.
 WS_GLASS_W = 61.00
 WS_GLASS_H = 92.44
-WS_GLASS_R = 6.00
-WS_VA_W = 48.96
-WS_VA_H = 73.44
-WS_PCB_W = 54.52
-WS_PCB_H = 78.02
-WS_STANDOFF_DX = 48.50  # 4 x M2.0 female brass pillars
+WS_GLASS_R = 3.00           # Measured R3.00 (Dia 6.00) corners in REF-ASM-Waveshare...stp
+WS_PCB_W = 54.50
+WS_PCB_H = 78.00
+WS_STANDOFF_DX = 48.50      # 4 x M2.0 female brass pillars ending at Z = -11.50
 WS_STANDOFF_DY = 72.00
-WS_STANDOFF_Z_END = -11.50 # Relative to glass front = 0.0 (-10.40 - 1.10)
+WS_STANDOFF_Z_END = -11.50
 
-# Placement in Enclosure
-WS_CX = 19.0            # Glass spans X = [-11.50, +49.50]; leaves 9.5 mm right wall/buttons
-WS_CY = 52.0            # Glass spans Y = [5.78, 98.22]; leaves 5.78 mm bottom chin
+WS_CX = 18.50               # Glass X: [-12.00, +49.00]
+WS_CY = 52.50               # Glass Y: [+6.28, +98.72]
 
-# Port/Feature offsets relative to (WS_CX, WS_CY), verified in STP:
-WS_USBC_W = 13.5        # Tunnel width for standard USB-C cable overmold
-WS_USBC_Z_CTR = -8.72   # (-9.65..-5.59) - 1.10 = -10.75..-6.69, centered -8.72
-WS_USBC_H_OPEN = 8.4    # Cutout opening height in Z
-WS_USBC_Y_END = WS_CY - 40.00  # USB-C front shell socket face at Y = 12.00
+# Measured feature coordinates relative to glass center (0, 0) & front Z = 0.0:
+# USB-C (bottom edge)
+WS_USBC_W = 13.5
+WS_USBC_Z_CTR = -8.72
+WS_USBC_H_OPEN = 8.4
 
-WS_BTN_X_EDGE = WS_CX + 26.85  # +45.85 tactile button domes
-WS_BTN_Y_LIST = [WS_CY - 25.00, WS_CY - 16.50, WS_CY - 8.00] # PWR, RESET, BOOT (27.0, 35.5, 44.0)
-WS_BTN_Z_CTR = -8.20    # (-8.20..-6.00) - 1.10 = -9.30..-7.10
+# Tactile buttons PWR, RESET, BOOT (Solid[0,1,2] exact centroids relative to glass)
+# relY = [-25.00, -16.50, -8.00], Z_rel = -8.62, outer contact dome X_rel = +26.85
+WS_BTN_X_DOME = WS_CX + 26.85           # +45.35
+WS_BTN_Y_LIST = [WS_CY - 25.00, WS_CY - 16.50, WS_CY - 8.00]  # [27.50, 36.00, 44.50]
+WS_BTN_Z_CTR = -8.62
 
-WS_SD_Y0 = WS_CY + 16.60       # 68.60
-WS_SD_Y1 = WS_CY + 32.70       # 84.70
-WS_SD_Z_CTR = -8.15     # (-8.40..-5.80) - 1.10 = -9.50..-6.90
+# MicroSD card slot (Solid[3] metal shroud relY = [+17.80, +31.80], relX_max = +30.35 -> +48.85)
+WS_SD_Y0 = WS_CY + 16.80                # 69.30
+WS_SD_Y1 = WS_CY + 32.80                # 85.30
+WS_SD_Z_CTR = -8.25
 
-# Right-Angle 32-Pin Header facing LEFT (-X) into wiring corridor:
-# Solder row inner edge Xw=-19.69, glass edge Xw=-30.50.
-# Measured 22.4 mm total width from inner row -> ends 11.6 mm past glass left edge.
-WS_DUPONT_TIP_X = WS_CX - 30.50 - 11.60  # -23.10
-WS_DUPONT_Y0 = WS_CY - 21.0              # 31.0
-WS_DUPONT_Y1 = WS_CY + 21.0              # 73.0
+# Integrated Right Button-Plunger Flange & Plunger Carrier (Back_Chassis_Frame)
+FLANGE_Y0 = 16.0                        # Clears Bottom-Right M3 boss (54.4, 6.6)
+FLANGE_Y1 = 96.0                        # Clears Mid-Right M3 boss (54.4, 108.0)
+PLUNGER_BLK_X0 = 46.60                  # Clears Waveshare PCB/midframe (+45.75) by 0.85 mm & Pod boss (+45.9)
+PLUNGER_BLK_X1 = 57.00
+PLUNGER_BLK_Y0 = 22.0
+PLUNGER_BLK_Y1 = 50.0
+PLUNGER_BLK_Z_TOP = -4.2                # Clears Glass (-1.10) & Top_Cover front (-2.4) safely
 
 # ==============================================================================
-# 2. Power Board (20.0 x 80.0 x 22H mm, mounted to Rear_Cover + 4 x M2 Ruthex)
+# 2. RTC Coin Cell + Holder (Underneath Waveshare! From REF-coin-cell*.stp)
+# ==============================================================================
+RTC_CX = 18.50              # Centered cleanly under Waveshare PCB & between standoffs
+RTC_CY = 46.00              # Wires exit -Y (toward Y~29, Z=-25..-21); clears Header Z=-18.13 by 2.87+ mm
+
+# ==============================================================================
+# 3. Power Board (from REF-power-module.stp: 20.0 x 80.0 x 20.57H mm)
 # ==============================================================================
 PB_W = 20.0
 PB_H = 80.0
-PB_Z_THK = 22.0
-PB_CX = -45.5           # Spans X = [-55.5, -35.5]; 12.4 mm clear left of DuPont tips!
-PB_CY = 89.0            # Spans Y = [49.0, 129.0]; leaves Y=[38..49] & [129..152] for 4p JSTs
 PB_HOLE_DX = 15.0
 PB_HOLE_DY = 75.0
-PB_STANDOFF_H = 6.5     # Rear_Cover inner (-36.3) + 6.5 = -29.8 mm PCB back (clears -30.9 M3 bosses; peak ~-9.8)
-PB_PCB_BACK_Z = Z_REAR_INNER + PB_STANDOFF_H  # -29.8 (PCB grows +Z toward Front_Shell)
+PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 12.67 mm clear of Header
+PB_CY = 91.00               # Y: [51.00, 131.00]; 5.1 mm above Bot-Left Pod M3 (45.9), 7.1 mm below Top-Left Pod M3 (138.1)
+PB_STANDOFF_H = 3.0         # PCB underside at Z = -22.00; -2.0 mm solder pins end at -24.00 (1.0 mm clear above floor); peak -3.43
 
 # ==============================================================================
-# 3. Speaker (28 x 28 x 11H mm, Lower-Left Front-Firing)
+# 4. Speaker (from REF-speaker.stp: 28.0 x 30.0 x 10.0H mm, Flat on Back Plate)
 # ==============================================================================
+# Normalized with +Z cone upward and 2 mm wire bump at +Y: body [-14, +14] x [-14, +14], bump [+14, +16]
 SPK_W = 28.0
 SPK_H = 28.0
-SPK_Z_THK = 11.0
-SPK_CX = -34.5          # Spans X = [-48.5, -20.5] (rim -50.3..-18.7, clears Bot-Left & Mid-Left)
-SPK_CY = 24.5           # Spans Y = [10.5, 38.5] (rim 8.7..40.3)
+SPK_Z_THK = 10.0
+SPK_CX = -33.20             # Body X: [-47.20, -19.20]; 2.8+ mm clear of Bot-Left M3 (-50.3) & Header (-16.33)
+SPK_CY = 21.00              # Body Y: [7.00, 35.00], wire bump Y=[35.0, 37.0]; clears Bot-Left Pod M3 (38.1) by 1.1 mm
+SPK_PEDESTAL_H = 11.5       # Pedestal top at Z = -13.50 -> speaker front cone at Z = -3.50 (1.1 mm behind Top_Cover)
 
 # ==============================================================================
-# 4. RTC Button Cell (CR2032/wrapped pack: 21 mm dia x 4.0 mm thick, Lower-Center)
+# 5. Holybro UM982 (from REF-holybro-um982.stp: 34.8 x 58.9 x 14.4H mm)
 # ==============================================================================
-RTC_BAT_DIA = 21.4      # 21.0 mm + 0.4 mm slip fit
-RTC_BAT_THK = 4.2       # 4.0 mm + 0.2 mm
-RTC_BAT_CX = -20.0      # Sits beside Speaker / directly next to SH1.0 RTC header (Y~19)
-RTC_BAT_CY = 20.0
-RTC_BAT_Z_BASE = Z_SLED_FRONT + 4.5  # Held in C-pocket on Mid_Frame_Sled (-17.0..-21.5)
+UM_W = 34.80
+UM_BODY_H = 53.20
+UM_TOTAL_H = 58.90          # Includes 5.7 mm SMA protrusion
+UM_Z_THK = 14.40
+UM_SMA_PITCH = 20.30
+UM_SMA_EDGE_X = 7.25        # Relative to UM left edge
+UM_SMA_Z_FROM_BACK = 5.95   # Measured Z=5.95 from back Z=0.0 (= 8.45 from front Z=14.40)
+
+UM_CX = 31.60               # X: [+14.20, +49.00]; clears Top-Right M3 (+50.5) by 1.50 mm
+UM_LEFT_X = UM_CX - UM_W / 2.0          # +14.20
+UM_TOP_Y = 178.00           # Body Y: [124.80, 178.00]; 2.0 mm local roof web (178.0..180.0); 26.08 mm clear above LCD
+UM_BOT_Y = UM_TOP_Y - UM_BODY_H         # +124.80
+UM_CY = 0.5 * (UM_BOT_Y + UM_TOP_Y)     # +151.40
+UM_BACK_Z = -17.20          # Standoffs = 7.80 mm off Back Plate Z=-25.0 (4-M2 rear CSK screws)
+UM_FRONT_Z = UM_BACK_Z + UM_Z_THK       # -2.80 (0.40 mm behind Top_Cover inside Z=-2.40)
+UM_SMA_Z = UM_BACK_Z + UM_SMA_Z_FROM_BACK  # -11.25
+
+UM_SMA_SLAVE_X = UM_LEFT_X + UM_SMA_EDGE_X              # +21.45
+UM_SMA_MASTER_X = UM_SMA_SLAVE_X + UM_SMA_PITCH         # +41.75
+UM_SMA_ACCESS_DIA = 10.5
+
+# UM982 rear 4-M2 hole positions & front LED / SWITCH exact offsets from REF-holybro-um982.stp
+UM_M2_X_OFFS = [2.85, 31.95]
+UM_M2_Y_OFFS = [5.80, 46.30]
+UM_LED_Y = UM_BOT_Y + 30.20             # 155.00
+UM_LED_X_LIST = [UM_LEFT_X + dx for dx in (9.90, 14.90, 19.90, 24.90)]  # [24.10, 29.10, 34.10, 39.10]
+UM_SW_X = UM_LEFT_X + 24.90             # 39.10
+UM_SW_Y = UM_BOT_Y + 13.31              # 138.11
 
 # ==============================================================================
-# 5. Holybro UM982 (34.8 x 53.2 x 14.4 mm, Label Front, Top-Right)
-# ==============================================================================
-UM_W = 34.8
-UM_H = 53.2
-UM_Z_THK = 14.4
-UM_SMA_PROTRUDE = 5.7   # 58.9 - 53.2 = 5.7 mm brass threads
-UM_SMA_PITCH = 20.3
-UM_SMA_EDGE_X = 7.25    # Centered in 34.8 mm width
-UM_SMA_Z_FROM_FRONT = 8.45
-UM_HOLE_TOP_OFFSET = 6.9
-UM_HOLE_DX = 29.1
-UM_HOLE_DY = 40.5
-UM_LED_TOP_OFFSET = 23.0
-UM_LED_X_OFFSETS = [9.9, 14.9, 19.9, 24.9]
-UM_SW_TOP_OFFSET = 40.0
-UM_SW_X_OFFSET = 24.9
-UM_LEFT_LENS_X_OFFSET = 9.9
-UM_LEFT_LENS_DIA = 5.2
-
-UM_RIGHT_X = 48.0       # X = [13.2, 48.0]; leaves 1.5 mm clear inside Top-Right M3 boss!
-UM_LEFT_X = UM_RIGHT_X - UM_W            # 13.2
-UM_CX = 0.5 * (UM_LEFT_X + UM_RIGHT_X)   # 30.6
-UM_TOP_Y = 180.0        # Sits inside 2.0 mm locally counterbored top roof web (180.0..182.0)
-UM_BOT_Y = UM_TOP_Y - UM_H               # 126.8 (28.6 mm clear above Waveshare Y=98.2 for COM1)
-UM_CY = 0.5 * (UM_BOT_Y + UM_TOP_Y)      # 153.4
-UM_FRONT_Z = -2.8       # 0.4 mm behind Front_Shell inner ceiling Z=-2.4
-UM_BACK_Z = UM_FRONT_Z - UM_Z_THK        # -17.2 (4.3 mm standoff down to sled Z=-21.5)
-UM_SMA_Z = UM_FRONT_Z - UM_SMA_Z_FROM_FRONT  # -11.25
-UM_SMA_SLAVE_X = UM_LEFT_X + UM_SMA_EDGE_X                 # 20.45
-UM_SMA_MASTER_X = UM_SMA_SLAVE_X + UM_SMA_PITCH            # 40.75
-UM_SMA_ACCESS_DIA = 10.5 # >= 10 mm requested, clears 5/16" hex corners
-
-# ==============================================================================
-# 6. E220 Module (40.0 x 60.0 x 15.0 mm, Top-Center)
+# 6. E220 LoRa Module (from REF-e220-module.stp: 40.0 x 60.0 x 16.0H mm)
 # ==============================================================================
 E220_W = 40.0
 E220_H = 60.0
-E220_Z_THK = 15.0
 E220_HOLE_DX = 35.0
 E220_HOLE_DY = 55.0
-E220_CX = -8.5          # X = [-28.5, +11.5]; clears GX-12 (-30.25) & UM982 (+13.2)
-E220_CY = 143.0         # Y = [113.0, 173.0]; 14.8 mm above Waveshare, 6.5 mm top coax room
-E220_STANDOFF_H = 4.0   # Solder clearance above Z_SLED_FRONT (-22.0 -> PCB back at -18.0 -> -3.0 peak)
-E220_SMA_X = -8.5       # Bulkhead SMA centered above E220 (28.95 mm from UM982 Slave, 30.5 mm from GX-12)
-E220_SMA_Z = UM_SMA_Z   # -11.25 aligned on top crown axis
-E220_SMA_DIA = 6.5
-E220_SMA_FLAT = 6.0
+E220_CX = -7.20             # X: [-27.20, +12.80]; 1.8 mm clear of PB (-29.0) & 1.4 mm clear of UM982 (+14.2)
+E220_CY = 134.00            # Y: [104.00, 164.00]; 5.28 mm above glass, 1.4+ mm clear below LoRa SMA tail (165.4)
+E220_STANDOFF_H = 4.0       # PCB Z=0 at -21.00; -3.0 mm pins end at -24.00 (1.0 mm clear); top at -8.00
 
 # ==============================================================================
-# 7. GX-12 4-Pin Bulkhead (10DOF Connector, Top-Left)
+# 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall (Aligned at Z = -11.25)
 # ==============================================================================
-GX12_X = -39.0          # Shifted right to clear symmetric Top-Left corner M3 boss (-53.5, 174.5) by 1.95 mm!
-GX12_Z = UM_SMA_Z       # -11.25
-GX12_HOLE_DIA = 12.2    # M12 x 0.75 barrel clearance
-GX12_FLAT_DIST = 11.1   # Top flat across M12 circle -> prevents rotation + bridges support-free
+# LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp)
+E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
+E220_SMA_Z = UM_SMA_Z       # -11.25
+E220_SMA_DIA = 6.6
+E220_SMA_FLAT = 6.1         # Top D-flat (+Z_asm) for 100% support-free bridging
+E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
+
+# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp)
+GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-50.5) & E220 (-27.2)
+GX12_Z = UM_SMA_Z           # -11.25
+GX12_HOLE_DIA = 12.2        # M12 x 0.75 barrel clearance
+GX12_FLAT_DIST = 11.1       # Top D-flat (+Z_asm) -> anti-rotation + support-free bridging
 GX12_NUT_RECESS_DIA = 17.5
-GX12_ROOF_WEB = 2.6     # Max panel wall <= 3.0 mm for 9.1 mm thread barrel + locknut
+GX12_WALL = 2.6             # Inner wall Y = 177.40 -> outer Y = 180.00
 
 # ==============================================================================
-# 8. 10,000 mAh LiPo Battery (115 x 63 x 11 mm -> 123.5 x 64.5 x 11.8 mm bay)
+# 8. Cover Closure (6 x Symmetric Front-Entry M3) & Option B2 Rear Pod Mount (4 x M3)
 # ==============================================================================
-BAT_CELL_W = 63.0
-BAT_CELL_H = 115.0
-BAT_POCKET_W = 64.5
-BAT_POCKET_H = 123.5    # Includes ~8.5 mm wire bend exit clearance at bottom Kapton PCB
-BAT_POCKET_THK = BAT_BAY_Z
-BAT_CX = 9.0            # X=[-23.25..+41.25] (wall -24.85..+42.85), 10.65 mm clear of Power Board!
-BAT_CY = 75.0           # Y = [13.25, 136.75]
-
-# ==============================================================================
-# 9. Case Closure & Option 3 Pole Adapter Fastener Grids (Ruthex M3 + 1/4"-20)
-# ==============================================================================
-# 6 x M3 Enclosure Closure Bosses (symmetric corners + side mid-clamp points)
 COVER_M3_POINTS = [
-    (-54.2, 6.5),       # Bottom-Left corner (outside Speaker rim X=-50.3)
-    ( 53.8, 7.2),       # Bottom-Right corner (clears Waveshare R6 glass corner)
-    (-54.2, 43.5),      # Mid-Left (clear gap between Speaker Y=40.3 and Power Board Y=49)
-    ( 54.0, 112.0),     # Mid-Right (clear gap between Waveshare Y=98.2 and UM982 Y=126.8)
-    (-53.5, 174.5),     # Top-Left corner (symmetric with Top-Right, clears GX-12 nut)
-    ( 53.5, 174.5),     # Top-Right corner (clears UM_RIGHT_X=48.0 and R6 top-right corner)
+    (-54.2,   6.8),         # Bottom-Left corner (leaves >= 1.75 mm side & 1.13 mm R6 corner wall)
+    ( 54.2,   6.8),         # Bottom-Right corner
+    (-54.1, 108.0),         # Mid-Left edge (1.85 mm outside wall; 1.2 mm clear of PB X=-49)
+    ( 54.1, 108.0),         # Mid-Right edge (above Right Flange Y=96, below UM982 Y=124.8)
+    (-54.4, 173.4),         # Top-Left corner (inside Top L-wall corner socket)
+    ( 54.4, 173.4),         # Top-Right corner (inside Top L-wall corner socket)
 ]
 
-# Option 3: 4 x M3 Rear Pole Adapter Grid (flanks BAT_CX=9.0 cleanly!)
-ADAPTER_CX = BAT_CX     # Centered at X = +9.0 behind battery pocket
-ADAPTER_M3_DX = 80.0    # X = -31.0 and +49.0 (2.35 mm clear outside battery wall; clears Power Board X=-35.5)
-ADAPTER_M3_DY = 58.0    # Y = 54.0, 112.0 (centered around Y = 83.0)
-ADAPTER_M3_CY = 83.0
-
-# 2 x 1/4"-20 Ruthex Inserts inside Pole_Adapter_Plate
-POLE_Q20_DY = 38.1      # 1.500" vertical pitch
-POLE_ADAPTER_W = 94.0
-POLE_ADAPTER_H = 74.0
-POLE_ADAPTER_BASE_T = 4.5
-POLE_ADAPTER_SPINE_W = 24.0
-POLE_ADAPTER_SPINE_T = 16.2 # >= 13.7 mm insert + 2.5 mm solid closed floor
-
-# Sun Shield Detachable Magnet & Alignment Pin Pockets (wide Left + Top faces; slim pins on narrow Right rim)
-SHIELD_MAG_DIA = 6.2
-SHIELD_MAG_DEPTH = 2.2
-SHIELD_MAG_POINTS = [
-    (-16.8, 48.0),      # Left lower magnet (above Speaker rim Y=40.3, clears -11.75 LCD)
-    (-16.8, 88.0),      # Left upper magnet (clears -11.75 LCD)
-    (  4.0, 105.0),     # Top-left above LCD (clears 98.47 LCD & Y=113 E220)
-    ( 38.0, 105.0),     # Top-right above LCD (clears 98.47 LCD & Y=126.8 UM982)
+# Shared Option B2 External Battery & Pole Pod Anchor Pattern (Ruthex M3 in Back Plate)
+POD_CX = 2.0                # Centered over main electronics spine
+POD_CY = 92.0
+POD_M3_DX = 80.0            # X = -38.0 and +42.0 (80 mm horizontal pitch)
+POD_M3_DY = 100.0           # Y =  42.0 and 142.0 (100 mm vertical pitch)
+POD_M3_POINTS = [
+    (POD_CX - POD_M3_DX / 2.0, POD_CY - POD_M3_DY / 2.0),  # (-38.0,  42.0)
+    (POD_CX + POD_M3_DX / 2.0, POD_CY - POD_M3_DY / 2.0),  # (+42.0,  42.0)
+    (POD_CX - POD_M3_DX / 2.0, POD_CY + POD_M3_DY / 2.0),  # (-38.0, 142.0)
+    (POD_CX + POD_M3_DX / 2.0, POD_CY + POD_M3_DY / 2.0),  # (+42.0, 142.0)
 ]
-SHIELD_PIN_POINTS = [
-    (-16.8, 68.0),      # Left registration dimple
-    ( 54.4, 18.0),      # Right lower dimple (Dia 5.4 pad fits cleanly inside +49.75..+59.0 wall -> zero protrusion!)
-    ( 54.4, 94.0),      # Right upper dimple (above MicroSD, zero wall protrusion!)
-]
+
+# Battery JST-PH Pass-Through Slot in Back Plate (inside both 5000 & 10000 pods, beside PB bottom)
+BAT_SLOT_CX = -22.5         # X: [-27.0, -18.0]; 2.0 mm right of PB (-29.0), 1.67 mm left of Header (-16.33)
+BAT_SLOT_CY = 54.5          # Y: [47.5, 61.5]; aligned directly beside Power Board battery input
+BAT_SLOT_W = 9.0
+BAT_SLOT_H = 14.0
+
+# Option B2 Pod Variants (both bolt onto POD_M3_POINTS & align twin 1/4"-20 inserts)
+POD_OUTER_W = 92.0          # X: [-44.0, +48.0] (4.0 mm radial boss margin outside X=-38/+42)
+POD_OUTER_R = 5.5
+POD_WALL = 2.4
+POD_FLOOR_THK = 3.0         # Lid base floor thickness
+POD_SPINE_W = 24.0
+POD_SPINE_H = 16.2          # >= 13.7 mm 1/4"-20 insert + 2.5 mm solid closed safety floor
+POLE_Q20_DY = 38.1          # 1.500" vertical pitch
+
+# Variant 1: 5000 mAh LiPo (REF-lipo-battery-3.7V-5000mAh.stp: 55.0 x 68.0 x 10.0 mm)
+BAT5_CELL_W = 55.0
+BAT5_CELL_H = 68.0
+BAT5_CELL_T = 10.0
+BAT5_BAY_W = 56.5           # +0.75 mm slip per side
+BAT5_BAY_H = 77.0           # Includes +9 mm wire exit zone below cell
+BAT5_BAY_D = 11.2           # +1.2 mm foam/swelling allowance (Z = -28.0..-39.2)
+BAT5_POD_H = 112.0          # Covers POD_M3_DY=100 +/- 6 mm corners comfortably
+
+# Variant 2: 10000 mAh LiPo (REF-lipo-battery-3.7V-10000mAh.stp: 63.0 x 115.0 x 11.0 mm)
+BAT10_CELL_W = 63.0
+BAT10_CELL_H = 115.0
+BAT10_CELL_T = 11.0
+BAT10_BAY_W = 64.5          # X: [-30.25, +34.25] (side walls out to -32.65/+36.65 -> clears M3 -38/+42!)
+BAT10_BAY_H = 124.0         # Y: [30.0, 154.0] (+9 mm Kapton/lead bend exit)
+BAT10_BAY_D = 12.8          # +1.8 mm wire-routing & foam/swelling allowance (Z = -28.0..-40.8)
+BAT10_POD_H = 132.0         # Y: [26.0, 158.0] (10 mm flange ears at Y=42 & 142 hold POD_M3_POINTS)
+
+# ==============================================================================
+# 9. Option H1 Slim Slot-In Sun Shield (Zero Magnets, Zero Protruding Bosses)
+# ==============================================================================
+# Continuous 1.90 mm wide x 1.80 mm deep U-groove in Top_Cover faceplate around LCD
+SHIELD_U_X_LEFT = -15.40    # 3.40 mm clear of glass (-12.00)
+SHIELD_U_X_RIGHT = 52.20    # 3.20 mm clear of glass (+49.00), 4.8 mm inside right outer wall (+60.0)
+SHIELD_U_Y_BOT = 14.00      # Stops clear above Bot M3 (6.6)
+SHIELD_U_Y_TOP = 102.00     # 3.28 mm clear above glass (98.72), clears Mid M3 (108.0) & LEDs (155.0)
+SHIELD_GROOVE_W = 1.90
+SHIELD_GROOVE_D = 1.80
+SHIELD_WALL_T = 1.60        # 4 perimeters x 0.4 mm nozzle (nominal 0.15 mm clearance each side in groove)
+SHIELD_DEPTH_TOP = 28.0     # Forward projection (+Z) above faceplate at top visor roof
+SHIELD_DEPTH_BOT = 12.0     # Tapered side-cheek forward projection at bottom (open bottom for thumb access)

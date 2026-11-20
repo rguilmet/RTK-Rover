@@ -1,9 +1,19 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.0.
 
-Outputs under <this_dir>/:
-  step/  - SolidEdge-compatible B-Rep STEP files (6 parts + full assembly)
-  stl/   - Print-ready STL meshes rotated flat on build plate (support-free)
-  dxf/   - AutoCAD LT 2010 compatible 2D footprint & bulkhead drawings
+Architecture:
+  - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
+    underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board,
+    Speaker pedestal), integral Top L-Bulkhead (GX-12, E220 SMA, UM982 SMAs),
+    and integral Right Button-Plunger & MicroSD Flange.
+  - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
+    flush glass bezel, USB-C tunnel, speaker acoustic slots, 4x UM982 LED light
+    pipes + SWITCH pinhole, Option H1 Sun Shield U-groove, and 6 symmetric
+    front-entry M3 CSK screws.
+  - Option B2 Pods (5000 mAh and 10000 mAh): Swappable 2-piece support-free
+    Battery_Cradle + Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm pitch)
+    bolting onto the shared 4 x M3 rear anchor grid + JST pass-through slot.
+  - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
+  - Button_Plungers: 3 captive tactile button plungers (PWR, RESET, BOOT).
 """
 
 import math
@@ -16,15 +26,31 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v2.0.0"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
 STL_DIR = CAD_DIR / "stl"
 DXF_DIR = CAD_DIR / "dxf"
-STP_WAVESHARE = CAD_DIR.parent / "ESP32-S3-Touch-LCD-3_5B.stp"
+
+REF_FILES = {
+    "waveshare": STEP_DIR / "REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-facing-header.stp",
+    "um982": STEP_DIR / "REF-holybro-um982.stp",
+    "e220": STEP_DIR / "REF-e220-module.stp",
+    "power": STEP_DIR / "REF-power-module.stp",
+    "speaker": STEP_DIR / "REF-speaker.stp",
+    "coin_cell": STEP_DIR / "REF-coin-cell.stp",
+    "coin_holder": STEP_DIR / "REF-coin-cell-holder.stp",
+    "gx12": STEP_DIR / "REF-compass-module-input-connector.stp",
+    "sma": STEP_DIR / "REF-sma-female-lora-connector.stp",
+    "bat5000": STEP_DIR / "REF-lipo-battery-3.7V-5000mAh.stp",
+    "bat10000": STEP_DIR / "REF-lipo-battery-3.7V-10000mAh.stp",
+}
 
 
+# ==============================================================================
+# Primitive & Support-Free Feature Helpers
+# ==============================================================================
 def make_rounded_box(width: float, height: float, depth: float, radius: float,
                      cx: float = 0.0, cy: float = 0.0, z_min: float = 0.0) -> cq.Workplane:
     """Create a vertical rounded-rectangle prism spanning [z_min, z_min + depth]."""
@@ -38,6 +64,13 @@ def make_rounded_box(width: float, height: float, depth: float, radius: float,
     if radius > 0.05:
         wp = wp.edges("|Z").fillet(radius)
     return wp
+
+
+def make_stadium_slot(cx: float, cy: float, width: float, height: float,
+                      z_min: float, depth: float) -> cq.Workplane:
+    """Create a vertical stadium/rounded-slot prism spanning [z_min, z_min + depth]."""
+    r = min(width, height) / 2.0 - 0.05
+    return make_rounded_box(width, height, depth, radius=max(0.2, r), cx=cx, cy=cy, z_min=z_min)
 
 
 def make_csk_cone_through(cx: float, cy: float, z_bed: float, plate_thk: float,
@@ -77,13 +110,15 @@ def make_csk_cone_through(cx: float, cy: float, z_bed: float, plate_thk: float,
 
 def make_teardrop_y_bore(cx: float, y_start: float, y_len: float, z_ctr: float,
                          dia: float, top_flat_dist: float = None,
-                         add_teardrop: bool = True) -> cq.Workplane:
-    """Create a vertical-wall horizontal Y-axis bore safe for face-down printing.
+                         add_teardrop: bool = True, peak_at_plus_z: bool = True) -> cq.Workplane:
+    """Create a horizontal Y-axis bore with top D-flat or 45-deg teardrop gable.
 
-    In print space (Front_Shell rotated 180 deg around X), -Z_asm points UP (+Z_print).
-    A top D-flat or 45-deg teardrop peak sits on the -Z_asm side so bridges stay <= 45 deg.
+    peak_at_plus_z=True places the self-supporting top gable/flat toward +Z_asm
+    (correct when printing back-down on Z_PLATE_OUTER). False places it toward -Z_asm
+    (correct when printing face-down on Z_FRONT_OUTER).
     """
     r = dia / 2.0
+    sign = 1.0 if peak_at_plus_z else -1.0
     bore = (
         cq.Workplane("XZ")
         .workplane(offset=-y_start)
@@ -94,9 +129,9 @@ def make_teardrop_y_bore(cx: float, y_start: float, y_len: float, z_ctr: float,
     if add_teardrop and top_flat_dist is None:
         tip = r * math.sqrt(2.0)
         pts = [
-            (cx - r / math.sqrt(2.0), z_ctr - r / math.sqrt(2.0)),
-            (cx, z_ctr - tip),
-            (cx + r / math.sqrt(2.0), z_ctr - r / math.sqrt(2.0)),
+            (cx - r / math.sqrt(2.0), z_ctr + sign * r / math.sqrt(2.0)),
+            (cx, z_ctr + sign * tip),
+            (cx + r / math.sqrt(2.0), z_ctr + sign * r / math.sqrt(2.0)),
         ]
         peak = (
             cq.Workplane("XZ")
@@ -107,11 +142,12 @@ def make_teardrop_y_bore(cx: float, y_start: float, y_len: float, z_ctr: float,
         )
         bore = bore.union(peak)
     if top_flat_dist is not None:
-        flat_z = z_ctr - (top_flat_dist - r)
-        slab_h = max(0.5, (z_ctr - r) - flat_z + 2.0)
+        flat_z = z_ctr + sign * (top_flat_dist - r)
+        slab_h = 3.0
+        z_min_clip = flat_z if peak_at_plus_z else (flat_z - slab_h)
         clip = (
             cq.Workplane("XY")
-            .workplane(offset=flat_z - slab_h)
+            .workplane(offset=z_min_clip)
             .center(cx, y_start + y_len / 2.0)
             .rect(dia + 2.0, y_len + 2.0)
             .extrude(slab_h)
@@ -121,15 +157,25 @@ def make_teardrop_y_bore(cx: float, y_start: float, y_len: float, z_ctr: float,
 
 
 def make_arch_x_cutout(x_start: float, x_len: float, cy: float, width_y: float,
-                       z_front: float, z_back: float, roof_gable: float = 1.6) -> cq.Workplane:
-    """Create a horizontal port cutout through a +-X wall with a 45-deg roof gable at -Z_asm."""
-    pts = [
-        (cy - width_y / 2.0, z_front),
-        (cy + width_y / 2.0, z_front),
-        (cy + width_y / 2.0, z_back),
-        (cy, z_back - roof_gable),
-        (cy - width_y / 2.0, z_back),
-    ]
+                       z_min: float, z_max: float, roof_gable: float = 1.5,
+                       peak_at_plus_z: bool = True) -> cq.Workplane:
+    """Create a horizontal port cutout through a +-X wall with a 45-deg roof gable."""
+    if peak_at_plus_z:
+        pts = [
+            (cy - width_y / 2.0, z_min),
+            (cy + width_y / 2.0, z_min),
+            (cy + width_y / 2.0, z_max),
+            (cy, z_max + roof_gable),
+            (cy - width_y / 2.0, z_max),
+        ]
+    else:
+        pts = [
+            (cy - width_y / 2.0, z_max),
+            (cy + width_y / 2.0, z_max),
+            (cy + width_y / 2.0, z_min),
+            (cy, z_min - roof_gable),
+            (cy - width_y / 2.0, z_min),
+        ]
     return (
         cq.Workplane("YZ")
         .workplane(offset=x_start)
@@ -139,79 +185,527 @@ def make_arch_x_cutout(x_start: float, x_len: float, cy: float, width_y: float,
     )
 
 
-def build_front_shell() -> cq.Workplane:
-    """Build Front_Shell (Z = 0.0 outer faceplate down to Z_PARTING = -24.0)."""
+def make_ruthex_boss(cx: float, cy: float, z_base: float, boss_h: float,
+                     boss_od: float, hole_od: float, hole_depth: float,
+                     open_at_top: bool = True) -> tuple[cq.Workplane, cq.Workplane]:
+    """Return (boss_solid, insert_bore_cutter) for a Ruthex heat-set insert."""
+    boss = (
+        cq.Workplane("XY")
+        .workplane(offset=z_base)
+        .center(cx, cy)
+        .circle(boss_od / 2.0)
+        .extrude(boss_h)
+    )
+    if open_at_top:
+        bore_z = z_base + boss_h - hole_depth
+        bore = (
+            cq.Workplane("XY")
+            .workplane(offset=bore_z)
+            .center(cx, cy)
+            .circle(hole_od / 2.0)
+            .extrude(hole_depth + 0.3)
+        )
+    else:
+        bore = (
+            cq.Workplane("XY")
+            .workplane(offset=z_base - 0.3)
+            .center(cx, cy)
+            .circle(hole_od / 2.0)
+            .extrude(hole_depth + 0.3)
+        )
+    return boss, bore
+
+
+# ==============================================================================
+# Part 1: Back_Chassis_Frame (Prints flat on Z_PLATE_OUTER = -28.0 mm, Support-Free)
+# ==============================================================================
+def build_back_chassis_frame() -> cq.Workplane:
+    """Build Back_Chassis_Frame carrying all modules, Top L-wall, and Right Plunger Flange."""
     case_cy = S.CASE_H / 2.0
-    depth = abs(S.Z_PARTING)  # 24.0 mm
-    outer = make_rounded_box(S.CASE_W, S.CASE_H, depth, S.CORNER_R,
-                             cx=0.0, cy=case_cy, z_min=S.Z_PARTING)
 
-    # Interior cavity leaving SIDE/BOT/TOP walls and FRONT faceplate (WALL_FRONT=2.4)
+    # 1. Base chassis back plate: full outer footprint [Z_PLATE_OUTER=-28.0 .. Z_PLATE_INNER=-25.0]
+    plate = make_rounded_box(S.CASE_W, S.CASE_H, S.WALL_BACK, S.CORNER_R,
+                             cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER)
+
+    # 2. Integrated Top L-Wall Bulkhead (Y = 177.0..180.0, Z = -28.0..-2.65)
+    # Trim inside Top_Cover outer R6 shape so corners stay dead flush.
+    full_wall_envelope = make_rounded_box(S.CASE_W, S.CASE_H, 25.35, S.CORNER_R,
+                                          cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER)
+    top_band = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_OUTER)
+        .center(0.0, S.CASE_H - S.WALL_TOP / 2.0)
+        .rect(S.CASE_W + 2.0, S.WALL_TOP)
+        .extrude(25.35)
+    )
+    top_l_wall = full_wall_envelope.intersect(top_band)
+    plate = plate.union(top_l_wall)
+
+    # Corner L-Wall extensions wrapping Top-Left and Top-Right Cover M3 sockets (Y=169.0..177.0)
+    for sign in (-1.0, 1.0):
+        corner_blk = (
+            cq.Workplane("XY")
+            .workplane(offset=S.Z_PLATE_OUTER)
+            .center(sign * (S.CASE_W / 2.0 - 4.7), 173.0)
+            .rect(9.4, 8.2)
+            .extrude(25.35)
+        ).intersect(full_wall_envelope)
+        plate = plate.union(corner_blk)
+
+    # 3. Integrated Right Button-Plunger & MicroSD Flange (X = 57.0..60.0, Y = 16.0..96.0)
+    flange_cy = 0.5 * (S.FLANGE_Y0 + S.FLANGE_Y1)
+    flange_h = S.FLANGE_Y1 - S.FLANGE_Y0
+    right_flange = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_OUTER)
+        .center(S.CASE_W / 2.0 - S.WALL_SIDE / 2.0, flange_cy)
+        .rect(S.WALL_SIDE, flange_h)
+        .extrude(25.35)
+    )
+    plate = plate.union(right_flange)
+
+    # Plunger guide block extending inward off Right Flange (X=46.6..57.0, Y=22..50, Z=-25.0..-4.2)
+    blk_cx = 0.5 * (S.PLUNGER_BLK_X0 + S.PLUNGER_BLK_X1)
+    blk_w = S.PLUNGER_BLK_X1 - S.PLUNGER_BLK_X0
+    blk_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
+    blk_h = S.PLUNGER_BLK_Y1 - S.PLUNGER_BLK_Y0
+    plunger_blk = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.5)
+        .center(blk_cx, blk_cy)
+        .rect(blk_w + 0.5, blk_h)
+        .extrude(S.PLUNGER_BLK_Z_TOP - S.Z_PLATE_INNER + 0.5)
+    )
+    plate = plate.union(plunger_blk)
+
+    # 4. Left & Bottom thin perimeter registration tabs (Z = -25.0..-21.2, 0.25 mm inside Top_Cover walls)
+    reg_tabs = [
+        (-56.0, 46.0, 1.6, 12.0),   # Left lower between Speaker & Mid-Left
+        (-56.0, 154.0, 1.6, 12.0),  # Left upper near GX-12
+        (-10.0, 4.0, 12.0, 1.6),    # Bottom left of USB-C
+        ( 42.0, 4.0, 10.0, 1.6),    # Bottom right of USB-C
+    ]
+    for tx, ty, tw, th in reg_tabs:
+        tab = (
+            cq.Workplane("XY")
+            .workplane(offset=S.Z_PLATE_INNER - 0.5)
+            .center(tx, ty)
+            .rect(tw, th)
+            .extrude(4.2)
+        )
+        plate = plate.union(tab)
+
+    # 5. Symmetric 6 x Front-Entry M3 Closure Bosses (Top_Cover columns drop to -13.0 -> boss top -13.2)
+    # Bottom & Mid bosses rise Z=-25.0..-13.2 (h=14.8 from -28.0); Top corner sockets bored in L-wall!
+    boss_z_top = -13.2
+    csk_holes = []
+    for mx, my in S.COVER_M3_POINTS:
+        is_top_corner = my > 165.0
+        if is_top_corner:
+            # Cut upper socket cylinder Dia 8.1 mm from Z=-2.4 down to boss_z_top=-13.2 for Top_Cover tube
+            sock = (
+                cq.Workplane("XY")
+                .workplane(offset=boss_z_top)
+                .center(mx, my)
+                .circle(4.05)
+                .extrude(11.5)
+            )
+            plate = plate.cut(sock)
+            # Drill M3 Ruthex insert bore from boss_z_top=-13.2 down 7.0 mm (leaves 7.8 mm closed floor)
+            bore = (
+                cq.Workplane("XY")
+                .workplane(offset=boss_z_top - S.RUTHEX_M3_DEPTH - 0.3)
+                .center(mx, my)
+                .circle(S.RUTHEX_M3_OD / 2.0)
+                .extrude(S.RUTHEX_M3_DEPTH + 0.6)
+            )
+            csk_holes.append(bore)
+        else:
+            b, bore = make_ruthex_boss(
+                mx, my, z_base=S.Z_PLATE_OUTER + 0.5,
+                boss_h=(boss_z_top - S.Z_PLATE_OUTER - 0.5),
+                boss_od=S.RUTHEX_M3_BOSS_OD, hole_od=S.RUTHEX_M3_OD,
+                hole_depth=S.RUTHEX_M3_DEPTH + 0.3, open_at_top=True,
+            )
+            plate = plate.union(b)
+            csk_holes.append(bore)
+    for bore in csk_holes:
+        plate = plate.cut(bore)
+
+    # 6. Shared 4 x M3 Option B2 Rear Pod Bosses (Ruthex inserts open to Z_PLATE_OUTER=-28.0)
+    pod_bores = []
+    for px, py in S.POD_M3_POINTS:
+        b, bore = make_ruthex_boss(
+            px, py, z_base=S.Z_PLATE_OUTER,
+            boss_h=8.0,                 # Reaches Z = -20.0 inside cavity (1.1 mm solid top cap!)
+            boss_od=S.RUTHEX_M3_BOSS_OD, hole_od=S.RUTHEX_M3_OD,
+            hole_depth=S.RUTHEX_M3_DEPTH + 0.2, open_at_top=False,
+        )
+        plate = plate.union(b)
+        pod_bores.append(bore)
+    for bore in pod_bores:
+        plate = plate.cut(bore)
+
+    # 7. Waveshare 3.5B Pillars (4 x Dia 5.0 mm standoffs up to -11.50, rear M2 CSK pass-throughs)
+    ws_pillar_h = (S.WS_STANDOFF_Z_END - S.Z_PLATE_INNER) + 0.5
+    ws_bores = []
+    for sx in (-S.WS_STANDOFF_DX / 2.0, S.WS_STANDOFF_DX / 2.0):
+        for sy in (-S.WS_STANDOFF_DY / 2.0, S.WS_STANDOFF_DY / 2.0):
+            px, py = S.WS_CX + sx, S.WS_CY + sy
+            pil = (
+                cq.Workplane("XY")
+                .workplane(offset=S.Z_PLATE_INNER - 0.5)
+                .center(px, py)
+                .circle(2.5)
+                .extrude(ws_pillar_h)
+            )
+            plate = plate.union(pil)
+            ws_bores.append(make_csk_cone_through(
+                px, py, S.Z_PLATE_OUTER, S.WS_STANDOFF_Z_END - S.Z_PLATE_OUTER,
+                S.HOLE_CLEAR_M2, 4.6, cone_from_bed=True
+            ))
+    for bore in ws_bores:
+        plate = plate.cut(bore)
+
+    # 8. RTC Coin Cell C-Clip Cradle Underneath Waveshare (exact match to REF-coin-cell-holder.stp)
+    # ID 22.5 mm, OD 26.5 mm, H 4.0 mm above floor (-25.0..-21.0), C-opening facing -Y for wires
+    rtc_ring = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.4)
+        .center(S.RTC_CX, S.RTC_CY + 0.12)
+        .circle(13.25)
+        .extrude(4.4)
+    )
+    rtc_inner = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.6)
+        .center(S.RTC_CX, S.RTC_CY + 0.12)
+        .circle(11.25)
+        .extrude(4.8)
+    )
+    rtc_wire_slot = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.6)
+        .center(S.RTC_CX, S.RTC_CY - 10.2)
+        .rect(22.0, 9.6)
+        .extrude(4.8)
+    )
+    rtc_holder = rtc_ring.cut(rtc_inner).cut(rtc_wire_slot)
+    plate = plate.union(rtc_holder)
+
+    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.0)
+    pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.0
+    pb_bores = []
+    for dx in (-S.PB_HOLE_DX / 2.0, S.PB_HOLE_DX / 2.0):
+        for dy in (-S.PB_HOLE_DY / 2.0, S.PB_HOLE_DY / 2.0):
+            px, py = S.PB_CX + dx, S.PB_CY + dy
+            b, bore = make_ruthex_boss(
+                px, py, z_base=S.Z_PLATE_OUTER + 0.5,
+                boss_h=(pb_top_z - S.Z_PLATE_OUTER - 0.5),
+                boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
+                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
+            )
+            plate = plate.union(b)
+            pb_bores.append(bore)
+    for bore in pb_bores:
+        plate = plate.cut(bore)
+
+    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -21.0)
+    e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -21.0
+    e2_bores = []
+    for dx in (-S.E220_HOLE_DX / 2.0, S.E220_HOLE_DX / 2.0):
+        for dy in (-S.E220_HOLE_DY / 2.0, S.E220_HOLE_DY / 2.0):
+            px, py = S.E220_CX + dx, S.E220_CY + dy
+            b, bore = make_ruthex_boss(
+                px, py, z_base=S.Z_PLATE_OUTER + 0.5,
+                boss_h=(e2_top_z - S.Z_PLATE_OUTER - 0.5),
+                boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
+                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
+            )
+            plate = plate.union(b)
+            e2_bores.append(bore)
+    for bore in e2_bores:
+        plate = plate.cut(bore)
+
+    # 11. Holybro UM982 Standoffs (4 x Dia 5.4 mm up to Z = -17.20, rear M2 CSK pass-throughs)
+    um_pillar_h = (S.UM_BACK_Z - S.Z_PLATE_INNER) + 0.5
+    um_bores = []
+    for dx in S.UM_M2_X_OFFS:
+        for dy in S.UM_M2_Y_OFFS:
+            px, py = S.UM_LEFT_X + dx, S.UM_BOT_Y + dy
+            pil = (
+                cq.Workplane("XY")
+                .workplane(offset=S.Z_PLATE_INNER - 0.5)
+                .center(px, py)
+                .circle(2.7)
+                .extrude(um_pillar_h)
+            )
+            plate = plate.union(pil)
+            um_bores.append(make_csk_cone_through(
+                px, py, S.Z_PLATE_OUTER, S.UM_BACK_Z - S.Z_PLATE_OUTER,
+                S.HOLE_CLEAR_M2, 4.6, cone_from_bed=True
+            ))
+    for bore in um_bores:
+        plate = plate.cut(bore)
+
+    # 12. Speaker Pedestal + Perimeter Cradle (top support at Z = -13.50, notched +Y for wires)
+    spk_ped_top = S.Z_PLATE_INNER + S.SPK_PEDESTAL_H  # -13.50
+    spk_outer = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.5)
+        .center(S.SPK_CX, S.SPK_CY)
+        .rect(S.SPK_W + 3.0, S.SPK_H + 3.0)
+        .extrude(S.SPK_PEDESTAL_H + 4.0)
+    )
+    # Core out speaker cavity above pedestal top (-13.50) AND lighten base (-23.0..-13.50)
+    spk_seat_pocket = (
+        cq.Workplane("XY")
+        .workplane(offset=spk_ped_top)
+        .center(S.SPK_CX, S.SPK_CY)
+        .rect(S.SPK_W + 0.4, S.SPK_H + 0.4)
+        .extrude(5.0)
+    )
+    spk_wire_notch = (
+        cq.Workplane("XY")
+        .workplane(offset=spk_ped_top)
+        .center(S.SPK_CX, S.SPK_CY + S.SPK_H / 2.0 + 1.0)
+        .rect(9.0, 4.0)
+        .extrude(5.0)
+    )
+    spk_hollow = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER)
+        .center(S.SPK_CX, S.SPK_CY)
+        .rect(18.0, 18.0)
+        .extrude(S.SPK_PEDESTAL_H - 2.0)
+    )
+    spk_cradle = spk_outer.cut(spk_seat_pocket).cut(spk_wire_notch).cut(spk_hollow)
+    plate = plate.union(spk_cradle)
+
+    # 13. Cutouts on Back Plate & Integral L-Wall & Right Flange
+    # 13a. Battery JST-PH wire pass-through slot
+    bat_slot = make_stadium_slot(S.BAT_SLOT_CX, S.BAT_SLOT_CY,
+                                 S.BAT_SLOT_W, S.BAT_SLOT_H,
+                                 S.Z_PLATE_OUTER - 0.5, S.WALL_BACK + 1.0)
+    plate = plate.cut(bat_slot)
+
+    # 13b. Top L-Wall Bulkhead Cutouts (UM982 local 2.0 mm roof web, GX-12, E220 SMA, UM982 SMAs)
+    # NOTE: peak_at_plus_z=True because Back_Chassis_Frame prints back-down on Z=-28!
+    um_recess = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER)
+        .center(S.UM_CX, 177.25)
+        .rect(S.UM_W + 0.6, 1.50)
+        .extrude(25.0)
+    )
+    plate = plate.cut(um_recess)
+
+    # GX-12 M12 bore + inner nut relief (leaves 2.6 mm web Y = 177.4..180.0)
+    gx_bore = make_teardrop_y_bore(
+        S.GX12_X, y_start=176.5, y_len=4.5, z_ctr=S.GX12_Z,
+        dia=S.GX12_HOLE_DIA, add_teardrop=True, peak_at_plus_z=True
+    )
+    gx_rel = make_teardrop_y_bore(
+        S.GX12_X, y_start=174.0, y_len=180.0 - S.GX12_WALL - 174.0, z_ctr=S.GX12_Z,
+        dia=S.GX12_NUT_RECESS_DIA, add_teardrop=True, peak_at_plus_z=True
+    )
+    plate = plate.cut(gx_bore).cut(gx_rel)
+
+    # E220 SMA bore (leaves 2.6 mm web Y = 177.4..180.0)
+    e2_sma_bore = make_teardrop_y_bore(
+        S.E220_SMA_X, y_start=176.5, y_len=4.5, z_ctr=S.E220_SMA_Z,
+        dia=S.E220_SMA_DIA, add_teardrop=True, peak_at_plus_z=True
+    )
+    e2_sma_rel = make_teardrop_y_bore(
+        S.E220_SMA_X, y_start=174.0, y_len=180.0 - S.E220_SMA_WALL - 174.0, z_ctr=S.E220_SMA_Z,
+        dia=11.5, add_teardrop=True, peak_at_plus_z=True
+    )
+    plate = plate.cut(e2_sma_bore).cut(e2_sma_rel)
+
+    # UM982 dual SMA bores (Dia 10.5 mm access holes through Y=178..180; counterbore Y=176..178)
+    for sx in (S.UM_SMA_SLAVE_X, S.UM_SMA_MASTER_X):
+        um_bore = make_teardrop_y_bore(
+            sx, y_start=177.5, y_len=3.5, z_ctr=S.UM_SMA_Z,
+            dia=S.UM_SMA_ACCESS_DIA, add_teardrop=True, peak_at_plus_z=True
+        )
+        um_pocket = make_teardrop_y_bore(
+            sx, y_start=175.0, y_len=3.0, z_ctr=S.UM_SMA_Z,
+            dia=11.0, add_teardrop=True, peak_at_plus_z=True
+        )
+        plate = plate.cut(um_bore).cut(um_pocket)
+
+    # 13c. Right Flange Tactile Button Plunger Bores + Captive Flange Pockets + MicroSD Slot
+    for by in S.WS_BTN_Y_LIST:
+        # Outer plunger stem bore (X = 50.8..60.5)
+        outer_bore = make_arch_x_cutout(
+            50.8, 10.0, by, width_y=4.6,
+            z_min=S.WS_BTN_Z_CTR - 2.1, z_max=S.WS_BTN_Z_CTR + 2.1,
+            roof_gable=1.5, peak_at_plus_z=True
+        )
+        # Inner plunger nose bore (X = 46.2..48.8)
+        inner_bore = make_arch_x_cutout(
+            46.2, 2.6, by, width_y=3.5,
+            z_min=S.WS_BTN_Z_CTR - 1.7, z_max=S.WS_BTN_Z_CTR + 1.7,
+            roof_gable=1.1, peak_at_plus_z=True
+        )
+        # Drop-in vertical pocket for captive collar flange (X = 48.2..51.2, open upward to Z=-4.2)
+        pocket = (
+            cq.Workplane("XY")
+            .workplane(offset=S.WS_BTN_Z_CTR - 3.3)
+            .center(49.7, by)
+            .rect(3.0, 6.8)
+            .extrude(10.0)
+        )
+        plate = plate.cut(outer_bore).cut(inner_bore).cut(pocket)
+
+    # MicroSD slot cutout + external finger scoop chamfer on Right Flange
+    sd_cy = 0.5 * (S.WS_SD_Y0 + S.WS_SD_Y1)
+    sd_h_y = S.WS_SD_Y1 - S.WS_SD_Y0
+    sd_cut = make_arch_x_cutout(
+        56.2, 4.5, sd_cy, width_y=sd_h_y,
+        z_min=S.WS_SD_Z_CTR - 2.6, z_max=S.WS_SD_Z_CTR + 2.6,
+        roof_gable=1.6, peak_at_plus_z=True
+    )
+    sd_scoop = make_arch_x_cutout(
+        58.8, 2.0, sd_cy, width_y=sd_h_y + 3.0,
+        z_min=S.WS_SD_Z_CTR - 3.5, z_max=S.WS_SD_Z_CTR + 3.5,
+        roof_gable=2.0, peak_at_plus_z=True
+    )
+    plate = plate.cut(sd_cut).cut(sd_scoop)
+
+    return plate
+
+
+# ==============================================================================
+# Part 2: Top_Cover (Prints face-down on Z = 0.0 mm, Support-Free, Zero Modules)
+# ==============================================================================
+def build_top_cover() -> cq.Workplane:
+    """Build Top_Cover (clean shell with glass opening, USB-C, speaker slots, LEDs, U-groove)."""
+    case_cy = S.CASE_H / 2.0
+    cover_depth = abs(S.Z_PLATE_INNER) - 0.15  # 24.85 mm (leaves 0.15 mm clamping gap above Back Plate)
+    z_cover_bot = -cover_depth                 # -24.85
+
+    outer = make_rounded_box(S.CASE_W, S.CASE_H, cover_depth, S.CORNER_R,
+                             cx=0.0, cy=case_cy, z_min=z_cover_bot)
+
+    # Hollow interior cavity below faceplate Z_FRONT_INNER (-2.4)
     in_w = S.CASE_W - 2.0 * S.WALL_SIDE
-    in_y_min = S.WALL_BOT
-    in_y_max = S.CASE_H - S.WALL_TOP
-    in_h = in_y_max - in_y_min
-    in_cy = 0.5 * (in_y_min + in_y_max)
-    cavity = make_rounded_box(in_w, in_h, depth - S.WALL_FRONT + 0.5,
+    in_h = S.CASE_H - S.WALL_BOT - S.WALL_TOP
+    cavity = make_rounded_box(in_w, in_h, cover_depth - S.WALL_FRONT + 0.5,
                               max(1.5, S.CORNER_R - S.WALL_SIDE),
-                              cx=0.0, cy=in_cy, z_min=S.Z_PARTING - 0.5)
-    shell = outer.cut(cavity)
+                              cx=0.0, cy=case_cy, z_min=z_cover_bot - 0.5)
+    cover = outer.cut(cavity)
 
-    # Perimeter tongue-and-groove lip step at parting rim (1.4 mm outer lap rim)
-    lip_h = 1.6
-    lip_cutter = make_rounded_box(S.CASE_W - 2.0 * 1.4, S.CASE_H - 2.0 * 1.4, lip_h + 0.2,
-                                  max(1.5, S.CORNER_R - 1.4),
-                                  cx=0.0, cy=case_cy, z_min=S.Z_PARTING - 0.2)
-    shell = shell.cut(lip_cutter)
-
-    # 1. Sun_Shield Magnet + Alignment Pin Pads (4 corners around LCD, zero fragile clips)
-    for mx, my in S.SHIELD_MAG_POINTS:
-        pad = (
+    # Notch out Top L-Wall crown (Y = 176.8..180.5) & Top Corner sockets (Y = 168.8..177.2)
+    # behind Z_FRONT_INNER (-2.4) so Top_Cover lifts STRAIGHT UP off bulkhead connectors!
+    top_notch = (
+        cq.Workplane("XY")
+        .workplane(offset=z_cover_bot - 0.5)
+        .center(0.0, 178.7)
+        .rect(S.CASE_W + 2.0, 4.0)
+        .extrude(cover_depth - S.WALL_FRONT + 0.5)
+    )
+    cover = cover.cut(top_notch)
+    for sign in (-1.0, 1.0):
+        corner_notch = (
             cq.Workplane("XY")
-            .workplane(offset=-5.0)
+            .workplane(offset=z_cover_bot - 0.5)
+            .center(sign * (S.CASE_W / 2.0 - 5.2), 173.0)
+            .rect(11.0, 8.4)
+            .extrude(cover_depth - S.WALL_FRONT + 0.5)
+        )
+        cover = cover.cut(corner_notch)
+
+    # Notch out Right Button-Plunger & MicroSD Flange window (Y = 15.8..96.2)
+    right_notch = (
+        cq.Workplane("XY")
+        .workplane(offset=z_cover_bot - 0.5)
+        .center(S.CASE_W / 2.0 - 1.2, 0.5 * (S.FLANGE_Y0 + S.FLANGE_Y1))
+        .rect(S.WALL_SIDE + 2.0, (S.FLANGE_Y1 - S.FLANGE_Y0) + 2.0 * S.NOTCH_CLEAR)
+        .extrude(cover_depth - S.WALL_FRONT + 0.5)
+    )
+    cover = cover.cut(right_notch)
+
+    # Reinforcing bezel backing rib behind the Option H1 Sun Shield U-groove (Z = -2.4..-3.4)
+    u_cx = 0.5 * (S.SHIELD_U_X_LEFT + S.SHIELD_U_X_RIGHT)
+    u_w = S.SHIELD_U_X_RIGHT - S.SHIELD_U_X_LEFT
+    for gx, gy, gw, gh in [
+        (S.SHIELD_U_X_LEFT, 0.5 * (S.SHIELD_U_Y_BOT + S.SHIELD_U_Y_TOP), 4.0, (S.SHIELD_U_Y_TOP - S.SHIELD_U_Y_BOT) + 2.5),
+        (S.SHIELD_U_X_RIGHT, 0.5 * (S.SHIELD_U_Y_BOT + S.SHIELD_U_Y_TOP), 4.0, (S.SHIELD_U_Y_TOP - S.SHIELD_U_Y_BOT) + 2.5),
+        (u_cx, S.SHIELD_U_Y_TOP, u_w + 4.0, 4.0),
+    ]:
+        rib = (
+            cq.Workplane("XY")
+            .workplane(offset=-3.4)
+            .center(gx, gy)
+            .rect(gw, gh)
+            .extrude(1.4)
+        )
+        cover = cover.union(rib)
+
+    # Cut Option H1 Recessed U-Groove (1.90 mm wide x 1.80 mm deep from Z = 0.0)
+    gw = S.SHIELD_GROOVE_W
+    left_grv = (
+        cq.Workplane("XY")
+        .workplane(offset=-S.SHIELD_GROOVE_D)
+        .center(S.SHIELD_U_X_LEFT, 0.5 * (S.SHIELD_U_Y_BOT + S.SHIELD_U_Y_TOP))
+        .rect(gw, (S.SHIELD_U_Y_TOP - S.SHIELD_U_Y_BOT) + gw)
+        .extrude(S.SHIELD_GROOVE_D + 0.2)
+    )
+    right_grv = (
+        cq.Workplane("XY")
+        .workplane(offset=-S.SHIELD_GROOVE_D)
+        .center(S.SHIELD_U_X_RIGHT, 0.5 * (S.SHIELD_U_Y_BOT + S.SHIELD_U_Y_TOP))
+        .rect(gw, (S.SHIELD_U_Y_TOP - S.SHIELD_U_Y_BOT) + gw)
+        .extrude(S.SHIELD_GROOVE_D + 0.2)
+    )
+    top_grv = (
+        cq.Workplane("XY")
+        .workplane(offset=-S.SHIELD_GROOVE_D)
+        .center(u_cx, S.SHIELD_U_Y_TOP)
+        .rect(u_w + gw, gw)
+        .extrude(S.SHIELD_GROOVE_D + 0.2)
+    )
+    cover = cover.cut(left_grv).cut(right_grv).cut(top_grv)
+
+    # 6 x Symmetric Front-Entry M3 Screw Landing Columns (extend Z=0.0 down to -13.0 mm)
+    # Below Z=-13.0, cut Dia 8.2 mm wall relief around lower/mid Back_Chassis_Frame M3 bosses.
+    col_len = 13.0
+    for mx, my in S.COVER_M3_POINTS:
+        if my < 165.0:
+            boss_pocket = (
+                cq.Workplane("XY")
+                .workplane(offset=z_cover_bot - 0.5)
+                .center(mx, my)
+                .circle(4.10)
+                .extrude((abs(z_cover_bot) - col_len) + 0.5)
+            )
+            cover = cover.cut(boss_pocket)
+        col = (
+            cq.Workplane("XY")
+            .workplane(offset=-col_len)
             .center(mx, my)
-            .circle(S.SHIELD_MAG_DIA / 2.0 + 1.6)
-            .extrude(5.0)
+            .circle(3.8)
+            .extrude(col_len - 0.5)
         )
-        shell = shell.union(pad)
-        mag_hole = (
-            cq.Workplane("XY")
-            .workplane(offset=-S.SHIELD_MAG_DEPTH)
-            .center(mx, my)
-            .circle(S.SHIELD_MAG_DIA / 2.0)
-            .extrude(S.SHIELD_MAG_DEPTH + 0.2)
-        )
-        shell = shell.cut(mag_hole)
+        cover = cover.union(col)
 
-    for px, py in S.SHIELD_PIN_POINTS:
-        pad = (
-            cq.Workplane("XY")
-            .workplane(offset=-4.5)
-            .center(px, py)
-            .circle(2.6)
-            .extrude(4.5)
-        )
-        shell = shell.union(pad)
-        dimple = (
-            cq.Workplane("XY")
-            .workplane(offset=0.05)
-            .center(px, py)
-            .circle(1.65)
-            .workplane(offset=-1.9)
-            .circle(0.2)
-            .loft(combine=True)
-        )
-        shell = shell.cut(dimple)
+    for mx, my in S.COVER_M3_POINTS:
+        csk = make_csk_cone_through(mx, my, z_bed=-col_len, plate_thk=col_len,
+                                    hole_d=S.HOLE_CLEAR_M3, head_d=6.2, cone_from_bed=False)
+        cover = cover.cut(csk)
 
-    # 2. Waveshare 3.5B Flush Glass Opening (cut AFTER shield pads -> zero STEP overlap!)
-    ws_open = make_rounded_box(S.WS_GLASS_W + 2.0 * S.FIT_CLEAR,
-                               S.WS_GLASS_H + 2.0 * S.FIT_CLEAR,
-                               6.5,
-                               S.WS_GLASS_R + S.FIT_CLEAR,
-                               cx=S.WS_CX, cy=S.WS_CY, z_min=-5.5)
-    shell = shell.cut(ws_open)
+    # Waveshare 3.5B Flush Glass Opening (cut cleanly through faceplate Z = -4.0..0.2)
+    ws_open = make_rounded_box(
+        S.WS_GLASS_W + 2.0 * S.FIT_CLEAR,
+        S.WS_GLASS_H + 2.0 * S.FIT_CLEAR,
+        4.5,
+        S.WS_GLASS_R + S.FIT_CLEAR,
+        cx=S.WS_CX, cy=S.WS_CY, z_min=-4.0,
+    )
+    cover = cover.cut(ws_open)
 
-    # 3. USB-C Bottom Tunnel (45-deg self-supporting peak at -Z_asm side)
+    # USB-C Bottom Tunnel (prints face-down -> gable at -Z_asm side!)
     usbc_z0 = S.WS_USBC_Z_CTR + S.WS_USBC_H_OPEN / 2.0
     usbc_z1 = S.WS_USBC_Z_CTR - S.WS_USBC_H_OPEN / 2.0
     usbc_pts = [
@@ -228,712 +722,506 @@ def build_front_shell() -> cq.Workplane:
         .close()
         .extrude(-(S.WALL_BOT + 1.5))
     )
-    shell = shell.cut(usbc_cut)
+    cover = cover.cut(usbc_cut)
 
-    # 4. Right-Side Tactile Buttons (3 x drop-in plunger bores) + MicroSD Scoop
-    right_x_inner = S.CASE_W / 2.0 - S.WALL_SIDE - 0.5
-    right_x_len = S.WALL_SIDE + 1.5
-    for by in S.WS_BTN_Y_LIST:
-        b_cut = make_arch_x_cutout(
-            right_x_inner, right_x_len, by, width_y=4.8,
-            z_front=S.WS_BTN_Z_CTR + 2.2, z_back=S.WS_BTN_Z_CTR - 2.2, roof_gable=1.5
-        )
-        shell = shell.cut(b_cut)
+    # Speaker 5 x Acoustic Grille Slots over cone (-33.2, 21.0)
+    for dy in (-8.0, -4.0, 0.0, 4.0, 8.0):
+        slot = make_stadium_slot(S.SPK_CX, S.SPK_CY + dy, 18.0, 2.0, z_min=-3.0, depth=3.5)
+        cover = cover.cut(slot)
 
-    sd_cy = 0.5 * (S.WS_SD_Y0 + S.WS_SD_Y1)
-    sd_len_y = (S.WS_SD_Y1 - S.WS_SD_Y0) + 3.0
-    sd_cut = make_arch_x_cutout(
-        right_x_inner, right_x_len, sd_cy, width_y=sd_len_y,
-        z_front=S.WS_SD_Z_CTR + 2.8, z_back=S.WS_SD_Z_CTR - 2.8, roof_gable=1.8
-    )
-    shell = shell.cut(sd_cut)
-
-    # 5. Lower-Left Front-Firing Speaker Acoustic Grille & Retaining Rim (28 x 28 x 11H)
-    for row in (-8.0, -4.0, 0.0, 4.0, 8.0):
-        slot = make_rounded_box(18.0, 1.8, S.WALL_FRONT + 1.0, 0.8,
-                                cx=S.SPK_CX, cy=S.SPK_CY + row, z_min=S.Z_FRONT_INNER - 0.5)
-        shell = shell.cut(slot)
-
-    spk_rim_out = make_rounded_box(S.SPK_W + 3.6, S.SPK_H + 3.6, 5.0, 2.5,
-                                   cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_FRONT_INNER - 5.0)
-    spk_rim_in = make_rounded_box(S.SPK_W + 2.0 * S.FIT_CLEAR, S.SPK_H + 2.0 * S.FIT_CLEAR, 5.5, 1.5,
-                                  cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_FRONT_INNER - 5.2)
-    shell = shell.union(spk_rim_out.cut(spk_rim_in))
-
-    # 6. UM982 Front LED Light Pipes (1.75 mm PETG filament -> Dia 1.95 mm) + SWITCH Pinhole
-    # (Power Board M2 bosses moved to Rear_Cover in v1.1.0 so Battery & Power remain on one shell)
-    for lx_off in S.UM_LED_X_OFFSETS:
-        lx = S.UM_LEFT_X + lx_off
-        ly = S.UM_TOP_Y - S.UM_LED_TOP_OFFSET
-        pipe_hole = (
+    # 4 x UM982 Status LED Light-Pipe Bores (Dia 1.95 mm) + SWITCH Access Pinhole (Dia 3.4 mm)
+    for lx in S.UM_LED_X_LIST:
+        lp = (
             cq.Workplane("XY")
-            .workplane(offset=S.Z_FRONT_INNER - 0.5)
-            .center(lx, ly)
+            .workplane(offset=-3.0)
+            .center(lx, S.UM_LED_Y)
             .circle(1.95 / 2.0)
-            .extrude(S.WALL_FRONT + 1.0)
+            .extrude(3.5)
         )
-        shell = shell.cut(pipe_hole)
+        cover = cover.cut(lp)
 
-    sw_x = S.UM_LEFT_X + S.UM_SW_X_OFFSET
-    sw_y = S.UM_TOP_Y - S.UM_SW_TOP_OFFSET
     sw_hole = (
         cq.Workplane("XY")
-        .workplane(offset=S.Z_FRONT_INNER - 0.5)
-        .center(sw_x, sw_y)
-        .circle(3.4 / 2.0)
-        .extrude(S.WALL_FRONT + 1.0)
+        .workplane(offset=-3.0)
+        .center(S.UM_SW_X, S.UM_SW_Y)
+        .circle(1.70)
+        .extrude(3.5)
     )
-    shell = shell.cut(sw_hole)
+    cover = cover.cut(sw_hole)
 
-    # 8. Top Bulkhead Local Thinning Pockets (Support-free open to Z_PARTING rear edge!)
-    # UM982 roof web thinned to 2.0 mm (Y=180.0..182.0), cutting inner wall Y=178.5..180.0
-    um_pocket = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PARTING - 0.5)
-        .center(S.UM_CX, 179.25)
-        .rect(S.UM_W + 0.8, 1.50)
-        .extrude(abs(S.Z_PARTING) - abs(S.Z_FRONT_INNER) + 0.5)
-    )
-    shell = shell.cut(um_pocket)
+    return cover
 
-    # GX-12 roof web thinned to 2.6 mm (Y=179.4..182.0), cutting inner wall Y=178.5..179.4
-    gx_pocket = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PARTING - 0.5)
-        .center(S.GX12_X, 178.95)
-        .rect(S.GX12_NUT_RECESS_DIA + 1.0, 0.90)
-        .extrude(abs(S.Z_PARTING) - abs(S.Z_FRONT_INNER) + 0.5)
-    )
-    shell = shell.cut(gx_pocket)
 
-    # 9. Top Roof Bulkhead Cutouts: GX-12 + E220 SMA + UM982 Slave & Master SMAs
-    roof_y0 = S.CASE_H - 4.2
-    roof_len = 5.0
-    gx_cut = make_teardrop_y_bore(S.GX12_X, roof_y0, roof_len, S.GX12_Z,
-                                  S.GX12_HOLE_DIA, top_flat_dist=S.GX12_FLAT_DIST,
-                                  add_teardrop=False)
-    e220_cut = make_teardrop_y_bore(S.E220_SMA_X, roof_y0, roof_len, S.E220_SMA_Z,
-                                    S.E220_SMA_DIA, top_flat_dist=S.E220_SMA_FLAT,
-                                    add_teardrop=False)
-    um_s_cut = make_teardrop_y_bore(S.UM_SMA_SLAVE_X, roof_y0, roof_len, S.UM_SMA_Z,
-                                    S.UM_SMA_ACCESS_DIA, add_teardrop=True)
-    um_m_cut = make_teardrop_y_bore(S.UM_SMA_MASTER_X, roof_y0, roof_len, S.UM_SMA_Z,
-                                    S.UM_SMA_ACCESS_DIA, add_teardrop=True)
-    shell = shell.cut(gx_cut).cut(e220_cut).cut(um_s_cut).cut(um_m_cut)
+# ==============================================================================
+# Parts 3-6: Option B2 2-Piece External Battery & Pole Mount Pods (5000 & 10000 mAh)
+# ==============================================================================
+def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
+    """Build (Battery_Cradle, Pole_Lid) for '5000' or '10000' mAh sharing POD_M3_POINTS."""
+    if variant == "5000":
+        bay_w, bay_h, bay_d, pod_h = S.BAT5_BAY_W, S.BAT5_BAY_H, S.BAT5_BAY_D, S.BAT5_POD_H
+    elif variant == "10000":
+        bay_w, bay_h, bay_d, pod_h = S.BAT10_BAY_W, S.BAT10_BAY_H, S.BAT10_BAY_D, S.BAT10_POD_H
+    else:
+        raise ValueError(f"Unknown battery pod variant: {variant}")
 
-    # 10. 6 x M3 Ruthex Enclosure Closure Bosses (growing UP from Z=-2.4 to Z=-24.0 + 1.6 rim)
-    boss_z_bot = S.Z_PARTING
-    boss_len = abs(boss_z_bot - S.Z_FRONT_INNER)
-    for bx, by in S.COVER_M3_POINTS:
-        boss = (
+    z_cradle_front = S.Z_PLATE_OUTER          # -28.0 (100% flat build-plate face)
+    z_cradle_back = z_cradle_front - bay_d    # -39.2 (5000) or -40.8 (10000), 100% flat mate
+
+    # --- Piece A: Battery_Cradle (Open-frame wall housing battery + 4x M3 pass-through ears) ---
+    cradle = make_rounded_box(S.POD_OUTER_W, pod_h, bay_d, S.POD_OUTER_R,
+                              cx=S.POD_CX, cy=S.POD_CY, z_min=z_cradle_back)
+    bay_cut = make_rounded_box(bay_w, bay_h, bay_d + 1.0, 2.5,
+                               cx=S.POD_CX, cy=S.POD_CY + 1.0, z_min=z_cradle_back - 0.5)
+    cradle = cradle.cut(bay_cut)
+
+    # 4 x M3 pass-through bores (3.4 mm) aligning identically to POD_M3_POINTS
+    for px, py in S.POD_M3_POINTS:
+        bore = (
             cq.Workplane("XY")
-            .workplane(offset=boss_z_bot + lip_h)
-            .center(bx, by)
-            .circle(S.RUTHEX_M3_BOSS_OD / 2.0)
-            .extrude(boss_len - lip_h)
-        )
-        # Gusset web tying boss smoothly to outer wall
-        hole = (
-            cq.Workplane("XY")
-            .workplane(offset=boss_z_bot + lip_h - 0.1)
-            .center(bx, by)
-            .circle(S.RUTHEX_M3_OD / 2.0)
-            .extrude(S.RUTHEX_M3_DEPTH + 0.5)
-        )
-        cham = (
-            cq.Workplane("XY")
-            .workplane(offset=boss_z_bot + lip_h - 0.05)
-            .center(bx, by)
-            .circle(S.RUTHEX_M3_OD / 2.0 + 0.6)
-            .workplane(offset=0.65)
-            .circle(S.RUTHEX_M3_OD / 2.0)
-            .loft(combine=True)
-        )
-        shell = shell.union(boss).cut(hole).cut(cham)
-
-    return shell
-
-
-def build_mid_sled() -> cq.Workplane:
-    """Build Mid_Frame_Sled (Z = -21.5 front to -24.0 flat back, zero supports)."""
-    plate_w = S.CASE_W - 2.0 * S.WALL_SIDE - 1.2
-    plate_y0 = S.WALL_BOT + 0.6
-    plate_y1 = S.CASE_H - S.WALL_TOP - 0.6
-    plate_h = plate_y1 - plate_y0
-    plate_cy = 0.5 * (plate_y0 + plate_y1)
-
-    sled = make_rounded_box(plate_w, plate_h, S.Z_SLED_THK, 2.5,
-                            cx=0.0, cy=plate_cy, z_min=S.Z_SLED_BACK)
-
-    # Open left C-bay on Left Power Bay (square inner corner -> zero floating fillet sliver)
-    pb_win = make_rounded_box(27.0, 90.0, S.Z_SLED_THK + 1.0, 0.0,
-                              cx=-46.5, cy=93.5, z_min=S.Z_SLED_BACK - 0.5)
-    pb_bot_jst = make_rounded_box(15.0, 11.0, S.Z_SLED_THK + 1.0, 0.0,
-                                  cx=-40.5, cy=44.5, z_min=S.Z_SLED_BACK - 0.5)
-    sled = sled.cut(pb_win).cut(pb_bot_jst)
-
-    # Clear corner cutouts for the 6 x M3 shell closure bosses (so sled locks flush in seam)
-    for bx, by in S.COVER_M3_POINTS:
-        c_notch = (
-            cq.Workplane("XY")
-            .workplane(offset=S.Z_SLED_BACK - 0.5)
-            .center(bx, by)
-            .circle(S.RUTHEX_M3_BOSS_OD / 2.0 + 0.4)
-            .extrude(S.Z_SLED_THK + 1.0)
-        )
-        sled = sled.cut(c_notch)
-
-    # Wire Routing Slot behind Waveshare right-angle DuPont tails + top Power harness slot
-    dupont_slot = make_rounded_box(10.0, 44.0, S.Z_SLED_THK + 1.0, 3.0,
-                                   cx=S.WS_DUPONT_TIP_X - 1.0, cy=S.WS_CY,
-                                   z_min=S.Z_SLED_BACK - 0.5)
-    sled = sled.cut(dupont_slot)
-
-    # 1. Waveshare 4 x M2 Standoff Pillars (Z=-21.5 up to Z=-11.50 = 10.0 mm tall, CSK back)
-    ws_pillar_h = S.WS_STANDOFF_Z_END - S.Z_SLED_FRONT  # 10.0 mm
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            wx = S.WS_CX + sx * (S.WS_STANDOFF_DX / 2.0)
-            wy = S.WS_CY + sy * (S.WS_STANDOFF_DY / 2.0)
-            pil = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_SLED_FRONT)
-                .center(wx, wy)
-                .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
-                .extrude(ws_pillar_h)
-            )
-            csk = make_csk_cone_through(wx, wy, S.Z_SLED_BACK, S.Z_SLED_THK + ws_pillar_h,
-                                        S.HOLE_CLEAR_M2, 4.2, cone_from_bed=True)
-            sled = sled.union(pil).cut(csk)
-
-    # 2. UM982 4 x M2 Standoff Pillars (Z=-21.5 up to Z=-17.2 = 4.3 mm tall, CSK back)
-    um_pillar_h = S.UM_BACK_Z - S.Z_SLED_FRONT  # 4.3 mm
-    for sx in (-1.0, 1.0):
-        for sy in (0.0, 1.0):
-            ux = S.UM_CX + sx * (S.UM_HOLE_DX / 2.0)
-            uy = (S.UM_TOP_Y - S.UM_HOLE_TOP_OFFSET) - sy * S.UM_HOLE_DY
-            pil = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_SLED_FRONT)
-                .center(ux, uy)
-                .circle(2.8)
-                .extrude(um_pillar_h)
-            )
-            csk = make_csk_cone_through(ux, uy, S.Z_SLED_BACK, S.Z_SLED_THK + um_pillar_h,
-                                        S.HOLE_CLEAR_M2, 4.2, cone_from_bed=True)
-            sled = sled.union(pil).cut(csk)
-
-    # 3. E220 4 x M2 Ruthex Standoff Bosses (35 x 55 mm grid, 3.5 mm solder clearance)
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            ex = S.E220_CX + sx * (S.E220_HOLE_DX / 2.0)
-            ey = S.E220_CY + sy * (S.E220_HOLE_DY / 2.0)
-            pil = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_SLED_FRONT)
-                .center(ex, ey)
-                .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
-                .extrude(S.E220_STANDOFF_H)
-            )
-            hole = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_SLED_FRONT + S.E220_STANDOFF_H - S.RUTHEX_M2_DEPTH)
-                .center(ex, ey)
-                .circle(S.RUTHEX_M2_OD / 2.0)
-                .extrude(S.RUTHEX_M2_DEPTH + 0.3)
-            )
-            sled = sled.union(pil).cut(hole)
-
-    # 4. RTC Coin-Cell Cradle Pocket (Ø21.4 x 4.2 mm at (-20.0, 20.0), open top for wire)
-    ring_out = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_SLED_FRONT)
-        .center(S.RTC_BAT_CX, S.RTC_BAT_CY)
-        .circle(S.RTC_BAT_DIA / 2.0 + 1.8)
-        .extrude(S.RTC_BAT_THK + 0.5)
-    )
-    ring_in = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_SLED_FRONT - 0.2)
-        .center(S.RTC_BAT_CX, S.RTC_BAT_CY)
-        .circle(S.RTC_BAT_DIA / 2.0)
-        .extrude(S.RTC_BAT_THK + 1.0)
-    )
-    wire_gap = make_rounded_box(8.0, 10.0, S.RTC_BAT_THK + 2.0, 0.5,
-                                cx=S.RTC_BAT_CX + 8.0, cy=S.RTC_BAT_CY,
-                                z_min=S.Z_SLED_FRONT - 0.2)
-    sled = sled.union(ring_out.cut(ring_in).cut(wire_gap))
-
-    return sled
-
-
-def build_rear_cover() -> cq.Workplane:
-    """Build Rear_Cover (Z = -38.8 bed outside up to Z_PARTING = -24.0, support-free)."""
-    case_cy = S.CASE_H / 2.0
-    depth = S.Z_PARTING - S.Z_REAR_OUTER  # 14.8 mm
-    outer = make_rounded_box(S.CASE_W, S.CASE_H, depth, S.CORNER_R,
-                             cx=0.0, cy=case_cy, z_min=S.Z_REAR_OUTER)
-
-    # Interior cavity above Z_REAR_INNER (-35.8)
-    in_w = S.CASE_W - 2.0 * S.WALL_SIDE
-    in_h = S.CASE_H - S.WALL_BOT - S.WALL_TOP
-    in_cy = 0.5 * (S.WALL_BOT + (S.CASE_H - S.WALL_TOP))
-    cav = make_rounded_box(in_w, in_h, depth - S.WALL_REAR + 0.5,
-                           max(1.5, S.CORNER_R - S.WALL_SIDE),
-                           cx=0.0, cy=in_cy, z_min=S.Z_REAR_INNER)
-    shell = outer.cut(cav)
-
-    # Mating tongue-and-groove outer rim step (1.2 mm lap matching Front_Shell cut)
-    lip_h = 1.4
-    lip_trim = (
-        make_rounded_box(S.CASE_W + 2.0, S.CASE_H + 2.0, lip_h + 0.2, S.CORNER_R,
-                         cx=0.0, cy=case_cy, z_min=S.Z_PARTING - lip_h)
-        .cut(make_rounded_box(S.CASE_W - 2.0 * 1.6, S.CASE_H - 2.0 * 1.6, lip_h + 0.6,
-                              max(1.5, S.CORNER_R - 1.6),
-                              cx=0.0, cy=case_cy, z_min=S.Z_PARTING - lip_h - 0.2))
-    )
-    shell = shell.cut(lip_trim)
-
-    # 1. Centered Battery Containment Walls (123.5 x 64.5 x 11.8 mm pocket)
-    bat_wall_out = make_rounded_box(S.BAT_POCKET_W + 3.2, S.BAT_POCKET_H + 3.2, S.BAT_POCKET_THK - 1.0,
-                                    3.0, cx=S.BAT_CX, cy=S.BAT_CY, z_min=S.Z_REAR_INNER - 0.5)
-    bat_wall_in = make_rounded_box(S.BAT_POCKET_W, S.BAT_POCKET_H, S.BAT_POCKET_THK,
-                                   2.0, cx=S.BAT_CX, cy=S.BAT_CY, z_min=S.Z_REAR_INNER - 0.2)
-    bat_lead_exit = make_rounded_box(16.0, 8.0, S.BAT_POCKET_THK, 1.0,
-                                     cx=S.BAT_CX - 18.0, cy=S.BAT_CY - S.BAT_POCKET_H / 2.0,
-                                     z_min=S.Z_REAR_INNER)
-    shell = shell.union(bat_wall_out.cut(bat_wall_in).cut(bat_lead_exit))
-
-    # 2. 6 x M3 Closure Screw Pillars with 45-deg CSK entering from Rear exterior
-    full_rear_h = S.Z_PARTING - S.Z_REAR_OUTER
-    for bx, by in S.COVER_M3_POINTS:
-        pil = (
-            cq.Workplane("XY")
-            .workplane(offset=S.Z_REAR_INNER)
-            .center(bx, by)
-            .circle(S.RUTHEX_M3_BOSS_OD / 2.0)
-            .extrude(S.Z_PARTING - S.Z_REAR_INNER)
-        )
-        csk = make_csk_cone_through(bx, by, S.Z_REAR_OUTER, full_rear_h,
-                                    S.HOLE_CLEAR_M3, 6.2, cone_from_bed=True)
-        shell = shell.union(pil).cut(csk)
-
-    # 3. Option 3: 4 x M3 Rear Pole Adapter Ruthex Bosses (80 x 58 mm, flanking Battery!)
-    boss_z_h = 8.4  # 3.0 mm rear wall + 5.4 mm inside cavity -> 6.7 mm blind hole leaves 1.7 mm cap
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            ax = S.ADAPTER_CX + sx * (S.ADAPTER_M3_DX / 2.0)
-            ay = S.ADAPTER_M3_CY + sy * (S.ADAPTER_M3_DY / 2.0)
-            boss = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_REAR_OUTER)
-                .center(ax, ay)
-                .circle(S.RUTHEX_M3_BOSS_OD / 2.0)
-                .extrude(boss_z_h)
-            )
-            hole = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_REAR_OUTER - 0.1)
-                .center(ax, ay)
-                .circle(S.RUTHEX_M3_OD / 2.0)
-                .extrude(S.RUTHEX_M3_DEPTH + 0.1)
-            )
-            cham = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_REAR_OUTER - 0.05)
-                .center(ax, ay)
-                .circle(S.RUTHEX_M3_OD / 2.0 + 0.55)
-                .workplane(offset=0.6)
-                .circle(S.RUTHEX_M3_OD / 2.0)
-                .loft(combine=True)
-            )
-            shell = shell.union(boss).cut(hole).cut(cham)
-
-    # 4. Power Board 4 x M2 Ruthex Bosses on Rear_Cover (15 x 75 mm grid, Z=-36.3 up to -29.8)
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            bx = S.PB_CX + sx * (S.PB_HOLE_DX / 2.0)
-            by = S.PB_CY + sy * (S.PB_HOLE_DY / 2.0)
-            boss = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_REAR_INNER)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
-                .extrude(S.PB_STANDOFF_H)
-            )
-            hole = (
-                cq.Workplane("XY")
-                .workplane(offset=S.PB_PCB_BACK_Z - S.RUTHEX_M2_DEPTH)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_OD / 2.0)
-                .extrude(S.RUTHEX_M2_DEPTH + 0.1)
-            )
-            cham = (
-                cq.Workplane("XY")
-                .workplane(offset=S.PB_PCB_BACK_Z + 0.05)
-                .center(bx, by)
-                .circle(S.RUTHEX_M2_OD / 2.0 + 0.5)
-                .workplane(offset=-0.55)
-                .circle(S.RUTHEX_M2_OD / 2.0)
-                .loft(combine=True)
-            )
-            shell = shell.union(boss).cut(hole).cut(cham)
-
-    return shell
-
-
-def build_pole_adapter() -> cq.Workplane:
-    """Build Option 3 Bolt-On Pole Adapter Plate (Z = -38.8 to -55.0)."""
-    z_mount = S.Z_REAR_OUTER  # Flush against rear outer shell
-    base = make_rounded_box(S.POLE_ADAPTER_W, S.POLE_ADAPTER_H, S.POLE_ADAPTER_BASE_T, 5.0,
-                            cx=S.ADAPTER_CX, cy=S.ADAPTER_M3_CY,
-                            z_min=z_mount - S.POLE_ADAPTER_BASE_T)
-
-    spine = make_rounded_box(S.POLE_ADAPTER_SPINE_W, S.POLE_ADAPTER_H - 6.0,
-                             S.POLE_ADAPTER_SPINE_T, 6.0,
-                             cx=S.ADAPTER_CX, cy=S.ADAPTER_M3_CY,
-                             z_min=z_mount - S.POLE_ADAPTER_SPINE_T)
-    plate = base.union(spine)
-
-    # 4 x M3 CSK holes (cone from rear face of adapter base plate)
-    z_base_rear = z_mount - S.POLE_ADAPTER_BASE_T
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            ax = S.ADAPTER_CX + sx * (S.ADAPTER_M3_DX / 2.0)
-            ay = S.ADAPTER_M3_CY + sy * (S.ADAPTER_M3_DY / 2.0)
-            csk = make_csk_cone_through(ax, ay, z_base_rear, S.POLE_ADAPTER_BASE_T,
-                                        S.HOLE_CLEAR_M3, 6.2, cone_from_bed=True)
-            plate = plate.cut(csk)
-
-    # 2 x 1/4"-20 Ruthex Insert Bosses (8.0 mm hole x 13.7 mm deep, >= 2.5 mm floor to case)
-    z_spine_back = z_mount - S.POLE_ADAPTER_SPINE_T
-    for sy in (-1.0, 1.0):
-        qy = S.ADAPTER_M3_CY + sy * (S.POLE_Q20_DY / 2.0)
-        q_hole = (
-            cq.Workplane("XY")
-            .workplane(offset=z_spine_back - 0.1)
-            .center(S.ADAPTER_CX, qy)
-            .circle(S.RUTHEX_Q20_OD / 2.0)
-            .extrude(S.RUTHEX_Q20_DEPTH + 0.1)
-        )
-        q_cham = (
-            cq.Workplane("XY")
-            .workplane(offset=z_spine_back - 0.05)
-            .center(S.ADAPTER_CX, qy)
-            .circle(S.RUTHEX_Q20_OD / 2.0 + 0.65)
-            .workplane(offset=0.7)
-            .circle(S.RUTHEX_Q20_OD / 2.0)
-            .loft(combine=True)
-        )
-        plate = plate.cut(q_hole).cut(q_cham)
-
-    return plate
-
-
-def build_sun_shield() -> cq.Workplane:
-    """Build Detachable 3-Sided Outdoor Sun Shield (flush X=[-23.5..+58.0], zero wall notches)."""
-    x_min, x_max = -23.5, 58.0       # Covers Left (-16.8) magnets & Right (+54.4) pins with >=2.1 mm edge margin
-    y_min, y_max = 5.5, 111.5        # Covers Top (Y=105) magnets cleanly while leaving UM982 SWITCH free
-    flange_w = x_max - x_min         # 81.5 mm
-    flange_h = y_max - y_min         # 106.0 mm
-    flange_cx = 0.5 * (x_min + x_max) # 17.25 mm
-    flange_cy = 0.5 * (y_min + y_max) # 58.5 mm
-
-    base = make_rounded_box(flange_w, flange_h, 3.0, 5.0,
-                            cx=flange_cx, cy=flange_cy, z_min=0.0)
-    # Visor walls (top + left + right hood rising forward +Z = 38 mm, open bottom!)
-    hood_h = 38.0
-    hood_outer = make_rounded_box(flange_w, flange_h, hood_h, 5.0,
-                                  cx=flange_cx, cy=flange_cy, z_min=0.0)
-    hood_inner = make_rounded_box(S.WS_GLASS_W + 0.6, 88.5, hood_h + 2.0, 4.0,
-                                  cx=S.WS_CX, cy=54.75, z_min=-0.5)
-    shield = base.union(hood_outer).cut(hood_inner)
-
-    # Trim lower portion to 4.5 mm protective bezel only, tapering upward at 45 deg
-    lower_cut = (
-        cq.Workplane("YZ")
-        .workplane(offset=flange_cx - flange_w / 2.0 - 2.0)
-        .polyline([
-            (y_min - 2.0, 4.5),
-            (58.0, 4.5),
-            (92.0, hood_h + 1.0),
-            (y_min - 2.0, hood_h + 1.0),
-        ])
-        .close()
-        .extrude(flange_w + 4.0)
-    )
-    shield = shield.cut(lower_cut)
-
-    # Magnet holes & slim registration pins mating cleanly inside Front_Shell bezel
-    for mx, my in S.SHIELD_MAG_POINTS:
-        m_hole = (
-            cq.Workplane("XY")
-            .workplane(offset=-0.1)
-            .center(mx, my)
-            .circle(S.SHIELD_MAG_DIA / 2.0)
-            .extrude(S.SHIELD_MAG_DEPTH + 0.1)
-        )
-        shield = shield.cut(m_hole)
-    for px, py in S.SHIELD_PIN_POINTS:
-        pin = (
-            cq.Workplane("XY")
-            .workplane(offset=0.0)
+            .workplane(offset=z_cradle_back - 1.5)
             .center(px, py)
-            .circle(1.45)
-            .workplane(offset=-1.6)
-            .circle(0.35)
-            .loft(combine=True)
+            .circle(S.HOLE_CLEAR_M3 / 2.0)
+            .extrude(bay_d + 3.0)
         )
-        shield = shield.union(pin)
+        cradle = cradle.cut(bore)
 
+    # --- Piece B: Pole_Lid (3.0 mm flat floor + twin 1/4"-20 Ruthex spine, 2.5 mm safety floor) ---
+    # Prints 100% flat on z_lid_front with spine growing upward -> zero overhangs.
+    z_lid_front = z_cradle_back - 0.10        # 0.10 mm gap avoids coplanar boolean touch
+    z_lid_back = z_lid_front - S.POD_FLOOR_THK
+    z_spine_back = z_lid_back - S.POD_SPINE_H
+
+    lid = make_rounded_box(S.POD_OUTER_W, pod_h, S.POD_FLOOR_THK, S.POD_OUTER_R,
+                           cx=S.POD_CX, cy=S.POD_CY, z_min=z_lid_back)
+
+    # Central reinforced 24.0 mm Spine carrying twin 1/4"-20 Ruthex inserts (38.1 mm pitch)
+    spine = make_rounded_box(S.POD_SPINE_W, 74.0, S.POD_SPINE_H + 0.5, 5.0,
+                             cx=S.POD_CX, cy=S.POD_CY, z_min=z_spine_back)
+    lid = lid.union(spine)
+
+    # 2 x 1/4"-20 Ruthex bores open to -Z_asm (back), stopping >= 2.5 mm shy of z_lid_front
+    for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
+        q_bore = (
+            cq.Workplane("XY")
+            .workplane(offset=z_spine_back - 0.2)
+            .center(S.POD_CX, qy)
+            .circle(S.RUTHEX_Q20_OD / 2.0)
+            .extrude(S.RUTHEX_Q20_DEPTH + 0.2)
+        )
+        lid = lid.cut(q_bore)
+
+    # 4 x M3 CSK thru-holes on outer flange (head on rear side z_lid_back)
+    for px, py in S.POD_M3_POINTS:
+        csk = make_csk_cone_through(px, py, z_bed=z_lid_back, plate_thk=S.POD_FLOOR_THK,
+                                    hole_d=S.HOLE_CLEAR_M3, head_d=6.2, cone_from_bed=True)
+        lid = lid.cut(csk)
+
+    return cradle, lid
+
+
+# ==============================================================================
+# Part 7: Slim_Sun_Shield (Option H1 - 1.6 mm PETG U-Channel Slot-In Hood)
+# ==============================================================================
+def build_slim_sun_shield() -> cq.Workplane:
+    """Build Option H1 Slim_Sun_Shield (prints flat on back Z = -1.70 mm, support-free)."""
+    xl, xr = S.SHIELD_U_X_LEFT, S.SHIELD_U_X_RIGHT
+    yb, yt = S.SHIELD_U_Y_BOT, S.SHIELD_U_Y_TOP
+    t = S.SHIELD_WALL_T
+    half_t = t / 2.0
+    z_base = -(S.SHIELD_GROOVE_D - 0.10)  # -1.70 mm (leaves 0.10 mm bottoming gap inside -1.80 groove)
+    # Centerline polygon of outer perimeter vs inner perimeter for clean tapered loft
+    outer_pts = [
+        (xl - half_t, yb),
+        (xl - half_t, yt + half_t),
+        (xr + half_t, yt + half_t),
+        (xr + half_t, yb),
+        (xr - half_t, yb),
+        (xr - half_t, yt - half_t),
+        (xl + half_t, yt - half_t),
+        (xl + half_t, yb),
+    ]
+    # Extrude max depth (+28 mm) then slice slanted taper from Z_bot (+12 mm) to Z_top (+28 mm)!
+    u_full = (
+        cq.Workplane("XY")
+        .workplane(offset=z_base)
+        .polyline(outer_pts)
+        .close()
+        .extrude(S.SHIELD_DEPTH_TOP - z_base)
+    )
+    # Taper slice polygon in YZ plane (clears Top visor roof at Y = yt..yt+half_t, slopes cleanly to yb)
+    slope_pts = [
+        (yb - 5.0, S.SHIELD_DEPTH_BOT),
+        (yt - 10.0, S.SHIELD_DEPTH_TOP),
+        (yt + 5.0, S.SHIELD_DEPTH_TOP),
+        (yt + 5.0, S.SHIELD_DEPTH_TOP + 10.0),
+        (yb - 5.0, S.SHIELD_DEPTH_TOP + 10.0),
+    ]
+    taper_cutter = (
+        cq.Workplane("YZ")
+        .workplane(offset=xl - 5.0)
+        .polyline(slope_pts)
+        .close()
+        .extrude((xr - xl) + 10.0)
+    )
+    shield = u_full.cut(taper_cutter)
+    # Slight fillet on front top vertical corners so it looks crisp
     return shield
 
 
+# ==============================================================================
+# Part 8: Button_Plungers (3 x Captive Tactile Plungers for Back_Chassis_Frame Flange)
+# ==============================================================================
 def build_button_plungers() -> cq.Workplane:
-    """Build 3 captive drop-in tactile plunger caps for PWR, RESET, BOOT (support-free)."""
-    # Positioned aligned inside the 3 Front_Shell bores; flange on inside, stem sticks slightly proud
-    plungers = None
+    """Build 3 captive tactile button plungers (PWR, RESET, BOOT), 45-deg self-supporting."""
+    comp = None
     for by in S.WS_BTN_Y_LIST:
-        flange = (
+        # 1. Inner nose reaching near button dome (X = +45.75..+48.6, 0.40 mm gap to dome +45.35)
+        nose = (
             cq.Workplane("YZ")
-            .workplane(offset=S.WS_BTN_X_EDGE + 0.6)
+            .workplane(offset=45.75)
             .center(by, S.WS_BTN_Z_CTR)
-            .circle(3.1)
-            .extrude(2.2)
+            .circle(1.40)
+            .extrude(2.85)
         )
+        # 2. Tapered 45-deg captive collar transitioning smoothly down onto outer stem (zero 90-deg overhang!)
+        collar = (
+            cq.Workplane("YZ")
+            .workplane(offset=48.55)
+            .center(by, S.WS_BTN_Z_CTR)
+            .rect(6.10, 5.20)
+            .workplane(offset=1.00)
+            .rect(6.10, 5.20)
+            .workplane(offset=1.25)
+            .rect(4.00, 3.60)
+            .loft(combine=True)
+        )
+        # 3. Outer gabled stem sticking 1.2 mm proud of right wall (X = +50.75..+61.20)
+        pts = [
+            (by - 2.00, S.WS_BTN_Z_CTR - 1.80),
+            (by + 2.00, S.WS_BTN_Z_CTR - 1.80),
+            (by + 2.00, S.WS_BTN_Z_CTR + 1.80),
+            (by,        S.WS_BTN_Z_CTR + 3.00),
+            (by - 2.00, S.WS_BTN_Z_CTR + 1.80),
+        ]
         stem = (
             cq.Workplane("YZ")
-            .workplane(offset=S.WS_BTN_X_EDGE + 2.8)
-            .center(by, S.WS_BTN_Z_CTR)
-            .circle(2.15)
-            .extrude(S.CASE_W / 2.0 + 0.8 - (S.WS_BTN_X_EDGE + 2.8))
+            .workplane(offset=50.75)
+            .polyline(pts)
+            .close()
+            .extrude(10.45)
         )
-        cap = flange.union(stem)
-        plungers = cap if plungers is None else plungers.union(cap)
-    return plungers
+        one = nose.union(collar).union(stem)
+        comp = one if comp is None else comp.add(one)
+    return comp
 
 
-def build_hardware_proxies() -> dict:
-    """Create bounding-envelope solids of all internal modules for interference audit."""
-    mods = {}
-    if STP_WAVESHARE.exists():
-        ws = cq.importers.importStep(str(STP_WAVESHARE))
-        # Shift STEP Z=+1.10 glass face down to Z=0.0, then translate to (WS_CX, WS_CY)
-        mods["waveshare_stp"] = ws.translate((S.WS_CX, S.WS_CY, -1.10))
-    # Power Board body (Z = PB_PCB_BACK_Z .. +20.0 mm tall parts) + 2.0 mm underside solder envelope (inset inside pads)
-    pb_upper = make_rounded_box(S.PB_W, S.PB_H, 20.0, 0.5,
-                                cx=S.PB_CX, cy=S.PB_CY, z_min=S.PB_PCB_BACK_Z)
-    pb_pins = make_rounded_box(S.PB_W - 8.0, S.PB_H - 12.0, 2.0, 0.2,
-                               cx=S.PB_CX, cy=S.PB_CY, z_min=S.PB_PCB_BACK_Z - 2.0)
-    mods["power_board"] = pb_upper.union(pb_pins)
-    mods["e220"] = make_rounded_box(
-        S.E220_W, S.E220_H, S.E220_Z_THK, 0.5,
-        cx=S.E220_CX, cy=S.E220_CY, z_min=S.Z_SLED_FRONT + S.E220_STANDOFF_H
-    )
-    mods["um982"] = make_rounded_box(
-        S.UM_W, S.UM_H, S.UM_Z_THK, 1.0,
-        cx=S.UM_CX, cy=S.UM_CY, z_min=S.UM_BACK_Z
-    )
-    mods["battery"] = make_rounded_box(
-        S.BAT_CELL_W, S.BAT_CELL_H, 11.0, 1.5,
-        cx=S.BAT_CX, cy=S.BAT_CY - 2.0, z_min=S.Z_REAR_INNER + 0.3
-    )
-    mods["speaker"] = make_rounded_box(
-        S.SPK_W, S.SPK_H, S.SPK_Z_THK, 1.0,
-        cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_FRONT_INNER - S.SPK_Z_THK - 0.2
-    )
-    mods["rtc_coin"] = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_SLED_FRONT)
-        .center(S.RTC_BAT_CX, S.RTC_BAT_CY)
-        .circle(21.0 / 2.0)
-        .extrude(4.0)
-    )
-    return mods
+# ==============================================================================
+# Real REF-*.stp Model Importers & Normalized Assembly Transformers
+# ==============================================================================
+def load_normalized_refs() -> dict[str, cq.Workplane]:
+    """Load all 11 REF-*.stp files and place them in exact assembly coordinates."""
+    refs = {}
+
+    # 1. Waveshare 3.5B (Solid[3] glass front datum -> WS_CX, WS_CY, 0.0)
+    ws = cq.importers.importStep(str(REF_FILES["waveshare"]))
+    s3b = ws.solids().vals()[3].BoundingBox()
+    gx, gy, gz = 0.5 * (s3b.xmin + s3b.xmax), 0.5 * (s3b.ymin + s3b.ymax), s3b.zmax
+    refs["waveshare"] = ws.translate((S.WS_CX - gx, S.WS_CY - gy, -gz))
+
+    # 2. Coin cell + holder (Z = -25.0..-21.0 under Waveshare)
+    cc = cq.importers.importStep(str(REF_FILES["coin_cell"]))
+    ch = cq.importers.importStep(str(REF_FILES["coin_holder"]))
+    cc_bb = cc.val().BoundingBox()
+    # Coin cell cylinder center measured at (21.094, 44.234)
+    dx_rtc = S.RTC_CX - 21.094
+    dy_rtc = S.RTC_CY - 44.234
+    dz_rtc = S.Z_PLATE_INNER - cc_bb.zmin
+    refs["coin_cell"] = cc.translate((dx_rtc, dy_rtc, dz_rtc))
+    refs["coin_holder"] = ch.translate((dx_rtc, dy_rtc, dz_rtc))
+
+    # 3. Power Board (PCB Z=0 -> Z_PLATE_INNER + PB_STANDOFF_H = -22.0)
+    pm = cq.importers.importStep(str(REF_FILES["power"]))
+    pbb = pm.val().BoundingBox()
+    pm_cx, pm_cy = 0.5 * (pbb.xmin + pbb.xmax), 0.5 * (pbb.ymin + pbb.ymax)
+    refs["power"] = pm.translate((S.PB_CX - pm_cx, S.PB_CY - pm_cy, S.Z_PLATE_INNER + S.PB_STANDOFF_H))
+
+    # 4. E220 Module (PCB Z=0 -> Z_PLATE_INNER + E220_STANDOFF_H = -21.0)
+    e2 = cq.importers.importStep(str(REF_FILES["e220"]))
+    ebb = e2.val().BoundingBox()
+    e2_cx, e2_cy = 0.5 * (ebb.xmin + ebb.xmax), 0.5 * (ebb.ymin + ebb.ymax)
+    refs["e220"] = e2.translate((S.E220_CX - e2_cx, S.E220_CY - e2_cy, S.Z_PLATE_INNER + S.E220_STANDOFF_H))
+
+    # 5. Holybro UM982 (Back Z=0 -> UM_BACK_Z = -17.20; Body top at UM_TOP_Y = 178.00)
+    um = cq.importers.importStep(str(REF_FILES["um982"]))
+    ubb = um.val().BoundingBox()
+    um_cx = 0.5 * (ubb.xmin + ubb.xmax)
+    um_bot_raw = ubb.ymin
+    refs["um982"] = um.translate((S.UM_CX - um_cx, S.UM_BOT_Y - um_bot_raw, S.UM_BACK_Z - ubb.zmin))
+
+    # 6. Speaker (normalized cone center (0,0), rotated 180 deg Z so wire bump faces +Y, Z = -13.5..-3.5)
+    sp = cq.importers.importStep(str(REF_FILES["speaker"]))
+    sbb = sp.val().BoundingBox()
+    sp_norm = sp.translate((-0.5 * (sbb.xmin + sbb.xmax), -(sbb.ymin + 16.0), -sbb.zmin)).rotate((0, 0, 0), (0, 0, 1), 180)
+    refs["speaker"] = sp_norm.translate((S.SPK_CX, S.SPK_CY, S.Z_PLATE_INNER + S.SPK_PEDESTAL_H))
+
+    # 7. GX-12 Compass Bulkhead (rotated -90 deg around X so +Z points +Y out crown; shoulder Z_ref=-0.9 at Y=180.0)
+    gx = cq.importers.importStep(str(REF_FILES["gx12"]))
+    gbb = gx.val().BoundingBox()
+    gx_cx, gx_cy = 0.5 * (gbb.xmin + gbb.xmax), 0.5 * (gbb.ymin + gbb.ymax)
+    gx_rot = gx.translate((-gx_cx, -gx_cy, 0.90)).rotate((0, 0, 0), (1, 0, 0), -90)
+    refs["gx12"] = gx_rot.translate((S.GX12_X, S.CASE_H, S.GX12_Z))
+
+    # 8. E220 LoRa Female SMA Bulkhead (rotated -90 deg X; inner hex flange face Z_ref=2.0 at Y=177.40)
+    sma = cq.importers.importStep(str(REF_FILES["sma"]))
+    smabb = sma.val().BoundingBox()
+    sma_cx, sma_cy = 0.5 * (smabb.xmin + smabb.xmax), 0.5 * (smabb.ymin + smabb.ymax)
+    sma_rot = sma.translate((-sma_cx, -sma_cy, -2.0)).rotate((0, 0, 0), (1, 0, 0), -90)
+    refs["sma"] = sma_rot.translate((S.E220_SMA_X, S.CASE_H - S.E220_SMA_WALL, S.E220_SMA_Z))
+
+    # 9. 5000 mAh LiPo Battery (rotated 180 deg Z so wire tab sits bottom-left over BAT_SLOT)
+    b5 = cq.importers.importStep(str(REF_FILES["bat5000"]))
+    b5b = b5.val().BoundingBox()
+    b5_rot = b5.translate((-0.5 * (b5b.xmin + b5b.xmax), -0.5 * (b5b.ymin + b5b.ymax), -b5b.zmax)).rotate((0, 0, 0), (0, 0, 1), 180)
+    refs["bat5000"] = b5_rot.translate((S.POD_CX, S.POD_CY + 5.0, S.Z_PLATE_OUTER))
+
+    # 10. 10000 mAh LiPo Battery (offset 1.5 mm off Back Plate inside 12.8 mm bay for wire routing)
+    b10 = cq.importers.importStep(str(REF_FILES["bat10000"]))
+    b10b = b10.val().BoundingBox()
+    b10_norm = b10.translate((-0.5 * (b10b.xmin + b10b.xmax), -0.5 * (b10b.ymin + b10b.ymax), -b10b.zmax))
+    refs["bat10000"] = b10_norm.translate((S.POD_CX, S.POD_CY + 1.0, S.Z_PLATE_OUTER - 1.5))
+
+    return refs
 
 
-def orient_for_print(part: cq.Workplane, flip_x180: bool = False, rot_y_deg: float = 0.0) -> cq.Workplane:
-    """Rotate/translate solid so its flat support-free print face sits at Z = 0, growing +Z."""
-    out = part.rotate((0, 0, 0), (1, 0, 0), 180.0) if flip_x180 else part
-    if abs(rot_y_deg) > 1e-3:
-        out = out.rotate((0, 0, 0), (0, 1, 0), rot_y_deg)
-    bb = out.val().BoundingBox()
-    return out.translate((0.0, 0.0, -bb.zmin))
-
-
-def run_audit(parts: dict, mods: dict) -> list:
-    """Run automated module-vs-module and module-vs-enclosure clearance audit."""
-    issues = []
-    checks = [
-        ("Front_Shell", "power_board"),
-        ("Front_Shell", "e220"),
-        ("Front_Shell", "um982"),
-        ("Front_Shell", "battery"),
-        ("Front_Shell", "speaker"),
-        ("Front_Shell", "rtc_coin"),
-        ("Mid_Frame_Sled", "power_board"),
-        ("Mid_Frame_Sled", "e220"),
-        ("Mid_Frame_Sled", "um982"),
-        ("Mid_Frame_Sled", "battery"),
-        ("Mid_Frame_Sled", "speaker"),
-        ("Rear_Cover", "power_board"),
-        ("Rear_Cover", "battery"),
-        ("Rear_Cover", "e220"),
-        ("Rear_Cover", "um982"),
-        ("Pole_Adapter_Plate", "Rear_Cover"),
-    ]
-    for pname, mname in checks:
-        target = mods[mname] if mname in mods else parts[mname]
-        inter = parts[pname].intersect(target)
-        vol = sum(s.Volume() for s in inter.solids().vals())
-        if vol > 0.05:
-            issues.append(f"[OVERLAP] {pname} vs {mname}: {vol:.2f} mm^3")
-        else:
-            print(f"[AUDIT PASS] {pname} vs {mname}: 0.00 mm^3 overlap")
-    # Verify Front_Shell outer envelope stayed exact (zero protruding bosses)
-    fs_bb = parts["Front_Shell"].val().BoundingBox()
-    if abs(fs_bb.xmax - S.CASE_W / 2.0) > 0.05 or abs(fs_bb.xmin + S.CASE_W / 2.0) > 0.05:
-        issues.append(f"[PROTRUSION] Front_Shell X=[{fs_bb.xmin:.2f}, {fs_bb.xmax:.2f}] exceeds +/-{S.CASE_W/2:.2f}")
+# ==============================================================================
+# Print Orientation Helpers & Exporters
+# ==============================================================================
+def to_print_bed(shape: cq.Workplane, mode: str) -> cq.Workplane:
+    """Orient part flat onto Z = 0.0 build plate for support-free PETG printing."""
+    if mode == "face_down":
+        s = shape.rotate((0, 0, 0), (1, 0, 0), 180)
+    elif mode == "plunger_flat":
+        s = shape.rotate((0, 0, 0), (0, 1, 0), 90)
     else:
-        print(f"[AUDIT PASS] Front_Shell outer X flush: [{fs_bb.xmin:.2f}, {fs_bb.xmax:.2f}] mm")
-    return issues
+        s = shape
+    bb = s.val().BoundingBox()
+    return s.translate((0.0, 0.0, -bb.zmin))
 
 
-def export_dxf_2d() -> Path:
-    """Export AutoCAD LT 2010 compatible R2010 DXF interface layout."""
-    DXF_DIR.mkdir(parents=True, exist_ok=True)
-    dxf_path = DXF_DIR / "RTK_Rover_Interfaces_2D.dxf"
+def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.Workplane]) -> None:
+    """Run automated manifold, outer envelope, and 0.00 mm^3 real-model collision audits."""
+    print("\n--- [1/3] Manifold & Outer Envelope Checks ---")
+    for name, shp in parts.items():
+        n_solids = len(shp.solids().vals())
+        bb = shp.val().BoundingBox()
+        expected = 3 if name == "Button_Plungers" else 1
+        assert n_solids == expected, f"{name}: expected {expected} solid(s), got {n_solids}"
+        if name in ("Back_Chassis_Frame", "Top_Cover"):
+            assert abs(bb.xmin + S.CASE_W / 2.0) < 0.02, f"{name} xmin={bb.xmin:.3f}"
+            assert abs(bb.xmax - S.CASE_W / 2.0) < 0.02, f"{name} xmax={bb.xmax:.3f}"
+            assert abs(bb.ymin - 0.0) < 0.02, f"{name} ymin={bb.ymin:.3f}"
+            assert abs(bb.ymax - S.CASE_H) < 0.02, f"{name} ymax={bb.ymax:.3f}"
+        print(f"  [OK] {name:22s}: {n_solids} solid(s), "
+              f"X[{bb.xmin:7.2f},{bb.xmax:7.2f}] Y[{bb.ymin:6.2f},{bb.ymax:6.2f}] Z[{bb.zmin:6.2f},{bb.zmax:6.2f}]")
+
+    print("\n--- [2/3] Printed Part vs Printed Part Interference Audit ---")
+    printed_pairs = [
+        ("Back_Chassis_Frame", "Top_Cover"),
+        ("Top_Cover", "Slim_Sun_Shield"),
+        ("Back_Chassis_Frame", "Slim_Sun_Shield"),
+        ("Back_Chassis_Frame", "Button_Plungers"),
+        ("Top_Cover", "Button_Plungers"),
+        ("Back_Chassis_Frame", "Battery_Cradle_5000"),
+        ("Battery_Cradle_5000", "Pole_Lid_5000"),
+        ("Back_Chassis_Frame", "Pole_Lid_5000"),
+        ("Back_Chassis_Frame", "Battery_Cradle_10000"),
+        ("Battery_Cradle_10000", "Pole_Lid_10000"),
+        ("Back_Chassis_Frame", "Pole_Lid_10000"),
+    ]
+    for a_name, b_name in printed_pairs:
+        inter = parts[a_name].intersect(parts[b_name])
+        vol = sum(s.Volume() for s in inter.solids().vals())
+        print(f"  {a_name:22s} vs {b_name:22s}: overlap = {vol:8.4f} mm^3")
+        assert vol <= 0.05, f"Interference failure: {a_name} vs {b_name} = {vol:.4f} mm^3"
+
+    print("\n--- [3/3] Printed Enclosure vs Real REF-*.stp Hardware Audit ---")
+    ref_checks = [
+        ("Back_Chassis_Frame", "waveshare"),
+        ("Top_Cover",          "waveshare"),
+        ("Button_Plungers",    "waveshare"),
+        ("Back_Chassis_Frame", "coin_cell"),
+        ("Back_Chassis_Frame", "power"),
+        ("Top_Cover",          "power"),
+        ("Back_Chassis_Frame", "e220"),
+        ("Top_Cover",          "e220"),
+        ("Back_Chassis_Frame", "um982"),
+        ("Top_Cover",          "um982"),
+        ("Back_Chassis_Frame", "speaker"),
+        ("Top_Cover",          "speaker"),
+        ("Back_Chassis_Frame", "gx12"),
+        ("Top_Cover",          "gx12"),
+        ("Back_Chassis_Frame", "sma"),
+        ("Top_Cover",          "sma"),
+        ("Battery_Cradle_5000", "bat5000"),
+        ("Pole_Lid_5000",       "bat5000"),
+        ("Back_Chassis_Frame",  "bat5000"),
+        ("Battery_Cradle_10000", "bat10000"),
+        ("Pole_Lid_10000",       "bat10000"),
+        ("Back_Chassis_Frame",   "bat10000"),
+    ]
+    for p_name, r_name in ref_checks:
+        inter = parts[p_name].intersect(refs[r_name])
+        vol = sum(s.Volume() for s in inter.solids().vals())
+        print(f"  {p_name:22s} vs REF_{r_name:12s}: overlap = {vol:8.4f} mm^3")
+        assert vol <= 0.05, f"Hardware collision: {p_name} vs REF_{r_name} = {vol:.4f} mm^3"
+
+
+def export_2d_dxf(path: Path) -> None:
+    """Export AutoCAD LT 2010 compatible 2D DXF of v2.0.0 chassis, pods, and crown."""
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4  # mm
     msp = doc.modelspace()
 
-    for layer, col in [("OUTLINE", 7), ("CUTOUTS", 1), ("HOLES_M2_M3", 3), ("MODULES", 4), ("TEXT_NOTES", 2)]:
-        doc.layers.add(layer, color=col)
+    layers = {
+        "CASE_OUTLINE": 7,
+        "MODULES": 3,
+        "FASTENERS_M3": 1,
+        "SUNSHIELD_GROOVE": 6,
+        "POD_B2": 4,
+        "CROWN_BULKHEAD": 2,
+    }
+    for lname, color in layers.items():
+        doc.layers.add(lname, color=color)
 
-    def rect_poly(x0, y0, x1, y1, layer):
+    def add_rect(cx, cy, w, h, layer):
+        x0, x1 = cx - w / 2.0, cx + w / 2.0
+        y0, y1 = cy - h / 2.0, cy + h / 2.0
         msp.add_lwpolyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], close=True, dxfattribs={"layer": layer})
 
-    # Front & Module View centered around (0, 0..182)
-    rect_poly(-S.CASE_W / 2, 0.0, S.CASE_W / 2, S.CASE_H, "OUTLINE")
-    rect_poly(S.WS_CX - S.WS_GLASS_W / 2, S.WS_CY - S.WS_GLASS_H / 2,
-              S.WS_CX + S.WS_GLASS_W / 2, S.WS_CY + S.WS_GLASS_H / 2, "CUTOUTS")
-    rect_poly(S.PB_CX - S.PB_W / 2, S.PB_CY - S.PB_H / 2,
-              S.PB_CX + S.PB_W / 2, S.PB_CY + S.PB_H / 2, "MODULES")
-    rect_poly(S.E220_CX - S.E220_W / 2, S.E220_CY - S.E220_H / 2,
-              S.E220_CX + S.E220_W / 2, S.E220_CY + S.E220_H / 2, "MODULES")
-    rect_poly(S.UM_LEFT_X, S.UM_BOT_Y, S.UM_RIGHT_X, S.UM_TOP_Y, "MODULES")
-    rect_poly(S.SPK_CX - S.SPK_W / 2, S.SPK_CY - S.SPK_H / 2,
-              S.SPK_CX + S.SPK_W / 2, S.SPK_CY + S.SPK_H / 2, "MODULES")
-    msp.add_circle((S.RTC_BAT_CX, S.RTC_BAT_CY), S.RTC_BAT_DIA / 2.0, dxfattribs={"layer": "MODULES"})
+    # Front XY footprint
+    add_rect(0.0, S.CASE_H / 2.0, S.CASE_W, S.CASE_H, "CASE_OUTLINE")
+    add_rect(S.WS_CX, S.WS_CY, S.WS_GLASS_W, S.WS_GLASS_H, "MODULES")
+    add_rect(S.PB_CX, S.PB_CY, S.PB_W, S.PB_H, "MODULES")
+    add_rect(S.SPK_CX, S.SPK_CY, S.SPK_W, S.SPK_H, "MODULES")
+    add_rect(S.E220_CX, S.E220_CY, S.E220_W, S.E220_H, "MODULES")
+    add_rect(S.UM_CX, S.UM_CY, S.UM_W, S.UM_BODY_H, "MODULES")
+    msp.add_circle((S.RTC_CX, S.RTC_CY), 13.25, dxfattribs={"layer": "MODULES"})
 
-    # UM982 Front LED light pipes & switch
-    for lx_off in S.UM_LED_X_OFFSETS:
-        msp.add_circle((S.UM_LEFT_X + lx_off, S.UM_TOP_Y - S.UM_LED_TOP_OFFSET), 1.95 / 2.0,
-                       dxfattribs={"layer": "CUTOUTS"})
-    msp.add_circle((S.UM_LEFT_X + S.UM_SW_X_OFFSET, S.UM_TOP_Y - S.UM_SW_TOP_OFFSET), 1.7,
-                   dxfattribs={"layer": "CUTOUTS"})
+    # Battery slot & Option B2 pods
+    add_rect(S.BAT_SLOT_CX, S.BAT_SLOT_CY, S.BAT_SLOT_W, S.BAT_SLOT_H, "POD_B2")
+    add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.BAT5_POD_H, "POD_B2")
+    add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.BAT10_POD_H, "POD_B2")
+    for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
+        msp.add_circle((S.POD_CX, qy), S.RUTHEX_Q20_OD / 2.0, dxfattribs={"layer": "POD_B2"})
 
-    for bx, by in S.COVER_M3_POINTS:
-        msp.add_circle((bx, by), S.RUTHEX_M3_OD / 2.0, dxfattribs={"layer": "HOLES_M2_M3"})
+    # Sun Shield U-groove centerline
+    msp.add_lwpolyline([
+        (S.SHIELD_U_X_LEFT, S.SHIELD_U_Y_BOT),
+        (S.SHIELD_U_X_LEFT, S.SHIELD_U_Y_TOP),
+        (S.SHIELD_U_X_RIGHT, S.SHIELD_U_Y_TOP),
+        (S.SHIELD_U_X_RIGHT, S.SHIELD_U_Y_BOT),
+    ], close=False, dxfattribs={"layer": "SUNSHIELD_GROOVE"})
 
-    # Offset +150 mm right: Rear Battery & Pole Adapter M3 + 1/4"-20 layout
-    ox = 150.0
-    rect_poly(ox - S.CASE_W / 2, 0.0, ox + S.CASE_W / 2, S.CASE_H, "OUTLINE")
-    rect_poly(ox + S.BAT_CX - S.BAT_POCKET_W / 2, S.BAT_CY - S.BAT_POCKET_H / 2,
-              ox + S.BAT_CX + S.BAT_POCKET_W / 2, S.BAT_CY + S.BAT_POCKET_H / 2, "MODULES")
-    rect_poly(ox + S.ADAPTER_CX - S.POLE_ADAPTER_W / 2, S.ADAPTER_M3_CY - S.POLE_ADAPTER_H / 2,
-              ox + S.ADAPTER_CX + S.POLE_ADAPTER_W / 2, S.ADAPTER_M3_CY + S.POLE_ADAPTER_H / 2, "OUTLINE")
-    for sx in (-1.0, 1.0):
-        for sy in (-1.0, 1.0):
-            msp.add_circle((ox + S.ADAPTER_CX + sx * S.ADAPTER_M3_DX / 2,
-                            S.ADAPTER_M3_CY + sy * S.ADAPTER_M3_DY / 2),
-                           S.RUTHEX_M3_OD / 2.0, dxfattribs={"layer": "HOLES_M2_M3"})
-    for sy in (-1.0, 1.0):
-        msp.add_circle((ox + S.ADAPTER_CX, S.ADAPTER_M3_CY + sy * S.POLE_Q20_DY / 2), S.RUTHEX_Q20_OD / 2.0,
-                       dxfattribs={"layer": "HOLES_M2_M3"})
+    # Fasteners
+    for mx, my in S.COVER_M3_POINTS:
+        msp.add_circle((mx, my), S.RUTHEX_M3_OD / 2.0, dxfattribs={"layer": "FASTENERS_M3"})
+    for px, py in S.POD_M3_POINTS:
+        msp.add_circle((px, py), S.RUTHEX_M3_OD / 2.0, dxfattribs={"layer": "FASTENERS_M3"})
 
-    # Offset +300 mm right: Top Crown Bulkhead Cross-Section (Y -> vertical Z_depth)
-    tx = 300.0
-    rect_poly(tx - S.CASE_W / 2, 0.0, tx + S.CASE_W / 2, abs(S.Z_REAR_OUTER), "OUTLINE")
-    msp.add_circle((tx + S.GX12_X, abs(S.GX12_Z)), S.GX12_HOLE_DIA / 2.0, dxfattribs={"layer": "CUTOUTS"})
-    msp.add_circle((tx + S.E220_SMA_X, abs(S.E220_SMA_Z)), S.E220_SMA_DIA / 2.0, dxfattribs={"layer": "CUTOUTS"})
-    msp.add_circle((tx + S.UM_SMA_SLAVE_X, abs(S.UM_SMA_Z)), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CUTOUTS"})
-    msp.add_circle((tx + S.UM_SMA_MASTER_X, abs(S.UM_SMA_Z)), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CUTOUTS"})
+    # Top L-Wall crown projection (offset Y + 215 mm)
+    y_off = S.CASE_H + 35.0
+    add_rect(0.0, y_off - (abs(S.Z_PLATE_OUTER) / 2.0), S.CASE_W, abs(S.Z_PLATE_OUTER), "CROWN_BULKHEAD")
+    msp.add_circle((S.GX12_X, y_off + S.GX12_Z), S.GX12_HOLE_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
+    msp.add_circle((S.E220_SMA_X, y_off + S.E220_SMA_Z), S.E220_SMA_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
+    msp.add_circle((S.UM_SMA_SLAVE_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
+    msp.add_circle((S.UM_SMA_MASTER_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
 
-    msp.add_text("FRONT & MODULE PLAN (mm)", dxfattribs={"layer": "TEXT_NOTES", "height": 4.0}).set_placement((-55, -10))
-    msp.add_text("REAR & POLE ADAPTER", dxfattribs={"layer": "TEXT_NOTES", "height": 4.0}).set_placement((ox - 55, -10))
-    msp.add_text("TOP CROWN BULKHEAD (Z depth from front=0)", dxfattribs={"layer": "TEXT_NOTES", "height": 4.0}).set_placement((tx - 55, -10))
-
-    doc.saveas(str(dxf_path))
-    return dxf_path
+    doc.saveas(str(path))
+    print(f"  Exported DXF -> {path.name}")
 
 
-def main() -> int:
+def main() -> None:
     print(f"=== {__filename__} {__version__} ===")
     STEP_DIR.mkdir(parents=True, exist_ok=True)
     STL_DIR.mkdir(parents=True, exist_ok=True)
+    DXF_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("Building parametric v2.0.0 enclosure parts...")
+    cradle_5000, lid_5000 = build_battery_pod_pair("5000")
+    cradle_10000, lid_10000 = build_battery_pod_pair("10000")
 
     parts = {
-        "Front_Shell": build_front_shell(),
-        "Mid_Frame_Sled": build_mid_sled(),
-        "Rear_Cover": build_rear_cover(),
-        "Pole_Adapter_Plate": build_pole_adapter(),
-        "Sun_Shield": build_sun_shield(),
+        "Back_Chassis_Frame": build_back_chassis_frame(),
+        "Top_Cover": build_top_cover(),
+        "Battery_Cradle_5000": cradle_5000,
+        "Pole_Lid_5000": lid_5000,
+        "Battery_Cradle_10000": cradle_10000,
+        "Pole_Lid_10000": lid_10000,
+        "Slim_Sun_Shield": build_slim_sun_shield(),
         "Button_Plungers": build_button_plungers(),
     }
-    mods = build_hardware_proxies()
-    issues = run_audit(parts, mods)
 
-    if "waveshare_stp" in mods:
-        # Verify real Waveshare STEP geometry vs all 3 main structural parts
-        for cname in ("Front_Shell", "Mid_Frame_Sled", "Rear_Cover"):
-            inter = parts[cname].intersect(mods["waveshare_stp"])
-            vol = sum(s.Volume() for s in inter.solids().vals())
-            print(f"[AUDIT STP] {cname} vs Waveshare_3.5B.stp: {vol:.2f} mm^3 overlap")
+    print("Importing all 11 REF-*.stp hardware reference models...")
+    refs = load_normalized_refs()
 
-    for name, solid in parts.items():
-        step_p = STEP_DIR / f"{name}.step"
-        solid.export(str(step_p))
-        print(f"Exported STEP: {step_p.name} ({step_p.stat().st_size} B)")
+    verify_assembly_and_refs(parts, refs)
 
-    # Export full assembled SolidEdge STEP (enclosure + hardware reference volumes)
-    assy = cq.Assembly(name="RTK_Rover_OptionA")
-    for name, solid in parts.items():
-        assy.add(solid, name=name)
-    for mname, solid in mods.items():
-        if mname != "waveshare_stp":
-            assy.add(solid, name=f"REF_{mname}")
-    assy_p = STEP_DIR / "RTK_Rover_Assembly.step"
-    assy.export(str(assy_p))
-    print(f"Exported Assembly STEP: {assy_p.name} ({assy_p.stat().st_size} B)")
+    print("\n--- Exporting B-Rep STEP & Print-Ready STL Files ---")
+    for name, shp in parts.items():
+        step_path = STEP_DIR / f"{name}.step"
+        cq.exporters.export(shp, str(step_path))
+        print(f"  Exported STEP -> {step_path.name}")
 
-    # Export print-ready STLs oriented flat on build plate (zero supports)
-    print_map = {
-        "Front_Shell": (parts["Front_Shell"], True, 0.0),
-        "Mid_Frame_Sled": (parts["Mid_Frame_Sled"], False, 0.0),
-        "Rear_Cover": (parts["Rear_Cover"], False, 0.0),
-        "Pole_Adapter_Plate": (parts["Pole_Adapter_Plate"], True, 0.0),
-        "Sun_Shield": (parts["Sun_Shield"], False, 0.0),
-        "Button_Plungers": (parts["Button_Plungers"], False, -90.0),
-    }
-    for name, (solid, flip, rot_y) in print_map.items():
-        pr_solid = orient_for_print(solid, flip_x180=flip, rot_y_deg=rot_y)
-        stl_p = STL_DIR / f"{name}_print.stl"
-        pr_solid.export(str(stl_p))
-        bb = pr_solid.val().BoundingBox()
-        print(f"Exported STL: {stl_p.name} ({stl_p.stat().st_size} B) "
-              f"size=({bb.xlen:.1f} x {bb.ylen:.1f} x {bb.zlen:.1f} mm)")
+    stl_map = [
+        ("Back_Chassis_Frame",   "back_chassis_print.stl",    "back_down"),
+        ("Top_Cover",            "top_cover_print.stl",       "face_down"),
+        ("Battery_Cradle_5000",  "bat_cradle_5000_print.stl", "face_down"),
+        ("Pole_Lid_5000",        "pole_lid_5000_print.stl",   "face_down"),
+        ("Battery_Cradle_10000", "bat_cradle_10000_print.stl","face_down"),
+        ("Pole_Lid_10000",       "pole_lid_10000_print.stl",  "face_down"),
+        ("Slim_Sun_Shield",      "slim_sun_shield_print.stl", "back_down"),
+        ("Button_Plungers",      "button_plungers_print.stl", "plunger_flat"),
+    ]
+    for name, stl_name, orient in stl_map:
+        stl_path = STL_DIR / stl_name
+        p_shp = to_print_bed(parts[name], orient)
+        cq.exporters.export(p_shp, str(stl_path), tolerance=0.05, angularTolerance=0.1)
+        print(f"  Exported STL  -> {stl_name}")
 
-    dxf_p = export_dxf_2d()
-    print(f"Exported DXF: {dxf_p.name} ({dxf_p.stat().st_size} B)")
+    # Export full SolidEdge B-Rep assemblies (5000 mAh & 10000 mAh) with real REF-*.stp hardware
+    for variant, bat_key, cradle_key, lid_key in [
+        ("5000mAh", "bat5000", "Battery_Cradle_5000", "Pole_Lid_5000"),
+        ("10000mAh", "bat10000", "Battery_Cradle_10000", "Pole_Lid_10000"),
+    ]:
+        assy = cq.Assembly(name=f"RTK_Rover_Assembly_{variant}")
+        for pname, color in [
+            ("Back_Chassis_Frame", cq.Color(0.22, 0.25, 0.29, 1.0)),
+            ("Top_Cover",          cq.Color(0.28, 0.34, 0.42, 0.92)),
+            (cradle_key,           cq.Color(0.18, 0.22, 0.27, 1.0)),
+            (lid_key,              cq.Color(0.14, 0.17, 0.21, 1.0)),
+            ("Slim_Sun_Shield",    cq.Color(0.12, 0.14, 0.17, 1.0)),
+            ("Button_Plungers",    cq.Color(0.90, 0.45, 0.10, 1.0)),
+        ]:
+            assy.add(parts[pname], name=pname, color=color)
+        for rname, rcolor in [
+            ("waveshare", cq.Color(0.08, 0.35, 0.25, 1.0)),
+            ("um982",     cq.Color(0.10, 0.10, 0.12, 1.0)),
+            ("e220",      cq.Color(0.12, 0.42, 0.22, 1.0)),
+            ("power",     cq.Color(0.12, 0.28, 0.55, 1.0)),
+            ("speaker",   cq.Color(0.18, 0.18, 0.18, 1.0)),
+            ("coin_cell", cq.Color(0.85, 0.72, 0.15, 1.0)),
+            ("gx12",      cq.Color(0.75, 0.76, 0.78, 1.0)),
+            ("sma",       cq.Color(0.82, 0.65, 0.18, 1.0)),
+            (bat_key,     cq.Color(0.85, 0.70, 0.10, 1.0)),
+        ]:
+            assy.add(refs[rname], name=f"REF_{rname}", color=rcolor)
+        assy_path = STEP_DIR / f"RTK_Rover_Assembly_{variant}.step"
+        assy.export(str(assy_path))
+        print(f"  Exported ASSY -> {assy_path.name}")
 
-    if issues:
-        print("INTERFERENCE DETECTED:")
-        for i in issues:
-            print(" ", i)
-        return 1
-    return 0
+    export_2d_dxf(DXF_DIR / "RTK_Rover_Interfaces_2D.dxf")
+    print("\n=== ALL CAD v2.0.0 CHECKS & EXPORTS PASSED! ===")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

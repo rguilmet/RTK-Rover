@@ -5,6 +5,15 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.0] - 2026-11-20
+### Changed & Redesigned
+- **Open-Frame Back Chassis, Lift-Off Cover, Option B2 Swappable Pods & Option H1 Slim Visor ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Redesigned the enclosure (`120.0 x 180.0 x 28.0 mm` main electronics chassis — `11.3 mm` thinner than `v1.1.0`) directly around the `11` hardware reference STEP models (`step/REF-*.stp`), verifying `0.0000 mm^3` boolean overlap across all `11` printed-part pairs and all `22` printed-vs-real-STEP hardware checks.
+  - **`Back_Chassis_Frame` (All Modules + Bulkheads Integrated):** Mounts `Waveshare 3.5B`, under-display `RTC Coin Cell` C-clip cradle (`X = +18.5, Y = 46.0`), `Holybro UM982`, `E220` LoRa, `Power Board`, and flat lower-left `Speaker` pedestal onto one rear chassis tray with an integral **Top L-Wall** (`GX-12`, `E220 SMA`, `UM982 SMAs` with 45-deg self-supporting teardrops) and integral **Right Plunger & MicroSD Flange** carrying `3` captive 45-deg tactile plungers (`Button_Plungers`).
+  - **Clean Lift-Off `Top_Cover` (`6` Symmetric Front-Entry `M3` Screws):** Houses zero components/connectors — only the flush `R3.0` glass bezel (`Waveshare` exact corner radius), gabled `USB-C` cutout, speaker acoustic grille slots, `4` `UM982` LED light pipes + `SWITCH` pinhole, and `Option H1` bezel U-groove — notched cleanly so it lifts straight off without disturbing wiring or antennas.
+  - **Option B2 Swappable External Battery/Pole Pods (`5000 mAh` & `10000 mAh`):** 2-piece support-free flat-bed cradles (`Battery_Cradle_5000`/`10000`) and twin `1/4"-20` Ruthex lids (`Pole_Lid_5000`/`10000`) sharing a `4 x M3` (`80 x 100 mm`) rear mount and `9 x 14 mm` stadium battery JST pass-through slot.
+  - **Option H1 `Slim_Sun_Shield`:** `1.6 mm` PETG tapered U-visor plugging flush into the reinforced `1.9 x 1.8 mm` `Top_Cover` groove (eliminating magnets and side bosses); moved binary SolidEdge `.par`/`.asm`/`.cfg`/`.log` and `REF-*.stl` artifacts to `RTK_Rover_Private/save/mechanical/cad_ref/`.
+
 ## [docs/mechanical/cad v1.1.0] - 2026-11-18
 ### Changed & Fixed
 - **Sun_Shield Right-Side Flush Fit, Rear-Cover Power Board Mount & Symmetric Top-Left Corner Screw ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v1.1.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v1.1.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
