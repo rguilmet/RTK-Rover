@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.0.5 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.0.5
+// RTK Rover Option A Enclosure v2.0.6 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.0.6
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -115,15 +115,17 @@ E220_CX = -7.20; E220_CY = 134.00;
 E220_STANDOFF_H = 3.05;
 E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
 
-// --- GX-12 Compass Bulkhead ---
+// --- GX-12 Compass Bulkhead & Top L-Wall Span ---
+TOP_L_WALL_HALF_W = 50.0;
 GX12_X = -39.50; GX12_Z = -14.00; GX12_HOLE_DIA = 12.2; GX12_NUT_RECESS_DIA = 17.5; GX12_WALL = 2.6;
 
 // --- Closure (6 Symmetric Front M3) & Rear Pod (4 M3) ---
 COVER_M3_POINTS = [
     [-54.2,   6.8], [ 54.2,   6.8],
     [-54.1, 108.0], [ 54.1, 108.0],
-    [-54.4, 173.4], [ 54.4, 173.4]
+    [-54.2, 173.2], [ 54.2, 173.2]
 ];
+COVER_BOSS_Z_TOP = -2.65;
 POD_CX = 2.0; POD_CY = 92.0;
 POD_M3_DX = 80.0; POD_M3_DY = 100.0;
 POD_M3_POINTS = [
@@ -210,17 +212,9 @@ module back_chassis_frame() {
         union() {
             // Base plate
             rrect(CASE_W, CASE_H, WALL_BACK, CORNER_R, 0, CASE_H/2, Z_PLATE_OUTER);
-            // Integral Top L-Wall Bulkhead
-            intersection() {
-                rrect(CASE_W, CASE_H, 25.35, CORNER_R, 0, CASE_H/2, Z_PLATE_OUTER);
-                union() {
-                    translate([0, CASE_H - WALL_TOP/2, Z_PLATE_OUTER + 25.35/2])
-                        cube([CASE_W + 2, WALL_TOP, 25.35], center=true);
-                    for (sg = [-1, 1])
-                        translate([sg * (CASE_W/2 - 4.7), 173.0, Z_PLATE_OUTER + 25.35/2])
-                            cube([9.4, 8.2, 25.35], center=true);
-                }
-            }
+            // Integral Top L-Wall Bulkhead (X = -50..+50, leaving top-corner M3 bosses open)
+            translate([0, CASE_H - WALL_TOP/2, Z_PLATE_OUTER + 25.35/2])
+                cube([2*TOP_L_WALL_HALF_W, WALL_TOP, 25.35], center=true);
             // Right Button-Plunger Flange + outer stop block + low bottom support rail (open to -X)
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
@@ -237,11 +231,10 @@ module back_chassis_frame() {
                       [-10.0,  4.0, 12.0, 1.6], [ 42.0,   4.0, 10.0, 1.6]])
                 translate([t[0], t[1], Z_PLATE_INNER + 1.8])
                     cube([t[2], t[3], 4.2], center=true);
-            // Lower/Mid Cover M3 bosses
+            // Symmetric 6 x Cover M3 bosses (full height up to COVER_BOSS_Z_TOP = -2.65)
             for (p = COVER_M3_POINTS)
-                if (p[1] < 165.0)
-                    translate([p[0], p[1], Z_PLATE_OUTER + 0.5])
-                        cylinder(d=RUTHEX_M3_BOSS, h=-13.2 - Z_PLATE_OUTER - 0.5);
+                translate([p[0], p[1], Z_PLATE_OUTER + 0.5])
+                    cylinder(d=RUTHEX_M3_BOSS, h=COVER_BOSS_Z_TOP - Z_PLATE_OUTER - 0.5);
             // Rear Option B2 Pod M3 bosses
             for (p = POD_M3_POINTS)
                 translate([p[0], p[1], Z_PLATE_OUTER])
@@ -278,15 +271,10 @@ module back_chassis_frame() {
             cube([9.0, 4.0, 5.0], center=true);
         rrect(SPK_W + 0.4 - 2*SPK_RIDGE_W, SPK_H + 0.4 - 2*SPK_RIDGE_W, SPK_PEDESTAL_H + 5.0, 2.0,
               SPK_CX, SPK_CY, Z_PLATE_INNER);
-        // Top corner sockets & M3 bores
-        for (p = COVER_M3_POINTS) {
-            if (p[1] > 165.0) {
-                translate([p[0], p[1], -13.2]) cylinder(d=8.1, h=11.5);
-                translate([p[0], p[1], -13.2 - RUTHEX_M3_DEPTH - 0.3]) cylinder(d=RUTHEX_M3_OD, h=RUTHEX_M3_DEPTH + 0.6);
-            } else {
-                translate([p[0], p[1], -13.2 - RUTHEX_M3_DEPTH - 0.3]) cylinder(d=RUTHEX_M3_OD, h=RUTHEX_M3_DEPTH + 0.6);
-            }
-        }
+        // Symmetric 6 x M3 Ruthex insert bores in full-height Cover M3 bosses
+        for (p = COVER_M3_POINTS)
+            translate([p[0], p[1], COVER_BOSS_Z_TOP - (RUTHEX_M3_DEPTH + 1.3)])
+                cylinder(d=RUTHEX_M3_OD, h=RUTHEX_M3_DEPTH + 1.6);
         for (p = POD_M3_POINTS)
             translate([p[0], p[1], Z_PLATE_OUTER - 0.3]) cylinder(d=RUTHEX_M3_OD, h=RUTHEX_M3_DEPTH + 0.5);
         // M2 thru CSK holes for Waveshare & UM982 + Ruthex M2 bores for PB & E220
@@ -303,7 +291,8 @@ module back_chassis_frame() {
         // Battery JST pass-through slot
         rrect(BAT_SLOT_W, BAT_SLOT_H, WALL_BACK + 1.0, 4.4, BAT_SLOT_CX, BAT_SLOT_CY, Z_PLATE_OUTER - 0.5);
         // UM982 L-wall recess & crown bores (E220 SMA w/ downward -Z_asm anti-rotation D-flat)
-        translate([UM_CX, 177.25, Z_PLATE_INNER + 12.5]) cube([UM_W + 0.6, 1.50, 25.0], center=true);
+        translate([0.5*((UM_LEFT_X - 0.30) + (TOP_L_WALL_HALF_W + 0.20)), 177.25, Z_PLATE_INNER + 12.5])
+            cube([(TOP_L_WALL_HALF_W + 0.20) - (UM_LEFT_X - 0.30), 1.50, 25.0], center=true);
         round_y_bore(GX12_X, 176.5, 4.5, GX12_Z, GX12_HOLE_DIA);
         round_y_bore(GX12_X, 174.0, 180.0 - GX12_WALL - 174.0, GX12_Z, GX12_NUT_RECESS_DIA);
         d_flat_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA, E220_SMA_FLAT, false);
@@ -335,16 +324,9 @@ module top_cover() {
                 // Interior cavity
                 rrect(CASE_W - 2*WALL_SIDE, CASE_H - WALL_BOT - WALL_TOP, cover_depth - WALL_FRONT + 0.5,
                       max(1.5, CORNER_R - WALL_SIDE), 0, CASE_H/2, z_bot - 0.5);
-                // Boss relief pockets below -13.0 in walls
-                for (p = COVER_M3_POINTS)
-                    if (p[1] < 165.0)
-                        translate([p[0], p[1], z_bot - 0.5]) cylinder(d=8.2, h=cover_depth - 13.0 + 0.5);
-                // Top L-wall crown & corner notches (straight +Z lift-off!)
+                // Top L-wall crown notch (X = -50.20..+50.20, keeps continuous R6 corners & straight +Z lift-off)
                 translate([0, 178.7, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-                    cube([CASE_W + 2, 4.0, cover_depth - WALL_FRONT + 0.5], center=true);
-                for (sg = [-1, 1])
-                    translate([sg * (CASE_W/2 - 5.2), 173.0, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-                        cube([11.0, 8.4, cover_depth - WALL_FRONT + 0.5], center=true);
+                    cube([2*(TOP_L_WALL_HALF_W + NOTCH_CLEAR), 4.0, cover_depth - WALL_FRONT + 0.5], center=true);
                 // Right Flange notch
                 translate([CASE_W/2 - 1.2, 0.5*(FLANGE_Y0+FLANGE_Y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
                     cube([WALL_SIDE + 2.0, (FLANGE_Y1 - FLANGE_Y0) + 2*NOTCH_CLEAR, cover_depth - WALL_FRONT + 0.5], center=true);
@@ -356,10 +338,10 @@ module top_cover() {
             // Downward inverted-U plunger capture comb (slots open UP when printing face-down)
             translate([comb_cx, comb_cy, 0.5*(PLUNGER_U_Z_BOT - 2.0)])
                 cube([comb_w, comb_h, -2.0 - PLUNGER_U_Z_BOT], center=true);
-            // 6 x Cover M3 Screw Columns down to -13.0
-            for (p = COVER_M3_POINTS)
-                translate([p[0], p[1], -13.0]) cylinder(d=7.6, h=12.5);
         }
+        // Full-height boss relief pockets (Z = -24.85..Z_FRONT_INNER = -2.40) around all 6 Back_Chassis_Frame M3 bosses
+        for (p = COVER_M3_POINTS)
+            translate([p[0], p[1], z_bot - 0.5]) cylinder(d=8.2, h=cover_depth - WALL_FRONT + 0.5);
         // Downward-open U-slots in capture comb
         for (by = WS_BTN_Y_LIST) {
             translate([PLUNGER_U_X0 - 0.5, by, WS_BTN_Z_CTR])
@@ -367,9 +349,9 @@ module top_cover() {
             translate([comb_cx, by, 0.5*(PLUNGER_U_Z_BOT - 0.5 + WS_BTN_Z_CTR)])
                 cube([comb_w + 1.0, PLUNGER_U_SLOT_W, WS_BTN_Z_CTR - (PLUNGER_U_Z_BOT - 0.5)], center=true);
         }
-        // Front CSK M3 thru holes
+        // Front CSK M3 thru holes through 2.40 mm faceplate
         for (p = COVER_M3_POINTS)
-            csk_through(p[0], p[1], -13.0, 13.0, HOLE_CLEAR_M3, 6.2, false);
+            csk_through(p[0], p[1], Z_FRONT_INNER, WALL_FRONT, HOLE_CLEAR_M3, 6.2, false);
         // Recessed Option H1 Sun Shield U-groove
         translate([SHIELD_U_X_LEFT, u_cy, -SHIELD_GROOVE_D/2 + 0.1])
             cube([SHIELD_GROOVE_W, u_h + SHIELD_GROOVE_W, SHIELD_GROOVE_D + 0.2], center=true);

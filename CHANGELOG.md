@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.6] - 2026-11-20
+### Changed & Fixed
+- **Full-Height Open-Top Cover M3 Bosses & Unobstructed Top Corners ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.6`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.6`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.0.6`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Narrowed `Back_Chassis_Frame`'s integral Top L-Wall crown to `TOP_L_WALL_HALF_W = 50.0 mm` (`X = [-50.0, +50.0]`, extending `um_recess` to `X = +50.20`), removed the enclosing top-corner socket blocks and `Top_Cover` corner notches (restoring continuous `R6.0` outer walls on `Top_Cover`), and aligned the top-corner screws symmetrically at `(-54.2, 173.2)` and `(+54.2, 173.2)`.
+  - Extended all `6` `Back_Chassis_Frame` cover `M3` Ruthex bosses (`88.23 cm^3`) uniformly up to `COVER_BOSS_Z_TOP = -2.65 mm` (`0.25 mm` clamping clearance behind `Top_Cover` inside face `-2.40 mm`, with `8.0 mm` deep bores for `M3 x 8/10 mm CSK` screws), removed hanging `Top_Cover` screw columns, and extended `Dia 8.2 mm` wall relief pockets cleanly behind the faceplate (`66.41 cm^3`).
+  - Verified **`0.0000 mm^3` overlap** for a `Dia 14.0 mm` vertical soldering iron barrel above all `6` M3 bosses, `0.0000 mm^3` across all `33` boolean audit pairs, and clean OpenSCAD `Manifold --hardwarnings` builds.
+
 ## [docs/mechanical/cad v2.0.5] - 2026-11-20
 ### Changed & Fixed
 - **Power Board `+0.50 mm` Standoffs (`5.0 mm` Ruthex M2 Blind Pocket) & `Top_Cover` U-Comb Plunger Capture ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.0.5`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

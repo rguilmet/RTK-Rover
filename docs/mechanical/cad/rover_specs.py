@@ -1,6 +1,6 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.0.5 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.0.6 enclosure.
 
-Architecture (v2.0.5 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
+Architecture (v2.0.6 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
      Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker pocket
@@ -27,7 +27,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.5"
+__version__ = "v2.0.6"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -195,6 +195,8 @@ E220_STANDOFF_H = 3.05      # Flush with -3.00 mm underside trace protrusion (+0
 # ==============================================================================
 # 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall
 # ==============================================================================
+TOP_L_WALL_HALF_W = 50.0    # X = [-50.0, +50.0], clears GX-12 relief (-48.25) & UM982 (+49.0) with open top-corner M3 bosses
+
 # LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, downward -Z_asm anti-rotation D-flat)
 E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
 E220_SMA_Z = UM_SMA_Z       # -11.25
@@ -203,7 +205,7 @@ E220_SMA_FLAT = 5.98        # Across-flat height from +Z crown to -Z flat (flat 
 E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
 
 # GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, Z-centered in main body)
-GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.4) & E220 (-27.2)
+GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.2) & E220 (-27.2)
 GX12_Z = -14.00             # Exact center of 28.0 mm main chassis Z = [0.00, -28.00]
 GX12_HOLE_DIA = 12.2        # Pure round M12 x 0.75 barrel clearance (no teardrop)
 GX12_NUT_RECESS_DIA = 17.5
@@ -217,9 +219,10 @@ COVER_M3_POINTS = [
     ( 54.2,   6.8),         # Bottom-Right corner
     (-54.1, 108.0),         # Mid-Left edge (1.85 mm outside wall; 1.2 mm clear of PB X=-49)
     ( 54.1, 108.0),         # Mid-Right edge (above Right Flange Y=52, above MicroSD Y=85.3, below UM982 Y=124.8)
-    (-54.4, 173.4),         # Top-Left corner (inside Top L-wall corner socket)
-    ( 54.4, 173.4),         # Top-Right corner (inside Top L-wall corner socket)
+    (-54.2, 173.2),         # Top-Left corner (free-standing open-top corner boss matching bottom corners)
+    ( 54.2, 173.2),         # Top-Right corner (free-standing open-top corner boss matching bottom corners)
 ]
+COVER_BOSS_Z_TOP = -2.65    # Full-height boss (0.25 mm clamping gap below Z_FRONT_INNER=-2.40; flush w/ Top L-Wall)
 
 # Shared Option B2 External Battery & Pole Pod Anchor Pattern (Ruthex M3 in Back Plate)
 POD_CX = 2.0                # Centered over main electronics spine

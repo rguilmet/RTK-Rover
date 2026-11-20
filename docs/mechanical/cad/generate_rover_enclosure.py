@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.5.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.6.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -27,7 +27,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.5"
+__version__ = "v2.0.6"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -229,30 +229,16 @@ def build_back_chassis_frame() -> cq.Workplane:
     plate = make_rounded_box(S.CASE_W, S.CASE_H, S.WALL_BACK, S.CORNER_R,
                              cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER)
 
-    # 2. Integrated Top L-Wall Bulkhead (Y = 177.0..180.0, Z = -28.0..-2.65)
-    # Trim inside Top_Cover outer R6 shape so corners stay dead flush.
-    full_wall_envelope = make_rounded_box(S.CASE_W, S.CASE_H, 25.35, S.CORNER_R,
-                                          cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER)
-    top_band = (
+    # 2. Integrated Top L-Wall Bulkhead (X = -TOP_L_WALL_HALF_W..+TOP_L_WALL_HALF_W, Y = 177.0..180.0)
+    # Narrowed cleanly to [-50, +50] so Top-Left & Top-Right M3 bosses stand wide open for soldering iron tips.
+    top_l_wall = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_OUTER)
         .center(0.0, S.CASE_H - S.WALL_TOP / 2.0)
-        .rect(S.CASE_W + 2.0, S.WALL_TOP)
+        .rect(2.0 * S.TOP_L_WALL_HALF_W, S.WALL_TOP)
         .extrude(25.35)
     )
-    top_l_wall = full_wall_envelope.intersect(top_band)
     plate = plate.union(top_l_wall)
-
-    # Corner L-Wall extensions wrapping Top-Left and Top-Right Cover M3 sockets (Y=169.0..177.0)
-    for sign in (-1.0, 1.0):
-        corner_blk = (
-            cq.Workplane("XY")
-            .workplane(offset=S.Z_PLATE_OUTER)
-            .center(sign * (S.CASE_W / 2.0 - 4.7), 173.0)
-            .rect(9.4, 8.2)
-            .extrude(25.35)
-        ).intersect(full_wall_envelope)
-        plate = plate.union(corner_blk)
 
     # 3. Integrated Right Button-Plunger Flange (X = 57.0..60.0, Y = 20.0..52.0)
     flange_cy = 0.5 * (S.FLANGE_Y0 + S.FLANGE_Y1)
@@ -306,40 +292,19 @@ def build_back_chassis_frame() -> cq.Workplane:
         )
         plate = plate.union(tab)
 
-    # 5. Symmetric 6 x Front-Entry M3 Closure Bosses (Top_Cover columns drop to -13.0 -> boss top -13.2)
-    # Bottom & Mid bosses rise Z=-25.0..-13.2 (h=14.8 from -28.0); Top corner sockets bored in L-wall!
-    boss_z_top = -13.2
+    # 5. Symmetric 6 x Front-Entry M3 Closure Bosses (full-height to Z=-2.65, 0.25 mm below Top_Cover inner face)
+    # All 6 bosses stand flush with Top L-Wall / Right Flange for unobstructed top-level soldering-iron access.
+    boss_z_top = S.COVER_BOSS_Z_TOP
     csk_holes = []
     for mx, my in S.COVER_M3_POINTS:
-        is_top_corner = my > 165.0
-        if is_top_corner:
-            # Cut upper socket cylinder Dia 8.1 mm from Z=-2.4 down to boss_z_top=-13.2 for Top_Cover tube
-            sock = (
-                cq.Workplane("XY")
-                .workplane(offset=boss_z_top)
-                .center(mx, my)
-                .circle(4.05)
-                .extrude(11.5)
-            )
-            plate = plate.cut(sock)
-            # Drill M3 Ruthex insert bore from boss_z_top=-13.2 down 7.0 mm (leaves 7.8 mm closed floor)
-            bore = (
-                cq.Workplane("XY")
-                .workplane(offset=boss_z_top - S.RUTHEX_M3_DEPTH - 0.3)
-                .center(mx, my)
-                .circle(S.RUTHEX_M3_OD / 2.0)
-                .extrude(S.RUTHEX_M3_DEPTH + 0.6)
-            )
-            csk_holes.append(bore)
-        else:
-            b, bore = make_ruthex_boss(
-                mx, my, z_base=S.Z_PLATE_OUTER + 0.5,
-                boss_h=(boss_z_top - S.Z_PLATE_OUTER - 0.5),
-                boss_od=S.RUTHEX_M3_BOSS_OD, hole_od=S.RUTHEX_M3_OD,
-                hole_depth=S.RUTHEX_M3_DEPTH + 0.3, open_at_top=True,
-            )
-            plate = plate.union(b)
-            csk_holes.append(bore)
+        b, bore = make_ruthex_boss(
+            mx, my, z_base=S.Z_PLATE_OUTER + 0.5,
+            boss_h=(boss_z_top - S.Z_PLATE_OUTER - 0.5),
+            boss_od=S.RUTHEX_M3_BOSS_OD, hole_od=S.RUTHEX_M3_OD,
+            hole_depth=S.RUTHEX_M3_DEPTH + 1.3, open_at_top=True,
+        )
+        plate = plate.union(b)
+        csk_holes.append(bore)
     for bore in csk_holes:
         plate = plate.cut(bore)
 
@@ -503,11 +468,13 @@ def build_back_chassis_frame() -> cq.Workplane:
 
     # 13b. Top L-Wall Bulkhead Cutouts (UM982 local 2.0 mm roof web, GX-12, E220 SMA, UM982 SMAs)
     # NOTE: peak_at_plus_z=True because Back_Chassis_Frame prints back-down on Z=-28!
+    um_rec_x0 = S.UM_LEFT_X - 0.30
+    um_rec_x1 = S.TOP_L_WALL_HALF_W + 0.20
     um_recess = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_INNER)
-        .center(S.UM_CX, 177.25)
-        .rect(S.UM_W + 0.6, 1.50)
+        .center(0.5 * (um_rec_x0 + um_rec_x1), 177.25)
+        .rect(um_rec_x1 - um_rec_x0, 1.50)
         .extrude(25.0)
     )
     plate = plate.cut(um_recess)
@@ -581,25 +548,16 @@ def build_top_cover() -> cq.Workplane:
                               cx=0.0, cy=case_cy, z_min=z_cover_bot - 0.5)
     cover = outer.cut(cavity)
 
-    # Notch out Top L-Wall crown (Y = 176.8..180.5) & Top Corner sockets (Y = 168.8..177.2)
-    # behind Z_FRONT_INNER (-2.4) so Top_Cover lifts STRAIGHT UP off bulkhead connectors!
+    # Notch out Top L-Wall crown (X = -50.20..+50.20, Y = 176.8..180.5) behind Z_FRONT_INNER (-2.4)
+    # so Top_Cover keeps continuous outer R6 side walls at top corners and lifts STRAIGHT UP!
     top_notch = (
         cq.Workplane("XY")
         .workplane(offset=z_cover_bot - 0.5)
         .center(0.0, 178.7)
-        .rect(S.CASE_W + 2.0, 4.0)
+        .rect(2.0 * (S.TOP_L_WALL_HALF_W + S.NOTCH_CLEAR), 4.0)
         .extrude(cover_depth - S.WALL_FRONT + 0.5)
     )
     cover = cover.cut(top_notch)
-    for sign in (-1.0, 1.0):
-        corner_notch = (
-            cq.Workplane("XY")
-            .workplane(offset=z_cover_bot - 0.5)
-            .center(sign * (S.CASE_W / 2.0 - 5.2), 173.0)
-            .rect(11.0, 8.4)
-            .extrude(cover_depth - S.WALL_FRONT + 0.5)
-        )
-        cover = cover.cut(corner_notch)
 
     # Notch out Right Button-Plunger Flange window (Y = 19.8..52.2)
     right_notch = (
@@ -684,30 +642,20 @@ def build_top_cover() -> cq.Workplane:
     )
     cover = cover.cut(left_grv).cut(right_grv).cut(top_grv)
 
-    # 6 x Symmetric Front-Entry M3 Screw Landing Columns (extend Z=0.0 down to -13.0 mm)
-    # Below Z=-13.0, cut Dia 8.2 mm wall relief around lower/mid Back_Chassis_Frame M3 bosses.
-    col_len = 13.0
+    # 6 x Symmetric Front-Entry M3 Boss Wall Relief Pockets (Z = -24.85..Z_FRONT_INNER=-2.40) + Faceplate CSK
+    # All 6 full-height Back_Chassis_Frame bosses seat cleanly up behind the 2.40 mm faceplate (M3 x 8/10 CSK).
     for mx, my in S.COVER_M3_POINTS:
-        if my < 165.0:
-            boss_pocket = (
-                cq.Workplane("XY")
-                .workplane(offset=z_cover_bot - 0.5)
-                .center(mx, my)
-                .circle(4.10)
-                .extrude((abs(z_cover_bot) - col_len) + 0.5)
-            )
-            cover = cover.cut(boss_pocket)
-        col = (
+        boss_pocket = (
             cq.Workplane("XY")
-            .workplane(offset=-col_len)
+            .workplane(offset=z_cover_bot - 0.5)
             .center(mx, my)
-            .circle(3.8)
-            .extrude(col_len - 0.5)
+            .circle(4.10)
+            .extrude((abs(z_cover_bot) - S.WALL_FRONT) + 0.5)
         )
-        cover = cover.union(col)
+        cover = cover.cut(boss_pocket)
 
     for mx, my in S.COVER_M3_POINTS:
-        csk = make_csk_cone_through(mx, my, z_bed=-col_len, plate_thk=col_len,
+        csk = make_csk_cone_through(mx, my, z_bed=S.Z_FRONT_INNER, plate_thk=S.WALL_FRONT,
                                     hole_d=S.HOLE_CLEAR_M3, head_d=6.2, cone_from_bed=False)
         cover = cover.cut(csk)
 
