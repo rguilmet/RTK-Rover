@@ -1,20 +1,21 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.1.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.2.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
-    underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board w/
-    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), full-width
-    R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0 (Z-centered
-    GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), Right Button-Plunger Flange +
-    low support rail, and 6 open-top full-height M3 bosses (Z = -2.65 mm).
+    underneath RTC Coin Cell + holder at Y = 64.0, Holybro UM982, E220 LoRa, Power
+    Board w/ 5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame),
+    full-width R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0
+    (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), Right Button-Plunger
+    Flange + low support rail, 6 open-top full-height M3 bosses (Z = -2.65 mm), and
+    relocated horizontal under-Waveshare BAT_SLOT (25.0, 35.5).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
     downward inverted-U plunger capture comb, and matching lower-half top-corner
     wrap (Y <= 173.0) with continuous front faceplate.
   - Standardized Option B2 Pod (10000 mAh Footprint + Capture Corner + 5000 mAh Adapter):
-    One skeletonized Battery_Cradle (w/ integral Bottom-Right Capture Corner opposite
-    the Bottom-Left cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
+    One skeletonized Battery_Cradle (w/ integral Bottom-Left Capture Corner opposite
+    the Bottom-Right cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
     plus removable skeletonized L-truss Battery_Adapter_5000 insert.
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
@@ -30,7 +31,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.1"
+__version__ = "v2.1.2"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -763,7 +764,7 @@ def build_battery_pod() -> tuple[cq.Workplane, cq.Workplane]:
 
     Battery_Cradle features a 2.0 mm outer frame, 2.0 mm continuous inner LiPo bay,
     4 x Dia 8.6 mm M3 sleeves, a 1.8 mm interlocking Warren-truss web, and an
-    integral Bottom-Right Capture Corner opposite the shared Bottom-Left cable exit.
+    integral Bottom-Left Capture Corner opposite the shared Bottom-Right cable exit.
     Pole_Lid stays a solid 3.0 mm plate sealing the truss and carrying twin 1/4"-20
     Ruthex inserts at 38.1 mm pitch.
     """
@@ -875,10 +876,10 @@ def build_battery_pod() -> tuple[cq.Workplane, cq.Workplane]:
 
     cradle = cradle.union(web.intersect(annulus)).cut(inner_void)
 
-    # Integral Bottom-Right Battery Capture Corner (X=[16.0, +34.25], Y=[31.0, 38.75])
-    # Supports bottom-right of both 10000 and 5000 mAh cells while leaving bottom-left open for JST wires.
-    cap_x0 = S.POD_CAPTURE_X0
-    cap_x1 = S.POD_CX + bay_w / 2.0 + 0.5
+    # Integral Bottom-Left Battery Capture Corner (X=[-30.25, -12.0], Y=[31.0, 38.75])
+    # Supports bottom-left of both 10000 and 5000 mAh cells while leaving bottom-right open under Waveshare for JST wires.
+    cap_x0 = (S.POD_CX - bay_w / 2.0) - 0.5
+    cap_x1 = S.POD_CAPTURE_X1
     cap_y0 = (bay_cy - bay_h / 2.0) - 0.5
     cap_y1 = S.POD_CAPTURE_Y1
     capture = make_rounded_box(
@@ -949,7 +950,7 @@ def build_battery_adapter_5000() -> cq.Workplane:
     ad_xr = (S.POD_CX + bay_w / 2.0) - slip
     ad_yb = S.POD_CAPTURE_Y1 + slip
     ad_yt = (bay_cy + bay_h / 2.0) - slip
-    p5_xr = S.BAT5_POCKET_X1
+    p5_xl = S.BAT5_POCKET_X0
     p5_yt = S.BAT5_POCKET_Y1
 
     env_full = make_rounded_box(
@@ -963,24 +964,24 @@ def build_battery_adapter_5000() -> cq.Workplane:
         .rect(ad_xr - ad_xl, ad_yt - p5_yt)
         .extrude(ad_h)
     )
-    l_right = (
+    l_left = (
         cq.Workplane("XY")
         .workplane(offset=ad_z0)
-        .center(0.5 * (p5_xr + ad_xr), 0.5 * (ad_yb + p5_yt + wall))
-        .rect(ad_xr - p5_xr, (p5_yt + wall) - ad_yb)
+        .center(0.5 * (ad_xl + p5_xl), 0.5 * (ad_yb + p5_yt + wall))
+        .rect(p5_xl - ad_xl, (p5_yt + wall) - ad_yb)
         .extrude(ad_h)
     )
-    l_solid = l_top.union(l_right).intersect(env_full)
+    l_solid = l_top.union(l_left).intersect(env_full)
 
     top_cut = make_rounded_box(
         (ad_xr - ad_xl) - 2.0 * wall, (ad_yt - p5_yt) - 2.0 * wall, ad_h + 1.0, radius=1.5,
         cx=0.5 * (ad_xl + ad_xr), cy=0.5 * (p5_yt + ad_yt), z_min=ad_z0 - 0.5
     )
-    right_cut = make_rounded_box(
-        (ad_xr - p5_xr) - 2.0 * wall, (p5_yt - ad_yb) - 2.0 * wall, ad_h + 1.0, radius=1.0,
-        cx=0.5 * (p5_xr + ad_xr), cy=0.5 * (ad_yb + p5_yt), z_min=ad_z0 - 0.5
+    left_cut = make_rounded_box(
+        (p5_xl - ad_xl) - 2.0 * wall, (p5_yt - ad_yb) - 2.0 * wall, ad_h + 1.0, radius=1.0,
+        cx=0.5 * (ad_xl + p5_xl), cy=0.5 * (ad_yb + p5_yt), z_min=ad_z0 - 0.5
     )
-    adapter = l_solid.cut(top_cut).cut(right_cut)
+    adapter = l_solid.cut(top_cut).cut(left_cut)
 
     def make_ad_strut(x0: float, y0: float, x1: float, y1: float) -> cq.Workplane:
         length = math.hypot(x1 - x0, y1 - y0) + web_t
@@ -1004,7 +1005,7 @@ def build_battery_adapter_5000() -> cq.Workplane:
         .union(make_ad_strut(tm, ty0, tx1, ty1))
     )
     for ry in (ad_yb + (p5_yt - ad_yb) / 3.0, ad_yb + 2.0 * (p5_yt - ad_yb) / 3.0):
-        truss = truss.union(make_ad_strut(p5_xr + wall / 2.0, ry, ad_xr - wall / 2.0, ry))
+        truss = truss.union(make_ad_strut(ad_xl + wall / 2.0, ry, p5_xl - wall / 2.0, ry))
 
     return adapter.union(truss.intersect(l_solid))
 
@@ -1167,13 +1168,13 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     sma_rot = sma.translate((-sma_cx, -sma_cy, -2.0)).rotate((0, 0, 0), (1, 0, 0), -90)
     refs["sma"] = sma_rot.translate((S.E220_SMA_X, S.CASE_H - S.E220_SMA_WALL, S.E220_SMA_Z))
 
-    # 9. 5000 mAh LiPo Battery (rotated 180 deg Z, seated in lower-left pocket above Capture Corner)
+    # 9. 5000 mAh LiPo Battery (flipped 180 deg X so wire tab sits bottom-right over BAT_SLOT)
     b5 = cq.importers.importStep(str(REF_FILES["bat5000"]))
     b5b = b5.val().BoundingBox()
-    b5_rot = b5.translate((-0.5 * (b5b.xmin + b5b.xmax), -0.5 * (b5b.ymin + b5b.ymax), -b5b.zmax)).rotate((0, 0, 0), (0, 0, 1), 180)
+    b5_rot = b5.translate((-0.5 * (b5b.xmin + b5b.xmax), -0.5 * (b5b.ymin + b5b.ymax), -0.5 * (b5b.zmin + b5b.zmax))).rotate((0, 0, 0), (1, 0, 0), 180)
     b5rb = b5_rot.val().BoundingBox()
-    # Align X_min=-29.50 & Y_body_min=39.25 (2.0 mm wire tab sits Y=[37.25, 39.25] directly below BAT_SLOT)
-    refs["bat5000"] = b5_rot.translate((-b5rb.xmin - 29.50, -b5rb.ymin + 37.25, S.Z_PLATE_OUTER - 1.5))
+    # Align X_max=+33.50 & Y_body_min=39.25 (2.0 mm wire tab sits X=[28.50, 30.50] Y=[37.25, 39.25] directly over BAT_SLOT)
+    refs["bat5000"] = b5_rot.translate((-b5rb.xmax + 33.50, -b5rb.ymin + 37.25, -b5rb.zmax + S.Z_PLATE_OUTER - 1.5))
 
     # 10. 10000 mAh LiPo Battery (aligned identically at X=-29.50, Y_body_min=39.25, offset 1.5 mm off Back Plate)
     b10 = cq.importers.importStep(str(REF_FILES["bat10000"]))
@@ -1299,25 +1300,25 @@ def export_2d_dxf(path: Path) -> None:
     add_rect(S.UM_CX, S.UM_CY, S.UM_W, S.UM_BODY_H, "MODULES")
     msp.add_circle((S.RTC_CX, S.RTC_CY), 13.25, dxfattribs={"layer": "MODULES"})
 
-    # Battery slot, unified Option B2 pod, Bottom-Right Capture Corner & 5000 mAh adapter pocket
+    # Battery slot, unified Option B2 pod, Bottom-Left Capture Corner & 5000 mAh adapter pocket
     bay_cy = S.POD_CY + 1.0
     add_rect(S.BAT_SLOT_CX, S.BAT_SLOT_CY, S.BAT_SLOT_W, S.BAT_SLOT_H, "POD_B2")
     add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.POD_H, "POD_B2")
     add_rect(S.POD_CX, bay_cy, S.POD_BAY_W, S.POD_BAY_H, "POD_B2")
-    cap_x1 = S.POD_CX + S.POD_BAY_W / 2.0
+    bay_xl = S.POD_CX - S.POD_BAY_W / 2.0
+    bay_xr = S.POD_CX + S.POD_BAY_W / 2.0
     cap_y0 = bay_cy - S.POD_BAY_H / 2.0
     msp.add_lwpolyline([
-        (S.POD_CAPTURE_X0, cap_y0),
-        (cap_x1, cap_y0),
-        (cap_x1, S.POD_CAPTURE_Y1),
-        (S.POD_CAPTURE_X0, S.POD_CAPTURE_Y1),
-    ], close=True, dxfattribs={"layer": "POD_B2"})
-    bay_xl = S.POD_CX - S.POD_BAY_W / 2.0
-    msp.add_lwpolyline([
+        (bay_xl, cap_y0),
+        (S.POD_CAPTURE_X1, cap_y0),
+        (S.POD_CAPTURE_X1, S.POD_CAPTURE_Y1),
         (bay_xl, S.POD_CAPTURE_Y1),
-        (S.BAT5_POCKET_X1, S.POD_CAPTURE_Y1),
-        (S.BAT5_POCKET_X1, S.BAT5_POCKET_Y1),
-        (bay_xl, S.BAT5_POCKET_Y1),
+    ], close=True, dxfattribs={"layer": "POD_B2"})
+    msp.add_lwpolyline([
+        (S.BAT5_POCKET_X0, S.POD_CAPTURE_Y1),
+        (bay_xr, S.POD_CAPTURE_Y1),
+        (bay_xr, S.BAT5_POCKET_Y1),
+        (S.BAT5_POCKET_X0, S.BAT5_POCKET_Y1),
     ], close=True, dxfattribs={"layer": "POD_B2"})
     for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
         msp.add_circle((S.POD_CX, qy), S.RUTHEX_Q20_OD / 2.0, dxfattribs={"layer": "POD_B2"})

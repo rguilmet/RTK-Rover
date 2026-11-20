@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.1 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.1.1
+// RTK Rover Option A Enclosure v2.1.2 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.1.2
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -75,7 +75,7 @@ PLUNGER_U_SLOT_W = 3.70;
 
 // --- RTC Coin Cell (Underneath Waveshare) ---
 RTC_CX = 18.50;
-RTC_CY = 46.00;
+RTC_CY = 64.00;
 
 // --- Power Board (20 x 80 x 20.57H, Back Plate mounted) ---
 PB_W = 20.0; PB_H = 80.0;
@@ -135,16 +135,16 @@ POD_M3_POINTS = [
     [POD_CX - POD_M3_DX/2, POD_CY + POD_M3_DY/2],
     [POD_CX + POD_M3_DX/2, POD_CY + POD_M3_DY/2]
 ];
-BAT_SLOT_CX = -22.5; BAT_SLOT_CY = 45.0; BAT_SLOT_W = 9.0; BAT_SLOT_H = 13.0;
+BAT_SLOT_CX = 25.0; BAT_SLOT_CY = 35.5; BAT_SLOT_W = 13.0; BAT_SLOT_H = 9.0;
 
 POD_OUTER_W = 92.0; POD_OUTER_R = 5.5;
 POD_FRAME_WALL = 2.0; POD_WEB_THK = 1.8; POD_M3_SLEEVE_OD = 8.6;
 POD_FLOOR_THK = 3.0; POD_SPINE_W = 24.0; POD_SPINE_H = 16.2; POLE_Q20_DY = 38.1;
 
 POD_BAY_W = 64.5; POD_BAY_H = 124.0; POD_BAY_D = 12.8; POD_H = 132.0;
-POD_CAPTURE_X0 = 16.0; POD_CAPTURE_Y1 = 38.75;
+POD_CAPTURE_X1 = -12.0; POD_CAPTURE_Y1 = 38.75;
 ADAPTER_SLIP = 0.25; ADAPTER_WALL = 2.0; ADAPTER_WEB_THK = 1.8;
-BAT5_POCKET_X1 = 26.25; BAT5_POCKET_Y1 = 106.00;
+BAT5_POCKET_X0 = -22.25; BAT5_POCKET_Y1 = 106.00;
 
 // --- Option H1 Slim Sun Shield ---
 SHIELD_U_X_LEFT = -15.40;
@@ -432,7 +432,7 @@ module battery_cradle() {
     n_bays = 6;
     y_lo = POD_M3_POINTS[0][1];
     y_hi = POD_M3_POINTS[2][1];
-    cap_x0 = POD_CAPTURE_X0; cap_x1 = POD_CX + bay_w/2 + 0.5;
+    cap_x0 = (POD_CX - bay_w/2) - 0.5; cap_x1 = POD_CAPTURE_X1;
     cap_y0 = (bay_cy - bay_h/2) - 0.5; cap_y1 = POD_CAPTURE_Y1;
 
     difference() {
@@ -494,7 +494,7 @@ module battery_cradle() {
                 }
                 rrect(bay_w, bay_h, bay_d + 1.0, 2.5, POD_CX, bay_cy, z_back - 0.5);
             }
-            // Integral Bottom-Right Battery Capture Corner
+            // Integral Bottom-Left Battery Capture Corner
             intersection() {
                 rrect(cap_x1 - cap_x0, cap_y1 - cap_y0, bay_d, 1.5,
                       0.5*(cap_x0+cap_x1), 0.5*(cap_y0+cap_y1), z_back);
@@ -536,7 +536,7 @@ module battery_adapter_5000() {
     ad_xr = (POD_CX + bay_w/2) - slip;
     ad_yb = POD_CAPTURE_Y1 + slip;
     ad_yt = (bay_cy + bay_h/2) - slip;
-    p5_xr = BAT5_POCKET_X1;
+    p5_xl = BAT5_POCKET_X0;
     p5_yt = BAT5_POCKET_Y1;
     tx0 = ad_xl + wall/2; tx1 = ad_xr - wall/2;
     ty0 = p5_yt + wall/2; ty1 = ad_yt - wall/2;
@@ -550,14 +550,14 @@ module battery_adapter_5000() {
                 union() {
                     translate([0.5*(ad_xl+ad_xr), 0.5*(p5_yt+ad_yt), ad_z0 + ad_h/2])
                         cube([ad_xr - ad_xl, ad_yt - p5_yt, ad_h], center=true);
-                    translate([0.5*(p5_xr+ad_xr), 0.5*(ad_yb+p5_yt+wall), ad_z0 + ad_h/2])
-                        cube([ad_xr - p5_xr, (p5_yt + wall) - ad_yb, ad_h], center=true);
+                    translate([0.5*(ad_xl+p5_xl), 0.5*(ad_yb+p5_yt+wall), ad_z0 + ad_h/2])
+                        cube([p5_xl - ad_xl, (p5_yt + wall) - ad_yb, ad_h], center=true);
                 }
             }
             rrect((ad_xr - ad_xl) - 2*wall, (ad_yt - p5_yt) - 2*wall, ad_h + 1.0, 1.5,
                   0.5*(ad_xl+ad_xr), 0.5*(p5_yt+ad_yt), ad_z0 - 0.5);
-            rrect((ad_xr - p5_xr) - 2*wall, (p5_yt - ad_yb) - 2*wall, ad_h + 1.0, 1.0,
-                  0.5*(p5_xr+ad_xr), 0.5*(ad_yb+p5_yt), ad_z0 - 0.5);
+            rrect((p5_xl - ad_xl) - 2*wall, (p5_yt - ad_yb) - 2*wall, ad_h + 1.0, 1.0,
+                  0.5*(ad_xl+p5_xl), 0.5*(ad_yb+p5_yt), ad_z0 - 0.5);
         }
         intersection() {
             intersection() {
@@ -566,8 +566,8 @@ module battery_adapter_5000() {
                 union() {
                     translate([0.5*(ad_xl+ad_xr), 0.5*(p5_yt+ad_yt), ad_z0 + ad_h/2])
                         cube([ad_xr - ad_xl, ad_yt - p5_yt, ad_h], center=true);
-                    translate([0.5*(p5_xr+ad_xr), 0.5*(ad_yb+p5_yt+wall), ad_z0 + ad_h/2])
-                        cube([ad_xr - p5_xr, (p5_yt + wall) - ad_yb, ad_h], center=true);
+                    translate([0.5*(ad_xl+p5_xl), 0.5*(ad_yb+p5_yt+wall), ad_z0 + ad_h/2])
+                        cube([p5_xl - ad_xl, (p5_yt + wall) - ad_yb, ad_h], center=true);
                 }
             }
             translate([0, 0, ad_z0]) linear_extrude(height=ad_h) union() {
@@ -575,8 +575,8 @@ module battery_adapter_5000() {
                 strut2d(tm, ty1, tx1, ty0, web_t);
                 strut2d(tx0, ty1, tm, ty0, web_t);
                 strut2d(tm, ty0, tx1, ty1, web_t);
-                strut2d(p5_xr + wall/2, ad_yb + (p5_yt - ad_yb)/3, ad_xr - wall/2, ad_yb + (p5_yt - ad_yb)/3, web_t);
-                strut2d(p5_xr + wall/2, ad_yb + 2*(p5_yt - ad_yb)/3, ad_xr - wall/2, ad_yb + 2*(p5_yt - ad_yb)/3, web_t);
+                strut2d(ad_xl + wall/2, ad_yb + (p5_yt - ad_yb)/3, p5_xl - wall/2, ad_yb + (p5_yt - ad_yb)/3, web_t);
+                strut2d(ad_xl + wall/2, ad_yb + 2*(p5_yt - ad_yb)/3, p5_xl - wall/2, ad_yb + 2*(p5_yt - ad_yb)/3, web_t);
             }
         }
     }

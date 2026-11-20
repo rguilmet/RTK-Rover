@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.2] - 2026-11-20
+### Changed & Improved
+- **Left-Right Mirrored Battery Pod / `5000 mAh` Adapter & Under-Waveshare `BAT_SLOT` ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.2`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.2`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.2`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Mirrored [`Battery_Cradle.step`](docs/mechanical/cad/step/Battery_Cradle.step) (`32.14 cm^3`) and [`Battery_Adapter_5000.step`](docs/mechanical/cad/step/Battery_Adapter_5000.step) (`13.90 cm^3`) left-to-right inside the `92 x 132 mm` Option B2 bay (`POD_CAPTURE_X1 = -12.0` **Bottom-Left Capture Corner** behind the Speaker; `BAT5_POCKET_X0 = -22.25` right-aligning the `5000 mAh` cell flush with `10000 mAh` at `X_max = +33.50`) so both cells exit their leads at Bottom-Right (`REF_bat5000` wire stub at `X = 28.50..30.50, Y = 37.25..39.25`).
+  - Relocated and rotated [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`89.81 cm^3`) `BAT_SLOT` to `(25.0, 35.5)` as a horizontal **`13.0 x 9.0 mm` stadium slot** (`X = 18.5..31.5, Y = 31.0..40.0`) directly beneath `Waveshare` and aligned flush with the open lower-right cable pocket (`Y = 31.00..38.75`, clear above the `31.00 mm` bay bottom wall without interference from the lower-left Speaker), and shifted the under-Waveshare RTC Coin Cell cradle up to `RTC_CY = 64.00 mm` (`6.42 mm` clear above `BAT_SLOT`, `8.63 mm` clear below upper `Waveshare` standoffs).
+  - Updated [`RTK_Rover_Interfaces_2D.dxf`](docs/mechanical/cad/dxf/RTK_Rover_Interfaces_2D.dxf), assemblies, STLs, and rendered previews; verified `7/7` manifold checks, **`34/34` `0.0000 mm^3` boolean interference checks**, and clean OpenSCAD `Manifold --hardwarnings` builds on `back_print`, `cradle_print`, and `adapter5_print`.
+
 ## [docs/mechanical/cad v2.1.1] - 2026-11-20
 ### Changed & Fixed
 - **`50/50` Split Top-Corner Post Wrap & Full-Width `R6.0` Top L-Wall Bulkhead ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.1`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.1`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.1`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
