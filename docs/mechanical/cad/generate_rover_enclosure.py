@@ -26,7 +26,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.2"
+__version__ = "v2.0.3"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -449,21 +449,22 @@ def build_back_chassis_frame() -> cq.Workplane:
     for bore in um_bores:
         plate = plate.cut(bore)
 
-    # 12. Speaker Pedestal + Perimeter Cradle (top support at Z = -13.50, notched +Y for wires)
+    # 12. Speaker Open-Center Pocket Frame + 2.0 mm Inner Support Ridge (Z = -13.50, notched +Y)
     spk_ped_top = S.Z_PLATE_INNER + S.SPK_PEDESTAL_H  # -13.50
-    spk_outer = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PLATE_INNER - 0.5)
-        .center(S.SPK_CX, S.SPK_CY)
-        .rect(S.SPK_W + 3.0, S.SPK_H + 3.0)
-        .extrude(S.SPK_PEDESTAL_H + 4.0)
+    spk_seat_w = S.SPK_W + 0.4
+    spk_seat_h = S.SPK_H + 0.4
+    spk_outer = make_rounded_box(
+        spk_seat_w + 2.0 * S.SPK_WALL,
+        spk_seat_h + 2.0 * S.SPK_WALL,
+        S.SPK_PEDESTAL_H + 4.5,
+        radius=2.5,
+        cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_PLATE_INNER - 0.5,
     )
-    # Core out speaker cavity above pedestal top (-13.50) AND lighten base (-23.0..-13.50)
     spk_seat_pocket = (
         cq.Workplane("XY")
         .workplane(offset=spk_ped_top)
         .center(S.SPK_CX, S.SPK_CY)
-        .rect(S.SPK_W + 0.4, S.SPK_H + 0.4)
+        .rect(spk_seat_w, spk_seat_h)
         .extrude(5.0)
     )
     spk_wire_notch = (
@@ -473,14 +474,14 @@ def build_back_chassis_frame() -> cq.Workplane:
         .rect(9.0, 4.0)
         .extrude(5.0)
     )
-    spk_hollow = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PLATE_INNER)
-        .center(S.SPK_CX, S.SPK_CY)
-        .rect(18.0, 18.0)
-        .extrude(S.SPK_PEDESTAL_H - 2.0)
+    spk_center_open = make_rounded_box(
+        spk_seat_w - 2.0 * S.SPK_RIDGE_W,
+        spk_seat_h - 2.0 * S.SPK_RIDGE_W,
+        S.SPK_PEDESTAL_H + 5.0,
+        radius=2.0,
+        cx=S.SPK_CX, cy=S.SPK_CY, z_min=S.Z_PLATE_INNER,
     )
-    spk_cradle = spk_outer.cut(spk_seat_pocket).cut(spk_wire_notch).cut(spk_hollow)
+    spk_cradle = spk_outer.cut(spk_seat_pocket).cut(spk_wire_notch).cut(spk_center_open)
     plate = plate.union(spk_cradle)
 
     # 13. Cutouts on Back Plate & Integral L-Wall & Right Flange

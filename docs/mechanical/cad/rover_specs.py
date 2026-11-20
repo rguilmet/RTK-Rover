@@ -26,7 +26,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.2"
+__version__ = "v2.0.3"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -137,7 +137,9 @@ SPK_H = 28.0
 SPK_Z_THK = 10.0
 SPK_CX = -33.20             # Body X: [-47.20, -19.20]; 2.8+ mm clear of Bot-Left M3 (-50.3) & Header (-16.33)
 SPK_CY = 21.00              # Body Y: [7.00, 35.00], wire bump Y=[35.0, 37.0]; clears Bot-Left Pod M3 (38.1) by 1.1 mm
-SPK_PEDESTAL_H = 11.5       # Pedestal top at Z = -13.50 -> speaker front cone at Z = -3.50 (1.1 mm behind Top_Cover)
+SPK_PEDESTAL_H = 11.5       # Seating ridge at Z = -13.50 -> speaker front cone at Z = -3.50 (1.1 mm behind Top_Cover)
+SPK_WALL = 1.6              # 4-perimeter pocket wall (31.6 x 31.6 outer)
+SPK_RIDGE_W = 2.0           # Continuous inner seating ledge width (24.4 x 24.4 open acoustic chamber)
 
 # ==============================================================================
 # 5. Holybro UM982 (from REF-holybro-um982.stp: 34.8 x 58.9 x 14.4H mm)

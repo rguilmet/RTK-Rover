@@ -1,12 +1,12 @@
-# RTK Rover Option A Mechanical Enclosure CAD (`v2.0.2`)
+# RTK Rover Option A Mechanical Enclosure CAD (`v2.0.3`)
 
 Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + swappable Option B2 **`5000 mAh`** / **`10000 mAh`** external Battery & `1/4"-20` Pole Mount Pods), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
 
-![Exploded CAD assembly of the RTK Rover v2.0.2 enclosure](previews/cad_preview_exploded.png)
+![Exploded CAD assembly of the RTK Rover v2.0.3 enclosure](previews/cad_preview_exploded.png)
 
 ---
 
-## 1. Key Architectural Improvements (`v2.0.0` - `v2.0.2`)
+## 1. Key Architectural Improvements (`v2.0.0` - `v2.0.3`)
 
 1. **Open-Frame Serviceability (`Back_Chassis_Frame` + Clean Lift-Off `Top_Cover`):**
    * **Every electronic module, connector, and tactile plunger** mounts directly to `Back_Chassis_Frame` (`3.0 mm` rear plate + integral right-angle **Top L-Wall** bulkhead + integral right-angle **Button-Plunger & MicroSD Flange**).
@@ -37,8 +37,8 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 | Path | Purpose | Tooling |
 | :--- | :--- | :--- |
-| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.0.2`) | Python / CadQuery |
-| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 33-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.0.2`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
+| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.0.3`) | Python / CadQuery |
+| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 33-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.0.3`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
 | [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` | OpenSCAD `2026.11.18` (`Manifold`) |
 | `step/REF-*.stp` (`12` files) | Exact hardware & battery reference models (including fixed `R6.0` `REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`) | SolidEdge / CadQuery |
 | `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`5000 mAh` pod + all `10` hardware models) | SolidEdge |
@@ -63,7 +63,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
   3. Holybro `UM982` SMAs (`X = +21.45, +41.75 mm`, `20.3 mm` pitch): Pure round `Dia 10.5 mm` crown bores (`2.0 mm` localized web, `4-M2` rear screws on `7.8 mm` standoffs). `Top_Cover` aligns `4 x Dia 1.95 mm` LED light pipes + `Dia 3.4 mm` `SWITCH` pinhole over the label face.
 * **Left Power & Acoustic Stack (`Back_Chassis_Frame`):**
   * `20 x 80 x 20.57H mm` `Power Board` flush on `2.05 mm` `M2` Ruthex standoffs (matching `-2.00 mm` underside trace protrusion; `1.98 mm` top clearance).
-  * Lower-left `28 x 30 x 10H mm` `Speaker` flat on `11.5 mm` ventilated pedestal firing upward (`+Z`) through `5` acoustic grille slots in `Top_Cover`.
+  * Lower-left `28 x 30 x 10H mm` `Speaker` seated inside an open-center **`31.6 x 31.6 mm`** pocket frame (`1.6 mm` wall, **`2.0 mm` continuous inner support ridge** at `Z = -13.50`, open `24.4 x 24.4 mm` center acoustic cavity) firing upward (`+Z`) through `5` acoustic grille slots in `Top_Cover`.
 * **Option B2 External Swappable Pods (`4 x M3` at `80 x 100 mm`, `2 x 1/4"-20` Spine):**
   * Both `Battery_Cradle_5000` (`11.2 mm` bay, **`27.66 cm^3` — `58.1%` lighter** vs. solid flange) and `Battery_Cradle_10000` (`12.8 mm` bay leaving `1.8 mm` wire-routing air/foam clearance behind the cell, **`30.35 cm^3` — `42.0%` lighter**) use a skeletonized `2.0 mm` outer frame + `2.0 mm` continuous inner LiPo wall + `Dia 8.6 mm` `M3` corner sleeves joined by a `1.8 mm` interlocking Warren-truss web (`0` overhang, flat-bed support-free). `Pole_Lid_*` stays a solid `3.0 mm` plate housing twin `1/4"-20` Ruthex inserts at `38.1 mm` (`1.500"`) pitch behind a solid `2.5 mm` closed safety floor.
 

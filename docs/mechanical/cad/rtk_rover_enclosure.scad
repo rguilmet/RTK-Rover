@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.0.2 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.2
+// RTK Rover Option A Enclosure v2.0.3 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.3
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -76,10 +76,10 @@ PB_HOLE_DX = 15.0; PB_HOLE_DY = 75.0;
 PB_CX = -39.00; PB_CY = 91.00;
 PB_STANDOFF_H = 2.05;
 
-// --- Speaker (28 x 30 x 10H, Flat on Back Plate Pedestal) ---
+// --- Speaker (28 x 30 x 10H, Open-Center Pocket Frame & Support Ridge) ---
 SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 10.0;
 SPK_CX = -33.20; SPK_CY = 21.00;
-SPK_PEDESTAL_H = 11.5;
+SPK_PEDESTAL_H = 11.5; SPK_WALL = 1.6; SPK_RIDGE_W = 2.0;
 
 // --- Holybro UM982 (34.8 x 53.2 x 14.4H) ---
 UM_W = 34.80; UM_BODY_H = 53.20; UM_Z_THK = 14.40;
@@ -240,20 +240,20 @@ module back_chassis_frame() {
             for (dx = UM_M2_X_OFFS, dy = UM_M2_Y_OFFS)
                 translate([UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_INNER - 0.5])
                     cylinder(d=5.4, h=(UM_BACK_Z - Z_PLATE_INNER) + 0.5);
-            // Speaker pedestal block
-            translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H + 3.5)/2 - 0.25])
-                cube([SPK_W + 3.0, SPK_H + 3.0, SPK_PEDESTAL_H + 4.0], center=true);
+            // Speaker open-center pocket frame (31.6 x 31.6 mm)
+            rrect(SPK_W + 0.4 + 2*SPK_WALL, SPK_H + 0.4 + 2*SPK_WALL, SPK_PEDESTAL_H + 4.5, 2.5,
+                  SPK_CX, SPK_CY, Z_PLATE_INNER - 0.5);
         }
         // Cut RTC cradle ID + opening
         translate([RTC_CX, RTC_CY + 0.12, Z_PLATE_INNER - 0.6]) cylinder(d=22.5, h=4.8);
         translate([RTC_CX, RTC_CY - 10.2, Z_PLATE_INNER + 1.8]) cube([22.0, 9.6, 4.8], center=true);
-        // Cut Speaker seat & hollow core
+        // Cut Speaker upper seat pocket, +Y wire notch & full-depth hollow acoustic center
         translate([SPK_CX, SPK_CY, Z_PLATE_INNER + SPK_PEDESTAL_H + 2.5])
             cube([SPK_W + 0.4, SPK_H + 0.4, 5.0], center=true);
         translate([SPK_CX, SPK_CY + SPK_H/2 + 1.0, Z_PLATE_INNER + SPK_PEDESTAL_H + 2.5])
             cube([9.0, 4.0, 5.0], center=true);
-        translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H - 2.0)/2])
-            cube([18.0, 18.0, SPK_PEDESTAL_H - 2.0], center=true);
+        rrect(SPK_W + 0.4 - 2*SPK_RIDGE_W, SPK_H + 0.4 - 2*SPK_RIDGE_W, SPK_PEDESTAL_H + 5.0, 2.0,
+              SPK_CX, SPK_CY, Z_PLATE_INNER);
         // Top corner sockets & M3 bores
         for (p = COVER_M3_POINTS) {
             if (p[1] > 165.0) {

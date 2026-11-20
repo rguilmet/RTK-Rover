@@ -5,6 +5,11 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.3] - 2026-11-20
+### Changed & Optimized
+- **Open-Center Speaker Pocket Frame & Inner Support Ridge ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Replaced the bridged speaker pedestal block on `Back_Chassis_Frame` with an open-center `31.6 x 31.6 mm` pocket frame (`1.6 mm` wall), `+Y` wire exit notch, and a continuous **`2.0 mm` inner support ridge** (`Z = -13.50`, opening a `24.4 x 24.4 mm` full-depth acoustic cavity down to `Z = -25.00`) for zero internal bridging and reduced filament usage (`0.0000 mm^3` across all `33` audit pairs).
+
 ## [docs/mechanical/cad v2.0.2] - 2026-11-20
 ### Changed & Optimized
 - **Skeletonized Interlocking-Web Battery Cradles ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.2`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.2`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
