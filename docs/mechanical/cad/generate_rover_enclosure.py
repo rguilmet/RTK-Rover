@@ -1,15 +1,17 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.0.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.1.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
     underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board w/
-    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), narrowed Top
-    L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs),
-    Right Button-Plunger Flange + low support rail, and 6 open-top full-height M3 bosses.
+    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), full-width
+    R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0 (Z-centered
+    GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), Right Button-Plunger Flange +
+    low support rail, and 6 open-top full-height M3 bosses (Z = -2.65 mm).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
-    downward inverted-U plunger capture comb, and continuous R6 corners.
+    downward inverted-U plunger capture comb, and matching lower-half top-corner
+    wrap (Y <= 173.0) with continuous front faceplate.
   - Standardized Option B2 Pod (10000 mAh Footprint + Capture Corner + 5000 mAh Adapter):
     One skeletonized Battery_Cradle (w/ integral Bottom-Right Capture Corner opposite
     the Bottom-Left cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
@@ -28,7 +30,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.0"
+__version__ = "v2.1.1"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -230,15 +232,34 @@ def build_back_chassis_frame() -> cq.Workplane:
     plate = make_rounded_box(S.CASE_W, S.CASE_H, S.WALL_BACK, S.CORNER_R,
                              cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER)
 
-    # 2. Integrated Top L-Wall Bulkhead (X = -TOP_L_WALL_HALF_W..+TOP_L_WALL_HALF_W, Y = 177.0..180.0)
-    # Narrowed cleanly to [-50, +50] so Top-Left & Top-Right M3 bosses stand wide open for soldering iron tips.
-    top_l_wall = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PLATE_OUTER)
-        .center(0.0, S.CASE_H - S.WALL_TOP / 2.0)
-        .rect(2.0 * S.TOP_L_WALL_HALF_W, S.WALL_TOP)
-        .extrude(25.35)
+    # 2. Integrated Full-Width R6.0 Top L-Wall Bulkhead + 50/50 Split Top-Corner Piers (Y = 173.2..180.0)
+    # Wraps the upper 180 deg (+Y) of both top-corner M3 bosses cleanly at Z = -2.65 mm while keeping
+    # overhead Dia 14.0 mm soldering-iron access completely unobstructed.
+    full_wall_envelope = make_rounded_box(
+        S.CASE_W, S.CASE_H, 25.35, S.CORNER_R,
+        cx=0.0, cy=case_cy, z_min=S.Z_PLATE_OUTER,
     )
+    top_band = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_OUTER - 0.5)
+        .center(0.0, S.CASE_H - S.WALL_TOP / 2.0 + 0.5)
+        .rect(S.CASE_W + 2.0, S.WALL_TOP + 1.0)
+        .extrude(26.35)
+    )
+    wrap_w = (S.CASE_W / 2.0 + 1.0) - S.TOP_CORNER_WRAP_X_IN
+    wrap_cx_abs = S.TOP_CORNER_WRAP_X_IN + wrap_w / 2.0
+    wrap_h = (S.CASE_H - S.TOP_CORNER_SPLIT_Y) + 1.0
+    wrap_cy = S.TOP_CORNER_SPLIT_Y + wrap_h / 2.0
+    for sign in (-1.0, 1.0):
+        corner_pier = (
+            cq.Workplane("XY")
+            .workplane(offset=S.Z_PLATE_OUTER - 0.5)
+            .center(sign * wrap_cx_abs, wrap_cy)
+            .rect(wrap_w, wrap_h)
+            .extrude(26.35)
+        )
+        top_band = top_band.union(corner_pier)
+    top_l_wall = full_wall_envelope.intersect(top_band)
     plate = plate.union(top_l_wall)
 
     # 3. Integrated Right Button-Plunger Flange (X = 57.0..60.0, Y = 20.0..52.0)
@@ -470,7 +491,7 @@ def build_back_chassis_frame() -> cq.Workplane:
     # 13b. Top L-Wall Bulkhead Cutouts (UM982 local 2.0 mm roof web, GX-12, E220 SMA, UM982 SMAs)
     # NOTE: peak_at_plus_z=True because Back_Chassis_Frame prints back-down on Z=-28!
     um_rec_x0 = S.UM_LEFT_X - 0.30
-    um_rec_x1 = S.TOP_L_WALL_HALF_W + 0.20
+    um_rec_x1 = S.UM_LEFT_X + S.UM_W + 0.30
     um_recess = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_INNER)
@@ -549,13 +570,15 @@ def build_top_cover() -> cq.Workplane:
                               cx=0.0, cy=case_cy, z_min=z_cover_bot - 0.5)
     cover = outer.cut(cavity)
 
-    # Notch out Top L-Wall crown (X = -50.20..+50.20, Y = 176.8..180.5) behind Z_FRONT_INNER (-2.4)
-    # so Top_Cover keeps continuous outer R6 side walls at top corners and lifts STRAIGHT UP!
+    # Notch out full-width Top L-Wall crown & upper split corners (Y = 173.0..180.5) behind Z_FRONT_INNER (-2.4)
+    # so Top_Cover wraps the lower 180 deg of both top-corner posts (Y <= 173.0) and lifts STRAIGHT UP!
+    notch_y0 = S.TOP_CORNER_SPLIT_Y - S.NOTCH_CLEAR
+    notch_y1 = S.CASE_H + 0.5
     top_notch = (
         cq.Workplane("XY")
         .workplane(offset=z_cover_bot - 0.5)
-        .center(0.0, 178.7)
-        .rect(2.0 * (S.TOP_L_WALL_HALF_W + S.NOTCH_CLEAR), 4.0)
+        .center(0.0, 0.5 * (notch_y0 + notch_y1))
+        .rect(S.CASE_W + 2.0, notch_y1 - notch_y0)
         .extrude(cover_depth - S.WALL_FRONT + 0.5)
     )
     cover = cover.cut(top_notch)

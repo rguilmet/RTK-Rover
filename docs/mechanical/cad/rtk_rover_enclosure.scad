@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.0 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.1.0
+// RTK Rover Option A Enclosure v2.1.1 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.1.1
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -115,8 +115,9 @@ E220_CX = -7.20; E220_CY = 134.00;
 E220_STANDOFF_H = 3.05;
 E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
 
-// --- GX-12 Compass Bulkhead & Top L-Wall Span ---
-TOP_L_WALL_HALF_W = 50.0;
+// --- GX-12 Compass Bulkhead & 50/50 Split Top-Corner Crown Span ---
+TOP_CORNER_SPLIT_Y = 173.2;
+TOP_CORNER_WRAP_X_IN = 50.6;
 GX12_X = -39.50; GX12_Z = -14.00; GX12_HOLE_DIA = 12.2; GX12_NUT_RECESS_DIA = 17.5; GX12_WALL = 2.6;
 
 // --- Closure (6 Symmetric Front M3) & Rear Pod (4 M3) ---
@@ -210,13 +211,26 @@ module arch_x_cut(xs, xlen, cy, wy, zmin, zmax, gable=1.5, peak_plus_z=true) {
 // Parts
 // =============================================================================
 module back_chassis_frame() {
+    wrap_w = (CASE_W/2 + 1.0) - TOP_CORNER_WRAP_X_IN;
+    wrap_h = (CASE_H - TOP_CORNER_SPLIT_Y) + 1.0;
+    wrap_cx = TOP_CORNER_WRAP_X_IN + wrap_w/2;
+    wrap_cy = TOP_CORNER_SPLIT_Y + wrap_h/2;
+
     difference() {
         union() {
             // Base plate
             rrect(CASE_W, CASE_H, WALL_BACK, CORNER_R, 0, CASE_H/2, Z_PLATE_OUTER);
-            // Integral Top L-Wall Bulkhead (X = -50..+50, leaving top-corner M3 bosses open)
-            translate([0, CASE_H - WALL_TOP/2, Z_PLATE_OUTER + 25.35/2])
-                cube([2*TOP_L_WALL_HALF_W, WALL_TOP, 25.35], center=true);
+            // Integral Full-Width R6.0 Top L-Wall Bulkhead + 50/50 Split Top-Corner Piers (Y = 173.2..180.0)
+            intersection() {
+                rrect(CASE_W, CASE_H, 25.35, CORNER_R, 0, CASE_H/2, Z_PLATE_OUTER);
+                union() {
+                    translate([0, CASE_H - WALL_TOP/2 + 0.5, Z_PLATE_OUTER + 25.35/2])
+                        cube([CASE_W + 2.0, WALL_TOP + 1.0, 26.35], center=true);
+                    for (sg = [-1, 1])
+                        translate([sg * wrap_cx, wrap_cy, Z_PLATE_OUTER + 25.35/2])
+                            cube([wrap_w, wrap_h, 26.35], center=true);
+                }
+            }
             // Right Button-Plunger Flange + outer stop block + low bottom support rail (open to -X)
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
@@ -293,8 +307,8 @@ module back_chassis_frame() {
         // Battery JST pass-through slot
         rrect(BAT_SLOT_W, BAT_SLOT_H, WALL_BACK + 1.0, 4.4, BAT_SLOT_CX, BAT_SLOT_CY, Z_PLATE_OUTER - 0.5);
         // UM982 L-wall recess & crown bores (E220 SMA w/ downward -Z_asm anti-rotation D-flat)
-        translate([0.5*((UM_LEFT_X - 0.30) + (TOP_L_WALL_HALF_W + 0.20)), 177.25, Z_PLATE_INNER + 12.5])
-            cube([(TOP_L_WALL_HALF_W + 0.20) - (UM_LEFT_X - 0.30), 1.50, 25.0], center=true);
+        translate([UM_CX, 177.25, Z_PLATE_INNER + 12.5])
+            cube([UM_W + 0.60, 1.50, 25.0], center=true);
         round_y_bore(GX12_X, 176.5, 4.5, GX12_Z, GX12_HOLE_DIA);
         round_y_bore(GX12_X, 174.0, 180.0 - GX12_WALL - 174.0, GX12_Z, GX12_NUT_RECESS_DIA);
         d_flat_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA, E220_SMA_FLAT, false);
@@ -310,6 +324,8 @@ module back_chassis_frame() {
 module top_cover() {
     cover_depth = abs(Z_PLATE_INNER) - 0.15;
     z_bot = -cover_depth;
+    top_notch_y0 = TOP_CORNER_SPLIT_Y - NOTCH_CLEAR;
+    top_notch_y1 = CASE_H + 0.5;
     u_cx = 0.5 * (SHIELD_U_X_LEFT + SHIELD_U_X_RIGHT);
     u_w = SHIELD_U_X_RIGHT - SHIELD_U_X_LEFT;
     u_cy = 0.5 * (SHIELD_U_Y_BOT + SHIELD_U_Y_TOP);
@@ -326,9 +342,9 @@ module top_cover() {
                 // Interior cavity
                 rrect(CASE_W - 2*WALL_SIDE, CASE_H - WALL_BOT - WALL_TOP, cover_depth - WALL_FRONT + 0.5,
                       max(1.5, CORNER_R - WALL_SIDE), 0, CASE_H/2, z_bot - 0.5);
-                // Top L-wall crown notch (X = -50.20..+50.20, keeps continuous R6 corners & straight +Z lift-off)
-                translate([0, 178.7, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-                    cube([2*(TOP_L_WALL_HALF_W + NOTCH_CLEAR), 4.0, cover_depth - WALL_FRONT + 0.5], center=true);
+                // Full-width Top L-wall crown & split-corner notch (Y = 173.0..180.5; keeps lower-half corner wrap & straight +Z lift-off)
+                translate([0, 0.5*(top_notch_y0 + top_notch_y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
+                    cube([CASE_W + 2.0, top_notch_y1 - top_notch_y0, cover_depth - WALL_FRONT + 0.5], center=true);
                 // Right Flange notch
                 translate([CASE_W/2 - 1.2, 0.5*(FLANGE_Y0+FLANGE_Y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
                     cube([WALL_SIDE + 2.0, (FLANGE_Y1 - FLANGE_Y0) + 2*NOTCH_CLEAR, cover_depth - WALL_FRONT + 0.5], center=true);

@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.1] - 2026-11-20
+### Changed & Fixed
+- **`50/50` Split Top-Corner Post Wrap & Full-Width `R6.0` Top L-Wall Bulkhead ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.1`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.1`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.1`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Replaced `TOP_L_WALL_HALF_W = 50.0` with `TOP_CORNER_SPLIT_Y = 173.2 mm` and `TOP_CORNER_WRAP_X_IN = 50.6 mm`, extending [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`89.81 cm^3`) around both `R6.0` top corners (`Y = 173.2..180.0 mm`) to monolithically fuse the bulkhead crown into the upper `180 deg` of the `(-54.2, 173.2)` and `(+54.2, 173.2)` `M3` corner bosses, and restored `um_recess` cleanly to `UM_W + 0.60` (`X = +13.90..+49.30 mm`, leaving a solid `1.30 mm` full-thickness bridge into the Top-Right pier).
+  - Updated [`Top_Cover.step`](docs/mechanical/cad/step/Top_Cover.step) (`65.04 cm^3`) with a matching full-width crown notch (`Y = 173.0..180.5 mm` behind the continuous `2.40 mm` front faceplate) so `Top_Cover`'s side walls wrap the lower `180 deg` (`Y = 169.1..173.0 mm`) of both top-corner posts at a `0.20 mm` perpendicular butt seam with straight `+Z` lift-off.
+  - Verified **`0.0000 mm^3` overlap** for a `Dia 14.0 mm` vertical soldering iron barrel above all `6` `M3` bosses, `7/7` single-solid manifold checks, `34/34` `0.0000 mm^3` boolean interference checks, and clean OpenSCAD `Manifold --hardwarnings` builds on `back_print` & `top_print`.
+
 ## [docs/mechanical/cad v2.1.0] - 2026-11-20
 ### Changed & Added
 - **Standardized `10000 mAh` Pole Pod, Bottom-Right Capture Corner & Removable `5000 mAh` Adapter ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.0`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

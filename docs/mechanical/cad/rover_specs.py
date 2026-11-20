@@ -1,17 +1,18 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.1.0 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.1 enclosure.
 
-Architecture (v2.1.0 - Standardized 10000 mAh Pod + Capture Corner + 5000 mAh Adapter):
+Architecture (v2.1.1 - 50/50 Split Top-Corner Post Wrap + Full-Width Top L-Wall):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
      Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker pocket
-     frame + ridge), narrowed Top L-Wall (GX-12 centered, E220 SMA w/ downward
-     D-flat, UM982 SMAs), Right Button-Plunger Flange + low rail, and 6 open-top
-     full-height M3 cover bosses (Z = -2.65 mm).
+     frame + ridge), full-width R6.0 Top L-Wall bulkhead w/ 50/50 split corner piers
+     at Y = 173.2..180.0 (GX-12 centered, E220 SMA w/ downward D-flat, UM982 SMAs),
+     Right Button-Plunger Flange + low rail, and 6 open-top full-height M3 cover
+     bosses (Z = -2.65 mm).
   2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
      flush glass opening, USB-C tunnel, MicroSD slot + finger scoop, speaker
      acoustic grille slots, 4 x UM982 status LED light pipes + SWITCH pinhole,
      Option H1 U-groove, downward inverted-U comb capturing button plungers, and
-     continuous R6 corners for 6 symmetric front-entry M3 x 8/10 CSK screws.
+     matching lower-half top-corner wrap (Y <= 173.0) for 6 symmetric M3 x 8/10 CSK.
   3. Standardized External Option B2 Pod (10000 mAh Footprint + Removable 5000 mAh Insert):
      Unified skeletonized Battery_Cradle (with integral Bottom-Right Capture Corner
      opposite the Bottom-Left cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex
@@ -30,7 +31,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.0"
+__version__ = "v2.1.1"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -198,7 +199,8 @@ E220_STANDOFF_H = 3.05      # Flush with -3.00 mm underside trace protrusion (+0
 # ==============================================================================
 # 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall
 # ==============================================================================
-TOP_L_WALL_HALF_W = 50.0    # X = [-50.0, +50.0], clears GX-12 relief (-48.25) & UM982 (+49.0) with open top-corner M3 bosses
+TOP_CORNER_SPLIT_Y = 173.2  # 50/50 split plane through top-corner M3 bosses (+-54.2, 173.2); Back wraps Y=173.2..180, Top_Cover wraps Y<=173.0
+TOP_CORNER_WRAP_X_IN = 50.6 # Inner X edge of upper corner piers (0.30 mm inside Dia 7.8 boss for clean non-tangent union; 1.60 mm clear of UM982, 2.35 mm clear of GX-12 relief)
 
 # LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, downward -Z_asm anti-rotation D-flat)
 E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
@@ -222,8 +224,8 @@ COVER_M3_POINTS = [
     ( 54.2,   6.8),         # Bottom-Right corner
     (-54.1, 108.0),         # Mid-Left edge (1.85 mm outside wall; 1.2 mm clear of PB X=-49)
     ( 54.1, 108.0),         # Mid-Right edge (above Right Flange Y=52, above MicroSD Y=85.3, below UM982 Y=124.8)
-    (-54.2, 173.2),         # Top-Left corner (free-standing open-top corner boss matching bottom corners)
-    ( 54.2, 173.2),         # Top-Right corner (free-standing open-top corner boss matching bottom corners)
+    (-54.2, 173.2),         # Top-Left corner (50/50 split wrap: Back_Chassis_Frame wraps +Y upper half, Top_Cover wraps -Y lower half)
+    ( 54.2, 173.2),         # Top-Right corner (50/50 split wrap: Back_Chassis_Frame wraps +Y upper half, Top_Cover wraps -Y lower half)
 ]
 COVER_BOSS_Z_TOP = -2.65    # Full-height boss (0.25 mm clamping gap below Z_FRONT_INNER=-2.40; flush w/ Top L-Wall)
 
