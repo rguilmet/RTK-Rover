@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.0.0 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.0
+// RTK Rover Option A Enclosure v2.0.2 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.2
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -128,6 +128,7 @@ POD_M3_POINTS = [
 BAT_SLOT_CX = -22.5; BAT_SLOT_CY = 54.5; BAT_SLOT_W = 9.0; BAT_SLOT_H = 14.0;
 
 POD_OUTER_W = 92.0; POD_OUTER_R = 5.5;
+POD_FRAME_WALL = 2.0; POD_WEB_THK = 1.8; POD_M3_SLEEVE_OD = 8.6;
 POD_FLOOR_THK = 3.0; POD_SPINE_W = 24.0; POD_SPINE_H = 16.2; POLE_Q20_DY = 38.1;
 
 BAT5_BAY_W = 56.5;  BAT5_BAY_H = 77.0;  BAT5_BAY_D = 11.2;  BAT5_POD_H = 112.0;
@@ -365,15 +366,114 @@ module top_cover() {
     }
 }
 
+module strut2d(x0, y0, x1, y1, w) {
+    dx = x1 - x0; dy = y1 - y0;
+    L = sqrt(dx*dx + dy*dy) + w;
+    ang = atan2(dy, dx);
+    translate([0.5*(x0 + x1), 0.5*(y0 + y1)])
+        rotate([0, 0, ang])
+            square([L, w], center=true);
+}
+
+module rrect2d(w, h, r, cx=0, cy=0) {
+    rr = min(r, min(w, h) / 2 - 0.05);
+    translate([cx, cy]) offset(r=rr) offset(delta=-rr) square([w, h], center=true);
+}
+
 module battery_cradle(v="5000") {
     bay_w = (v == "5000") ? BAT5_BAY_W : BAT10_BAY_W;
     bay_h = (v == "5000") ? BAT5_BAY_H : BAT10_BAY_H;
     bay_d = (v == "5000") ? BAT5_BAY_D : BAT10_BAY_D;
     pod_h = (v == "5000") ? BAT5_POD_H : BAT10_POD_H;
     z_back = Z_PLATE_OUTER - bay_d;
+    bay_cy = POD_CY + 1.0;
+    in_xl = POD_CX - (bay_w/2 + POD_FRAME_WALL/2);
+    in_xr = POD_CX + (bay_w/2 + POD_FRAME_WALL/2);
+    in_yb = bay_cy - (bay_h/2 + POD_FRAME_WALL/2);
+    in_yt = bay_cy + (bay_h/2 + POD_FRAME_WALL/2);
+    out_xl = POD_CX - (POD_OUTER_W/2 - POD_FRAME_WALL/2);
+    out_xr = POD_CX + (POD_OUTER_W/2 - POD_FRAME_WALL/2);
+    out_yb = POD_CY - (pod_h/2 - POD_FRAME_WALL/2);
+    out_yt = POD_CY + (pod_h/2 - POD_FRAME_WALL/2);
+    n_bays = (v == "5000") ? 4 : 6;
+    y_lo = POD_M3_POINTS[0][1];
+    y_hi = POD_M3_POINTS[2][1];
+
     difference() {
-        rrect(POD_OUTER_W, pod_h, bay_d, POD_OUTER_R, POD_CX, POD_CY, z_back);
-        rrect(bay_w, bay_h, bay_d + 1.0, 2.5, POD_CX, POD_CY + 1.0, z_back - 0.5);
+        union() {
+            difference() {
+                rrect(POD_OUTER_W, pod_h, bay_d, POD_OUTER_R, POD_CX, POD_CY, z_back);
+                rrect(POD_OUTER_W - 2*POD_FRAME_WALL, pod_h - 2*POD_FRAME_WALL, bay_d + 1.0,
+                      max(1.5, POD_OUTER_R - POD_FRAME_WALL), POD_CX, POD_CY, z_back - 0.5);
+            }
+            difference() {
+                rrect(bay_w + 2*POD_FRAME_WALL, bay_h + 2*POD_FRAME_WALL, bay_d, 3.5, POD_CX, bay_cy, z_back);
+                rrect(bay_w, bay_h, bay_d + 1.0, 2.5, POD_CX, bay_cy, z_back - 0.5);
+            }
+            for (p = POD_M3_POINTS)
+                translate([p[0], p[1], z_back]) cylinder(d=POD_M3_SLEEVE_OD, h=bay_d);
+            // Interlocking Warren-truss web
+            translate([0, 0, z_back]) linear_extrude(height=bay_d) intersection() {
+                difference() {
+                    rrect2d(POD_OUTER_W - POD_FRAME_WALL, pod_h - POD_FRAME_WALL,
+                            max(1.5, POD_OUTER_R - POD_FRAME_WALL/2), POD_CX, POD_CY);
+                    rrect2d(bay_w + POD_FRAME_WALL, bay_h + POD_FRAME_WALL, 3.0, POD_CX, bay_cy);
+                }
+                union() {
+                    for (p = POD_M3_POINTS) {
+                        sx = (p[0] < POD_CX) ? -1 : 1;
+                        sy = (p[1] < POD_CY) ? -1 : 1;
+                        ix = (sx < 0) ? in_xl : in_xr;
+                        ox = (sx < 0) ? out_xl : out_xr;
+                        iy = (sy < 0) ? in_yb : in_yt;
+                        oy = (sy < 0) ? out_yb : out_yt;
+                        strut2d(ox, p[1], ix, p[1], POD_WEB_THK);
+                        strut2d(p[0], oy, p[0], p[1], POD_WEB_THK);
+                        strut2d(p[0], p[1], ix, max(in_yb, min(in_yt, p[1] - sy*16.0)), POD_WEB_THK);
+                        if (v == "5000")
+                            strut2d(p[0], p[1], p[0] - sx*14.0, iy, POD_WEB_THK);
+                    }
+                    for (side = [-1, 1]) {
+                        ix = (side < 0) ? in_xl : in_xr;
+                        ox = (side < 0) ? out_xl : out_xr;
+                        for (i = [0 : n_bays - 1]) {
+                            ya = y_lo + i*(y_hi - y_lo)/n_bays;
+                            yb = y_lo + (i+1)*(y_hi - y_lo)/n_bays;
+                            if (i % 2 == 0) strut2d(ox, ya, ix, yb, POD_WEB_THK);
+                            else strut2d(ix, ya, ox, yb, POD_WEB_THK);
+                        }
+                        strut2d(ox, POD_CY, ix, POD_CY, POD_WEB_THK);
+                    }
+                    if (v == "5000") {
+                        for (i = [0 : 3]) {
+                            xa = in_xl + i*(in_xr - in_xl)/4;
+                            xb = in_xl + (i+1)*(in_xr - in_xl)/4;
+                            if (i % 2 == 0) {
+                                strut2d(xa, out_yb, xb, in_yb, POD_WEB_THK);
+                                strut2d(xa, out_yt, xb, in_yt, POD_WEB_THK);
+                            } else {
+                                strut2d(xa, in_yb, xb, out_yb, POD_WEB_THK);
+                                strut2d(xa, in_yt, xb, out_yt, POD_WEB_THK);
+                            }
+                        }
+                        strut2d(POD_CX, out_yb, POD_CX, in_yb, POD_WEB_THK);
+                        strut2d(POD_CX, out_yt, POD_CX, in_yt, POD_WEB_THK);
+                    } else {
+                        for (tx = [POD_CX - 20.0, POD_CX, POD_CX + 20.0]) {
+                            strut2d(tx, out_yb, tx, in_yb, POD_WEB_THK);
+                            strut2d(tx, in_yt, tx, out_yt, POD_WEB_THK);
+                        }
+                        for (side = [-1, 1]) {
+                            ix = (side < 0) ? in_xl : in_xr;
+                            ox = (side < 0) ? out_xl : out_xr;
+                            strut2d(ox, out_yb + 2.0, ix, y_lo, POD_WEB_THK);
+                            strut2d(ox, out_yt - 2.0, ix, y_hi, POD_WEB_THK);
+                        }
+                    }
+                }
+            }
+        }
+        rrect(bay_w, bay_h, bay_d + 1.0, 2.5, POD_CX, bay_cy, z_back - 0.5);
         for (p = POD_M3_POINTS)
             translate([p[0], p[1], z_back - 1.5]) cylinder(d=HOLE_CLEAR_M3, h=bay_d + 3.0);
     }

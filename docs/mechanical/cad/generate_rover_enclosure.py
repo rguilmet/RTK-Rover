@@ -26,7 +26,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.1"
+__version__ = "v2.0.2"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -761,7 +761,13 @@ def build_top_cover() -> cq.Workplane:
 # Parts 3-6: Option B2 2-Piece External Battery & Pole Mount Pods (5000 & 10000 mAh)
 # ==============================================================================
 def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
-    """Build (Battery_Cradle, Pole_Lid) for '5000' or '10000' mAh sharing POD_M3_POINTS."""
+    """Build (Battery_Cradle, Pole_Lid) for '5000' or '10000' mAh sharing POD_M3_POINTS.
+
+    Battery_Cradle is skeletonized into a 2.0 mm outer frame, 2.0 mm continuous inner
+    LiPo containment wall, 4 x Dia 8.6 mm M3 bolt sleeves, and a 1.8 mm interlocking
+    Warren-truss web (100% flat-bed support-free extrusion). Pole_Lid stays solid 3.0 mm
+    to seal the truss cells and shield the LiPo pouch on a survey pole.
+    """
     if variant == "5000":
         bay_w, bay_h, bay_d, pod_h = S.BAT5_BAY_W, S.BAT5_BAY_H, S.BAT5_BAY_D, S.BAT5_POD_H
     elif variant == "10000":
@@ -771,13 +777,125 @@ def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
 
     z_cradle_front = S.Z_PLATE_OUTER          # -28.0 (100% flat build-plate face)
     z_cradle_back = z_cradle_front - bay_d    # -39.2 (5000) or -40.8 (10000), 100% flat mate
+    wall = S.POD_FRAME_WALL
+    web_t = S.POD_WEB_THK
+    bay_cy = S.POD_CY + 1.0
 
-    # --- Piece A: Battery_Cradle (Open-frame wall housing battery + 4x M3 pass-through ears) ---
-    cradle = make_rounded_box(S.POD_OUTER_W, pod_h, bay_d, S.POD_OUTER_R,
-                              cx=S.POD_CX, cy=S.POD_CY, z_min=z_cradle_back)
-    bay_cut = make_rounded_box(bay_w, bay_h, bay_d + 1.0, 2.5,
-                               cx=S.POD_CX, cy=S.POD_CY + 1.0, z_min=z_cradle_back - 0.5)
-    cradle = cradle.cut(bay_cut)
+    # --- Piece A: Skeletonized Battery_Cradle (Outer Frame + Inner Pocket + 4xM3 + Truss Web) ---
+    outer_solid = make_rounded_box(S.POD_OUTER_W, pod_h, bay_d, S.POD_OUTER_R,
+                                   cx=S.POD_CX, cy=S.POD_CY, z_min=z_cradle_back)
+    outer_void = make_rounded_box(S.POD_OUTER_W - 2.0 * wall, pod_h - 2.0 * wall, bay_d + 1.0,
+                                  max(1.5, S.POD_OUTER_R - wall),
+                                  cx=S.POD_CX, cy=S.POD_CY, z_min=z_cradle_back - 0.5)
+    frame = outer_solid.cut(outer_void)
+
+    inner_outer = make_rounded_box(bay_w + 2.0 * wall, bay_h + 2.0 * wall, bay_d, 3.5,
+                                   cx=S.POD_CX, cy=bay_cy, z_min=z_cradle_back)
+    inner_void = make_rounded_box(bay_w, bay_h, bay_d + 1.0, 2.5,
+                                  cx=S.POD_CX, cy=bay_cy, z_min=z_cradle_back - 0.5)
+    pocket_wall = inner_outer.cut(inner_void)
+    cradle = frame.union(pocket_wall)
+
+    # 4 x Reinforced M3 corner bolt sleeves
+    for px, py in S.POD_M3_POINTS:
+        boss = (
+            cq.Workplane("XY")
+            .workplane(offset=z_cradle_back)
+            .center(px, py)
+            .circle(S.POD_M3_SLEEVE_OD / 2.0)
+            .extrude(bay_d)
+        )
+        cradle = cradle.union(boss)
+
+    # Interlocking Warren-truss web inside the annular gap between frame & pocket centerlines
+    annulus = (
+        make_rounded_box(S.POD_OUTER_W - wall, pod_h - wall, bay_d,
+                         max(1.5, S.POD_OUTER_R - wall / 2.0),
+                         cx=S.POD_CX, cy=S.POD_CY, z_min=z_cradle_back)
+        .cut(make_rounded_box(bay_w + wall, bay_h + wall, bay_d + 1.0, 3.0,
+                              cx=S.POD_CX, cy=bay_cy, z_min=z_cradle_back - 0.5))
+    )
+
+    def make_strut(x0: float, y0: float, x1: float, y1: float) -> cq.Workplane:
+        dx, dy = x1 - x0, y1 - y0
+        length = math.hypot(dx, dy) + web_t
+        ang = math.degrees(math.atan2(dy, dx))
+        return (
+            cq.Workplane("XY")
+            .workplane(offset=z_cradle_back)
+            .center(0.5 * (x0 + x1), 0.5 * (y0 + y1))
+            .transformed(rotate=(0, 0, ang))
+            .rect(length, web_t)
+            .extrude(bay_d)
+        )
+
+    web = None
+
+    def add_web(strut: cq.Workplane) -> None:
+        nonlocal web
+        web = strut if web is None else web.union(strut)
+
+    in_xl = S.POD_CX - (bay_w / 2.0 + wall / 2.0)
+    in_xr = S.POD_CX + (bay_w / 2.0 + wall / 2.0)
+    in_yb = bay_cy - (bay_h / 2.0 + wall / 2.0)
+    in_yt = bay_cy + (bay_h / 2.0 + wall / 2.0)
+    out_xl = S.POD_CX - (S.POD_OUTER_W / 2.0 - wall / 2.0)
+    out_xr = S.POD_CX + (S.POD_OUTER_W / 2.0 - wall / 2.0)
+    out_yb = S.POD_CY - (pod_h / 2.0 - wall / 2.0)
+    out_yt = S.POD_CY + (pod_h / 2.0 - wall / 2.0)
+
+    # Corner M3 radial ties + diagonal gussets into pocket and outer wall
+    for px, py in S.POD_M3_POINTS:
+        sx = -1.0 if px < S.POD_CX else 1.0
+        sy = -1.0 if py < S.POD_CY else 1.0
+        ix = in_xl if sx < 0 else in_xr
+        ox = out_xl if sx < 0 else out_xr
+        iy = in_yb if sy < 0 else in_yt
+        oy = out_yb if sy < 0 else out_yt
+        add_web(make_strut(ox, py, ix, py))
+        add_web(make_strut(px, oy, px, py))
+        add_web(make_strut(px, py, ix, max(in_yb, min(in_yt, py - sy * 16.0))))
+        if variant == "5000":
+            add_web(make_strut(px, py, px - sx * 14.0, iy))
+
+    # Left & Right side Warren-truss zigzag web + spine load-center horizontal tie
+    n_bays = 4 if variant == "5000" else 6
+    y_lo, y_hi = S.POD_M3_POINTS[0][1], S.POD_M3_POINTS[2][1]
+    ys = [y_lo + i * (y_hi - y_lo) / n_bays for i in range(n_bays + 1)]
+    for side in (-1, 1):
+        ix = in_xl if side < 0 else in_xr
+        ox = out_xl if side < 0 else out_xr
+        for i in range(n_bays):
+            ya, yb = ys[i], ys[i + 1]
+            if i % 2 == 0:
+                add_web(make_strut(ox, ya, ix, yb))
+            else:
+                add_web(make_strut(ix, ya, ox, yb))
+        add_web(make_strut(ox, S.POD_CY, ix, S.POD_CY))
+
+    # Top & Bottom truss ties
+    if variant == "5000":
+        n_tb = 4
+        xs = [in_xl + i * (in_xr - in_xl) / n_tb for i in range(n_tb + 1)]
+        for y_in, y_out in ((in_yb, out_yb), (in_yt, out_yt)):
+            for i in range(n_tb):
+                xa, xb = xs[i], xs[i + 1]
+                if i % 2 == 0:
+                    add_web(make_strut(xa, y_out, xb, y_in))
+                else:
+                    add_web(make_strut(xa, y_in, xb, y_out))
+            add_web(make_strut(S.POD_CX, y_out, S.POD_CX, y_in))
+    else:
+        for tx in (S.POD_CX - 20.0, S.POD_CX, S.POD_CX + 20.0):
+            add_web(make_strut(tx, out_yb, tx, in_yb))
+            add_web(make_strut(tx, in_yt, tx, out_yt))
+        for side in (-1, 1):
+            ix = in_xl if side < 0 else in_xr
+            ox = out_xl if side < 0 else out_xr
+            add_web(make_strut(ox, out_yb + 2.0, ix, y_lo))
+            add_web(make_strut(ox, out_yt - 2.0, ix, y_hi))
+
+    cradle = cradle.union(web.intersect(annulus)).cut(inner_void)
 
     # 4 x M3 pass-through bores (3.4 mm) aligning identically to POD_M3_POINTS
     for px, py in S.POD_M3_POINTS:
@@ -790,7 +908,7 @@ def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
         )
         cradle = cradle.cut(bore)
 
-    # --- Piece B: Pole_Lid (3.0 mm flat floor + twin 1/4"-20 Ruthex spine, 2.5 mm safety floor) ---
+    # --- Piece B: Pole_Lid (3.0 mm solid flat floor + twin 1/4"-20 Ruthex spine, 2.5 mm safety floor) ---
     # Prints 100% flat on z_lid_front with spine growing upward -> zero overhangs.
     z_lid_front = z_cradle_back - 0.10        # 0.10 mm gap avoids coplanar boolean touch
     z_lid_back = z_lid_front - S.POD_FLOOR_THK
@@ -1025,7 +1143,8 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
             assert abs(bb.xmax - S.CASE_W / 2.0) < 0.02, f"{name} xmax={bb.xmax:.3f}"
             assert abs(bb.ymin - 0.0) < 0.02, f"{name} ymin={bb.ymin:.3f}"
             assert abs(bb.ymax - S.CASE_H) < 0.02, f"{name} ymax={bb.ymax:.3f}"
-        print(f"  [OK] {name:22s}: {n_solids} solid(s), "
+        vol_cm3 = sum(s.Volume() for s in shp.solids().vals()) / 1000.0
+        print(f"  [OK] {name:22s}: {n_solids} solid(s), vol={vol_cm3:6.2f} cm^3, "
               f"X[{bb.xmin:7.2f},{bb.xmax:7.2f}] Y[{bb.ymin:6.2f},{bb.ymax:6.2f}] Z[{bb.zmin:6.2f},{bb.zmax:6.2f}]")
 
     print("\n--- [2/3] Printed Part vs Printed Part Interference Audit ---")
@@ -1224,7 +1343,7 @@ def main() -> None:
         print(f"  Exported ASSY -> {assy_path.name}")
 
     export_2d_dxf(DXF_DIR / "RTK_Rover_Interfaces_2D.dxf")
-    print("\n=== ALL CAD v2.0.0 CHECKS & EXPORTS PASSED! ===")
+    print(f"\n=== ALL CAD {__version__} CHECKS & EXPORTS PASSED! ===")
 
 
 if __name__ == "__main__":

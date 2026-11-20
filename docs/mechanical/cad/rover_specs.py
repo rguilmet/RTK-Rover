@@ -26,7 +26,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.1"
+__version__ = "v2.0.2"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -229,10 +229,13 @@ BAT_SLOT_W = 9.0
 BAT_SLOT_H = 14.0
 
 # Option B2 Pod Variants (both bolt onto POD_M3_POINTS & align twin 1/4"-20 inserts)
-POD_OUTER_W = 92.0          # X: [-44.0, +48.0] (4.0 mm radial boss margin outside X=-38/+42)
+POD_OUTER_W = 92.0          # X: [-44.0, +48.0] (6.0 mm corner margin outside X=-38/+42)
 POD_OUTER_R = 5.5
 POD_WALL = 2.4
-POD_FLOOR_THK = 3.0         # Lid base floor thickness
+POD_FRAME_WALL = 2.0        # 5 perimeters @ 0.4 mm nozzle for outer perimeter & inner LiPo pocket
+POD_WEB_THK = 1.8           # 4-5 solid perimeters for interlocking Warren-truss web struts
+POD_M3_SLEEVE_OD = 8.6      # Reinforced M3 corner sleeve around Dia 3.4 mm bolt bore
+POD_FLOOR_THK = 3.0         # Lid base floor thickness (solid protection over rear truss)
 POD_SPINE_W = 24.0
 POD_SPINE_H = 16.2          # >= 13.7 mm 1/4"-20 insert + 2.5 mm solid closed safety floor
 POLE_Q20_DY = 38.1          # 1.500" vertical pitch

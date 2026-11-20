@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.2] - 2026-11-20
+### Changed & Optimized
+- **Skeletonized Interlocking-Web Battery Cradles ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.2`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.2`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Replaced solid flange infill on `Battery_Cradle_5000` (`66.04 -> 27.66 cm^3`, **`-58.1%`** filament) and `Battery_Cradle_10000` (`52.34 -> 30.35 cm^3`, **`-42.0%`** filament) with a `2.0 mm` outer perimeter wall, continuous `2.0 mm` inner LiPo containment pocket, `4 x Dia 8.6 mm` `M3` bolt sleeves, and an interlocking `1.8 mm` Warren-truss web extruded full-depth flat on the build plate (`0` supports, solid `3.0 mm` `Pole_Lid_*` sealing rear face).
+  - Verified single-solid manifold geometry on both cradles (`0.0000 mm^3` across all `33` collision pairs) and re-rendered the exploded, rear comparison, and print-plate previews.
+
 ## [docs/mechanical/cad v2.0.1] - 2026-11-20
 ### Changed & Polished
 - **Restored `R6.0` Waveshare Corners, Pure Round Bulkhead/Plunger Bores & Flush Standoffs ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.1`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.1`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
