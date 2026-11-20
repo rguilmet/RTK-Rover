@@ -1,18 +1,18 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.0.0 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.0.4 enclosure.
 
-Architecture (v2.0.0 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
+Architecture (v2.0.4 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
-     Power Board, Speaker pedestal), an integral right-angle Top L-Bulkhead
-     (GX-12, E220 SMA, UM982 Slave/Master SMAs), and an integral right-angle
-     Right Button-Plunger & MicroSD Flange (captive button plungers).
+     Power Board, open-center Speaker pocket frame + ridge), an integral right-angle
+     Top L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs),
+     and an integral right-angle Right Button-Plunger Flange (captive plungers).
   2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
-     only flush glass opening, USB-C cutout, speaker acoustic grille slots,
-     4 x UM982 status LED light pipes + SWITCH pinhole, and Option H1 U-groove.
-     Secured by 6 symmetric front-entry M3 CSK screws (4 corners + 2 mid-side).
+     flush glass opening, USB-C tunnel, MicroSD slot + finger scoop, speaker
+     acoustic grille slots, 4 x UM982 status LED light pipes + SWITCH pinhole,
+     and Option H1 U-groove. Secured by 6 symmetric front-entry M3 CSK screws.
   3. External Option B2 Battery & Pole Mount Pods (5000 mAh and 10000 mAh):
      2-piece support-free stacked pod (Battery_Cradle + Pole_Lid w/ twin 1/4"-20
-     Ruthex inserts) bolting onto the rear via a shared 4 x M3 grid & Bat JST slot.
+     Ruthex inserts) bolting onto the shared 4 x M3 grid & Bat JST slot.
   4. Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG tapered hood plugging into
      the recessed U-groove in Top_Cover (zero magnets, zero protruding side bosses).
 
@@ -26,7 +26,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.3"
+__version__ = "v2.0.4"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -103,8 +103,8 @@ WS_SD_Y1 = WS_CY + 32.80                # 85.30
 WS_SD_Z_CTR = -8.25
 
 # Integrated Right Button-Plunger Flange & Plunger Carrier (Back_Chassis_Frame)
-FLANGE_Y0 = 16.0                        # Clears Bottom-Right M3 boss (54.4, 6.6)
-FLANGE_Y1 = 96.0                        # Clears Mid-Right M3 boss (54.4, 108.0)
+FLANGE_Y0 = 20.0                        # Clears Bottom-Right M3 boss (54.2, 6.8) with 2.0 mm below plunger block
+FLANGE_Y1 = 52.0                        # Button block flange only (MicroSD slot moved to Top_Cover right wall)
 PLUNGER_BLK_X0 = 46.60                  # Clears Waveshare PCB/midframe (+45.75) by 0.85 mm & Pod boss (+45.9)
 PLUNGER_BLK_X1 = 57.00
 PLUNGER_BLK_Y0 = 22.0
@@ -185,17 +185,18 @@ E220_CY = 134.00            # Y: [104.00, 164.00]; 5.28 mm above glass, 1.4+ mm 
 E220_STANDOFF_H = 3.05      # Flush with -3.00 mm underside trace protrusion (+0.05 mm clear); top at -8.95 mm
 
 # ==============================================================================
-# 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall (Aligned at Z = -11.25)
+# 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall
 # ==============================================================================
-# LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, pure round bore)
+# LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, downward -Z_asm anti-rotation D-flat)
 E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
 E220_SMA_Z = UM_SMA_Z       # -11.25
 E220_SMA_DIA = 6.6
+E220_SMA_FLAT = 5.98        # Across-flat height from +Z crown to -Z flat (flat at Z=-13.930, 0.125 mm clear of -13.805)
 E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
 
-# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, pure round bore)
-GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-50.5) & E220 (-27.2)
-GX12_Z = UM_SMA_Z           # -11.25
+# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, Z-centered in main body)
+GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.4) & E220 (-27.2)
+GX12_Z = -14.00             # Exact center of 28.0 mm main chassis Z = [0.00, -28.00]
 GX12_HOLE_DIA = 12.2        # Pure round M12 x 0.75 barrel clearance (no teardrop)
 GX12_NUT_RECESS_DIA = 17.5
 GX12_WALL = 2.6             # Inner wall Y = 177.40 -> outer Y = 180.00
@@ -207,7 +208,7 @@ COVER_M3_POINTS = [
     (-54.2,   6.8),         # Bottom-Left corner (leaves >= 1.75 mm side & 1.13 mm R6 corner wall)
     ( 54.2,   6.8),         # Bottom-Right corner
     (-54.1, 108.0),         # Mid-Left edge (1.85 mm outside wall; 1.2 mm clear of PB X=-49)
-    ( 54.1, 108.0),         # Mid-Right edge (above Right Flange Y=96, below UM982 Y=124.8)
+    ( 54.1, 108.0),         # Mid-Right edge (above Right Flange Y=52, above MicroSD Y=85.3, below UM982 Y=124.8)
     (-54.4, 173.4),         # Top-Left corner (inside Top L-wall corner socket)
     ( 54.4, 173.4),         # Top-Right corner (inside Top L-wall corner socket)
 ]

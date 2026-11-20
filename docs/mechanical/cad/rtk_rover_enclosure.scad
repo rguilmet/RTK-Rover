@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.0.3 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.3
+// RTK Rover Option A Enclosure v2.0.4 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.4
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -58,8 +58,8 @@ WS_SD_Y0 = WS_CY + 16.80;
 WS_SD_Y1 = WS_CY + 32.80;
 WS_SD_Z_CTR = -8.25;
 
-FLANGE_Y0 = 16.0;
-FLANGE_Y1 = 96.0;
+FLANGE_Y0 = 20.0;
+FLANGE_Y1 = 52.0;
 PLUNGER_BLK_X0 = 46.60;
 PLUNGER_BLK_X1 = 57.00;
 PLUNGER_BLK_Y0 = 22.0;
@@ -106,10 +106,10 @@ E220_W = 40.0; E220_H = 60.0;
 E220_HOLE_DX = 35.0; E220_HOLE_DY = 55.0;
 E220_CX = -7.20; E220_CY = 134.00;
 E220_STANDOFF_H = 3.05;
-E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_WALL = 2.6;
+E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
 
 // --- GX-12 Compass Bulkhead ---
-GX12_X = -39.50; GX12_Z = UM_SMA_Z; GX12_HOLE_DIA = 12.2; GX12_NUT_RECESS_DIA = 17.5; GX12_WALL = 2.6;
+GX12_X = -39.50; GX12_Z = -14.00; GX12_HOLE_DIA = 12.2; GX12_NUT_RECESS_DIA = 17.5; GX12_WALL = 2.6;
 
 // --- Closure (6 Symmetric Front M3) & Rear Pod (4 M3) ---
 COVER_M3_POINTS = [
@@ -172,6 +172,19 @@ module round_y_bore(cx, y_start, y_len, zc, dia) {
             cylinder(d=dia, h=y_len);
 }
 
+module d_flat_y_bore(cx, y_start, y_len, zc, dia, flat_dist, flat_at_plus_z=false) {
+    r = dia / 2;
+    sign = flat_at_plus_z ? 1.0 : -1.0;
+    flat_z = zc + sign * (flat_dist - r);
+    slab_h = 3.0;
+    z_min_clip = flat_at_plus_z ? flat_z : (flat_z - slab_h);
+    difference() {
+        round_y_bore(cx, y_start, y_len, zc, dia);
+        translate([cx, y_start + y_len / 2, z_min_clip + slab_h / 2])
+            cube([dia + 2, y_len + 2, slab_h], center=true);
+    }
+}
+
 module arch_x_cut(xs, xlen, cy, wy, zmin, zmax, gable=1.5, peak_plus_z=true) {
     translate([xs, 0, 0])
         rotate([90, 0, 90])
@@ -201,7 +214,7 @@ module back_chassis_frame() {
                             cube([9.4, 8.2, 25.35], center=true);
                 }
             }
-            // Right Button-Plunger & MicroSD Flange
+            // Right Button-Plunger Flange
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
             translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1), 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
@@ -278,11 +291,11 @@ module back_chassis_frame() {
             csk_through(UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_OUTER, UM_BACK_Z - Z_PLATE_OUTER, HOLE_CLEAR_M2, 4.6, true);
         // Battery JST pass-through slot
         rrect(BAT_SLOT_W, BAT_SLOT_H, WALL_BACK + 1.0, 4.4, BAT_SLOT_CX, BAT_SLOT_CY, Z_PLATE_OUTER - 0.5);
-        // UM982 L-wall recess & pure round crown bores (no teardrops)
+        // UM982 L-wall recess & crown bores (E220 SMA w/ downward -Z_asm anti-rotation D-flat)
         translate([UM_CX, 177.25, Z_PLATE_INNER + 12.5]) cube([UM_W + 0.6, 1.50, 25.0], center=true);
         round_y_bore(GX12_X, 176.5, 4.5, GX12_Z, GX12_HOLE_DIA);
         round_y_bore(GX12_X, 174.0, 180.0 - GX12_WALL - 174.0, GX12_Z, GX12_NUT_RECESS_DIA);
-        round_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA);
+        d_flat_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA, E220_SMA_FLAT, false);
         round_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5);
         round_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
         round_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
@@ -292,11 +305,6 @@ module back_chassis_frame() {
             translate([46.2, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=3.40, h=2.6);
             translate([49.7, by, WS_BTN_Z_CTR + 1.7]) cube([3.0, 6.8, 10.0], center=true);
         }
-        // MicroSD cutout + scoop
-        arch_x_cut(56.2, 4.5, 0.5*(WS_SD_Y0+WS_SD_Y1), WS_SD_Y1 - WS_SD_Y0,
-                   WS_SD_Z_CTR - 2.6, WS_SD_Z_CTR + 2.6, 1.6, true);
-        arch_x_cut(58.8, 2.0, 0.5*(WS_SD_Y0+WS_SD_Y1), WS_SD_Y1 - WS_SD_Y0 + 3.0,
-                   WS_SD_Z_CTR - 3.5, WS_SD_Z_CTR + 3.5, 2.0, true);
     }
 }
 
@@ -356,6 +364,11 @@ module top_cover() {
                         [WS_USBC_W/2, WS_USBC_H_OPEN/2], [0, WS_USBC_H_OPEN/2 + 2.0],
                         [-WS_USBC_W/2, WS_USBC_H_OPEN/2]
                     ]);
+        // MicroSD cutout + external finger scoop on Right Wall (prints face-down -> gable at -Z_asm!)
+        arch_x_cut(56.2, 4.5, 0.5*(WS_SD_Y0+WS_SD_Y1), WS_SD_Y1 - WS_SD_Y0,
+                   WS_SD_Z_CTR - 2.6, WS_SD_Z_CTR + 2.6, 1.6, false);
+        arch_x_cut(58.8, 2.0, 0.5*(WS_SD_Y0+WS_SD_Y1), WS_SD_Y1 - WS_SD_Y0 + 3.0,
+                   WS_SD_Z_CTR - 3.5, WS_SD_Z_CTR + 3.5, 2.0, false);
         // Speaker acoustic grille
         for (dy = [-8, -4, 0, 4, 8])
             rrect(18.0, 2.0, 3.5, 0.9, SPK_CX, SPK_CY + dy, -3.0);

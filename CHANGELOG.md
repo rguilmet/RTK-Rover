@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.4] - 2026-11-20
+### Changed & Refined
+- **MicroSD on `Top_Cover`, Z-Centered `GX-12` & Downward `E220` SMA D-Flat ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.4`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.4`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Moved the gabled `MicroSD` card slot and external finger scoop (`peak_at_plus_z=False` for support-free face-down printing) from `Back_Chassis_Frame` onto `Top_Cover`'s right wall (`66.69 cm^3`), and shrank `Back_Chassis_Frame`'s integral Right Flange (`90.03 cm^3`) down to `Y = 20.0..52.0 mm` for the `3` captive button plungers only.
+  - Centered the `GX-12` compass bulkhead bore vertically in the `28.0 mm` main chassis (`GX12_Z = -14.00 mm`, decoupled from `UM_SMA_Z = -11.25 mm`).
+  - Added the matching downward-facing (`-Z_asm`) anti-rotation D-flat (`E220_SMA_FLAT = 5.98 mm`, flat plane at `Z = -13.930 mm` for `0.125 mm` slip clearance over `REF-sma-female-lora-connector.stp`) to the `E220` SMA bulkhead bore and `CROWN_BULKHEAD` 2D DXF projection; verified `0.0000 mm^3` overlap across all `33` boolean audit pairs.
+
 ## [docs/mechanical/cad v2.0.3] - 2026-11-20
 ### Changed & Optimized
 - **Open-Center Speaker Pocket Frame & Inner Support Ridge ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

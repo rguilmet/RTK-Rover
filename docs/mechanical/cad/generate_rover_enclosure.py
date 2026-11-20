@@ -1,14 +1,14 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.0.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.4.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
     underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board,
-    Speaker pedestal), integral Top L-Bulkhead (GX-12, E220 SMA, UM982 SMAs),
-    and integral Right Button-Plunger & MicroSD Flange.
+    Speaker open-center pocket frame), integral Top L-Bulkhead (Z-centered GX-12,
+    E220 SMA w/ downward D-flat, UM982 SMAs), and integral Right Button-Plunger Flange.
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
-    flush glass bezel, USB-C tunnel, speaker acoustic slots, 4x UM982 LED light
-    pipes + SWITCH pinhole, Option H1 Sun Shield U-groove, and 6 symmetric
-    front-entry M3 CSK screws.
+    flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
+    4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove, and
+    6 symmetric front-entry M3 CSK screws.
   - Option B2 Pods (5000 mAh and 10000 mAh): Swappable 2-piece support-free
     Battery_Cradle + Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm pitch)
     bolting onto the shared 4 x M3 rear anchor grid + JST pass-through slot.
@@ -26,7 +26,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.3"
+__version__ = "v2.0.4"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -253,7 +253,7 @@ def build_back_chassis_frame() -> cq.Workplane:
         ).intersect(full_wall_envelope)
         plate = plate.union(corner_blk)
 
-    # 3. Integrated Right Button-Plunger & MicroSD Flange (X = 57.0..60.0, Y = 16.0..96.0)
+    # 3. Integrated Right Button-Plunger Flange (X = 57.0..60.0, Y = 20.0..52.0)
     flange_cy = 0.5 * (S.FLANGE_Y0 + S.FLANGE_Y1)
     flange_h = S.FLANGE_Y1 - S.FLANGE_Y0
     right_flange = (
@@ -513,10 +513,11 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.cut(gx_bore).cut(gx_rel)
 
-    # E220 SMA bore (pure round cylindrical bore, leaves 2.6 mm web Y = 177.4..180.0)
+    # E220 SMA bore w/ downward (-Z_asm) anti-rotation D-flat at Z=-13.930 (leaves 2.6 mm web Y = 177.4..180.0)
     e2_sma_bore = make_teardrop_y_bore(
         S.E220_SMA_X, y_start=176.5, y_len=4.5, z_ctr=S.E220_SMA_Z,
-        dia=S.E220_SMA_DIA, add_teardrop=False
+        dia=S.E220_SMA_DIA, top_flat_dist=S.E220_SMA_FLAT,
+        add_teardrop=False, peak_at_plus_z=False
     )
     e2_sma_rel = make_teardrop_y_bore(
         S.E220_SMA_X, y_start=174.0, y_len=180.0 - S.E220_SMA_WALL - 174.0, z_ctr=S.E220_SMA_Z,
@@ -536,7 +537,7 @@ def build_back_chassis_frame() -> cq.Workplane:
         )
         plate = plate.cut(um_bore).cut(um_pocket)
 
-    # 13c. Right Flange Tactile Button Plunger Bores (pure round cylindrical) + Captive Pockets + MicroSD Slot (gabled)
+    # 13c. Right Flange Tactile Button Plunger Bores (pure round cylindrical) + Captive Pockets
     for by in S.WS_BTN_Y_LIST:
         # Outer round plunger stem bore (Dia 4.60 mm, X = 50.8..60.8)
         outer_bore = (
@@ -563,21 +564,6 @@ def build_back_chassis_frame() -> cq.Workplane:
             .extrude(10.0)
         )
         plate = plate.cut(outer_bore).cut(inner_bore).cut(pocket)
-
-    # MicroSD slot cutout + external finger scoop chamfer on Right Flange
-    sd_cy = 0.5 * (S.WS_SD_Y0 + S.WS_SD_Y1)
-    sd_h_y = S.WS_SD_Y1 - S.WS_SD_Y0
-    sd_cut = make_arch_x_cutout(
-        56.2, 4.5, sd_cy, width_y=sd_h_y,
-        z_min=S.WS_SD_Z_CTR - 2.6, z_max=S.WS_SD_Z_CTR + 2.6,
-        roof_gable=1.6, peak_at_plus_z=True
-    )
-    sd_scoop = make_arch_x_cutout(
-        58.8, 2.0, sd_cy, width_y=sd_h_y + 3.0,
-        z_min=S.WS_SD_Z_CTR - 3.5, z_max=S.WS_SD_Z_CTR + 3.5,
-        roof_gable=2.0, peak_at_plus_z=True
-    )
-    plate = plate.cut(sd_cut).cut(sd_scoop)
 
     return plate
 
@@ -622,7 +608,7 @@ def build_top_cover() -> cq.Workplane:
         )
         cover = cover.cut(corner_notch)
 
-    # Notch out Right Button-Plunger & MicroSD Flange window (Y = 15.8..96.2)
+    # Notch out Right Button-Plunger Flange window (Y = 19.8..52.2)
     right_notch = (
         cq.Workplane("XY")
         .workplane(offset=z_cover_bot - 0.5)
@@ -729,6 +715,21 @@ def build_top_cover() -> cq.Workplane:
         .extrude(-(S.WALL_BOT + 1.5))
     )
     cover = cover.cut(usbc_cut)
+
+    # MicroSD slot cutout + external finger scoop on Right Wall (prints face-down -> gable at -Z_asm!)
+    sd_cy = 0.5 * (S.WS_SD_Y0 + S.WS_SD_Y1)
+    sd_h_y = S.WS_SD_Y1 - S.WS_SD_Y0
+    sd_cut = make_arch_x_cutout(
+        56.2, 4.5, sd_cy, width_y=sd_h_y,
+        z_min=S.WS_SD_Z_CTR - 2.6, z_max=S.WS_SD_Z_CTR + 2.6,
+        roof_gable=1.6, peak_at_plus_z=False
+    )
+    sd_scoop = make_arch_x_cutout(
+        58.8, 2.0, sd_cy, width_y=sd_h_y + 3.0,
+        z_min=S.WS_SD_Z_CTR - 3.5, z_max=S.WS_SD_Z_CTR + 3.5,
+        roof_gable=2.0, peak_at_plus_z=False
+    )
+    cover = cover.cut(sd_cut).cut(sd_scoop)
 
     # Speaker 5 x Acoustic Grille Slots over cone (-33.2, 21.0)
     for dy in (-8.0, -4.0, 0.0, 4.0, 8.0):
@@ -1257,6 +1258,14 @@ def export_2d_dxf(path: Path) -> None:
     add_rect(0.0, y_off - (abs(S.Z_PLATE_OUTER) / 2.0), S.CASE_W, abs(S.Z_PLATE_OUTER), "CROWN_BULKHEAD")
     msp.add_circle((S.GX12_X, y_off + S.GX12_Z), S.GX12_HOLE_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
     msp.add_circle((S.E220_SMA_X, y_off + S.E220_SMA_Z), S.E220_SMA_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
+    e2_r = S.E220_SMA_DIA / 2.0
+    e2_dz = -(S.E220_SMA_FLAT - e2_r)
+    e2_dx = math.sqrt(max(0.0, e2_r * e2_r - e2_dz * e2_dz))
+    msp.add_line(
+        (S.E220_SMA_X - e2_dx, y_off + S.E220_SMA_Z + e2_dz),
+        (S.E220_SMA_X + e2_dx, y_off + S.E220_SMA_Z + e2_dz),
+        dxfattribs={"layer": "CROWN_BULKHEAD"},
+    )
     msp.add_circle((S.UM_SMA_SLAVE_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
     msp.add_circle((S.UM_SMA_MASTER_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
 
