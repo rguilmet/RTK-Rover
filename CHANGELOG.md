@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.0] - 2026-11-20
+### Changed & Added
+- **Standardized `10000 mAh` Pole Pod, Bottom-Right Capture Corner & Removable `5000 mAh` Adapter ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.0`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Consolidated the separate `5000 mAh` and `10000 mAh` cradles/lids into a single standardized Option B2 `92 x 132 mm` pod ([`Battery_Cradle.step`](docs/mechanical/cad/step/Battery_Cradle.step) `32.14 cm^3`, [`Pole_Lid.step`](docs/mechanical/cad/step/Pole_Lid.step) `63.24 cm^3`) on the `10000 mAh` bay footprint, retiring the superseded `*_5000` and `*_10000` STEP/STL files.
+  - Added an integral **Bottom-Right Battery Capture Corner** inside `Battery_Cradle` (`X = +16.0..+34.25, Y = 31.0..38.75`, opposite the shared bottom-left JST exit) so both cells seat cleanly (`Y_body_min = 39.25 mm`) without sliding into the cable pocket, and aligned `BAT_SLOT` on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`88.25 cm^3`, `BAT_SLOT_CY = 45.0`, `Y = 38.5..51.5`) directly over their identical bottom-left cable exits.
+  - Added removable skeletonized L-truss [`Battery_Adapter_5000.step`](docs/mechanical/cad/step/Battery_Adapter_5000.step) (`13.90 cm^3`, [`bat_adapter_5000_print.stl`](docs/mechanical/cad/stl/bat_adapter_5000_print.stl)) dropping into the standardized bay (`0.25 mm` slip) to retain the `5000 mAh` pouch on all `4` sides; verified **`0.0000 mm^3` overlap across all `34` boolean audit pairs** and clean OpenSCAD `Manifold --hardwarnings` builds.
+
 ## [docs/mechanical/cad v2.0.6] - 2026-11-20
 ### Changed & Fixed
 - **Full-Height Open-Top Cover M3 Bosses & Unobstructed Top Corners ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.6`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.6`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.0.6`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

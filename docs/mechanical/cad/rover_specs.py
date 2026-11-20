@@ -1,19 +1,22 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.0.6 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.0 enclosure.
 
-Architecture (v2.0.6 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
+Architecture (v2.1.0 - Standardized 10000 mAh Pod + Capture Corner + 5000 mAh Adapter):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
      Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker pocket
-     frame + ridge), integral Top L-Bulkhead (Z-centered GX-12, E220 SMA w/
-     downward D-flat, UM982 SMAs), and Right Button-Plunger Flange + low rail.
+     frame + ridge), narrowed Top L-Wall (GX-12 centered, E220 SMA w/ downward
+     D-flat, UM982 SMAs), Right Button-Plunger Flange + low rail, and 6 open-top
+     full-height M3 cover bosses (Z = -2.65 mm).
   2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
      flush glass opening, USB-C tunnel, MicroSD slot + finger scoop, speaker
      acoustic grille slots, 4 x UM982 status LED light pipes + SWITCH pinhole,
-     Option H1 U-groove, and downward inverted-U comb capturing button plungers
-     when closed. Secured by 6 symmetric front-entry M3 CSK screws.
-  3. External Option B2 Battery & Pole Mount Pods (5000 mAh and 10000 mAh):
-     2-piece support-free stacked pod (Battery_Cradle + Pole_Lid w/ twin 1/4"-20
-     Ruthex inserts) bolting onto the shared 4 x M3 grid & Bat JST slot.
+     Option H1 U-groove, downward inverted-U comb capturing button plungers, and
+     continuous R6 corners for 6 symmetric front-entry M3 x 8/10 CSK screws.
+  3. Standardized External Option B2 Pod (10000 mAh Footprint + Removable 5000 mAh Insert):
+     Unified skeletonized Battery_Cradle (with integral Bottom-Right Capture Corner
+     opposite the Bottom-Left cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex
+     inserts) bolting onto the 4 x M3 grid & aligned JST slot, plus removable
+     skeletonized L-truss Battery_Adapter_5000 dropping cleanly inside the bay.
   4. Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG tapered hood plugging into
      the recessed U-groove in Top_Cover (zero magnets, zero protruding side bosses).
 
@@ -27,7 +30,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.6"
+__version__ = "v2.1.0"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -236,13 +239,13 @@ POD_M3_POINTS = [
     (POD_CX + POD_M3_DX / 2.0, POD_CY + POD_M3_DY / 2.0),  # (+42.0, 142.0)
 ]
 
-# Battery JST-PH Pass-Through Slot in Back Plate (inside both 5000 & 10000 pods, beside PB bottom)
+# Battery JST-PH Pass-Through Slot in Back Plate (directly above shared bottom-left cable exit)
 BAT_SLOT_CX = -22.5         # X: [-27.0, -18.0]; 2.0 mm right of PB (-29.0), 1.67 mm left of Header (-16.33)
-BAT_SLOT_CY = 54.5          # Y: [47.5, 61.5]; aligned directly beside Power Board battery input
+BAT_SLOT_CY = 45.0          # Y: [38.5, 51.5]; directly over shared bottom-left cable exit (Y=37.25..39.25)
 BAT_SLOT_W = 9.0
-BAT_SLOT_H = 14.0
+BAT_SLOT_H = 13.0
 
-# Option B2 Pod Variants (both bolt onto POD_M3_POINTS & align twin 1/4"-20 inserts)
+# Standardized Option B2 Pod (10000 mAh Footprint + Capture Corner + Removable 5000 mAh Adapter)
 POD_OUTER_W = 92.0          # X: [-44.0, +48.0] (6.0 mm corner margin outside X=-38/+42)
 POD_OUTER_R = 5.5
 POD_WALL = 2.4
@@ -254,23 +257,29 @@ POD_SPINE_W = 24.0
 POD_SPINE_H = 16.2          # >= 13.7 mm 1/4"-20 insert + 2.5 mm solid closed safety floor
 POLE_Q20_DY = 38.1          # 1.500" vertical pitch
 
-# Variant 1: 5000 mAh LiPo (REF-lipo-battery-3.7V-5000mAh.stp: 55.0 x 68.0 x 10.0 mm)
-BAT5_CELL_W = 55.0
+POD_BAY_W = 64.5            # X: [-30.25, +34.25] (side walls out to -32.65/+36.65 -> clears M3 -38/+42)
+POD_BAY_H = 124.0           # Y: [31.0, 155.0] (+8.25 mm bottom wire bend/exit space below cell Y=39.25)
+POD_BAY_D = 12.8            # +1.8 mm wire-routing & foam/swelling allowance (Z = -28.0..-40.8)
+POD_H = 132.0               # Y: [26.0, 158.0] (10 mm flange ears at Y=42 & 142 hold POD_M3_POINTS)
+
+# Integral Bottom-Right Battery Capture Corner (opposite side from Bottom-Left cable exit)
+POD_CAPTURE_X0 = 16.0       # Solid block X=[16.0, 34.25], Y=[31.0, 38.75] (stops both cells at Y=39.25)
+POD_CAPTURE_Y1 = 38.75      # Leaves bottom-left pocket X=[-30.25, +16.0], Y=[31.0, 38.75] for JST leads
+
+# Battery Cell Reference Dimensions (Meshnology 1S LiPo pouches, bottom-left cable exit)
+BAT5_CELL_W = 55.0          # Placed X=[-29.50, +25.50], body Y=[39.25, 105.25], tab Y=[37.25, 39.25]
 BAT5_CELL_H = 68.0
 BAT5_CELL_T = 10.0
-BAT5_BAY_W = 56.5           # +0.75 mm slip per side
-BAT5_BAY_H = 77.0           # Includes +9 mm wire exit zone below cell
-BAT5_BAY_D = 11.2           # +1.2 mm foam/swelling allowance (Z = -28.0..-39.2)
-BAT5_POD_H = 112.0          # Covers POD_M3_DY=100 +/- 6 mm corners comfortably
-
-# Variant 2: 10000 mAh LiPo (REF-lipo-battery-3.7V-10000mAh.stp: 63.0 x 115.0 x 11.0 mm)
-BAT10_CELL_W = 63.0
+BAT10_CELL_W = 63.0         # Placed X=[-29.50, +33.50], body Y=[39.25, 154.25]
 BAT10_CELL_H = 115.0
 BAT10_CELL_T = 11.0
-BAT10_BAY_W = 64.5          # X: [-30.25, +34.25] (side walls out to -32.65/+36.65 -> clears M3 -38/+42!)
-BAT10_BAY_H = 124.0         # Y: [30.0, 154.0] (+9 mm Kapton/lead bend exit)
-BAT10_BAY_D = 12.8          # +1.8 mm wire-routing & foam/swelling allowance (Z = -28.0..-40.8)
-BAT10_POD_H = 132.0         # Y: [26.0, 158.0] (10 mm flange ears at Y=42 & 142 hold POD_M3_POINTS)
+
+# Removable Skeletonized 5000 mAh Adapter Insert (drops cleanly inside standardized POD_BAY)
+ADAPTER_SLIP = 0.25         # Per-side slip clearance inside bay (Y_bot = 38.75 + 0.25 = 39.00)
+ADAPTER_WALL = 2.0
+ADAPTER_WEB_THK = 1.8
+BAT5_POCKET_X1 = 26.25      # +0.75 mm slip past 5000 mAh right edge (+25.50)
+BAT5_POCKET_Y1 = 106.00     # +0.75 mm slip past 5000 mAh top edge (+105.25)
 
 # ==============================================================================
 # 9. Option H1 Slim Slot-In Sun Shield (Zero Magnets, Zero Protruding Bosses)

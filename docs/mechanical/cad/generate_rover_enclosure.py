@@ -1,18 +1,19 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.6.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.0.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
     underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board w/
-    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), integral Top
-    L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), and
-    Right Button-Plunger Flange + low support rail (open to -X for tool-free assembly).
+    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), narrowed Top
+    L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs),
+    Right Button-Plunger Flange + low support rail, and 6 open-top full-height M3 bosses.
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
-    downward inverted-U plunger capture comb, and 6 symmetric front-entry M3 CSK screws.
-  - Option B2 Pods (5000 mAh and 10000 mAh): Swappable 2-piece support-free
-    Battery_Cradle + Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm pitch)
-    bolting onto the shared 4 x M3 rear anchor grid + JST pass-through slot.
+    downward inverted-U plunger capture comb, and continuous R6 corners.
+  - Standardized Option B2 Pod (10000 mAh Footprint + Capture Corner + 5000 mAh Adapter):
+    One skeletonized Battery_Cradle (w/ integral Bottom-Right Capture Corner opposite
+    the Bottom-Left cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
+    plus removable skeletonized L-truss Battery_Adapter_5000 insert.
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
@@ -27,7 +28,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.6"
+__version__ = "v2.1.0"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -732,25 +733,20 @@ def build_top_cover() -> cq.Workplane:
 
 
 # ==============================================================================
-# Parts 3-6: Option B2 2-Piece External Battery & Pole Mount Pods (5000 & 10000 mAh)
+# Parts 3-5: Standardized Option B2 Pod (10000 mAh Cradle, Pole Lid) + 5000 mAh Adapter
 # ==============================================================================
-def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
-    """Build (Battery_Cradle, Pole_Lid) for '5000' or '10000' mAh sharing POD_M3_POINTS.
+def build_battery_pod() -> tuple[cq.Workplane, cq.Workplane]:
+    """Build standardized (Battery_Cradle, Pole_Lid) on the 10000 mAh footprint.
 
-    Battery_Cradle is skeletonized into a 2.0 mm outer frame, 2.0 mm continuous inner
-    LiPo containment wall, 4 x Dia 8.6 mm M3 bolt sleeves, and a 1.8 mm interlocking
-    Warren-truss web (100% flat-bed support-free extrusion). Pole_Lid stays solid 3.0 mm
-    to seal the truss cells and shield the LiPo pouch on a survey pole.
+    Battery_Cradle features a 2.0 mm outer frame, 2.0 mm continuous inner LiPo bay,
+    4 x Dia 8.6 mm M3 sleeves, a 1.8 mm interlocking Warren-truss web, and an
+    integral Bottom-Right Capture Corner opposite the shared Bottom-Left cable exit.
+    Pole_Lid stays a solid 3.0 mm plate sealing the truss and carrying twin 1/4"-20
+    Ruthex inserts at 38.1 mm pitch.
     """
-    if variant == "5000":
-        bay_w, bay_h, bay_d, pod_h = S.BAT5_BAY_W, S.BAT5_BAY_H, S.BAT5_BAY_D, S.BAT5_POD_H
-    elif variant == "10000":
-        bay_w, bay_h, bay_d, pod_h = S.BAT10_BAY_W, S.BAT10_BAY_H, S.BAT10_BAY_D, S.BAT10_POD_H
-    else:
-        raise ValueError(f"Unknown battery pod variant: {variant}")
-
+    bay_w, bay_h, bay_d, pod_h = S.POD_BAY_W, S.POD_BAY_H, S.POD_BAY_D, S.POD_H
     z_cradle_front = S.Z_PLATE_OUTER          # -28.0 (100% flat build-plate face)
-    z_cradle_back = z_cradle_front - bay_d    # -39.2 (5000) or -40.8 (10000), 100% flat mate
+    z_cradle_back = z_cradle_front - bay_d    # -40.8 (100% flat mate)
     wall = S.POD_FRAME_WALL
     web_t = S.POD_WEB_THK
     bay_cy = S.POD_CY + 1.0
@@ -824,16 +820,13 @@ def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
         sy = -1.0 if py < S.POD_CY else 1.0
         ix = in_xl if sx < 0 else in_xr
         ox = out_xl if sx < 0 else out_xr
-        iy = in_yb if sy < 0 else in_yt
         oy = out_yb if sy < 0 else out_yt
         add_web(make_strut(ox, py, ix, py))
         add_web(make_strut(px, oy, px, py))
         add_web(make_strut(px, py, ix, max(in_yb, min(in_yt, py - sy * 16.0))))
-        if variant == "5000":
-            add_web(make_strut(px, py, px - sx * 14.0, iy))
 
-    # Left & Right side Warren-truss zigzag web + spine load-center horizontal tie
-    n_bays = 4 if variant == "5000" else 6
+    # Left & Right side 6-bay Warren-truss zigzag web + spine load-center horizontal tie
+    n_bays = 6
     y_lo, y_hi = S.POD_M3_POINTS[0][1], S.POD_M3_POINTS[2][1]
     ys = [y_lo + i * (y_hi - y_lo) / n_bays for i in range(n_bays + 1)]
     for side in (-1, 1):
@@ -848,28 +841,30 @@ def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
         add_web(make_strut(ox, S.POD_CY, ix, S.POD_CY))
 
     # Top & Bottom truss ties
-    if variant == "5000":
-        n_tb = 4
-        xs = [in_xl + i * (in_xr - in_xl) / n_tb for i in range(n_tb + 1)]
-        for y_in, y_out in ((in_yb, out_yb), (in_yt, out_yt)):
-            for i in range(n_tb):
-                xa, xb = xs[i], xs[i + 1]
-                if i % 2 == 0:
-                    add_web(make_strut(xa, y_out, xb, y_in))
-                else:
-                    add_web(make_strut(xa, y_in, xb, y_out))
-            add_web(make_strut(S.POD_CX, y_out, S.POD_CX, y_in))
-    else:
-        for tx in (S.POD_CX - 20.0, S.POD_CX, S.POD_CX + 20.0):
-            add_web(make_strut(tx, out_yb, tx, in_yb))
-            add_web(make_strut(tx, in_yt, tx, out_yt))
-        for side in (-1, 1):
-            ix = in_xl if side < 0 else in_xr
-            ox = out_xl if side < 0 else out_xr
-            add_web(make_strut(ox, out_yb + 2.0, ix, y_lo))
-            add_web(make_strut(ox, out_yt - 2.0, ix, y_hi))
+    for tx in (S.POD_CX - 20.0, S.POD_CX, S.POD_CX + 20.0):
+        add_web(make_strut(tx, out_yb, tx, in_yb))
+        add_web(make_strut(tx, in_yt, tx, out_yt))
+    for side in (-1, 1):
+        ix = in_xl if side < 0 else in_xr
+        ox = out_xl if side < 0 else out_xr
+        add_web(make_strut(ox, out_yb + 2.0, ix, y_lo))
+        add_web(make_strut(ox, out_yt - 2.0, ix, y_hi))
 
     cradle = cradle.union(web.intersect(annulus)).cut(inner_void)
+
+    # Integral Bottom-Right Battery Capture Corner (X=[16.0, +34.25], Y=[31.0, 38.75])
+    # Supports bottom-right of both 10000 and 5000 mAh cells while leaving bottom-left open for JST wires.
+    cap_x0 = S.POD_CAPTURE_X0
+    cap_x1 = S.POD_CX + bay_w / 2.0 + 0.5
+    cap_y0 = (bay_cy - bay_h / 2.0) - 0.5
+    cap_y1 = S.POD_CAPTURE_Y1
+    capture = make_rounded_box(
+        cap_x1 - cap_x0, cap_y1 - cap_y0, bay_d, radius=1.5,
+        cx=0.5 * (cap_x0 + cap_x1), cy=0.5 * (cap_y0 + cap_y1), z_min=z_cradle_back
+    )
+    inner_clip = make_rounded_box(bay_w + 1.0, bay_h + 1.0, bay_d + 0.2, 2.8,
+                                  cx=S.POD_CX, cy=bay_cy, z_min=z_cradle_back - 0.1)
+    cradle = cradle.union(capture.intersect(inner_clip))
 
     # 4 x M3 pass-through bores (3.4 mm) aligning identically to POD_M3_POINTS
     for px, py in S.POD_M3_POINTS:
@@ -914,6 +909,81 @@ def build_battery_pod_pair(variant: str) -> tuple[cq.Workplane, cq.Workplane]:
         lid = lid.cut(csk)
 
     return cradle, lid
+
+
+def build_battery_adapter_5000() -> cq.Workplane:
+    """Build removable skeletonized L-truss adapter adapting the 10000 mAh bay to 5000 mAh."""
+    bay_w, bay_h, bay_d = S.POD_BAY_W, S.POD_BAY_H, S.POD_BAY_D
+    bay_cy = S.POD_CY + 1.0
+    z_cradle_back = S.Z_PLATE_OUTER - bay_d
+    ad_z0 = z_cradle_back + 0.10
+    ad_h = bay_d - 0.20
+
+    slip = S.ADAPTER_SLIP
+    wall = S.ADAPTER_WALL
+    web_t = S.ADAPTER_WEB_THK
+    ad_xl = (S.POD_CX - bay_w / 2.0) + slip
+    ad_xr = (S.POD_CX + bay_w / 2.0) - slip
+    ad_yb = S.POD_CAPTURE_Y1 + slip
+    ad_yt = (bay_cy + bay_h / 2.0) - slip
+    p5_xr = S.BAT5_POCKET_X1
+    p5_yt = S.BAT5_POCKET_Y1
+
+    env_full = make_rounded_box(
+        ad_xr - ad_xl, (bay_cy + bay_h / 2.0 - slip) - (bay_cy - bay_h / 2.0 + slip),
+        ad_h, radius=2.5, cx=S.POD_CX, cy=bay_cy, z_min=ad_z0
+    )
+    l_top = (
+        cq.Workplane("XY")
+        .workplane(offset=ad_z0)
+        .center(0.5 * (ad_xl + ad_xr), 0.5 * (p5_yt + ad_yt))
+        .rect(ad_xr - ad_xl, ad_yt - p5_yt)
+        .extrude(ad_h)
+    )
+    l_right = (
+        cq.Workplane("XY")
+        .workplane(offset=ad_z0)
+        .center(0.5 * (p5_xr + ad_xr), 0.5 * (ad_yb + p5_yt + wall))
+        .rect(ad_xr - p5_xr, (p5_yt + wall) - ad_yb)
+        .extrude(ad_h)
+    )
+    l_solid = l_top.union(l_right).intersect(env_full)
+
+    top_cut = make_rounded_box(
+        (ad_xr - ad_xl) - 2.0 * wall, (ad_yt - p5_yt) - 2.0 * wall, ad_h + 1.0, radius=1.5,
+        cx=0.5 * (ad_xl + ad_xr), cy=0.5 * (p5_yt + ad_yt), z_min=ad_z0 - 0.5
+    )
+    right_cut = make_rounded_box(
+        (ad_xr - p5_xr) - 2.0 * wall, (p5_yt - ad_yb) - 2.0 * wall, ad_h + 1.0, radius=1.0,
+        cx=0.5 * (p5_xr + ad_xr), cy=0.5 * (ad_yb + p5_yt), z_min=ad_z0 - 0.5
+    )
+    adapter = l_solid.cut(top_cut).cut(right_cut)
+
+    def make_ad_strut(x0: float, y0: float, x1: float, y1: float) -> cq.Workplane:
+        length = math.hypot(x1 - x0, y1 - y0) + web_t
+        ang = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        return (
+            cq.Workplane("XY")
+            .workplane(offset=ad_z0)
+            .center(0.5 * (x0 + x1), 0.5 * (y0 + y1))
+            .transformed(rotate=(0, 0, ang))
+            .rect(length, web_t)
+            .extrude(ad_h)
+        )
+
+    tx0, tx1 = ad_xl + wall / 2.0, ad_xr - wall / 2.0
+    ty0, ty1 = p5_yt + wall / 2.0, ad_yt - wall / 2.0
+    tm = 0.5 * (tx0 + tx1)
+    truss = (
+        make_ad_strut(tx0, ty0, tm, ty1)
+        .union(make_ad_strut(tm, ty1, tx1, ty0))
+        .union(make_ad_strut(tx0, ty1, tm, ty0))
+        .union(make_ad_strut(tm, ty0, tx1, ty1))
+    )
+    for ry in (ad_yb + (p5_yt - ad_yb) / 3.0, ad_yb + 2.0 * (p5_yt - ad_yb) / 3.0):
+        truss = truss.union(make_ad_strut(p5_xr + wall / 2.0, ry, ad_xr - wall / 2.0, ry))
+
+    return adapter.union(truss.intersect(l_solid))
 
 
 # ==============================================================================
@@ -1074,17 +1144,18 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     sma_rot = sma.translate((-sma_cx, -sma_cy, -2.0)).rotate((0, 0, 0), (1, 0, 0), -90)
     refs["sma"] = sma_rot.translate((S.E220_SMA_X, S.CASE_H - S.E220_SMA_WALL, S.E220_SMA_Z))
 
-    # 9. 5000 mAh LiPo Battery (rotated 180 deg Z so wire tab sits bottom-left over BAT_SLOT)
+    # 9. 5000 mAh LiPo Battery (rotated 180 deg Z, seated in lower-left pocket above Capture Corner)
     b5 = cq.importers.importStep(str(REF_FILES["bat5000"]))
     b5b = b5.val().BoundingBox()
     b5_rot = b5.translate((-0.5 * (b5b.xmin + b5b.xmax), -0.5 * (b5b.ymin + b5b.ymax), -b5b.zmax)).rotate((0, 0, 0), (0, 0, 1), 180)
-    refs["bat5000"] = b5_rot.translate((S.POD_CX, S.POD_CY + 5.0, S.Z_PLATE_OUTER))
+    b5rb = b5_rot.val().BoundingBox()
+    # Align X_min=-29.50 & Y_body_min=39.25 (2.0 mm wire tab sits Y=[37.25, 39.25] directly below BAT_SLOT)
+    refs["bat5000"] = b5_rot.translate((-b5rb.xmin - 29.50, -b5rb.ymin + 37.25, S.Z_PLATE_OUTER - 1.5))
 
-    # 10. 10000 mAh LiPo Battery (offset 1.5 mm off Back Plate inside 12.8 mm bay for wire routing)
+    # 10. 10000 mAh LiPo Battery (aligned identically at X=-29.50, Y_body_min=39.25, offset 1.5 mm off Back Plate)
     b10 = cq.importers.importStep(str(REF_FILES["bat10000"]))
     b10b = b10.val().BoundingBox()
-    b10_norm = b10.translate((-0.5 * (b10b.xmin + b10b.xmax), -0.5 * (b10b.ymin + b10b.ymax), -b10b.zmax))
-    refs["bat10000"] = b10_norm.translate((S.POD_CX, S.POD_CY + 1.0, S.Z_PLATE_OUTER - 1.5))
+    refs["bat10000"] = b10.translate((-b10b.xmin - 29.50, -b10b.ymin + 39.25, -b10b.zmax + S.Z_PLATE_OUTER - 1.5))
 
     return refs
 
@@ -1128,12 +1199,12 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         ("Back_Chassis_Frame", "Slim_Sun_Shield"),
         ("Back_Chassis_Frame", "Button_Plungers"),
         ("Top_Cover", "Button_Plungers"),
-        ("Back_Chassis_Frame", "Battery_Cradle_5000"),
-        ("Battery_Cradle_5000", "Pole_Lid_5000"),
-        ("Back_Chassis_Frame", "Pole_Lid_5000"),
-        ("Back_Chassis_Frame", "Battery_Cradle_10000"),
-        ("Battery_Cradle_10000", "Pole_Lid_10000"),
-        ("Back_Chassis_Frame", "Pole_Lid_10000"),
+        ("Back_Chassis_Frame", "Battery_Cradle"),
+        ("Battery_Cradle", "Pole_Lid"),
+        ("Back_Chassis_Frame", "Pole_Lid"),
+        ("Battery_Cradle", "Battery_Adapter_5000"),
+        ("Pole_Lid", "Battery_Adapter_5000"),
+        ("Back_Chassis_Frame", "Battery_Adapter_5000"),
     ]
     for a_name, b_name in printed_pairs:
         inter = parts[a_name].intersect(parts[b_name])
@@ -1143,28 +1214,29 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
 
     print("\n--- [3/3] Printed Enclosure vs Real REF-*.stp Hardware Audit ---")
     ref_checks = [
-        ("Back_Chassis_Frame", "waveshare"),
-        ("Top_Cover",          "waveshare"),
-        ("Button_Plungers",    "waveshare"),
-        ("Back_Chassis_Frame", "coin_cell"),
-        ("Back_Chassis_Frame", "power"),
-        ("Top_Cover",          "power"),
-        ("Back_Chassis_Frame", "e220"),
-        ("Top_Cover",          "e220"),
-        ("Back_Chassis_Frame", "um982"),
-        ("Top_Cover",          "um982"),
-        ("Back_Chassis_Frame", "speaker"),
-        ("Top_Cover",          "speaker"),
-        ("Back_Chassis_Frame", "gx12"),
-        ("Top_Cover",          "gx12"),
-        ("Back_Chassis_Frame", "sma"),
-        ("Top_Cover",          "sma"),
-        ("Battery_Cradle_5000", "bat5000"),
-        ("Pole_Lid_5000",       "bat5000"),
-        ("Back_Chassis_Frame",  "bat5000"),
-        ("Battery_Cradle_10000", "bat10000"),
-        ("Pole_Lid_10000",       "bat10000"),
+        ("Back_Chassis_Frame",   "waveshare"),
+        ("Top_Cover",            "waveshare"),
+        ("Button_Plungers",      "waveshare"),
+        ("Back_Chassis_Frame",   "coin_cell"),
+        ("Back_Chassis_Frame",   "power"),
+        ("Top_Cover",            "power"),
+        ("Back_Chassis_Frame",   "e220"),
+        ("Top_Cover",            "e220"),
+        ("Back_Chassis_Frame",   "um982"),
+        ("Top_Cover",            "um982"),
+        ("Back_Chassis_Frame",   "speaker"),
+        ("Top_Cover",            "speaker"),
+        ("Back_Chassis_Frame",   "gx12"),
+        ("Top_Cover",            "gx12"),
+        ("Back_Chassis_Frame",   "sma"),
+        ("Top_Cover",            "sma"),
+        ("Battery_Cradle",       "bat10000"),
+        ("Pole_Lid",             "bat10000"),
         ("Back_Chassis_Frame",   "bat10000"),
+        ("Battery_Cradle",       "bat5000"),
+        ("Battery_Adapter_5000", "bat5000"),
+        ("Pole_Lid",             "bat5000"),
+        ("Back_Chassis_Frame",   "bat5000"),
     ]
     for p_name, r_name in ref_checks:
         inter = parts[p_name].intersect(refs[r_name])
@@ -1174,7 +1246,7 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
 
 
 def export_2d_dxf(path: Path) -> None:
-    """Export AutoCAD LT 2010 compatible 2D DXF of v2.0.0 chassis, pods, and crown."""
+    """Export AutoCAD LT 2010 compatible 2D DXF of chassis, standardized pod, adapter, and crown."""
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4  # mm
     msp = doc.modelspace()
@@ -1204,10 +1276,26 @@ def export_2d_dxf(path: Path) -> None:
     add_rect(S.UM_CX, S.UM_CY, S.UM_W, S.UM_BODY_H, "MODULES")
     msp.add_circle((S.RTC_CX, S.RTC_CY), 13.25, dxfattribs={"layer": "MODULES"})
 
-    # Battery slot & Option B2 pods
+    # Battery slot, unified Option B2 pod, Bottom-Right Capture Corner & 5000 mAh adapter pocket
+    bay_cy = S.POD_CY + 1.0
     add_rect(S.BAT_SLOT_CX, S.BAT_SLOT_CY, S.BAT_SLOT_W, S.BAT_SLOT_H, "POD_B2")
-    add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.BAT5_POD_H, "POD_B2")
-    add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.BAT10_POD_H, "POD_B2")
+    add_rect(S.POD_CX, S.POD_CY, S.POD_OUTER_W, S.POD_H, "POD_B2")
+    add_rect(S.POD_CX, bay_cy, S.POD_BAY_W, S.POD_BAY_H, "POD_B2")
+    cap_x1 = S.POD_CX + S.POD_BAY_W / 2.0
+    cap_y0 = bay_cy - S.POD_BAY_H / 2.0
+    msp.add_lwpolyline([
+        (S.POD_CAPTURE_X0, cap_y0),
+        (cap_x1, cap_y0),
+        (cap_x1, S.POD_CAPTURE_Y1),
+        (S.POD_CAPTURE_X0, S.POD_CAPTURE_Y1),
+    ], close=True, dxfattribs={"layer": "POD_B2"})
+    bay_xl = S.POD_CX - S.POD_BAY_W / 2.0
+    msp.add_lwpolyline([
+        (bay_xl, S.POD_CAPTURE_Y1),
+        (S.BAT5_POCKET_X1, S.POD_CAPTURE_Y1),
+        (S.BAT5_POCKET_X1, S.BAT5_POCKET_Y1),
+        (bay_xl, S.BAT5_POCKET_Y1),
+    ], close=True, dxfattribs={"layer": "POD_B2"})
     for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
         msp.add_circle((S.POD_CX, qy), S.RUTHEX_Q20_OD / 2.0, dxfattribs={"layer": "POD_B2"})
 
@@ -1251,17 +1339,15 @@ def main() -> None:
     STL_DIR.mkdir(parents=True, exist_ok=True)
     DXF_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("Building parametric v2.0.0 enclosure parts...")
-    cradle_5000, lid_5000 = build_battery_pod_pair("5000")
-    cradle_10000, lid_10000 = build_battery_pod_pair("10000")
+    print(f"Building parametric {__version__} enclosure parts...")
+    cradle, lid = build_battery_pod()
 
     parts = {
         "Back_Chassis_Frame": build_back_chassis_frame(),
         "Top_Cover": build_top_cover(),
-        "Battery_Cradle_5000": cradle_5000,
-        "Pole_Lid_5000": lid_5000,
-        "Battery_Cradle_10000": cradle_10000,
-        "Pole_Lid_10000": lid_10000,
+        "Battery_Cradle": cradle,
+        "Pole_Lid": lid,
+        "Battery_Adapter_5000": build_battery_adapter_5000(),
         "Slim_Sun_Shield": build_slim_sun_shield(),
         "Button_Plungers": build_button_plungers(),
     }
@@ -1280,10 +1366,9 @@ def main() -> None:
     stl_map = [
         ("Back_Chassis_Frame",   "back_chassis_print.stl",    "back_down"),
         ("Top_Cover",            "top_cover_print.stl",       "face_down"),
-        ("Battery_Cradle_5000",  "bat_cradle_5000_print.stl", "face_down"),
-        ("Pole_Lid_5000",        "pole_lid_5000_print.stl",   "face_down"),
-        ("Battery_Cradle_10000", "bat_cradle_10000_print.stl","face_down"),
-        ("Pole_Lid_10000",       "pole_lid_10000_print.stl",  "face_down"),
+        ("Battery_Cradle",       "bat_cradle_print.stl",      "face_down"),
+        ("Pole_Lid",             "pole_lid_print.stl",        "face_down"),
+        ("Battery_Adapter_5000", "bat_adapter_5000_print.stl","face_down"),
         ("Slim_Sun_Shield",      "slim_sun_shield_print.stl", "back_down"),
         ("Button_Plungers",      "button_plungers_print.stl", "plunger_flat"),
     ]
@@ -1293,20 +1378,23 @@ def main() -> None:
         cq.exporters.export(p_shp, str(stl_path), tolerance=0.05, angularTolerance=0.1)
         print(f"  Exported STL  -> {stl_name}")
 
-    # Export full SolidEdge B-Rep assemblies (5000 mAh & 10000 mAh) with real REF-*.stp hardware
-    for variant, bat_key, cradle_key, lid_key in [
-        ("5000mAh", "bat5000", "Battery_Cradle_5000", "Pole_Lid_5000"),
-        ("10000mAh", "bat10000", "Battery_Cradle_10000", "Pole_Lid_10000"),
+    # Export full SolidEdge B-Rep assemblies (10000 mAh standard & 5000 mAh w/ adapter)
+    for variant, bat_key, include_adapter in [
+        ("5000mAh", "bat5000", True),
+        ("10000mAh", "bat10000", False),
     ]:
         assy = cq.Assembly(name=f"RTK_Rover_Assembly_{variant}")
-        for pname, color in [
+        assy_parts = [
             ("Back_Chassis_Frame", cq.Color(0.22, 0.25, 0.29, 1.0)),
             ("Top_Cover",          cq.Color(0.28, 0.34, 0.42, 0.92)),
-            (cradle_key,           cq.Color(0.18, 0.22, 0.27, 1.0)),
-            (lid_key,              cq.Color(0.14, 0.17, 0.21, 1.0)),
+            ("Battery_Cradle",     cq.Color(0.18, 0.22, 0.27, 1.0)),
+            ("Pole_Lid",           cq.Color(0.14, 0.17, 0.21, 1.0)),
             ("Slim_Sun_Shield",    cq.Color(0.12, 0.14, 0.17, 1.0)),
             ("Button_Plungers",    cq.Color(0.90, 0.45, 0.10, 1.0)),
-        ]:
+        ]
+        if include_adapter:
+            assy_parts.insert(3, ("Battery_Adapter_5000", cq.Color(0.15, 0.55, 0.52, 1.0)))
+        for pname, color in assy_parts:
             assy.add(parts[pname], name=pname, color=color)
         for rname, rcolor in [
             ("waveshare", cq.Color(0.08, 0.35, 0.25, 1.0)),

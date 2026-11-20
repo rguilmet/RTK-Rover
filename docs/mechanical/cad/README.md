@@ -1,21 +1,21 @@
-# RTK Rover Option A Mechanical Enclosure CAD (`v2.0.6`)
+# RTK Rover Option A Mechanical Enclosure CAD (`v2.1.0`)
 
-Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + swappable Option B2 **`5000 mAh`** / **`10000 mAh`** external Battery & `1/4"-20` Pole Mount Pods), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
+Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + standardized Option B2 **`10000 mAh`** Battery & `1/4"-20` Pole Mount Pod with removable **`5000 mAh`** adapter insert), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
 
-![Exploded CAD assembly of the RTK Rover v2.0.6 enclosure](previews/cad_preview_exploded.png)
+![Exploded CAD assembly of the RTK Rover v2.1.0 enclosure](previews/cad_preview_exploded.png)
 
 ---
 
-## 1. Key Architectural Improvements (`v2.0.0` - `v2.0.6`)
+## 1. Key Architectural Improvements (`v2.0.0` - `v2.1.0`)
 
 1. **Open-Frame Serviceability (`Back_Chassis_Frame` + Clean Lift-Off `Top_Cover`):**
    * **Every electronic module, connector, and tactile plunger** mounts directly to `Back_Chassis_Frame` (`3.0 mm` rear plate + narrowed `X = [-50, +50]` **Top L-Wall** bulkhead + open-inner Right **Button-Plunger Flange** & low rail at `Y = 20..52 mm` + **`6` full-height open-top `M3` bosses** up to `Z = -2.65 mm` for unobstructed soldering-iron insert installation), while `Top_Cover` carries continuous `R6` corners, gabled `USB-C` / `MicroSD` wall openings, and a **downward inverted-U plunger capture comb** retaining the `3` plungers with `1.55 mm` travel.
    * Unscrew the **`6` symmetric front-entry `M3 x 8 mm` (or `10 mm`) CSK screws** (`4` corners + `2` mid-side) and lift `Top_Cover` straight off (`+Z`) with **zero unplugged antennas, zero detached wires, and zero loose plunger caps**.
 2. **RTC Coin Cell Relocated Under Waveshare:**
    * `Dia 21.5 x 4.0 mm` wrapped RTC battery sits inside an integral C-clip cradle molded onto `Back_Chassis_Frame` directly beneath `Waveshare 3.5B` (`9.5+ mm` clear below the brass standoffs, `2.8+ mm` clear below the lowest `2x16` header pin), shortening overall height.
-3. **Option B2 External Swappable Battery & `1/4"-20` Pole Pods (`5000 mAh` & `10000 mAh`):**
+3. **Standardized Option B2 `10000 mAh` Pod + Bottom-Right Capture Corner + `5000 mAh` Adapter:**
    * Moves the LiPo pouch out of the electronics cavity (trimming the main chassis depth by `11.3 mm`, down to `28.0 mm`).
-   * **Both** the **`5000 mAh`** (`112 mm` tall, `~7-7.5 hr`) and **`10000 mAh`** (`132 mm` tall, `~14-15 hr`) 2-piece pods bolt onto the exact same **`4 x M3` (`80 x 100 mm`)** rear grid flanking a **`9 x 14 mm` stadium JST pass-through slot** beside the Power Board battery input.
+   * Standardizes the pole mount on one `92 x 132 mm` pod (`Battery_Cradle` + `Pole_Lid`, **`4 x M3` (`80 x 100 mm`)**) with an integral **Bottom-Right Capture Corner** (`X = +16.0..+34.25, Y = 31.0..38.75`). Both the **`10000 mAh`** cell and **`5000 mAh`** cell (paired with the drop-in skeletonized **`Battery_Adapter_5000`** insert) exit their JST leads at the exact same **bottom-left pocket** directly over the **`9 x 13 mm` stadium `BAT_SLOT`** beside the Power Board input.
 4. **Option H1 Slim Slot-In Sun Shield (`1.6 mm` Walls, Zero Magnets):**
    * Tapered 3-sided PETG visor (`28.0 mm` top projection tapering to `12.0 mm` at bottom; open bottom for thumb gestures) plugs cleanly into a reinforced `1.90 x 1.80 mm` U-groove in `Top_Cover` — zero protruding magnet bosses and `> 65%` less filament than `v1.1.0`.
 
@@ -27,9 +27,9 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 | :---: | :---: |
 | ![Open-frame bench access showing all modules on Back_Chassis_Frame](previews/cad_preview_bench_open.png) | ![Front view with Option H1 visor and 6 front-entry M3 screws](previews/cad_preview_front_sunshield.png) |
 
-| Option B2 Pods (`5000 mAh` vs `10000 mAh`) | Support-Free Flat Print Orientations |
+| Option B2 Configurations (`10000 mAh` vs `5000 mAh + Adapter`) | Support-Free Flat Print Orientations |
 | :---: | :---: |
-| ![Rear comparison of 5000 mAh and 10000 mAh pods](previews/cad_preview_pods_comparison.png) | ![All 8 STL parts oriented flat on the build plate](previews/cad_preview_print_plates.png) |
+| ![Rear comparison of 10000 mAh pod and 5000 mAh adapter insert](previews/cad_preview_pods_comparison.png) | ![All 7 STL parts oriented flat on the build plate](previews/cad_preview_print_plates.png) |
 
 ---
 
@@ -37,14 +37,14 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 | Path | Purpose | Tooling |
 | :--- | :--- | :--- |
-| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.0.6`) | Python / CadQuery |
-| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 33-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.0.6`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
-| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.0.6`) | OpenSCAD `2026.11.18` (`Manifold`) |
+| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.1.0`) | Python / CadQuery |
+| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 34-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.1.0`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
+| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.1.0`) | OpenSCAD `2026.11.18` (`Manifold`) |
 | `step/REF-*.stp` (`12` files) | Exact hardware & battery reference models (including fixed `R6.0` `REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`) | SolidEdge / CadQuery |
-| `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`5000 mAh` pod + all `10` hardware models) | SolidEdge |
-| `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`10000 mAh` pod + all `10` hardware models) | SolidEdge |
-| `step/*.step` (`8` part files) | `Back_Chassis_Frame`, `Top_Cover`, `Battery_Cradle_5000`, `Pole_Lid_5000`, `Battery_Cradle_10000`, `Pole_Lid_10000`, `Slim_Sun_Shield`, `Button_Plungers` | SolidEdge |
-| `stl/*_print.stl` (`8` files) | Pre-oriented flat-on-bed support-free meshes ready to slice | Snapmaker Luban / PrusaSlicer / OrcaSlicer |
+| `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Battery_Adapter_5000` + `Pole_Lid` + hardware) | SolidEdge |
+| `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Pole_Lid` + `10000 mAh` hardware) | SolidEdge |
+| `step/*.step` (`7` part files) | `Back_Chassis_Frame`, `Top_Cover`, `Battery_Cradle`, `Pole_Lid`, `Battery_Adapter_5000`, `Slim_Sun_Shield`, `Button_Plungers` | SolidEdge |
+| `stl/*_print.stl` (`7` files) | Pre-oriented flat-on-bed support-free meshes ready to slice | Snapmaker Luban / PrusaSlicer / OrcaSlicer |
 | [`dxf/RTK_Rover_Interfaces_2D.dxf`](dxf/RTK_Rover_Interfaces_2D.dxf) | Layered 2D module footprints, U-groove, shared pod grid & top crown (`R2010` DXF) | AutoCAD LT 2010 / SolidEdge |
 | `previews/*.png` (`5` files) | Rendered assembly, bench-open, pod comparison, and print plate previews | Documentation |
 
@@ -64,18 +64,19 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 * **Left Power & Acoustic Stack (`Back_Chassis_Frame`):**
   * `20 x 80 x 20.57H mm` `Power Board` on **`2.55 mm` `M2` Ruthex standoffs** (`+0.55 mm` clear of `-2.00 mm` underside trace protrusion; full `5.00 mm` blind Ruthex pocket above `0.55 mm` closed rear skin; `1.48 mm` top clearance below `Top_Cover`).
   * Lower-left `28 x 30 x 10H mm` `Speaker` seated inside an open-center **`31.6 x 31.6 mm`** pocket frame (`1.6 mm` wall, **`2.0 mm` continuous inner support ridge** at `Z = -13.50`, open `24.4 x 24.4 mm` center acoustic cavity) firing upward (`+Z`) through `5` acoustic grille slots in `Top_Cover`.
-* **Option B2 External Swappable Pods (`4 x M3` at `80 x 100 mm`, `2 x 1/4"-20` Spine):**
-  * Both `Battery_Cradle_5000` (`11.2 mm` bay, **`27.66 cm^3` — `58.1%` lighter** vs. solid flange) and `Battery_Cradle_10000` (`12.8 mm` bay leaving `1.8 mm` wire-routing air/foam clearance behind the cell, **`30.35 cm^3` — `42.0%` lighter**) use a skeletonized `2.0 mm` outer frame + `2.0 mm` continuous inner LiPo wall + `Dia 8.6 mm` `M3` corner sleeves joined by a `1.8 mm` interlocking Warren-truss web (`0` overhang, flat-bed support-free). `Pole_Lid_*` stays a solid `3.0 mm` plate housing twin `1/4"-20` Ruthex inserts at `38.1 mm` (`1.500"`) pitch behind a solid `2.5 mm` closed safety floor.
+* **Standardized Option B2 `10000 mAh` Pod + `5000 mAh` Adapter (`4 x M3` at `80 x 100 mm`, `2 x 1/4"-20` Spine):**
+  * One standardized **`Battery_Cradle`** (`64.5 x 124.0 x 12.8 mm` bay, **`32.14 cm^3`**) combines a `2.0 mm` outer frame, `2.0 mm` continuous inner LiPo wall, `Dia 8.6 mm` `M3` corner sleeves, `1.8 mm` interlocking Warren-truss web, and an integral **Bottom-Right Capture Corner** (`X = +16.0..+34.25, Y = 31.0..38.75`, opposite the shared bottom-left cable exit aligned under **`BAT_SLOT`** at `Y = 38.5..51.5`).
+  * Drop-in **`Battery_Adapter_5000`** (`13.90 cm^3` skeletonized L-truss spacer) adapts the exact same `Battery_Cradle` + `Pole_Lid` (`63.24 cm^3`, `3.0 mm` floor + twin `1/4"-20` Ruthex inserts at `38.1 mm` pitch behind a `2.5 mm` closed safety floor) to hold the `5000 mAh` cell on all `4` sides with aligned bottom-left JST exit.
 
 ---
 
 ## 5. Verification & Snapmaker 2.0 PETG Print Guide
 
-* **Automated Real-Hardware Audit:** `python generate_rover_enclosure.py` verified single-solid manifold geometry on all `7` enclosure parts (`3` solids on `Button_Plungers`), flush `[-60.00, 60.00] x [0.00, 180.00] mm` outer envelope, **`0.0000 mm^3` overlap across all `11` printed-part pairs**, and **`0.0000 mm^3` overlap across all `22` enclosure-vs-real-`REF-*.stp` hardware pairs**.
+* **Automated Real-Hardware Audit:** `python generate_rover_enclosure.py` verified single-solid manifold geometry on all `6` enclosure parts (`3` solids on `Button_Plungers`), flush `[-60.00, 60.00] x [0.00, 180.00] mm` outer envelope, **`0.0000 mm^3` overlap across all `11` printed-part pairs**, and **`0.0000 mm^3` overlap across all `23` enclosure-vs-real-`REF-*.stp` hardware pairs**.
 * **Snapmaker 2 PETG Settings:**
   * Apply a thin washable **PVA glue stick** release/barrier layer on smooth/matte sheets (or print on textured PEI) and wait until the bed cools **below `30 deg C`** before removing large flat parts.
   * **Nozzle:** `235-245 deg C` | **Bed:** `70-75 deg C` | **Z-Offset:** `+0.04 to +0.06 mm` above PLA | **First Layer:** `15-20 mm/s`, fan OFF layers `1-3`, `30-50%` afterwards.
-  * **Walls & Infill:** `4` perimeters (`1.6 mm`), `25-35%` gyroid infill (`100%` infill on `Pole_Lid_*` spine), **zero supports (`stl/*_print.stl` already flat on `Z = 0`)**.
+  * **Walls & Infill:** `4` perimeters (`1.6 mm`), `25-35%` gyroid infill (`100%` infill on `Pole_Lid` spine), **zero supports (`stl/*_print.stl` already flat on `Z = 0`)**.
 
 ---
 
@@ -84,10 +85,10 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 * **Ruthex Heat-Set Inserts (`250-265 deg C` soldering iron tip):**
   * `10 x M3` (`Dia 4.0 x 6.7 mm`): `6` in `Back_Chassis_Frame` cover bosses + `4` in `Back_Chassis_Frame` rear Option B2 pod bosses.
   * `8 x M2` (`Dia 3.2 x 5.0 mm`): `4` in `Power Board` standoffs + `4` in `E220` standoffs.
-  * `2 x 1/4"-20` (`Dia 8.0 x 13.7 mm`): in `Pole_Lid_5000` or `Pole_Lid_10000` spine (`38.1 mm` pitch).
+  * `2 x 1/4"-20` (`Dia 8.0 x 13.7 mm`): in `Pole_Lid` spine (`38.1 mm` pitch).
 * **Metric Screws (`90-deg` flat-head CSK unless noted):**
   * `6 x M3 x 8 mm` (or `10 mm`) `CSK` (front-entry `Top_Cover` closure into full-height `Z = -2.65 mm` bosses)
-  * `4 x M3 x 20 mm CSK` (`5000 mAh` pod) **or** `4 x M3 x 22 mm CSK` (`10000 mAh` pod)
+  * `4 x M3 x 22 mm CSK` (standardized `Battery_Cradle` + `Pole_Lid` rear mount)
   * `4 x M2 x 20 mm CSK` (`Waveshare` via rear of `Back_Chassis_Frame` pillars, `16.5 mm` span + `3.5 mm` thread engagement)
   * `4 x M2 x 14 mm CSK` (`UM982` `4-M2` via rear of `Back_Chassis_Frame` pillars, `10.8 mm` span + `3.2 mm` thread engagement)
   * `8 x M2 x 5 mm` pan head (`Power Board` + `E220`)
