@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.5] - 2026-11-20
+### Changed & Fixed
+- **Power Board `+0.50 mm` Standoffs (`5.0 mm` Ruthex M2 Blind Pocket) & `Top_Cover` U-Comb Plunger Capture ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.0.5`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Raised `Power Board` standoffs from `2.05` to **`2.55 mm`** (`PB_STANDOFF_H`) and restored full **`5.00 mm` Ruthex M2 blind insert depth** (`Z = -27.450 mm` bore bottom above a solid `0.550 mm` closed rear skin, with `1.48 mm` clearance below `Top_Cover`).
+  - Removed the enclosed inner pocket/bore on `Back_Chassis_Frame`'s Right Flange (`87.49 cm^3`), leaving the open-from-`-X` outer bearing stop (`X = 56.0..60.0`) + low support rail (`Z = -11.70`) for tool-free horizontal plunger insertion, and added a matching downward inverted-U capture comb (`X = 49.90..51.60`, `Z = -11.50..-2.00`, `Dia 3.70 mm` slots opening upward when printing face-down) onto `Top_Cover` (`67.00 cm^3`).
+  - Lengthened `Button_Plungers` (`0.62 cm^3`, `Dia 3.20 mm` nose, `45-deg` tapered collar, `1.60 mm` outer button projection), verified dynamically across **`1.55 mm` linear travel (`0.30 mm` resting dome gap + `1.25 mm` active press stroke)** with positive collar stops on both `Back_Chassis_Frame` and `Top_Cover`, `0.0000 mm^3` across all `33` boolean audit pairs, and clean OpenSCAD `Manifold --hardwarnings` builds.
+
 ## [docs/mechanical/cad v2.0.4] - 2026-11-20
 ### Changed & Refined
 - **MicroSD on `Top_Cover`, Z-Centered `GX-12` & Downward `E220` SMA D-Flat ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.4`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.4`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

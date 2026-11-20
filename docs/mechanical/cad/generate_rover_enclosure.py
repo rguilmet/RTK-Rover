@@ -1,19 +1,20 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.4.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.0.5.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
-    underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board,
-    Speaker open-center pocket frame), integral Top L-Bulkhead (Z-centered GX-12,
-    E220 SMA w/ downward D-flat, UM982 SMAs), and integral Right Button-Plunger Flange.
+    underneath RTC Coin Cell + holder, Holybro UM982, E220 LoRa, Power Board w/
+    5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame), integral Top
+    L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), and
+    Right Button-Plunger Flange + low support rail (open to -X for tool-free assembly).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
-    4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove, and
-    6 symmetric front-entry M3 CSK screws.
+    4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
+    downward inverted-U plunger capture comb, and 6 symmetric front-entry M3 CSK screws.
   - Option B2 Pods (5000 mAh and 10000 mAh): Swappable 2-piece support-free
     Battery_Cradle + Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm pitch)
     bolting onto the shared 4 x M3 rear anchor grid + JST pass-through slot.
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
-  - Button_Plungers: 3 captive tactile button plungers (PWR, RESET, BOOT).
+  - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
 
 import math
@@ -26,7 +27,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.4"
+__version__ = "v2.0.5"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -265,7 +266,7 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.union(right_flange)
 
-    # Plunger guide block extending inward off Right Flange (X=46.6..57.0, Y=22..50, Z=-25.0..-4.2)
+    # Plunger outer stop block (X=56.0..57.0) + low bottom support rail (X=49.9..56.5, Z=-25.0..-11.7)
     blk_cx = 0.5 * (S.PLUNGER_BLK_X0 + S.PLUNGER_BLK_X1)
     blk_w = S.PLUNGER_BLK_X1 - S.PLUNGER_BLK_X0
     blk_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
@@ -273,11 +274,20 @@ def build_back_chassis_frame() -> cq.Workplane:
     plunger_blk = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_INNER - 0.5)
-        .center(blk_cx, blk_cy)
+        .center(blk_cx + 0.25, blk_cy)
         .rect(blk_w + 0.5, blk_h)
         .extrude(S.PLUNGER_BLK_Z_TOP - S.Z_PLATE_INNER + 0.5)
     )
-    plate = plate.union(plunger_blk)
+    rail_cx = 0.5 * (S.PLUNGER_RAIL_X0 + S.PLUNGER_BLK_X0 + 0.5)
+    rail_w = (S.PLUNGER_BLK_X0 + 0.5) - S.PLUNGER_RAIL_X0
+    plunger_rail = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.5)
+        .center(rail_cx, blk_cy)
+        .rect(rail_w, blk_h)
+        .extrude(S.PLUNGER_RAIL_Z_TOP - S.Z_PLATE_INNER + 0.5)
+    )
+    plate = plate.union(plunger_blk).union(plunger_rail)
 
     # 4. Left & Bottom thin perimeter registration tabs (Z = -25.0..-21.2, 0.25 mm inside Top_Cover walls)
     reg_tabs = [
@@ -394,8 +404,8 @@ def build_back_chassis_frame() -> cq.Workplane:
     rtc_holder = rtc_ring.cut(rtc_inner).cut(rtc_wire_slot)
     plate = plate.union(rtc_holder)
 
-    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.95, flush with -2.0 mm back trace clearance)
-    pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.95
+    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.45, full 5.0 mm Ruthex blind pocket)
+    pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.45
     pb_bores = []
     for dx in (-S.PB_HOLE_DX / 2.0, S.PB_HOLE_DX / 2.0):
         for dy in (-S.PB_HOLE_DY / 2.0, S.PB_HOLE_DY / 2.0):
@@ -404,7 +414,7 @@ def build_back_chassis_frame() -> cq.Workplane:
                 px, py, z_base=S.Z_PLATE_OUTER + 0.5,
                 boss_h=(pb_top_z - S.Z_PLATE_OUTER - 0.5),
                 boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
-                hole_depth=4.50, open_at_top=True,
+                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
             )
             plate = plate.union(b)
             pb_bores.append(bore)
@@ -537,33 +547,16 @@ def build_back_chassis_frame() -> cq.Workplane:
         )
         plate = plate.cut(um_bore).cut(um_pocket)
 
-    # 13c. Right Flange Tactile Button Plunger Bores (pure round cylindrical) + Captive Pockets
+    # 13c. Right Flange Tactile Button Plunger Outer Bearing Bores (pure round Dia 4.60 mm, open to -X)
     for by in S.WS_BTN_Y_LIST:
-        # Outer round plunger stem bore (Dia 4.60 mm, X = 50.8..60.8)
         outer_bore = (
             cq.Workplane("YZ")
-            .workplane(offset=50.8)
+            .workplane(offset=55.5)
             .center(by, S.WS_BTN_Z_CTR)
             .circle(2.30)
-            .extrude(10.0)
+            .extrude(5.3)
         )
-        # Inner round plunger nose bore (Dia 3.40 mm, X = 46.2..48.8)
-        inner_bore = (
-            cq.Workplane("YZ")
-            .workplane(offset=46.2)
-            .center(by, S.WS_BTN_Z_CTR)
-            .circle(1.70)
-            .extrude(2.6)
-        )
-        # Drop-in vertical pocket for captive collar flange (X = 48.2..51.2, open upward to Z=-4.2)
-        pocket = (
-            cq.Workplane("XY")
-            .workplane(offset=S.WS_BTN_Z_CTR - 3.3)
-            .center(49.7, by)
-            .rect(3.0, 6.8)
-            .extrude(10.0)
-        )
-        plate = plate.cut(outer_bore).cut(inner_bore).cut(pocket)
+        plate = plate.cut(outer_bore)
 
     return plate
 
@@ -634,6 +627,37 @@ def build_top_cover() -> cq.Workplane:
             .extrude(1.4)
         )
         cover = cover.union(rib)
+
+    # Downward inverted-U plunger capture comb (X = 49.90..51.60, Y = 22.0..50.0, Z = -11.50..-2.00)
+    # Prints face-down with slots opening UP (+Z_print) cleanly without supports.
+    comb_cx = 0.5 * (S.PLUNGER_U_X0 + S.PLUNGER_U_X1)
+    comb_w = S.PLUNGER_U_X1 - S.PLUNGER_U_X0
+    comb_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
+    comb_h = S.PLUNGER_BLK_Y1 - S.PLUNGER_BLK_Y0
+    u_comb = (
+        cq.Workplane("XY")
+        .workplane(offset=S.PLUNGER_U_Z_BOT)
+        .center(comb_cx, comb_cy)
+        .rect(comb_w, comb_h)
+        .extrude(-2.0 - S.PLUNGER_U_Z_BOT)
+    )
+    cover = cover.union(u_comb)
+    for by in S.WS_BTN_Y_LIST:
+        u_round = (
+            cq.Workplane("YZ")
+            .workplane(offset=S.PLUNGER_U_X0 - 0.5)
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(S.PLUNGER_U_SLOT_W / 2.0)
+            .extrude(comb_w + 1.0)
+        )
+        u_open = (
+            cq.Workplane("XY")
+            .workplane(offset=S.PLUNGER_U_Z_BOT - 0.5)
+            .center(comb_cx, by)
+            .rect(comb_w + 1.0, S.PLUNGER_U_SLOT_W)
+            .extrude(S.WS_BTN_Z_CTR - (S.PLUNGER_U_Z_BOT - 0.5))
+        )
+        cover = cover.cut(u_round).cut(u_open)
 
     # Cut Option H1 Recessed U-Groove (1.90 mm wide x 1.80 mm deep from Z = 0.0)
     gw = S.SHIELD_GROOVE_W
@@ -997,36 +1021,36 @@ def build_slim_sun_shield() -> cq.Workplane:
 # Part 8: Button_Plungers (3 x Captive Tactile Plungers for Back_Chassis_Frame Flange)
 # ==============================================================================
 def build_button_plungers() -> cq.Workplane:
-    """Build 3 captive round tactile button plungers (PWR, RESET, BOOT), 45-deg self-supporting."""
+    """Build 3 captive round tactile button plungers (PWR, RESET, BOOT), 1.55 mm travel."""
     comp = None
     for by in S.WS_BTN_Y_LIST:
-        # 1. Inner nose reaching near button dome (X = +45.75..+48.6, 0.40 mm gap to dome +45.35)
+        # 1. Inner guided nose (Dia 3.20 mm, X = +45.65..+53.25; 0.30 mm rest gap to dome +45.35)
         nose = (
             cq.Workplane("YZ")
-            .workplane(offset=45.75)
+            .workplane(offset=45.65)
             .center(by, S.WS_BTN_Z_CTR)
-            .circle(1.40)
-            .extrude(2.85)
+            .circle(S.PLUNGER_NOSE_DIA / 2.0)
+            .extrude(7.60)
         )
-        # 2. Tapered 45-deg captive collar transitioning smoothly down onto round stem (zero 90-deg overhang!)
+        # 2. Tapered 45-deg captive collar (X = +53.15..+55.85; 1.55 mm clear of U-comb +51.60)
         collar = (
             cq.Workplane("YZ")
-            .workplane(offset=48.55)
+            .workplane(offset=53.15)
             .center(by, S.WS_BTN_Z_CTR)
-            .rect(6.10, 5.20)
-            .workplane(offset=1.00)
-            .rect(6.10, 5.20)
-            .workplane(offset=1.25)
+            .rect(5.80, 5.40)
+            .workplane(offset=0.80)
+            .rect(5.80, 5.40)
+            .workplane(offset=1.90)
             .circle(2.05)
             .loft(combine=True)
         )
-        # 3. Pure round cylindrical stem sticking 1.2 mm proud of right wall (Dia 4.10 mm, X = +50.75..+61.20)
+        # 3. Pure round cylindrical stem sticking 1.60 mm proud of right wall (Dia 4.10 mm, X = +55.80..+61.60)
         stem = (
             cq.Workplane("YZ")
-            .workplane(offset=50.75)
+            .workplane(offset=55.80)
             .center(by, S.WS_BTN_Z_CTR)
             .circle(2.05)
-            .extrude(10.45)
+            .extrude(5.80)
         )
         one = nose.union(collar).union(stem)
         comp = one if comp is None else comp.add(one)

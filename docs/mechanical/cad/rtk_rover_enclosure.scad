@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.0.4 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.18 mirror of rover_specs.py v2.0.4
+// RTK Rover Option A Enclosure v2.0.5 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.0.5
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -60,11 +60,18 @@ WS_SD_Z_CTR = -8.25;
 
 FLANGE_Y0 = 20.0;
 FLANGE_Y1 = 52.0;
-PLUNGER_BLK_X0 = 46.60;
+PLUNGER_BLK_X0 = 56.00;
 PLUNGER_BLK_X1 = 57.00;
 PLUNGER_BLK_Y0 = 22.0;
 PLUNGER_BLK_Y1 = 50.0;
 PLUNGER_BLK_Z_TOP = -4.2;
+PLUNGER_RAIL_X0 = 49.90;
+PLUNGER_RAIL_Z_TOP = -11.70;
+PLUNGER_U_X0 = 49.90;
+PLUNGER_U_X1 = 51.60;
+PLUNGER_U_Z_BOT = -11.50;
+PLUNGER_NOSE_DIA = 3.20;
+PLUNGER_U_SLOT_W = 3.70;
 
 // --- RTC Coin Cell (Underneath Waveshare) ---
 RTC_CX = 18.50;
@@ -74,7 +81,7 @@ RTC_CY = 46.00;
 PB_W = 20.0; PB_H = 80.0;
 PB_HOLE_DX = 15.0; PB_HOLE_DY = 75.0;
 PB_CX = -39.00; PB_CY = 91.00;
-PB_STANDOFF_H = 2.05;
+PB_STANDOFF_H = 2.55;
 
 // --- Speaker (28 x 30 x 10H, Open-Center Pocket Frame & Support Ridge) ---
 SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 10.0;
@@ -214,13 +221,17 @@ module back_chassis_frame() {
                             cube([9.4, 8.2, 25.35], center=true);
                 }
             }
-            // Right Button-Plunger Flange
+            // Right Button-Plunger Flange + outer stop block + low bottom support rail (open to -X)
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
-            translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1), 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
-                       0.5*(Z_PLATE_INNER + PLUNGER_BLK_Z_TOP)])
+            translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1) + 0.25, 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
+                       0.5*(Z_PLATE_INNER + PLUNGER_BLK_Z_TOP) - 0.25])
                 cube([PLUNGER_BLK_X1 - PLUNGER_BLK_X0 + 0.5, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
                       PLUNGER_BLK_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
+            translate([0.5*(PLUNGER_RAIL_X0 + PLUNGER_BLK_X0 + 0.5), 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
+                       0.5*(Z_PLATE_INNER + PLUNGER_RAIL_Z_TOP) - 0.25])
+                cube([(PLUNGER_BLK_X0 + 0.5) - PLUNGER_RAIL_X0, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
+                      PLUNGER_RAIL_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
             // Perimeter registration tabs
             for (t = [[-56.0, 46.0, 1.6, 12.0], [-56.0, 154.0, 1.6, 12.0],
                       [-10.0,  4.0, 12.0, 1.6], [ 42.0,   4.0, 10.0, 1.6]])
@@ -282,8 +293,8 @@ module back_chassis_frame() {
         for (sx = [-1, 1], sy = [-1, 1]) {
             csk_through(WS_CX + sx*WS_STANDOFF_DX/2, WS_CY + sy*WS_STANDOFF_DY/2,
                         Z_PLATE_OUTER, WS_STANDOFF_Z_END - Z_PLATE_OUTER, HOLE_CLEAR_M2, 4.6, true);
-            translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_PLATE_INNER + PB_STANDOFF_H - 4.50])
-                cylinder(d=RUTHEX_M2_OD, h=4.80);
+            translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_PLATE_INNER + PB_STANDOFF_H - RUTHEX_M2_DEPTH])
+                cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
             translate([E220_CX + sx*E220_HOLE_DX/2, E220_CY + sy*E220_HOLE_DY/2, Z_PLATE_INNER + E220_STANDOFF_H - RUTHEX_M2_DEPTH])
                 cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
         }
@@ -299,12 +310,9 @@ module back_chassis_frame() {
         round_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5);
         round_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
         round_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
-        // Pure round plunger bores & captive pockets
-        for (by = WS_BTN_Y_LIST) {
-            translate([50.8, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.60, h=10.0);
-            translate([46.2, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=3.40, h=2.6);
-            translate([49.7, by, WS_BTN_Z_CTR + 1.7]) cube([3.0, 6.8, 10.0], center=true);
-        }
+        // Pure round outer plunger bearing bores (Dia 4.60 mm, open to -X)
+        for (by = WS_BTN_Y_LIST)
+            translate([55.5, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.60, h=5.3);
     }
 }
 
@@ -315,34 +323,50 @@ module top_cover() {
     u_w = SHIELD_U_X_RIGHT - SHIELD_U_X_LEFT;
     u_cy = 0.5 * (SHIELD_U_Y_BOT + SHIELD_U_Y_TOP);
     u_h = SHIELD_U_Y_TOP - SHIELD_U_Y_BOT;
+    comb_cx = 0.5 * (PLUNGER_U_X0 + PLUNGER_U_X1);
+    comb_w = PLUNGER_U_X1 - PLUNGER_U_X0;
+    comb_cy = 0.5 * (PLUNGER_BLK_Y0 + PLUNGER_BLK_Y1);
+    comb_h = PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0;
 
     difference() {
         union() {
-            rrect(CASE_W, CASE_H, cover_depth, CORNER_R, 0, CASE_H/2, z_bot);
+            difference() {
+                rrect(CASE_W, CASE_H, cover_depth, CORNER_R, 0, CASE_H/2, z_bot);
+                // Interior cavity
+                rrect(CASE_W - 2*WALL_SIDE, CASE_H - WALL_BOT - WALL_TOP, cover_depth - WALL_FRONT + 0.5,
+                      max(1.5, CORNER_R - WALL_SIDE), 0, CASE_H/2, z_bot - 0.5);
+                // Boss relief pockets below -13.0 in walls
+                for (p = COVER_M3_POINTS)
+                    if (p[1] < 165.0)
+                        translate([p[0], p[1], z_bot - 0.5]) cylinder(d=8.2, h=cover_depth - 13.0 + 0.5);
+                // Top L-wall crown & corner notches (straight +Z lift-off!)
+                translate([0, 178.7, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
+                    cube([CASE_W + 2, 4.0, cover_depth - WALL_FRONT + 0.5], center=true);
+                for (sg = [-1, 1])
+                    translate([sg * (CASE_W/2 - 5.2), 173.0, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
+                        cube([11.0, 8.4, cover_depth - WALL_FRONT + 0.5], center=true);
+                // Right Flange notch
+                translate([CASE_W/2 - 1.2, 0.5*(FLANGE_Y0+FLANGE_Y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
+                    cube([WALL_SIDE + 2.0, (FLANGE_Y1 - FLANGE_Y0) + 2*NOTCH_CLEAR, cover_depth - WALL_FRONT + 0.5], center=true);
+            }
             // U-groove reinforcing backing rib
             translate([SHIELD_U_X_LEFT, u_cy, -2.7]) cube([4.0, u_h + 2.5, 1.4], center=true);
             translate([SHIELD_U_X_RIGHT, u_cy, -2.7]) cube([4.0, u_h + 2.5, 1.4], center=true);
             translate([u_cx, SHIELD_U_Y_TOP, -2.7]) cube([u_w + 4.0, 4.0, 1.4], center=true);
+            // Downward inverted-U plunger capture comb (slots open UP when printing face-down)
+            translate([comb_cx, comb_cy, 0.5*(PLUNGER_U_Z_BOT - 2.0)])
+                cube([comb_w, comb_h, -2.0 - PLUNGER_U_Z_BOT], center=true);
             // 6 x Cover M3 Screw Columns down to -13.0
             for (p = COVER_M3_POINTS)
                 translate([p[0], p[1], -13.0]) cylinder(d=7.6, h=12.5);
         }
-        // Interior cavity
-        rrect(CASE_W - 2*WALL_SIDE, CASE_H - WALL_BOT - WALL_TOP, cover_depth - WALL_FRONT + 0.5,
-              max(1.5, CORNER_R - WALL_SIDE), 0, CASE_H/2, z_bot - 0.5);
-        // Boss relief pockets below -13.0 in walls
-        for (p = COVER_M3_POINTS)
-            if (p[1] < 165.0)
-                translate([p[0], p[1], z_bot - 0.5]) cylinder(d=8.2, h=cover_depth - 13.0 + 0.5);
-        // Top L-wall crown & corner notches (straight +Z lift-off!)
-        translate([0, 178.7, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-            cube([CASE_W + 2, 4.0, cover_depth - WALL_FRONT + 0.5], center=true);
-        for (sg = [-1, 1])
-            translate([sg * (CASE_W/2 - 5.2), 173.0, 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-                cube([11.0, 8.4, cover_depth - WALL_FRONT + 0.5], center=true);
-        // Right Flange notch
-        translate([CASE_W/2 - 1.2, 0.5*(FLANGE_Y0+FLANGE_Y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
-            cube([WALL_SIDE + 2.0, (FLANGE_Y1 - FLANGE_Y0) + 2*NOTCH_CLEAR, cover_depth - WALL_FRONT + 0.5], center=true);
+        // Downward-open U-slots in capture comb
+        for (by = WS_BTN_Y_LIST) {
+            translate([PLUNGER_U_X0 - 0.5, by, WS_BTN_Z_CTR])
+                rotate([0, 90, 0]) cylinder(d=PLUNGER_U_SLOT_W, h=comb_w + 1.0);
+            translate([comb_cx, by, 0.5*(PLUNGER_U_Z_BOT - 0.5 + WS_BTN_Z_CTR)])
+                cube([comb_w + 1.0, PLUNGER_U_SLOT_W, WS_BTN_Z_CTR - (PLUNGER_U_Z_BOT - 0.5)], center=true);
+        }
         // Front CSK M3 thru holes
         for (p = COVER_M3_POINTS)
             csk_through(p[0], p[1], -13.0, 13.0, HOLE_CLEAR_M3, 6.2, false);
@@ -535,14 +559,14 @@ module slim_sun_shield() {
 
 module button_plungers() {
     for (by = WS_BTN_Y_LIST) {
-        translate([45.75, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=2.8, h=2.85);
-        translate([48.55, by, WS_BTN_Z_CTR]) rotate([0, 90, 0])
+        translate([45.65, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=PLUNGER_NOSE_DIA, h=7.60);
+        translate([53.15, by, WS_BTN_Z_CTR]) rotate([0, 90, 0])
             hull() {
-                cube([5.2, 6.1, 0.2], center=true);
-                translate([0, 0, 1.0]) cube([5.2, 6.1, 0.2], center=true);
-                translate([0, 0, 2.25]) cylinder(d=4.1, h=0.2, center=true);
+                cube([5.40, 5.80, 0.2], center=true);
+                translate([0, 0, 0.80]) cube([5.40, 5.80, 0.2], center=true);
+                translate([0, 0, 2.70]) cylinder(d=4.10, h=0.2, center=true);
             }
-        translate([50.75, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.10, h=10.45);
+        translate([55.80, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.10, h=5.80);
     }
 }
 
@@ -564,7 +588,7 @@ else if (PART == "lid5_print") rotate([180, 0, 0]) pole_lid("5000");
 else if (PART == "cradle10_print") rotate([180, 0, 0]) translate([0, 0, -Z_PLATE_OUTER]) battery_cradle("10000");
 else if (PART == "lid10_print") rotate([180, 0, 0]) pole_lid("10000");
 else if (PART == "shield_print") translate([0, 0, SHIELD_GROOVE_D - 0.10]) slim_sun_shield();
-else if (PART == "plungers_print") rotate([0, -90, 0]) translate([-61.2, 0, 0]) button_plungers();
+else if (PART == "plungers_print") rotate([0, -90, 0]) translate([-61.6, 0, 0]) button_plungers();
 else {
     color("SlateGray") translate([0, 0, EXPLODE_MM]) top_cover();
     color("SteelBlue") back_chassis_frame();

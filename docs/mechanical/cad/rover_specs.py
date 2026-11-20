@@ -1,15 +1,16 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.0.4 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.0.5 enclosure.
 
-Architecture (v2.0.4 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
+Architecture (v2.0.5 - Open-Frame Back Chassis + Lift-Off Cover + Option B2 Pods):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
-     Power Board, open-center Speaker pocket frame + ridge), an integral right-angle
-     Top L-Bulkhead (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs),
-     and an integral right-angle Right Button-Plunger Flange (captive plungers).
+     Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker pocket
+     frame + ridge), integral Top L-Bulkhead (Z-centered GX-12, E220 SMA w/
+     downward D-flat, UM982 SMAs), and Right Button-Plunger Flange + low rail.
   2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
      flush glass opening, USB-C tunnel, MicroSD slot + finger scoop, speaker
      acoustic grille slots, 4 x UM982 status LED light pipes + SWITCH pinhole,
-     and Option H1 U-groove. Secured by 6 symmetric front-entry M3 CSK screws.
+     Option H1 U-groove, and downward inverted-U comb capturing button plungers
+     when closed. Secured by 6 symmetric front-entry M3 CSK screws.
   3. External Option B2 Battery & Pole Mount Pods (5000 mAh and 10000 mAh):
      2-piece support-free stacked pod (Battery_Cradle + Pole_Lid w/ twin 1/4"-20
      Ruthex inserts) bolting onto the shared 4 x M3 grid & Bat JST slot.
@@ -26,7 +27,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.4"
+__version__ = "v2.0.5"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -102,14 +103,21 @@ WS_SD_Y0 = WS_CY + 16.80                # 69.30
 WS_SD_Y1 = WS_CY + 32.80                # 85.30
 WS_SD_Z_CTR = -8.25
 
-# Integrated Right Button-Plunger Flange & Plunger Carrier (Back_Chassis_Frame)
+# Integrated Right Button-Plunger Flange (Back_Chassis_Frame) + U-Capture Comb (Top_Cover)
 FLANGE_Y0 = 20.0                        # Clears Bottom-Right M3 boss (54.2, 6.8) with 2.0 mm below plunger block
 FLANGE_Y1 = 52.0                        # Button block flange only (MicroSD slot moved to Top_Cover right wall)
-PLUNGER_BLK_X0 = 46.60                  # Clears Waveshare PCB/midframe (+45.75) by 0.85 mm & Pod boss (+45.9)
+PLUNGER_BLK_X0 = 56.00                  # Open to -X for tool-free plunger slide-in; 4.00 mm bearing wall (56..60)
 PLUNGER_BLK_X1 = 57.00
 PLUNGER_BLK_Y0 = 22.0
 PLUNGER_BLK_Y1 = 50.0
 PLUNGER_BLK_Z_TOP = -4.2                # Clears Glass (-1.10) & Top_Cover front (-2.4) safely
+PLUNGER_RAIL_X0 = 49.90                 # Low support rail under collar/nose (clears Top_Cover U-comb -11.50 by 0.20)
+PLUNGER_RAIL_Z_TOP = -11.70
+PLUNGER_U_X0 = 49.90                    # Top_Cover downward inverted-U capture wall (clears glass opening 49.25 by 0.65)
+PLUNGER_U_X1 = 51.60                    # Allows 1.55 mm travel (0.30 mm rest gap + 1.25 mm active stroke) to collar 53.15
+PLUNGER_U_Z_BOT = -11.50
+PLUNGER_NOSE_DIA = 3.20
+PLUNGER_U_SLOT_W = 3.70                 # 0.25 mm radial slip clearance around Dia 3.20 mm nose
 
 # ==============================================================================
 # 2. RTC Coin Cell + Holder (Underneath Waveshare! From REF-coin-cell*.stp)
@@ -126,7 +134,7 @@ PB_HOLE_DX = 15.0
 PB_HOLE_DY = 75.0
 PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 12.67 mm clear of Header
 PB_CY = 91.00               # Y: [51.00, 131.00]; 5.1 mm above Bot-Left Pod M3 (45.9), 7.1 mm below Top-Left Pod M3 (138.1)
-PB_STANDOFF_H = 2.05        # Flush with -2.00 mm underside trace protrusion (+0.05 mm clear); peak -4.38 mm (1.98 mm below Top_Cover)
+PB_STANDOFF_H = 2.55        # +0.55 mm clear of -2.00 mm trace protrusion, full 5.00 mm Ruthex M2 pocket; peak -3.88 mm (1.48 mm below cover)
 
 # ==============================================================================
 # 4. Speaker (from REF-speaker.stp: 28.0 x 30.0 x 10.0H mm, Flat on Back Plate)
