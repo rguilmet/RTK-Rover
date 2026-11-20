@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.0.1] - 2026-11-20
+### Changed & Polished
+- **Restored `R6.0` Waveshare Corners, Pure Round Bulkhead/Plunger Bores & Flush Standoffs ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.1`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.1`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Restored `WS_GLASS_R = 6.00` to match the Waveshare `3.5B` datasheet and updated [`REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`](docs/mechanical/cad/step/REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp) (verified together with the `2x16` header across all `33` `0.0000 mm^3` boolean audit pairs).
+  - Removed 45-deg teardrop gables from all round horizontal bores (`GX-12`, `E220 SMA`, `UM982 Slave/Master` SMAs, and `3` right-flange plunger bores) and switched `Button_Plungers` stems to pure round `Dia 4.10 mm` shafts (`45-deg` lofted collar), retaining 45-deg bridges exclusively on the rectangular `MicroSD` and `USB-C` slots.
+  - Lowered `Power Board` (`2.05 mm`) and `E220` (`3.05 mm`) standoffs to sit flush against their `-2.00 mm` / `-3.00 mm` underside trace-clearance protrusions (`4.5 mm` bore on `Power Board`, preserving a solid closed rear skin).
+  - Removed `5` superseded `v1.1.0` `stl/*_print.stl` files and updated private mirror layout to `RTK_Rover_Private/docs/mechanical/{par,stl,step}`.
+
 ## [docs/mechanical/cad v2.0.0] - 2026-11-20
 ### Changed & Redesigned
 - **Open-Frame Back Chassis, Lift-Off Cover, Option B2 Swappable Pods & Option H1 Slim Visor ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.0.0`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.0.0`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

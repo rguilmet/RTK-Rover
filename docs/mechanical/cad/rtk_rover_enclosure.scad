@@ -41,7 +41,7 @@ RUTHEX_Q20_OD = 8.0; RUTHEX_Q20_DEPTH = 13.7;
 // --- Waveshare 3.5B (Portrait, USB-C Down) ---
 WS_GLASS_W = 61.00;
 WS_GLASS_H = 92.44;
-WS_GLASS_R = 3.00;
+WS_GLASS_R = 6.00;
 WS_STANDOFF_DX = 48.50;
 WS_STANDOFF_DY = 72.00;
 WS_STANDOFF_Z_END = -11.50;
@@ -74,7 +74,7 @@ RTC_CY = 46.00;
 PB_W = 20.0; PB_H = 80.0;
 PB_HOLE_DX = 15.0; PB_HOLE_DY = 75.0;
 PB_CX = -39.00; PB_CY = 91.00;
-PB_STANDOFF_H = 3.0;
+PB_STANDOFF_H = 2.05;
 
 // --- Speaker (28 x 30 x 10H, Flat on Back Plate Pedestal) ---
 SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 10.0;
@@ -105,7 +105,7 @@ UM_SW_Y = UM_BOT_Y + 13.31;
 E220_W = 40.0; E220_H = 60.0;
 E220_HOLE_DX = 35.0; E220_HOLE_DY = 55.0;
 E220_CX = -7.20; E220_CY = 134.00;
-E220_STANDOFF_H = 4.0;
+E220_STANDOFF_H = 3.05;
 E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_WALL = 2.6;
 
 // --- GX-12 Compass Bulkhead ---
@@ -165,16 +165,10 @@ module csk_through(cx, cy, zbed, thk, hd, headd, cone_from_bed=true) {
     }
 }
 
-module teardrop_y_bore(cx, y_start, y_len, zc, dia, peak_plus_z=true) {
-    r = dia / 2;
-    s = peak_plus_z ? 1 : -1;
+module round_y_bore(cx, y_start, y_len, zc, dia) {
     translate([cx, y_start, zc])
         rotate([-90, 0, 0])
-            linear_extrude(height=y_len)
-                polygon(concat(
-                    [for (a = [0 : 10 : 350]) [r * cos(a), r * sin(a)]],
-                    [[r/sqrt(2), -s*r/sqrt(2)], [0, -s*r*sqrt(2)], [-r/sqrt(2), -s*r/sqrt(2)]]
-                ));
+            cylinder(d=dia, h=y_len);
 }
 
 module arch_x_cut(xs, xlen, cy, wy, zmin, zmax, gable=1.5, peak_plus_z=true) {
@@ -274,8 +268,8 @@ module back_chassis_frame() {
         for (sx = [-1, 1], sy = [-1, 1]) {
             csk_through(WS_CX + sx*WS_STANDOFF_DX/2, WS_CY + sy*WS_STANDOFF_DY/2,
                         Z_PLATE_OUTER, WS_STANDOFF_Z_END - Z_PLATE_OUTER, HOLE_CLEAR_M2, 4.6, true);
-            translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_PLATE_INNER + PB_STANDOFF_H - RUTHEX_M2_DEPTH])
-                cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
+            translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_PLATE_INNER + PB_STANDOFF_H - 4.50])
+                cylinder(d=RUTHEX_M2_OD, h=4.80);
             translate([E220_CX + sx*E220_HOLE_DX/2, E220_CY + sy*E220_HOLE_DY/2, Z_PLATE_INNER + E220_STANDOFF_H - RUTHEX_M2_DEPTH])
                 cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
         }
@@ -283,18 +277,18 @@ module back_chassis_frame() {
             csk_through(UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_OUTER, UM_BACK_Z - Z_PLATE_OUTER, HOLE_CLEAR_M2, 4.6, true);
         // Battery JST pass-through slot
         rrect(BAT_SLOT_W, BAT_SLOT_H, WALL_BACK + 1.0, 4.4, BAT_SLOT_CX, BAT_SLOT_CY, Z_PLATE_OUTER - 0.5);
-        // UM982 L-wall recess & crown bores
+        // UM982 L-wall recess & pure round crown bores (no teardrops)
         translate([UM_CX, 177.25, Z_PLATE_INNER + 12.5]) cube([UM_W + 0.6, 1.50, 25.0], center=true);
-        teardrop_y_bore(GX12_X, 176.5, 4.5, GX12_Z, GX12_HOLE_DIA, true);
-        teardrop_y_bore(GX12_X, 174.0, 180.0 - GX12_WALL - 174.0, GX12_Z, GX12_NUT_RECESS_DIA, true);
-        teardrop_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA, true);
-        teardrop_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5, true);
-        teardrop_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA, true);
-        teardrop_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA, true);
-        // Plunger bores & pockets
+        round_y_bore(GX12_X, 176.5, 4.5, GX12_Z, GX12_HOLE_DIA);
+        round_y_bore(GX12_X, 174.0, 180.0 - GX12_WALL - 174.0, GX12_Z, GX12_NUT_RECESS_DIA);
+        round_y_bore(E220_SMA_X, 176.5, 4.5, E220_SMA_Z, E220_SMA_DIA);
+        round_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5);
+        round_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
+        round_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
+        // Pure round plunger bores & captive pockets
         for (by = WS_BTN_Y_LIST) {
-            arch_x_cut(50.8, 10.0, by, 4.6, WS_BTN_Z_CTR - 2.1, WS_BTN_Z_CTR + 2.1, 1.5, true);
-            arch_x_cut(46.2, 2.6,  by, 3.5, WS_BTN_Z_CTR - 1.7, WS_BTN_Z_CTR + 1.7, 1.1, true);
+            translate([50.8, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.60, h=10.0);
+            translate([46.2, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=3.40, h=2.6);
             translate([49.7, by, WS_BTN_Z_CTR + 1.7]) cube([3.0, 6.8, 10.0], center=true);
         }
         // MicroSD cutout + scoop
@@ -431,18 +425,11 @@ module button_plungers() {
         translate([45.75, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=2.8, h=2.85);
         translate([48.55, by, WS_BTN_Z_CTR]) rotate([0, 90, 0])
             hull() {
-                translate([0, 0, 0]) cube([5.2, 6.1, 0.2], center=true);
+                cube([5.2, 6.1, 0.2], center=true);
                 translate([0, 0, 1.0]) cube([5.2, 6.1, 0.2], center=true);
-                translate([0, 0, 2.25]) cube([3.6, 4.0, 0.2], center=true);
+                translate([0, 0, 2.25]) cylinder(d=4.1, h=0.2, center=true);
             }
-        translate([50.75, 0, 0])
-            rotate([90, 0, 90])
-                linear_extrude(height=10.45)
-                    polygon([
-                        [by - 2.0, WS_BTN_Z_CTR - 1.8], [by + 2.0, WS_BTN_Z_CTR - 1.8],
-                        [by + 2.0, WS_BTN_Z_CTR + 1.8], [by, WS_BTN_Z_CTR + 3.0],
-                        [by - 2.0, WS_BTN_Z_CTR + 1.8]
-                    ]);
+        translate([50.75, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.10, h=10.45);
     }
 }
 

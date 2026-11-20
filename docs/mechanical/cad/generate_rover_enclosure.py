@@ -26,7 +26,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.0"
+__version__ = "v2.0.1"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -34,6 +34,7 @@ STL_DIR = CAD_DIR / "stl"
 DXF_DIR = CAD_DIR / "dxf"
 
 REF_FILES = {
+    "waveshare_body": STEP_DIR / "REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp",
     "waveshare": STEP_DIR / "REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-facing-header.stp",
     "um982": STEP_DIR / "REF-holybro-um982.stp",
     "e220": STEP_DIR / "REF-e220-module.stp",
@@ -393,8 +394,8 @@ def build_back_chassis_frame() -> cq.Workplane:
     rtc_holder = rtc_ring.cut(rtc_inner).cut(rtc_wire_slot)
     plate = plate.union(rtc_holder)
 
-    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.0)
-    pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.0
+    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.95, flush with -2.0 mm back trace clearance)
+    pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.95
     pb_bores = []
     for dx in (-S.PB_HOLE_DX / 2.0, S.PB_HOLE_DX / 2.0):
         for dy in (-S.PB_HOLE_DY / 2.0, S.PB_HOLE_DY / 2.0):
@@ -403,15 +404,15 @@ def build_back_chassis_frame() -> cq.Workplane:
                 px, py, z_base=S.Z_PLATE_OUTER + 0.5,
                 boss_h=(pb_top_z - S.Z_PLATE_OUTER - 0.5),
                 boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
-                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
+                hole_depth=4.50, open_at_top=True,
             )
             plate = plate.union(b)
             pb_bores.append(bore)
     for bore in pb_bores:
         plate = plate.cut(bore)
 
-    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -21.0)
-    e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -21.0
+    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -21.95, flush with -3.0 mm back trace clearance)
+    e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -21.95
     e2_bores = []
     for dx in (-S.E220_HOLE_DX / 2.0, S.E220_HOLE_DX / 2.0):
         for dy in (-S.E220_HOLE_DY / 2.0, S.E220_HOLE_DY / 2.0):
@@ -500,53 +501,57 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.cut(um_recess)
 
-    # GX-12 M12 bore + inner nut relief (leaves 2.6 mm web Y = 177.4..180.0)
+    # GX-12 M12 bore + inner nut relief (pure round cylindrical bores, leaves 2.6 mm web Y = 177.4..180.0)
     gx_bore = make_teardrop_y_bore(
         S.GX12_X, y_start=176.5, y_len=4.5, z_ctr=S.GX12_Z,
-        dia=S.GX12_HOLE_DIA, add_teardrop=True, peak_at_plus_z=True
+        dia=S.GX12_HOLE_DIA, add_teardrop=False
     )
     gx_rel = make_teardrop_y_bore(
         S.GX12_X, y_start=174.0, y_len=180.0 - S.GX12_WALL - 174.0, z_ctr=S.GX12_Z,
-        dia=S.GX12_NUT_RECESS_DIA, add_teardrop=True, peak_at_plus_z=True
+        dia=S.GX12_NUT_RECESS_DIA, add_teardrop=False
     )
     plate = plate.cut(gx_bore).cut(gx_rel)
 
-    # E220 SMA bore (leaves 2.6 mm web Y = 177.4..180.0)
+    # E220 SMA bore (pure round cylindrical bore, leaves 2.6 mm web Y = 177.4..180.0)
     e2_sma_bore = make_teardrop_y_bore(
         S.E220_SMA_X, y_start=176.5, y_len=4.5, z_ctr=S.E220_SMA_Z,
-        dia=S.E220_SMA_DIA, add_teardrop=True, peak_at_plus_z=True
+        dia=S.E220_SMA_DIA, add_teardrop=False
     )
     e2_sma_rel = make_teardrop_y_bore(
         S.E220_SMA_X, y_start=174.0, y_len=180.0 - S.E220_SMA_WALL - 174.0, z_ctr=S.E220_SMA_Z,
-        dia=11.5, add_teardrop=True, peak_at_plus_z=True
+        dia=11.5, add_teardrop=False
     )
     plate = plate.cut(e2_sma_bore).cut(e2_sma_rel)
 
-    # UM982 dual SMA bores (Dia 10.5 mm access holes through Y=178..180; counterbore Y=176..178)
+    # UM982 dual SMA bores (pure round Dia 10.5 mm access holes through Y=178..180; counterbore Y=176..178)
     for sx in (S.UM_SMA_SLAVE_X, S.UM_SMA_MASTER_X):
         um_bore = make_teardrop_y_bore(
             sx, y_start=177.5, y_len=3.5, z_ctr=S.UM_SMA_Z,
-            dia=S.UM_SMA_ACCESS_DIA, add_teardrop=True, peak_at_plus_z=True
+            dia=S.UM_SMA_ACCESS_DIA, add_teardrop=False
         )
         um_pocket = make_teardrop_y_bore(
             sx, y_start=175.0, y_len=3.0, z_ctr=S.UM_SMA_Z,
-            dia=11.0, add_teardrop=True, peak_at_plus_z=True
+            dia=11.0, add_teardrop=False
         )
         plate = plate.cut(um_bore).cut(um_pocket)
 
-    # 13c. Right Flange Tactile Button Plunger Bores + Captive Flange Pockets + MicroSD Slot
+    # 13c. Right Flange Tactile Button Plunger Bores (pure round cylindrical) + Captive Pockets + MicroSD Slot (gabled)
     for by in S.WS_BTN_Y_LIST:
-        # Outer plunger stem bore (X = 50.8..60.5)
-        outer_bore = make_arch_x_cutout(
-            50.8, 10.0, by, width_y=4.6,
-            z_min=S.WS_BTN_Z_CTR - 2.1, z_max=S.WS_BTN_Z_CTR + 2.1,
-            roof_gable=1.5, peak_at_plus_z=True
+        # Outer round plunger stem bore (Dia 4.60 mm, X = 50.8..60.8)
+        outer_bore = (
+            cq.Workplane("YZ")
+            .workplane(offset=50.8)
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(2.30)
+            .extrude(10.0)
         )
-        # Inner plunger nose bore (X = 46.2..48.8)
-        inner_bore = make_arch_x_cutout(
-            46.2, 2.6, by, width_y=3.5,
-            z_min=S.WS_BTN_Z_CTR - 1.7, z_max=S.WS_BTN_Z_CTR + 1.7,
-            roof_gable=1.1, peak_at_plus_z=True
+        # Inner round plunger nose bore (Dia 3.40 mm, X = 46.2..48.8)
+        inner_bore = (
+            cq.Workplane("YZ")
+            .workplane(offset=46.2)
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(1.70)
+            .extrude(2.6)
         )
         # Drop-in vertical pocket for captive collar flange (X = 48.2..51.2, open upward to Z=-4.2)
         pocket = (
@@ -872,7 +877,7 @@ def build_slim_sun_shield() -> cq.Workplane:
 # Part 8: Button_Plungers (3 x Captive Tactile Plungers for Back_Chassis_Frame Flange)
 # ==============================================================================
 def build_button_plungers() -> cq.Workplane:
-    """Build 3 captive tactile button plungers (PWR, RESET, BOOT), 45-deg self-supporting."""
+    """Build 3 captive round tactile button plungers (PWR, RESET, BOOT), 45-deg self-supporting."""
     comp = None
     for by in S.WS_BTN_Y_LIST:
         # 1. Inner nose reaching near button dome (X = +45.75..+48.6, 0.40 mm gap to dome +45.35)
@@ -883,7 +888,7 @@ def build_button_plungers() -> cq.Workplane:
             .circle(1.40)
             .extrude(2.85)
         )
-        # 2. Tapered 45-deg captive collar transitioning smoothly down onto outer stem (zero 90-deg overhang!)
+        # 2. Tapered 45-deg captive collar transitioning smoothly down onto round stem (zero 90-deg overhang!)
         collar = (
             cq.Workplane("YZ")
             .workplane(offset=48.55)
@@ -892,22 +897,15 @@ def build_button_plungers() -> cq.Workplane:
             .workplane(offset=1.00)
             .rect(6.10, 5.20)
             .workplane(offset=1.25)
-            .rect(4.00, 3.60)
+            .circle(2.05)
             .loft(combine=True)
         )
-        # 3. Outer gabled stem sticking 1.2 mm proud of right wall (X = +50.75..+61.20)
-        pts = [
-            (by - 2.00, S.WS_BTN_Z_CTR - 1.80),
-            (by + 2.00, S.WS_BTN_Z_CTR - 1.80),
-            (by + 2.00, S.WS_BTN_Z_CTR + 1.80),
-            (by,        S.WS_BTN_Z_CTR + 3.00),
-            (by - 2.00, S.WS_BTN_Z_CTR + 1.80),
-        ]
+        # 3. Pure round cylindrical stem sticking 1.2 mm proud of right wall (Dia 4.10 mm, X = +50.75..+61.20)
         stem = (
             cq.Workplane("YZ")
             .workplane(offset=50.75)
-            .polyline(pts)
-            .close()
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(2.05)
             .extrude(10.45)
         )
         one = nose.union(collar).union(stem)
@@ -919,14 +917,20 @@ def build_button_plungers() -> cq.Workplane:
 # Real REF-*.stp Model Importers & Normalized Assembly Transformers
 # ==============================================================================
 def load_normalized_refs() -> dict[str, cq.Workplane]:
-    """Load all 11 REF-*.stp files and place them in exact assembly coordinates."""
+    """Load all REF-*.stp hardware models and place them in exact assembly coordinates."""
     refs = {}
 
-    # 1. Waveshare 3.5B (Solid[3] glass front datum -> WS_CX, WS_CY, 0.0)
-    ws = cq.importers.importStep(str(REF_FILES["waveshare"]))
-    s3b = ws.solids().vals()[3].BoundingBox()
-    gx, gy, gz = 0.5 * (s3b.xmin + s3b.xmax), 0.5 * (s3b.ymin + s3b.ymax), s3b.zmax
-    refs["waveshare"] = ws.translate((S.WS_CX - gx, S.WS_CY - gy, -gz))
+    # 1. Waveshare 3.5B (fixed R6.0 body REF-Waveshare...stp + 2x16 angled header Solid[4] from ASM)
+    ws_body = cq.importers.importStep(str(REF_FILES["waveshare_body"]))
+    s_body_bb = ws_body.solids().vals()[3].BoundingBox()
+    gx, gy, gz = 0.5 * (s_body_bb.xmin + s_body_bb.xmax), 0.5 * (s_body_bb.ymin + s_body_bb.ymax), s_body_bb.zmax
+    ws_body_norm = ws_body.translate((S.WS_CX - gx, S.WS_CY - gy, -gz))
+
+    ws_asm = cq.importers.importStep(str(REF_FILES["waveshare"]))
+    s3b = ws_asm.solids().vals()[3].BoundingBox()
+    ax, ay, az = 0.5 * (s3b.xmin + s3b.xmax), 0.5 * (s3b.ymin + s3b.ymax), s3b.zmax
+    hdr = cq.Workplane("XY").add(ws_asm.solids().vals()[4]).translate((S.WS_CX - ax, S.WS_CY - ay, -az))
+    refs["waveshare"] = ws_body_norm.add(hdr)
 
     # 2. Coin cell + holder (Z = -25.0..-21.0 under Waveshare)
     cc = cq.importers.importStep(str(REF_FILES["coin_cell"]))

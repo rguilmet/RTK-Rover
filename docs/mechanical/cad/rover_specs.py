@@ -26,7 +26,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.0.0"
+__version__ = "v2.0.1"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -70,12 +70,12 @@ RUTHEX_Q20_MIN_WALL = 3.3
 RUTHEX_Q20_BOSS_OD = 15.2   # >= 8.0 + 2*3.3 = 14.6
 
 # ==============================================================================
-# 1. Waveshare ESP32-S3-Touch-LCD-3.5B (from REF-ASM-Waveshare-...stp)
+# 1. Waveshare ESP32-S3-Touch-LCD-3.5B (from REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp + header)
 # ==============================================================================
-# Normalized REF-ASM glass front sits at Z = 0.0; datum is center of 61.00 x 92.44 glass.
+# Normalized REF glass front sits at Z = 0.0; datum is center of 61.00 x 92.44 glass.
 WS_GLASS_W = 61.00
 WS_GLASS_H = 92.44
-WS_GLASS_R = 3.00           # Measured R3.00 (Dia 6.00) corners in REF-ASM-Waveshare...stp
+WS_GLASS_R = 6.00           # Exact Waveshare R6.00 corners matching fixed REF-Waveshare...stp
 WS_PCB_W = 54.50
 WS_PCB_H = 78.00
 WS_STANDOFF_DX = 48.50      # 4 x M2.0 female brass pillars ending at Z = -11.50
@@ -126,7 +126,7 @@ PB_HOLE_DX = 15.0
 PB_HOLE_DY = 75.0
 PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 12.67 mm clear of Header
 PB_CY = 91.00               # Y: [51.00, 131.00]; 5.1 mm above Bot-Left Pod M3 (45.9), 7.1 mm below Top-Left Pod M3 (138.1)
-PB_STANDOFF_H = 3.0         # PCB underside at Z = -22.00; -2.0 mm solder pins end at -24.00 (1.0 mm clear above floor); peak -3.43
+PB_STANDOFF_H = 2.05        # Flush with -2.00 mm underside trace protrusion (+0.05 mm clear); peak -4.38 mm (1.98 mm below Top_Cover)
 
 # ==============================================================================
 # 4. Speaker (from REF-speaker.stp: 28.0 x 30.0 x 10.0H mm, Flat on Back Plate)
@@ -180,23 +180,21 @@ E220_HOLE_DX = 35.0
 E220_HOLE_DY = 55.0
 E220_CX = -7.20             # X: [-27.20, +12.80]; 1.8 mm clear of PB (-29.0) & 1.4 mm clear of UM982 (+14.2)
 E220_CY = 134.00            # Y: [104.00, 164.00]; 5.28 mm above glass, 1.4+ mm clear below LoRa SMA tail (165.4)
-E220_STANDOFF_H = 4.0       # PCB Z=0 at -21.00; -3.0 mm pins end at -24.00 (1.0 mm clear); top at -8.00
+E220_STANDOFF_H = 3.05      # Flush with -3.00 mm underside trace protrusion (+0.05 mm clear); top at -8.95 mm
 
 # ==============================================================================
 # 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall (Aligned at Z = -11.25)
 # ==============================================================================
-# LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp)
+# LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, pure round bore)
 E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
 E220_SMA_Z = UM_SMA_Z       # -11.25
 E220_SMA_DIA = 6.6
-E220_SMA_FLAT = 6.1         # Top D-flat (+Z_asm) for 100% support-free bridging
 E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
 
-# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp)
+# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, pure round bore)
 GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-50.5) & E220 (-27.2)
 GX12_Z = UM_SMA_Z           # -11.25
-GX12_HOLE_DIA = 12.2        # M12 x 0.75 barrel clearance
-GX12_FLAT_DIST = 11.1       # Top D-flat (+Z_asm) -> anti-rotation + support-free bridging
+GX12_HOLE_DIA = 12.2        # Pure round M12 x 0.75 barrel clearance (no teardrop)
 GX12_NUT_RECESS_DIA = 17.5
 GX12_WALL = 2.6             # Inner wall Y = 177.40 -> outer Y = 180.00
 
