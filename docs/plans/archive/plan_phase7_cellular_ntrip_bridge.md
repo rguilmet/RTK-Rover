@@ -1,4 +1,7 @@
-# Architectural Plan: Cellular NTRIP-to-Rover Bridge (RTK2go $\to$ Phone $\to$ Rover)
+# [ARCHIVED] Architectural Plan: Cellular NTRIP-to-Rover Bridge (RTK2go -> Phone -> Rover)
+
+> [!NOTE]
+> **Status: [ARCHIVED -- CONSOLIDATED INTO Plan 2 (2026-11-21)]** -- All Phases 7.1-7.5 (`3.5B` BLE 5.0 NUS bridge, Core 0 Dual-Source RTCM3 Arbiter, Android NTRIP client, Tile 4 diagnostics, updated for `UM982 COM1` `Serial1` `GPIO 17/18` and built-in NimBLE) plus the optional Phone Hotspot fallback are consolidated into [`../plan_2_rover_enhancements_and_android_companion.md`](../plan_2_rover_enhancements_and_android_companion.md).
 
 **Document Version:** `1.1.0`  
 **Date:** November 7, 2026  

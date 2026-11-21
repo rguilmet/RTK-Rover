@@ -3,7 +3,7 @@
 **Harness:** [`scripts/bench_e220_multirate.py`](../../scripts/bench_e220_multirate.py) (`v1.0.2`, Stage 1 Pi GPIO `<->` USB-FTDI `1 ms` latency timer)  
 **Channels / Rates:** `CH 75` (`925.125 MHz`), `115200 8N1` operational UART, `200 B` LoRa subpacket, `4.8 / 9.6 / 19.2 kbps`  
 **Power Profiles Tested:** `21 dBm` (`125 mW`) and `30 dBm` (`1.0 W`, full unattended runs)  
-**Companion Engineering Specs:** [`docs/e220-reference.md`](../e220-reference.md) | [`docs/plans/plan_async_mailbox_lora_transport_analysis.md`](../plans/plan_async_mailbox_lora_transport_analysis.md)
+**Companion Engineering Specs:** [`docs/e220-reference.md`](../../e220-reference.md) | [`docs/plans/archive/plan_async_mailbox_lora_transport_analysis.md`](../../plans/archive/plan_async_mailbox_lora_transport_analysis.md)
 
 ---
 

@@ -1,6 +1,7 @@
-# Project Structure, Model Utilization & Token Optimization Plan
+# [ARCHIVED] Project Structure, Model Utilization & Token Optimization Plan
 
-> **[FOLDED INTO COMPOSITE EXECUTION ROADMAP — Nov 16, 2026]:** Remaining Phases 1–6 (updated to exact `v0.8.14` file metrics) now serve as **Phase 1 (Prerequisite Modularization & Hygiene)** of [`plan_beam_10dof_and_modularization.md`](plan_beam_10dof_and_modularization.md) so the `SEN0696` beam 10DOF drivers and UI cards land inside clean `< 800-line` modules.
+> [!NOTE]
+> **[ARCHIVED -- CONSOLIDATED INTO Plan 1 (2026-11-21)]:** All remaining repo hygiene, C/C++/Python modularization, `build/` cleanup, `CHANGELOG.md` rolling archive, and `.agents/skills/` items (paired with `Field_Instrument_Core` shared-library extraction) are consolidated into the active roadmap [`../plan_1_shared_core_library_and_token_optimization.md`](../plan_1_shared_core_library_and_token_optimization.md).
 
 **Document Version:** `1.0.0`  
 **Date:** November 15, 2026  

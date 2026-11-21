@@ -1,7 +1,7 @@
-# [COMPLETED & DEPRECATED] Plan Phase 8: Single-UART UM982 (`COM1`) Consolidation & Auto-Detected `MMC5983MA` 9-DOF Compass Integration
+# [COMPLETED & ARCHIVED] Plan Phase 8: Single-UART UM982 (`COM1`) Consolidation & Auto-Detected `MMC5983MA` 9-DOF Compass Integration
 
 > [!NOTE]
-> **Status: COMPLETED & DEPRECATED (November 16, 2026)** — Part 1 (Single-UART `UM982 COM1` consolidation, `COM2` removal, and `VERSIONA/MODE/CONFIG/LOGLIST` state audit) was completed and shipped in **`v0.8.0`** (active in `v0.8.14+`). Part 2 (`MMC5983MA`-only compass roadmap) is superseded by the beam-mounted **DFRobot Gravity 10DOF (`SEN0696` / `Product 3126`) + `Field_Instrument_Core` Reuse & Modularization** plan in [`plan_beam_10dof_and_modularization.md`](plan_beam_10dof_and_modularization.md) *(retaining `MMC5983MA` `0x30` strictly as an optional auto-detected fallback)*.
+> **Status: COMPLETED & ARCHIVED (November 21, 2026)** -- Part 1 (Single-UART `UM982 COM1` consolidation, `COM2` removal, and `VERSIONA/MODE/CONFIG/LOGLIST` state audit) was completed and shipped in **`v0.8.0`** (active in `v0.8.18`). Part 2 (`MMC5983MA` `0x30` auto-detected 9-DOF compass) also shipped in firmware and is retained as a Tier-B fallback alongside the beam-mounted `SEN0696` roadmap in [`../plan_2_rover_enhancements_and_android_companion.md`](../plan_2_rover_enhancements_and_android_companion.md); `Field_Instrument_Core` prep is tracked in [`../plan_1_shared_core_library_and_token_optimization.md`](../plan_1_shared_core_library_and_token_optimization.md).
 
 **Document Version:** `1.0.0`  
 **Date:** November 7, 2026  

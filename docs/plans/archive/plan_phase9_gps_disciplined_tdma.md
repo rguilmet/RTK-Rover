@@ -1,7 +1,7 @@
-# [COMPLETED & DEPRECATED] Plan Phase 9: GPS-Disciplined 5-Second Superframe TDMA & Data-Path Integrity Hardening
+# [COMPLETED & ARCHIVED] Plan Phase 9: GPS-Disciplined 5-Second Superframe TDMA & Data-Path Integrity Hardening
 
 > [!NOTE]
-> **Status: COMPLETED & DEPRECATED (November 15, 2026)** — Fully implemented and field-hardened across Rover firmware `v0.8.1` - `v0.8.7` and Base Station `e220_pacer.py v3.5.0` - `v3.6.1`. This planning document is retained in `docs/plans/` for historical reference only; see [`docs/project_overview.md`](../project_overview.md) and [`docs/e220-reference.md`](../e220-reference.md) (`v2.5`) for authoritative production specifications.
+> **Status: COMPLETED & ARCHIVED (November 21, 2026)** -- Fully implemented and field-hardened across Rover firmware `v0.8.1` - `v0.8.7` and Base Station `e220_pacer.py v3.5.0` - `v3.6.1`, later evolved to Architecture 2B (`v0.8.12` - `v0.8.14` / `v3.7.1`). Residual F-19 legacy `COM2` alias/comment cleanup is tracked in [`../plan_1_shared_core_library_and_token_optimization.md`](../plan_1_shared_core_library_and_token_optimization.md). See [`docs/project_overview.md`](../../project_overview.md) and [`docs/e220-reference.md`](../../e220-reference.md) (`v3.2`) for authoritative production specifications.
 
 **Document Version:** `1.2.0`  
 **Date:** November 14, 2026  

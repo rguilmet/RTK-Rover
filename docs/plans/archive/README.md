@@ -1,0 +1,16 @@
+# Archived Plans Index
+
+All 7 pre-consolidation planning documents in [RTK Rover](../../../README.md) were reviewed against `v0.8.18` firmware, `CAD v2.1.6`, and `Magnetic_Field_Scanner v5.1.13` on `2026-11-21`, moved here via `git mv` to preserve history, and consolidated into two active plans in [`../`](../):
+
+1. **[Plan 1: Shared Core Library & Token Optimization](../plan_1_shared_core_library_and_token_optimization.md)**
+2. **[Plan 2: Rover Enhancements & Android Companion](../plan_2_rover_enhancements_and_android_companion.md)**
+
+| Archived File | Original Scope | Status (`2026-11-21`) | Shipped Baseline / Resolution | Active Destination |
+| :--- | :--- | :--- | :--- | :--- |
+| [`plan_phase8_single_uart_um982_and_mmc5983ma_compass.md`](plan_phase8_single_uart_um982_and_mmc5983ma_compass.md) | Single-UART `UM982 COM1` & `MMC5983MA` `0x30` compass | Completed & Archived | Shipped in `v0.8.0`; `MMC5983MA` kept as Tier-B fallback | [Plan 2](../plan_2_rover_enhancements_and_android_companion.md) (fallback) / [Plan 1](../plan_1_shared_core_library_and_token_optimization.md) (Core) |
+| [`plan_phase9_gps_disciplined_tdma.md`](plan_phase9_gps_disciplined_tdma.md) | 5s GPS TDMA, data-path integrity guards, `AXP2101` fix | Completed & Archived | Shipped `v0.8.1` - `v0.8.7` (evolved to Arch 2B) | [Plan 1](../plan_1_shared_core_library_and_token_optimization.md) (residual F-19 `COM2` alias cleanup) |
+| [`plan_async_mailbox_lora_transport_analysis.md`](plan_async_mailbox_lora_transport_analysis.md) | Stage 1 E220 bench & Async Mailbox Arch 2B transport | Completed & Archived | Shipped `v0.8.12` - `v0.8.14` & `e220_pacer.py v3.7.1` | [Plan 2](../plan_2_rover_enhancements_and_android_companion.md) (optional `Arch 5` & `10s` backlog only) |
+| [`plan_project_structure_and_token_optimization.md`](plan_project_structure_and_token_optimization.md) | `< 800 L` file splits, skills, `build/` purge, `CHANGELOG` split | Consolidated into Plan 1 | Merged with `Field_Instrument_Core` roadmap | [Plan 1](../plan_1_shared_core_library_and_token_optimization.md) |
+| [`plan_beam_10dof_and_modularization.md`](plan_beam_10dof_and_modularization.md) | Phase 1 modularization + Phases 2-5 `SEN0696` 10DOF fusion | Split & Consolidated | Phase 2 driver shipped `v0.8.15` - `v0.8.18`; Phases 1 & 3-5 split | [Plan 1](../plan_1_shared_core_library_and_token_optimization.md) (Ph 1) & [Plan 2](../plan_2_rover_enhancements_and_android_companion.md) (Ph 3-5) |
+| [`plan_phase7_cellular_ntrip_bridge.md`](plan_phase7_cellular_ntrip_bridge.md) | `3.5B` BLE NUS NTRIP bridge, RTCM3 arbiter, Tile 4 UI | Consolidated into Plan 2 | Unimplemented; updated from `COM2` -> `COM1` + built-in NimBLE | [Plan 2](../plan_2_rover_enhancements_and_android_companion.md) |
+| [`plan_smart_pole_and_android_app.md`](plan_smart_pole_and_android_app.md) | `3.49-V2` Smart Pole + Android App + `Field_Instrument_Core` | `3.49-V2` Retired; Consolidated | `3.5B` hardware locked as-is; Android Slave Mode + Core extracted | [Plan 1](../plan_1_shared_core_library_and_token_optimization.md) (Sec 7) & [Plan 2](../plan_2_rover_enhancements_and_android_companion.md) (Sec 4-6) |

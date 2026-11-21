@@ -1,13 +1,16 @@
-# Composite Plan: Token-Efficient Modularization, Shared Library Reuse & Beam-Mounted DFRobot Gravity 10DOF (`SEN0696` / `Product 3126`) Heading Fusion
+# [ARCHIVED] Composite Plan: Token-Efficient Modularization, Shared Library Reuse & Beam-Mounted DFRobot Gravity 10DOF (`SEN0696` / `Product 3126`) Heading Fusion
+
+> [!NOTE]
+> **Status: [ARCHIVED -- SPLIT & CONSOLIDATED INTO Plan 1 & Plan 2 (2026-11-21)]** -- Phase 2 (`SEN0696` `I2C0` driver + `1 Hz` logging) shipped in `v0.8.15` - `v0.8.18`. Remaining Phase 1 (modularization, repo hygiene, `Field_Instrument_Core` prep) is consolidated into [`../plan_1_shared_core_library_and_token_optimization.md`](../plan_1_shared_core_library_and_token_optimization.md), and Phases 3-5 (3D AHRS, calibration, baro, UI integration updated for `v0.8.18` `SEN0696` findings) are consolidated into [`../plan_2_rover_enhancements_and_android_companion.md`](../plan_2_rover_enhancements_and_android_companion.md).
 
 **Document Version:** `1.2.0`  
 **Date:** November 16, 2026  
 **Product Reference:** DFRobot Gravity: BMI323 + BMM350 + BMP581 10DOF IMU (`SKU: SEN0696` / [`Product 3126`](https://www.dfrobot.com/product-3126.html))  
 **Firmware Baseline:** `v0.8.14` (`e220_pacer.py v3.7.1`, `stage2_bench_verify.py v1.0.3`)  
 **Target Firmware Milestones:** `v0.8.15` (Hygiene, Reuse-Safe Modularization & `MFS` Fusion Port) $\rightarrow$ `v0.9.0` (`SEN0696` Beam 10DOF Driver, 3D AHRS & Diagnostics) $\rightarrow$ `Field_Instrument_Core` Extraction  
-**Replaces:** [`plan_phase8_single_uart_um982_and_mmc5983ma_compass.md`](plan_phase8_single_uart_um982_and_mmc5983ma_compass.md) *(now marked `[COMPLETED & DEPRECATED]`: Single-UART `UM982 COM1` already shipped in `v0.8.0`)*  
-**Consolidates & Updates:** [`plan_project_structure_and_token_optimization.md`](plan_project_structure_and_token_optimization.md) (Phases 1–6 updated to `v0.8.14` line counts & shared-library boundaries)  
-**Cross-Project Target:** [`plan_smart_pole_and_android_app.md`](plan_smart_pole_and_android_app.md) (`Field_Instrument_Core` shared across `RTK_Rover`, `Magnetic_Field_Scanner`, `RTK_Smart_Pole`, and future Waveshare ESP32-S3 instruments)
+**Replaces:** [`plan_phase8_single_uart_um982_and_mmc5983ma_compass.md`](plan_phase8_single_uart_um982_and_mmc5983ma_compass.md) *(now marked `[COMPLETED & ARCHIVED]`: Single-UART `UM982 COM1` already shipped in `v0.8.0`)*  
+**Consolidates & Updates:** [`plan_project_structure_and_token_optimization.md`](plan_project_structure_and_token_optimization.md) (Phases 1-6 updated to `v0.8.14` line counts & shared-library boundaries)  
+**Cross-Project Target:** [`plan_smart_pole_and_android_app.md`](plan_smart_pole_and_android_app.md) *(now archived; `Field_Instrument_Core` shared across `RTK_Rover` `3.5B`, `Magnetic_Field_Scanner` `3.49 v3`, and future Waveshare ESP32-S3 instruments)*
 
 ---
 

@@ -1,12 +1,12 @@
-# Asynchronous Latest-Value Mailbox & Content-Independent LoRa Transport Architecture (Trade Study)
+# [COMPLETED & ARCHIVED] Asynchronous Latest-Value Mailbox & Content-Independent LoRa Transport Architecture (Trade Study)
 
 > [!NOTE]
-> **Status: STAGE 1 HARDWARE-VALIDATED DESIGN SPEC (READY FOR IMPLEMENTATION)**  
+> **Status: COMPLETED & ARCHIVED (November 21, 2026)** -- Stage 1 bench characterization (`30 dBm` `6/6` suites at `100.0%`), Architecture 2B Base (`e220_pacer.py v3.7.0` - `v3.7.1`) and Rover firmware (`v0.8.12` - `v0.8.14`), and Stage 2 / field validation (`test/_048` - `test/_053`) are all shipped in production (`v0.8.18`). See [`docs/e220-reference.md`](../../e220-reference.md) and [`docs/benchmarks/e220_stage1_20261116/`](../../benchmarks/e220_stage1_20261116/README.md) for production specs; optional deferred backlog items (`Arch 5` `4.8k` 2-signal MSM4 pruner and Rover `10 s` macro-cycle parity) are carried into [`../plan_2_rover_enhancements_and_android_companion.md`](../plan_2_rover_enhancements_and_android_companion.md).  
 > **Document Version:** `1.2.0`  
 > **Date:** November 16, 2026  
 > **Baseline System:** Rover Firmware `v0.8.11` (`src/e220_driver/e220_driver.cpp`) + Base Station `e220_pacer.py v3.6.5`  
 > **Scope:** Independent architectural evaluation and E220 hardware-in-the-loop verification strategy confirming safe `4.8k / 9.6k / 19.2k` timing, buffering, and max-satellite performance prior to implementation.  
-> **Empirical Baselines:** [`test/_043`](../../test/_043/) (`7/7` air-rate switches, `740/740` uplinks), [`docs/benchmarks/e220_stage1_20261116/`](../benchmarks/e220_stage1_20261116/README.md) (**Stage 1 `21 dBm` + `30 dBm` full characterization**, `bench_e220_multirate.py v1.0.2/v1.0.3`), and [`docs/e220-reference.md`](../e220-reference.md) (`v3.0`).
+> **Empirical Baselines:** [`test/_043`](../../../test/_043/) (`7/7` air-rate switches, `740/740` uplinks), [`docs/benchmarks/e220_stage1_20261116/`](../../benchmarks/e220_stage1_20261116/README.md) (**Stage 1 `21 dBm` + `30 dBm` full characterization**, `bench_e220_multirate.py v1.0.2/v1.0.3`), and [`docs/e220-reference.md`](../../e220-reference.md) (`v3.0`).
 
 ---
 

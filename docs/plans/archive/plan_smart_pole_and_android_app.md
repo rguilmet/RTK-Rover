@@ -1,4 +1,7 @@
-# Plan Smart Pole and Android App
+# [ARCHIVED] Plan Smart Pole and Android App
+
+> [!NOTE]
+> **Status: [ARCHIVED -- 3.49-V2 MIGRATION RETIRED; CONSOLIDATED INTO Plan 1 & Plan 2 (2026-11-21)]** -- The `Waveshare 3.49B-v2` hardware migration and beam-box Smart Pole redesign are retired; the Rover hardware remains locked as-is on the `Waveshare ESP32-S3-Touch-LCD-3.5B` platform (`v0.8.18` / `CAD v2.1.6`). Section 7 (`Field_Instrument_Core` shared library across `RTK_Rover` and `Magnetic_Field_Scanner`) is consolidated into [`../plan_1_shared_core_library_and_token_optimization.md`](../plan_1_shared_core_library_and_token_optimization.md), and Sections 4-6 (Android app, BLE 5.0 NUS link, and upgraded bidirectional "Slave Mode" control) are consolidated into [`../plan_2_rover_enhancements_and_android_companion.md`](../plan_2_rover_enhancements_and_android_companion.md).
 
 **Document Version:** `2.6.0`  
 **Date:** November 7, 2026  
