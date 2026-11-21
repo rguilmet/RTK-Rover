@@ -1,12 +1,12 @@
-# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.1.6`)
+# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.2.0`)
 
-Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified metric screw stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.1.6`).
+Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified fastener stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.2.0`).
 
 * **Enclosure Architecture & CAD Previews:** [`cad/README.md`](cad/README.md)
-* **Pre-Oriented Support-Free STL Files (`7` files):** [`cad/stl/`](cad/stl/)
+* **Pre-Oriented Support-Free STL Files (`8` files):** [`cad/stl/`](cad/stl/)
 * **Parametric Source Datums:** [`cad/rover_specs.py`](cad/rover_specs.py)
 
-All `7` meshes in [`cad/stl/`](cad/stl/) (`*_print.stl`) are already rotated flat onto `Z = 0` and engineered to print **100% support-free** with a standard `0.4 mm` nozzle.
+All `8` meshes in [`cad/stl/`](cad/stl/) (`*_print.stl`) are already rotated flat onto `Z = 0` and engineered to print **100% support-free** with a standard `0.4 mm` nozzle.
 
 ---
 
@@ -34,7 +34,7 @@ Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **Orca
 
 ---
 
-## 2. Per-Part Slicer Overrides (`7` STL Files)
+## 2. Per-Part Slicer Overrides (`8` STL Files)
 
 | STL File | Vol (`cm^3`) | Layer / Walls / Infill | Adhesion & Print Notes |
 | :--- | :---: | :--- | :--- |
@@ -42,13 +42,14 @@ Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **Orca
 | [`back_chassis_print.stl`](cad/stl/back_chassis_print.stl) | `92.85` | `0.20 mm`, `4` walls, `25-30%` gyroid | Add a **`5 mm` outer brim** when printing open-air (prevents corner lift on the `120 x 180 mm` base). Keep seam aligned along a rear/interior corner. |
 | [`top_cover_print.stl`](cad/stl/top_cover_print.stl) | `65.04` | `0.20 mm`, `4` walls, `25%` gyroid | Prints **face-down** (bed texture becomes front faceplate). Use **outer-only brim** (or skirt only) so brim never fills the flush glass opening or `1.90 mm` U-groove. |
 | [`pole_lid_print.stl`](cad/stl/pole_lid_print.stl) | `63.24` | `0.20 mm`, **`5-6` walls**, **`60-100%` gyroid** | Primary structural mount carrying the `1/4"-20` survey pole clamp. Use `100%` infill (or a `100%` infill modifier over the central spine) so clamp torque cannot crush the bosses. |
+| [`pole_tilt_wedge_print.stl`](cad/stl/pole_tilt_wedge_print.stl) | `92.88` | `0.20 mm`, **`5-6` walls**, **`40-60%` gyroid** | Prints **flat on rear vertical face (`Z = 0`), `0` supports** with a **`5 mm` outer brim** (`58.4 mm` tall). Keep seam on an interior kite-window corner; all `37.5 deg` tunnels and `45 deg` gussets self-support cleanly. |
 | [`bat_cradle_print.stl`](cad/stl/bat_cradle_print.stl) | `32.14` | `0.20 mm`, **`5` walls**, `25%` gyroid | Setting `5` walls makes the `2.0 mm` outer/inner walls and `1.8 mm` Warren-truss web print as 100% solid perimeters. |
 | [`bat_adapter_5000_print.stl`](cad/stl/bat_adapter_5000_print.stl) | `13.90` | `0.20 mm`, **`5` walls**, `25%` gyroid | Only needed when installing the `5000 mAh` LiPo cell inside the standardized `10000 mAh` bay. |
 | [`slim_sun_shield_print.stl`](cad/stl/slim_sun_shield_print.stl) | `9.70` | `0.20 mm`, `4` walls (`100%` solid) | **Use a `5 mm` outer brim** (narrow `1.60 mm` U-channel footprint needs extra bed grip) and keep outer-wall speed at `25-30 mm/s`. |
 
 ---
 
-## 3. Ruthex Heat-Set Insert BOM (`20` Inserts Total)
+## 3. Ruthex Heat-Set Insert BOM (`21` Inserts Total)
 
 Install all inserts cleanly before mounting electronics using a soldering iron set to **`250-260 deg C`** (slightly cooler than ABS so PETG does not pool at the bottom of blind `M2` pockets):
 
@@ -59,13 +60,14 @@ Install all inserts cleanly before mounting electronics using a soldering iron s
 | **`4`** | `M2` | Ruthex `RX-M2x4.0` (`M2S`, `OD 3.6 mm x L 4.0 mm`) | `Dia 3.2 x 5.0 mm` | `Back_Chassis_Frame` -> `Power Board` standoffs (`2.55 mm` standoff height) | `0.55 mm` closed rear skin |
 | **`4`** | `M2` | Ruthex `RX-M2x4.0` (`M2S`, `OD 3.6 mm x L 4.0 mm`) | `Dia 3.2 x 5.0 mm` | `Back_Chassis_Frame` -> `E220 LoRa` standoffs (`8.50 mm` standoff height) | `6.50 mm` closed standoff |
 | **`2`** | `1/4"-20` | Ruthex `RX-1/4"x12.7` (`OD ~9.6 mm x L 12.7 mm`) | `Dia 8.0 x 13.7 mm` | `Pole_Lid` central spine (`38.1 mm` / `1.500 in` vertical pitch) | `2.50 mm` spine + `3.00 mm` lid floor |
+| **`1`** | `1/4"-20` | Ruthex `RX-1/4"x12.7` (`OD ~9.6 mm x L 12.7 mm`) | `Dia 8.0 x 13.7 mm` | `Pole_Tilt_Wedge_37_5` base saddle center (laser-mount `8.0 mm` stud) | Solid spine gusset (`>= 4.23 mm` side wall) |
 
 ### Insert Seating Tip for Cover Bosses (`Z = -2.65 mm`)
 Press each `M3` cover insert straight down with light pressure until `~0.2 mm` proud, then immediately press the boss face flat with a cool steel ruler or scraper so melted PETG flashes flush rather than leaving a raised collar inside the `0.25 mm` clamping gap behind `Top_Cover`.
 
 ---
 
-## 4. Metric Screw BOM (`26` Screws Total) & Stack-Up Verification
+## 4. Fastener BOM (`26` Metric + `2` Imperial Screws) & Stack-Up Verification
 
 Standard ISO/DIN length convention applies throughout:
 * **Countersunk (`90-deg` CSK / DIN 7991 / ISO 10642):** Length is measured **overall including the conical head**.
@@ -81,8 +83,9 @@ Standard ISO/DIN length convention applies throughout:
 | **`Holybro UM982` -> Rear Pillars (`1.60 mm` CSK recess)** | **`4`** | **`M2 x 12 mm`** | `90-deg` Flat CSK | Kit 1 (`M2` CSK; seated in `1.60 mm` recess) | `9.20 mm` (`Z=-26.4..-17.20`) | `2.80 mm` (`7.0` threads) | `13.20 mm` (`4.0 mm` hole) |
 | **`Power Board` PCB -> Stand-offs** | **`4`** | **`M2 x 6 mm`** | Button Head | Kit 2 (`M2` Button + **`1 x M2` flat washer**) | `~1.57 mm` PCB + `~0.3-0.5 mm` washer | `~3.9-4.1 mm` into `4.0 mm` Ruthex | `~6.9 mm` (`5.0 mm` bore) |
 | **`E220 LoRa` PCB -> Stand-offs** | **`4`** | **`M2 x 6 mm`** | Button Head | Kit 2 (`M2` Button + **`1 x M2` flat washer**) | `~1.50 mm` PCB + `~0.3-0.5 mm` washer | `~4.0-4.2 mm` into `4.0 mm` Ruthex | `~6.8 mm` (`5.0 mm` bore) |
+| **`Pole_Tilt_Wedge_37_5` -> `Pole_Lid`** | **`2`** | **`1/4"-20 x 3/4"`** *(or `5/8"`)* | Allen SHCS (`3/16"` hex) | Threads from rear `Dia 11.40 mm` access tunnels into `Pole_Lid` spine | `8.00 mm` (`WEDGE_SPINE_WEB`) | `11.05 mm` (`8.7` thr) w/ `3/4"`; `7.88 mm` w/ `5/8"` | `21.70 mm` (`0.85"`) |
 
-### Consolidated Fastener Shopping / Kit-Picking List (All `26` Screws + `8` Washers from `3` Standard Kits)
+### Consolidated Fastener Shopping / Kit-Picking List (`26` Metric + `2` Imperial Screws, `8` Washers)
 
 * **Kit 3 -- `M3` CSK Assortment (`10` pcs total):**
   * `6 x M3 x 8 mm` `90-deg` Flat-Head CSK *(or `M3 x 10 mm` CSK)* -- Top cover closure
@@ -92,21 +95,21 @@ Standard ISO/DIN length convention applies throughout:
   * `4 x M2 x 12 mm` `90-deg` Flat-Head CSK -- Holybro `UM982` mount (rear entry via `1.60 mm` `CAD v2.1.6` recessed CSK pockets, leaving `1.20 mm` bottom margin in `UM982`'s `4.00 mm` tapped holes)
 * **Kit 2 -- `M2` Button-Head + Washer Kit (`8` screws + `8` flat washers):**
   * `8 x M2 x 6 mm` Button Head + **`8 x M2` flat washers** (`0.3-0.5 mm` thick) -- Power Board (`4`) + E220 LoRa (`4`); the flat washer guarantees `>= 0.8 mm` bottom clearance above the `5.00 mm` blind Ruthex pocket floor
-* **Ruthex Heat-Set Inserts (`20` pcs total):**
+* **Ruthex Heat-Set Inserts (`21` pcs total):**
   * `10 x M3` (`RX-M3x5.7`)
   * `8 x M2` (`RX-M2x4.0`)
-  * `2 x 1/4"-20` (`RX-1/4"x12.7`)
+  * `3 x 1/4"-20` (`RX-1/4"x12.7`) -- `2` in `Pole_Lid` spine + `1` in `Pole_Tilt_Wedge_37_5` base saddle
 * **Light Pipes, Pole Clamp & Optional Padding:**
   * `4 x Dia 1.75 mm` clear PETG filament stubs (~`12 mm` long), pressed into `Top_Cover`'s `Dia 1.95 mm` `UM982` LED bores and trimmed flush.
-  * `2 x 1/4"-20` stainless bolts matched to your survey pole clamp bracket (max thread engagement into `Pole_Lid` **`<= 12.7 mm` / `0.50 in`**).
+  * `2 x 1/4"-20 x 3/4"` (or `5/8"`) stainless **Allen socket-head cap screws** (`SHCS`, `3/16"` hex) securing `Pole_Tilt_Wedge_37_5` to `Pole_Lid`'s twin inserts (`<= 12.7 mm` / `0.50 in` thread engagement).
   * Optional `1 mm` closed-cell EVA / neoprene foam strip behind the LiPo pouch inside `Battery_Cradle` and around the `Speaker` pocket rim.
 
 ---
 
 ## 5. Recommended Assembly Sequence
 
-1. **Dry-Fit Check:** Before installing any inserts, test-slide `Top_Cover` over `Back_Chassis_Frame`'s `4.50 mm` inner capture rim and test all `3` `Button_Plungers` in the Right Flange (`1.55 mm` travel).
-2. **Install Heat-Set Inserts (`20` total):** Solder `10 x M3`, `8 x M2`, and `2 x 1/4"-20` inserts while `Back_Chassis_Frame` and `Pole_Lid` are empty and flat on the bench.
+1. **Dry-Fit Check:** Before installing any inserts, test-slide `Top_Cover` over `Back_Chassis_Frame`'s `4.50 mm` inner capture rim, test all `3` `Button_Plungers` in the Right Flange (`1.55 mm` travel), and test-fit `Pole_Tilt_Wedge_37_5`'s `60.50 mm` anti-rotation saddle over the `60 mm` laser-mount platform (`65..115 mm` slide).
+2. **Install Heat-Set Inserts (`21` total):** Solder `10 x M3`, `8 x M2`, and `3 x 1/4"-20` inserts while `Back_Chassis_Frame`, `Pole_Lid`, and `Pole_Tilt_Wedge_37_5` are empty on the bench (keep `Pole_Tilt_Wedge_37_5` base `RX-1/4"x12.7` flush with the `V = 0` saddle floor).
 3. **Install Rear-Screwed Modules First (Must Precede Pod Mount):**
    * Snap `RTC` coin cell (`+` / wire harness toward `-Y`) into its under-display C-clip cradle (`(18.50, 64.00)`).
    * Mount `Waveshare 3.5B` with `4 x M2 x 20 mm CSK` from the rear (CSK heads flush at `Z = -28.0 mm`).
@@ -118,3 +121,4 @@ Standard ISO/DIN length convention applies throughout:
    * Plug and dress the `2x16` DuPont harness under `Waveshare` (`+X` right-facing header clears the `Speaker` by `10.13 mm` and clears the `RTC` cradle by `2.52+ mm`), and feed the battery `JST-PH` lead through `BAT_SLOT` (`(25.0, 35.5)`).
 5. **Close Front Cover:** Align `Top_Cover`'s downward inverted-U plunger comb straight down (`-Z`) onto `Back_Chassis_Frame` and torque `6 x M3 x 8 mm CSK` screws evenly; press `4` clear PETG light pipes into the LED bores and slide `Slim_Sun_Shield` into the front U-groove if used.
 6. **Attach Rear Battery & Pole Pod:** Route the LiPo cell (`+ Battery_Adapter_5000` if using `5000 mAh`) against the Bottom-Left Capture Corner with leads exiting Bottom-Right through `BAT_SLOT`, seat `Battery_Cradle` + `Pole_Lid`, and secure with `4 x M3 x 20 mm CSK` screws (never `25 mm`).
+7. **Mount `37.5 deg` Tilt Wedge & Laser Clamp:** Seat `Pole_Lid`'s `24 x 74 mm` spine into `Pole_Tilt_Wedge_37_5`'s recessed `3.0 mm` pocket and tighten `2 x 1/4"-20 x 3/4"` (or `5/8"`) Allen SHCS bolts through the rear `Dia 11.40 mm` access tunnels (`3/16"` ball-end or standard L-key). Remove the laser-level adapter sleeve and knurled collar from the laser pole clamp to expose the bare `8.0 mm` `1/4"-20` stud, straddle the wedge's `6.0 mm` side skirts onto the `60 mm` platform (`65..115 mm` slot position), and tighten the clamp's thumbscrew into the wedge's base `1/4"-20` insert.

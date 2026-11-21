@@ -1,12 +1,12 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.6 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.6
+// RTK Rover Option A Enclosure v2.2.0 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.2.0
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
 
 /* [View & Export Selector] */
-PART = "all"; // ["all", "back", "top", "cradle", "lid", "adapter5", "shield", "plungers", "back_print", "top_print", "cradle_print", "lid_print", "adapter5_print", "shield_print", "plungers_print"]
+PART = "all"; // ["all", "back", "top", "cradle", "lid", "adapter5", "wedge", "shield", "plungers", "back_print", "top_print", "cradle_print", "lid_print", "adapter5_print", "wedge_print", "shield_print", "plungers_print"]
 BATTERY_OPT = "10000"; // ["5000", "10000"]
 SHOW_MODULES = true;
 EXPLODE_MM = 0; // [0:1:60]
@@ -160,6 +160,29 @@ SHIELD_GROOVE_D = 1.80;
 SHIELD_WALL_T = 1.60;
 SHIELD_DEPTH_TOP = 28.0;
 SHIELD_DEPTH_BOT = 12.0;
+
+// --- 37.5-deg Laser-Mount Pole Tilt Wedge (Pole_Tilt_Wedge_37_5) ---
+WEDGE_TILT_DEG = 37.5;
+WEDGE_DU_SB = 14.0;
+WEDGE_V_SB = 19.0;
+WEDGE_MATE_GAP = 0.10;
+WEDGE_SPINE_WEB = 8.0;
+WEDGE_POCKET_D = 3.0;
+WEDGE_POCKET_WALL = 3.0;
+WEDGE_CORE_W = 32.0;
+WEDGE_SHELF_W = 60.0;
+WEDGE_SADDLE_CLR = 0.25;
+WEDGE_SKIRT_T = 3.2;
+WEDGE_SKIRT_DROP = 6.0;
+WEDGE_BASE_THK = 5.5;
+WEDGE_GUSSET_H = 8.0;
+WEDGE_U_BACK = -40.0;
+WEDGE_U_FRONT = 14.0;
+WEDGE_U_SKIRT_FRONT = 7.0;
+WEDGE_TOP_BEVEL_DV = 8.5;
+WEDGE_Q20_CLR = 6.80;
+WEDGE_Q20_SHCS_CBORE = 11.40;
+WEDGE_WIN_POLY = [[17.5, -34.5], [35.0, -34.5], [42.5, -27.0], [32.5, -16.5]];
 
 // =============================================================================
 // Primitives
@@ -632,6 +655,80 @@ module button_plungers() {
     }
 }
 
+module pole_tilt_wedge() {
+    z_mate = Z_PLATE_OUTER - POD_BAY_D - 0.10 - POD_FLOOR_THK - POD_SPINE_H - WEDGE_MATE_GAP;
+    y_sp_bot = POD_CY - 37.0;
+    s = sin(WEDGE_TILT_DEG);
+    c = cos(WEDGE_TILT_DEG);
+    rim = FIT_CLEAR + WEDGE_POCKET_WALL;
+    p_bot_lip = [WEDGE_V_SB - rim*c + WEDGE_POCKET_D*s, WEDGE_DU_SB + rim*s + WEDGE_POCKET_D*c];
+    p_top_lip = [WEDGE_V_SB + (74.0 + rim)*c + WEDGE_POCKET_D*s, WEDGE_DU_SB - (74.0 + rim)*s + WEDGE_POCKET_D*c];
+    v_back_top = p_top_lip[0] - WEDGE_TOP_BEVEL_DV;
+
+    w_in = WEDGE_SHELF_W + 2*WEDGE_SADDLE_CLR;
+    w_out = w_in + 2*WEDGE_SKIRT_T;
+    gusset_top_v = WEDGE_BASE_THK + WEDGE_GUSSET_H;
+
+    difference() {
+        translate([POD_CX, y_sp_bot, z_mate])
+            rotate([WEDGE_TILT_DEG, 0, 0])
+                translate([0, -WEDGE_V_SB, -WEDGE_DU_SB])
+                    difference() {
+                        union() {
+                            // Central spine column (X_w=[-16, +16])
+                            rotate([90, 0, 90])
+                                translate([0, 0, -WEDGE_CORE_W/2])
+                                    linear_extrude(height=WEDGE_CORE_W)
+                                        polygon([
+                                            [0.0, WEDGE_U_BACK],
+                                            [0.0, WEDGE_U_FRONT],
+                                            [p_bot_lip[0], WEDGE_U_FRONT],
+                                            p_bot_lip,
+                                            p_top_lip,
+                                            [v_back_top, WEDGE_U_BACK]
+                                        ]);
+                            // Full-width anti-rotation U-saddle with 45-deg side gussets
+                            translate([0, 0, WEDGE_U_BACK])
+                                linear_extrude(height=WEDGE_U_SKIRT_FRONT - WEDGE_U_BACK)
+                                    polygon([
+                                        [-w_out/2, -WEDGE_SKIRT_DROP],
+                                        [-w_in/2,  -WEDGE_SKIRT_DROP],
+                                        [-w_in/2,   0.0],
+                                        [ w_in/2,   0.0],
+                                        [ w_in/2,  -WEDGE_SKIRT_DROP],
+                                        [ w_out/2, -WEDGE_SKIRT_DROP],
+                                        [ w_out/2,  WEDGE_BASE_THK],
+                                        [ WEDGE_CORE_W/2 + WEDGE_GUSSET_H, WEDGE_BASE_THK],
+                                        [ WEDGE_CORE_W/2, gusset_top_v],
+                                        [-WEDGE_CORE_W/2, gusset_top_v],
+                                        [-WEDGE_CORE_W/2 - WEDGE_GUSSET_H, WEDGE_BASE_THK],
+                                        [-w_out/2,  WEDGE_BASE_THK]
+                                    ]);
+                        }
+                        // Support-free kite lightening cutout
+                        rotate([90, 0, 90])
+                            translate([0, 0, -WEDGE_CORE_W])
+                                linear_extrude(height=2*WEDGE_CORE_W)
+                                    polygon(WEDGE_WIN_POLY);
+                        // Base 1/4"-20 Ruthex bore + 0.5 mm lead-in cone
+                        translate([0, -0.5, 0]) rotate([-90, 0, 0])
+                            cylinder(d=RUTHEX_Q20_OD, h=RUTHEX_Q20_DEPTH + 0.5);
+                        translate([0, -0.2, 0]) rotate([-90, 0, 0])
+                            cylinder(d1=RUTHEX_Q20_OD + 1.4, d2=RUTHEX_Q20_OD, h=0.7);
+                    }
+        // Recessed Pole_Lid spine alignment pocket (24.5 x 74.5 mm, R5.25)
+        rrect(POD_SPINE_W + 2*FIT_CLEAR, 74.0 + 2*FIT_CLEAR, WEDGE_POCKET_D + 2.0, 5.0 + FIT_CLEAR,
+              POD_CX, POD_CY, z_mate);
+        // Twin 1/4"-20 SHCS through-bores + rear hex-key counterbore tunnels
+        for (qy = [POD_CY - POLE_Q20_DY/2, POD_CY + POLE_Q20_DY/2]) {
+            translate([POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 1.0])
+                cylinder(d=WEDGE_Q20_CLR, h=WEDGE_SPINE_WEB + WEDGE_POCKET_D + 2.0);
+            translate([POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 80.0])
+                cylinder(d=WEDGE_Q20_SHCS_CBORE, h=80.0);
+        }
+    }
+}
+
 // =============================================================================
 // Selection & Print Orientations
 // =============================================================================
@@ -640,6 +737,7 @@ else if (PART == "top") top_cover();
 else if (PART == "cradle") battery_cradle();
 else if (PART == "lid") pole_lid();
 else if (PART == "adapter5") battery_adapter_5000();
+else if (PART == "wedge") pole_tilt_wedge();
 else if (PART == "shield") slim_sun_shield();
 else if (PART == "plungers") button_plungers();
 else if (PART == "back_print") translate([0, 0, -Z_PLATE_OUTER]) back_chassis_frame();
@@ -647,6 +745,11 @@ else if (PART == "top_print") rotate([180, 0, 0]) top_cover();
 else if (PART == "cradle_print") rotate([180, 0, 0]) translate([0, 0, -Z_PLATE_OUTER]) battery_cradle();
 else if (PART == "lid_print") rotate([180, 0, 0]) pole_lid();
 else if (PART == "adapter5_print") rotate([180, 0, 0]) translate([0, 0, -Z_PLATE_OUTER]) battery_adapter_5000();
+else if (PART == "wedge_print")
+    translate([0, WEDGE_V_SB, WEDGE_DU_SB - WEDGE_U_BACK])
+        rotate([-WEDGE_TILT_DEG, 0, 0])
+            translate([-POD_CX, -(POD_CY - 37.0), -(Z_PLATE_OUTER - POD_BAY_D - 0.10 - POD_FLOOR_THK - POD_SPINE_H - WEDGE_MATE_GAP)])
+                pole_tilt_wedge();
 else if (PART == "shield_print") translate([0, 0, SHIELD_GROOVE_D - 0.10]) slim_sun_shield();
 else if (PART == "plungers_print") rotate([0, -90, 0]) translate([-61.6, 0, 0]) button_plungers();
 else {
@@ -656,6 +759,7 @@ else {
     if (BATTERY_OPT == "5000")
         color("Teal") translate([0, 0, -1.5*EXPLODE_MM]) battery_adapter_5000();
     color("DimGray") translate([0, 0, -2*EXPLODE_MM]) pole_lid();
+    color("SlateBlue") translate([0, 0, -3*EXPLODE_MM]) pole_tilt_wedge();
     color("Orange") translate([0, 0, 2*EXPLODE_MM]) slim_sun_shield();
     color("Gold") translate([EXPLODE_MM * 0.4, 0, 0]) button_plungers();
     if (SHOW_MODULES) {

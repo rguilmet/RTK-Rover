@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.6.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.0.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -18,6 +18,9 @@ Architecture:
     One skeletonized Battery_Cradle (w/ integral Bottom-Left Capture Corner opposite
     the Bottom-Right cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
     plus removable skeletonized L-truss Battery_Adapter_5000 insert.
+  - Pole_Tilt_Wedge_37_5: Support-free 37.5-deg laser-mount wedge with 6.0 mm
+    anti-rotation saddle skirts, bottom 1/4"-20 Ruthex insert, and twin upper
+    1/4"-20 SHCS pockets mating onto Pole_Lid spine.
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
@@ -32,7 +35,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.6"
+__version__ = "v2.2.0"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -1116,6 +1119,170 @@ def build_button_plungers() -> cq.Workplane:
 
 
 # ==============================================================================
+# Part 9: Pole_Tilt_Wedge_37_5 (Support-Free 37.5-deg Laser Mount Adapter)
+# ==============================================================================
+def _wedge_spine_datums() -> tuple[float, float, float]:
+    """Return Pole_Lid mating Z plane, spine bottom Y, and pod X centerline."""
+    z_lid_front = S.Z_PLATE_OUTER - S.POD_BAY_D - 0.10
+    z_lid_back = z_lid_front - S.POD_FLOOR_THK
+    z_spine = z_lid_back - S.POD_SPINE_H
+    z_mate = z_spine - S.WEDGE_MATE_GAP
+    y_sp_bot = S.POD_CY - 37.0
+    return z_mate, y_sp_bot, S.POD_CX
+
+
+def _local_wedge_to_asm(shape: cq.Workplane) -> cq.Workplane:
+    """Transform wedge local (X_w, V_w, U_w) coordinates into assembly coordinates."""
+    z_mate, y_sp_bot, x_cx = _wedge_spine_datums()
+    return (
+        shape
+        .translate((0.0, -S.WEDGE_V_SB, -S.WEDGE_DU_SB))
+        .rotate((0, 0, 0), (1, 0, 0), S.WEDGE_TILT_DEG)
+        .translate((x_cx, y_sp_bot, z_mate))
+    )
+
+
+def build_pole_tilt_wedge() -> cq.Workplane:
+    """Build support-free 37.5-deg laser-mount tilt wedge in assembly coordinates."""
+    th = math.radians(S.WEDGE_TILT_DEG)
+    s, c = math.sin(th), math.cos(th)
+    du_sb, v_sb = S.WEDGE_DU_SB, S.WEDGE_V_SB
+
+    def sp_vu(dy: float, dn: float) -> tuple[float, float]:
+        return (v_sb + dy * c + dn * s, du_sb - dy * s + dn * c)
+
+    rim = S.FIT_CLEAR + S.WEDGE_POCKET_WALL
+    p_bot_lip = sp_vu(-rim, S.WEDGE_POCKET_D)
+    p_top_lip = sp_vu(74.0 + rim, S.WEDGE_POCKET_D)
+    v_back_top = p_top_lip[0] - S.WEDGE_TOP_BEVEL_DV
+
+    # 1. Central spine column (YZ plane: local X=V_w, local Y=U_w, extruded in X_w)
+    core_poly = [
+        (0.0, S.WEDGE_U_BACK),
+        (0.0, S.WEDGE_U_FRONT),
+        (p_bot_lip[0], S.WEDGE_U_FRONT),
+        (p_bot_lip[0], p_bot_lip[1]),
+        p_top_lip,
+        (v_back_top, S.WEDGE_U_BACK),
+    ]
+    core = (
+        cq.Workplane("YZ")
+        .workplane(offset=-S.WEDGE_CORE_W / 2.0)
+        .polyline(core_poly)
+        .close()
+        .extrude(S.WEDGE_CORE_W)
+    )
+
+    # 2. Full-width anti-rotation U-saddle with 45-deg side gussets
+    w_in = S.WEDGE_SHELF_W + 2.0 * S.WEDGE_SADDLE_CLR
+    w_out = w_in + 2.0 * S.WEDGE_SKIRT_T
+    gusset_top_v = S.WEDGE_BASE_THK + S.WEDGE_GUSSET_H
+    saddle_poly = [
+        (-w_out / 2.0, -S.WEDGE_SKIRT_DROP),
+        (-w_in / 2.0, -S.WEDGE_SKIRT_DROP),
+        (-w_in / 2.0, 0.0),
+        (w_in / 2.0, 0.0),
+        (w_in / 2.0, -S.WEDGE_SKIRT_DROP),
+        (w_out / 2.0, -S.WEDGE_SKIRT_DROP),
+        (w_out / 2.0, S.WEDGE_BASE_THK),
+        (S.WEDGE_CORE_W / 2.0 + S.WEDGE_GUSSET_H, S.WEDGE_BASE_THK),
+        (S.WEDGE_CORE_W / 2.0, gusset_top_v),
+        (-S.WEDGE_CORE_W / 2.0, gusset_top_v),
+        (-S.WEDGE_CORE_W / 2.0 - S.WEDGE_GUSSET_H, S.WEDGE_BASE_THK),
+        (-w_out / 2.0, S.WEDGE_BASE_THK),
+    ]
+    saddle = (
+        cq.Workplane("XY")
+        .workplane(offset=S.WEDGE_U_BACK)
+        .polyline(saddle_poly)
+        .close()
+        .extrude(S.WEDGE_U_SKIRT_FRONT - S.WEDGE_U_BACK)
+    )
+
+    # 3. Support-free kite lightening cutout (<= 45 deg roof edges in +U_w print orientation)
+    win_cut = (
+        cq.Workplane("YZ")
+        .workplane(offset=-S.WEDGE_CORE_W)
+        .polyline(S.WEDGE_WIN_POLY)
+        .close()
+        .extrude(2.0 * S.WEDGE_CORE_W)
+    )
+    wedge_local = core.union(saddle).cut(win_cut)
+
+    # 4. Vertical 1/4"-20 Ruthex bore (Dia 8.0 x 13.7 mm along +V_w) + 0.5 mm lead-in cone
+    r_q = S.RUTHEX_Q20_OD / 2.0
+    base_bore = (
+        cq.Workplane("XZ")
+        .workplane(offset=0.5)
+        .center(0.0, 0.0)
+        .circle(r_q)
+        .extrude(-(S.RUTHEX_Q20_DEPTH + 0.5))
+    )
+    lead_cone = (
+        cq.Workplane("XY")
+        .workplane(offset=-0.2)
+        .circle(r_q + 0.7)
+        .workplane(offset=0.7)
+        .circle(r_q)
+        .loft(combine=True)
+        .rotate((0, 0, 0), (1, 0, 0), -90)
+    )
+    wedge_local = wedge_local.cut(base_bore).cut(lead_cone)
+
+    # 5. Transform to Assembly coords and cut Pole_Lid spine alignment pocket + twin SHCS tunnels
+    wedge_asm = _local_wedge_to_asm(wedge_local)
+    z_mate, _, x_cx = _wedge_spine_datums()
+    sp_pocket = make_rounded_box(
+        S.POD_SPINE_W + 2.0 * S.FIT_CLEAR,
+        74.0 + 2.0 * S.FIT_CLEAR,
+        S.WEDGE_POCKET_D + 2.0,
+        5.0 + S.FIT_CLEAR,
+        cx=x_cx,
+        cy=S.POD_CY,
+        z_min=z_mate,
+    )
+    wedge_asm = wedge_asm.cut(sp_pocket)
+
+    for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
+        thru = (
+            cq.Workplane("XY")
+            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB - 1.0)
+            .center(x_cx, qy)
+            .circle(S.WEDGE_Q20_CLR / 2.0)
+            .extrude(S.WEDGE_SPINE_WEB + S.WEDGE_POCKET_D + 2.0)
+        )
+        cbore = (
+            cq.Workplane("XY")
+            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB)
+            .center(x_cx, qy)
+            .circle(S.WEDGE_Q20_SHCS_CBORE / 2.0)
+            .extrude(-80.0)
+        )
+        wedge_asm = wedge_asm.cut(thru).cut(cbore)
+
+    return wedge_asm
+
+
+def build_laser_mount_ref(u_screw: float) -> cq.Workplane:
+    """Build virtual laser-mount platform + 92 mm rack tower in assembly coordinates for collision audit."""
+    shelf_local = (
+        cq.Workplane("XZ")
+        .workplane(offset=0.0)
+        .center(0.0, 0.5 * (-u_screw + (S.WEDGE_SHELF_L - u_screw)))
+        .rect(S.WEDGE_SHELF_W, S.WEDGE_SHELF_L)
+        .extrude(S.WEDGE_SHELF_THK)
+    )
+    rack_local = (
+        cq.Workplane("XY")
+        .workplane(offset=-u_screw - 35.0)
+        .center(0.0, 0.5 * (-25.0 + S.WEDGE_RACK_H))
+        .rect(S.WEDGE_SHELF_W, 25.0 + S.WEDGE_RACK_H)
+        .extrude(35.0)
+    )
+    return _local_wedge_to_asm(shelf_local.union(rack_local))
+
+
+# ==============================================================================
 # Real REF-*.stp Model Importers & Normalized Assembly Transformers
 # ==============================================================================
 def load_normalized_refs() -> dict[str, cq.Workplane]:
@@ -1209,6 +1376,14 @@ def to_print_bed(shape: cq.Workplane, mode: str) -> cq.Workplane:
         s = shape.rotate((0, 0, 0), (1, 0, 0), 180)
     elif mode == "plunger_flat":
         s = shape.rotate((0, 0, 0), (0, 1, 0), 90)
+    elif mode == "wedge_back_down":
+        z_mate, y_sp_bot, x_cx = _wedge_spine_datums()
+        s = (
+            shape
+            .translate((-x_cx, -y_sp_bot, -z_mate))
+            .rotate((0, 0, 0), (1, 0, 0), -S.WEDGE_TILT_DEG)
+            .translate((0.0, S.WEDGE_V_SB, S.WEDGE_DU_SB - S.WEDGE_U_BACK))
+        )
     else:
         s = shape
     bb = s.val().BoundingBox()
@@ -1217,7 +1392,7 @@ def to_print_bed(shape: cq.Workplane, mode: str) -> cq.Workplane:
 
 def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.Workplane]) -> None:
     """Run automated manifold, outer envelope, and 0.00 mm^3 real-model collision audits."""
-    print("\n--- [1/3] Manifold & Outer Envelope Checks ---")
+    print("\n--- [1/4] Manifold & Outer Envelope Checks ---")
     for name, shp in parts.items():
         n_solids = len(shp.solids().vals())
         bb = shp.val().BoundingBox()
@@ -1232,7 +1407,7 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         print(f"  [OK] {name:22s}: {n_solids} solid(s), vol={vol_cm3:6.2f} cm^3, "
               f"X[{bb.xmin:7.2f},{bb.xmax:7.2f}] Y[{bb.ymin:6.2f},{bb.ymax:6.2f}] Z[{bb.zmin:6.2f},{bb.zmax:6.2f}]")
 
-    print("\n--- [2/3] Printed Part vs Printed Part Interference Audit ---")
+    print("\n--- [2/4] Printed Part vs Printed Part Interference Audit ---")
     printed_pairs = [
         ("Back_Chassis_Frame", "Top_Cover"),
         ("Top_Cover", "Slim_Sun_Shield"),
@@ -1245,6 +1420,10 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         ("Battery_Cradle", "Battery_Adapter_5000"),
         ("Pole_Lid", "Battery_Adapter_5000"),
         ("Back_Chassis_Frame", "Battery_Adapter_5000"),
+        ("Pole_Tilt_Wedge_37_5", "Pole_Lid"),
+        ("Pole_Tilt_Wedge_37_5", "Battery_Cradle"),
+        ("Pole_Tilt_Wedge_37_5", "Back_Chassis_Frame"),
+        ("Pole_Tilt_Wedge_37_5", "Top_Cover"),
     ]
     for a_name, b_name in printed_pairs:
         inter = parts[a_name].intersect(parts[b_name])
@@ -1252,7 +1431,7 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         print(f"  {a_name:22s} vs {b_name:22s}: overlap = {vol:8.4f} mm^3")
         assert vol <= 0.05, f"Interference failure: {a_name} vs {b_name} = {vol:.4f} mm^3"
 
-    print("\n--- [3/3] Printed Enclosure vs Real REF-*.stp Hardware Audit ---")
+    print("\n--- [3/4] Printed Enclosure vs Real REF-*.stp Hardware Audit ---")
     ref_checks = [
         ("Back_Chassis_Frame",   "waveshare"),
         ("Top_Cover",            "waveshare"),
@@ -1284,9 +1463,19 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         print(f"  {p_name:22s} vs REF_{r_name:12s}: overlap = {vol:8.4f} mm^3")
         assert vol <= 0.05, f"Hardware collision: {p_name} vs REF_{r_name} = {vol:.4f} mm^3"
 
+    print("\n--- [4/4] Tilted Rover vs Laser Mount Reference Audit (65..115 mm Slide) ---")
+    lm_parts = ("Pole_Tilt_Wedge_37_5", "Pole_Lid", "Battery_Cradle", "Back_Chassis_Frame", "Top_Cover")
+    for u_screw in (S.WEDGE_SLIDE_MIN, S.WEDGE_SLIDE_MAX):
+        lm_ref = build_laser_mount_ref(u_screw)
+        for p_name in lm_parts:
+            inter = parts[p_name].intersect(lm_ref)
+            vol = sum(s.Volume() for s in inter.solids().vals())
+            print(f"  LaserMount({u_screw:5.1f} mm) vs {p_name:22s}: overlap = {vol:8.4f} mm^3")
+            assert vol <= 0.05, f"Laser mount collision @ {u_screw:.1f} mm vs {p_name}: {vol:.4f} mm^3"
+
 
 def export_2d_dxf(path: Path) -> None:
-    """Export AutoCAD LT 2010 compatible 2D DXF of chassis, standardized pod, adapter, and crown."""
+    """Export AutoCAD LT 2010 compatible 2D DXF of chassis, standardized pod, adapter, crown, and tilt wedge."""
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4  # mm
     msp = doc.modelspace()
@@ -1298,6 +1487,7 @@ def export_2d_dxf(path: Path) -> None:
         "SUNSHIELD_GROOVE": 6,
         "POD_B2": 4,
         "CROWN_BULKHEAD": 2,
+        "TILT_WEDGE_37_5": 5,
     }
     for lname, color in layers.items():
         doc.layers.add(lname, color=color)
@@ -1369,6 +1559,33 @@ def export_2d_dxf(path: Path) -> None:
     msp.add_circle((S.UM_SMA_SLAVE_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
     msp.add_circle((S.UM_SMA_MASTER_X, y_off + S.UM_SMA_Z), S.UM_SMA_ACCESS_DIA / 2.0, dxfattribs={"layer": "CROWN_BULKHEAD"})
 
+    # 37.5-deg Tilt Wedge side profile (offset X = +120 mm, local V_w -> +X_dxf, U_w -> +Y_dxf shifted +60)
+    wx_off, wy_off = 120.0, 60.0
+    th = math.radians(S.WEDGE_TILT_DEG)
+    sw, cw = math.sin(th), math.cos(th)
+    rim = S.FIT_CLEAR + S.WEDGE_POCKET_WALL
+    w_bot_lip = (S.WEDGE_V_SB - rim * cw + S.WEDGE_POCKET_D * sw, S.WEDGE_DU_SB + rim * sw + S.WEDGE_POCKET_D * cw)
+    w_top_lip = (S.WEDGE_V_SB + (74.0 + rim) * cw + S.WEDGE_POCKET_D * sw,
+                 S.WEDGE_DU_SB - (74.0 + rim) * sw + S.WEDGE_POCKET_D * cw)
+    wedge_prof = [
+        (wx_off + 0.0, wy_off + S.WEDGE_U_BACK),
+        (wx_off + 0.0, wy_off + S.WEDGE_U_FRONT),
+        (wx_off + w_bot_lip[0], wy_off + S.WEDGE_U_FRONT),
+        (wx_off + w_bot_lip[0], wy_off + w_bot_lip[1]),
+        (wx_off + w_top_lip[0], wy_off + w_top_lip[1]),
+        (wx_off + w_top_lip[0] - S.WEDGE_TOP_BEVEL_DV, wy_off + S.WEDGE_U_BACK),
+    ]
+    msp.add_lwpolyline(wedge_prof, close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in S.WEDGE_WIN_POLY], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    # Base 1/4"-20 Ruthex center + twin SHCS bolt axes
+    msp.add_line((wx_off + 0.0, wy_off), (wx_off + S.RUTHEX_Q20_DEPTH, wy_off), dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    for dy_q in (37.0 - S.POLE_Q20_DY / 2.0, 37.0 + S.POLE_Q20_DY / 2.0):
+        vq = S.WEDGE_V_SB + dy_q * cw
+        uq = S.WEDGE_DU_SB - dy_q * sw
+        msp.add_line((wx_off + vq - 20.0 * sw, wy_off + uq - 20.0 * cw),
+                     (wx_off + vq + 5.0 * sw, wy_off + uq + 5.0 * cw),
+                     dxfattribs={"layer": "TILT_WEDGE_37_5"})
+
     doc.saveas(str(path))
     print(f"  Exported DXF -> {path.name}")
 
@@ -1388,6 +1605,7 @@ def main() -> None:
         "Battery_Cradle": cradle,
         "Pole_Lid": lid,
         "Battery_Adapter_5000": build_battery_adapter_5000(),
+        "Pole_Tilt_Wedge_37_5": build_pole_tilt_wedge(),
         "Slim_Sun_Shield": build_slim_sun_shield(),
         "Button_Plungers": build_button_plungers(),
     }
@@ -1409,6 +1627,7 @@ def main() -> None:
         ("Battery_Cradle",       "bat_cradle_print.stl",      "face_down"),
         ("Pole_Lid",             "pole_lid_print.stl",        "face_down"),
         ("Battery_Adapter_5000", "bat_adapter_5000_print.stl","face_down"),
+        ("Pole_Tilt_Wedge_37_5", "pole_tilt_wedge_print.stl", "wedge_back_down"),
         ("Slim_Sun_Shield",      "slim_sun_shield_print.stl", "back_down"),
         ("Button_Plungers",      "button_plungers_print.stl", "plunger_flat"),
     ]
@@ -1429,6 +1648,7 @@ def main() -> None:
             ("Top_Cover",          cq.Color(0.28, 0.34, 0.42, 0.92)),
             ("Battery_Cradle",     cq.Color(0.18, 0.22, 0.27, 1.0)),
             ("Pole_Lid",           cq.Color(0.14, 0.17, 0.21, 1.0)),
+            ("Pole_Tilt_Wedge_37_5", cq.Color(0.24, 0.30, 0.36, 1.0)),
             ("Slim_Sun_Shield",    cq.Color(0.12, 0.14, 0.17, 1.0)),
             ("Button_Plungers",    cq.Color(0.90, 0.45, 0.10, 1.0)),
         ]
