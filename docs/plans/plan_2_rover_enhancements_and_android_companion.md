@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Status:** Active Execution Roadmap (Consolidated November 21, 2026)  
-> **Document Version:** `1.0.0`  
+> **Document Version:** `1.1.0`  
 > **Baselines:** `RTK_Rover v0.8.18` | `CAD v2.1.6` | `e220_pacer.py v3.7.1`  
 > **Prerequisite Structure Plan:** [`plan_1_shared_core_library_and_token_optimization.md`](plan_1_shared_core_library_and_token_optimization.md) (Phase 1.1 splits + shared `matrix_math`/`ahrs_9dof`)  
 > **Consolidates:** Phases 3-5 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), Phases 7.1-7.5 of [`archive/plan_phase7_cellular_ntrip_bridge.md`](archive/plan_phase7_cellular_ntrip_bridge.md), and Sections 4-6 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md) (retiring the `3.49B-v2` hardware migration).
@@ -88,6 +88,12 @@ flowchart TD
 * **Source Selection Modes (`settings.json` + Android RPC):**
   * `AUTO` (Default): **LoRa primary**. If `now - last_lora_valid_rtcm_ms > 3000 ms`, immediately promote `BLE NTRIP` frames (`NTRIP: BLE`). Switch back to LoRa only after LoRa delivers `>= 3` consecutive valid frames (prevents boundary oscillation).
   * `LORA_ONLY` / `NTRIP_ONLY`: Explicit user override from Tile 1/4 or Android app.
+* **`settings.json` NTRIP Schema & Persistence (`settings_manager`):**
+  * Persist NTRIP caster fields inside `/settings.json` on Rover SD/FFat (keeping private mountpoint/email profiles strictly in `RTK_Rover_Private/profiles/settings.json`, never hardcoded in public firmware):
+    * `rtcm_source_mode` (`"AUTO"` / `"LORA_ONLY"` / `"NTRIP_ONLY"`, default `"AUTO"`),
+    * `ntrip_host` (default `"rtk2go.com"`), `ntrip_host_ip` (IP fallback `"3.14.70.106"`), `ntrip_port` (`2101`),
+    * `ntrip_mountpoint` (default `""`, case-sensitive), `ntrip_user_email` (default `""`), `ntrip_password` (default `"none"`).
+  * Extend `SystemSettings` (`settings_manager.h/.cpp`, `~240 B` struct delta) with placeholder-overwrite protection mirroring `is_placeholder_ssid()` so `save_settings()` never strips or overwrites real private NTRIP credentials on SD/FFat.
 * **Non-Destructive `3.5B` UI Badging:** Header Row 1 adds `BLE` icon (Cyan connected / Amber adv / Dim OFF); Header Row 2 displays correction source (`LoRa -84dB` vs. `NTRIP BLE` vs. `NO CORR`) + diff age; Tile 4 adds `BLE & NTRIP Diagnostics` card (peer state, MTU, RX kbps, failover count).
 
 ### Phase 2.5 -- Framed Telemetry & Bidirectional "Slave Mode" Control Protocol
@@ -122,7 +128,7 @@ flowchart TD
 | `0x08` | `CMD_RTCM_SET_MODE` | Switch `rtcm_arbiter` (`AUTO / LORA_ONLY / NTRIP_ONLY`). |
 | `0x09` | `CMD_SENSOR_CAL` | Trigger `TARE` pole level or start/complete `Tile 3` `CAL MAG` ellipsoid routine. |
 | `0x0A` | `CMD_POLE_GEOM_SET` | Sync `antenna_spacing_m` and `antenna_height_m` into `settings.json` & `nav_engine`. |
-| `0x0B` | `CMD_FILE_SYNC_CHUNK` | Chunked verified BLE upload/download for `waypoints.csv` / parcel files or `settings.json` updates (zero field Wi-Fi switch required). |
+| `0x0B` | `CMD_FILE_SYNC_CHUNK` | Chunked verified BLE upload/download for `waypoints.csv` / parcel files or `settings.json` updates (on BLE connect, Android reads active NTRIP caster profile from Rover `/settings.json` as single source of truth; zero field Wi-Fi switch required). |
 
 ---
 
@@ -148,7 +154,7 @@ flowchart LR
 ### Phase 2.6 -- Foreground Service, BLE Central & Cellular NTRIP Engine
 * **Android Foreground Service:** Persistent notification keeps BLE NTRIP streaming and point logging alive when pocketed or screen-locked (`WakeLock` option).
 * **BLE 5.0 NUS Central Manager:** Auto-scans `"RTK-Rover"`, requests `MTU 512`, reconnects automatically within `< 1.5 s` after battery swaps or power cycles, decodes `0xAA 0x55` frames, and sequences reliable `ACK/NACK` RPC commands.
-* **Cellular NTRIP Client:** Connects over cellular to `rtk2go.com:2101` (or user caster profiles: host, port, mountpoint, Basic Auth / NMEA GGA source table selection), validates `ICY 200 OK`, retries with exponential backoff (`1s -> 2s -> 4s -> 8s -> 15s`), filters strictly valid **`CRC24Q == 0`** RTCM3 message types **`1006, 1074, 1084, 1094, 1230`** (plus configurable `1124`), and chunks frames cleanly across BLE RX.
+* **Cellular NTRIP Client (RTK2go / SNIP NTRIP v1.0):** Connects over cellular to `rtk2go.com:2101` (direct IP fallback `3.14.70.106:2101`), pre-populated from Rover `/settings.json` on BLE connect (`ntrip_host`, `ntrip_host_ip`, `ntrip_port`, `ntrip_mountpoint`, `ntrip_user_email`, `ntrip_password`). Sends `GET /<MOUNTPOINT> HTTP/1.0` with `User-Agent: NTRIP RTK-Rover-Mobile/1.0` and `Authorization: Basic base64("<email>:<password_or_none>")` -- RTK2go requires a **valid email address** as username (fake/blank usernames trigger temporary IP bans) and **no password** for data consumers (`"none"` or empty). Validates `ICY 200 OK`, retries with exponential backoff (`1s -> 2s -> 4s -> 8s -> 15s`), filters strictly valid **`CRC24Q == 0`** RTCM 3.3 streams (`1005/1006, 1074/1077, 1084/1087, 1094/1097, 1124/1127, 1230` configurable whitelist), and chunks frames cleanly across BLE RX.
 
 ### Phase 2.7 -- Enhanced Mobile Mapping, Parcel GIS & Bidirectional Stakeout
 * **Sunlight Map + Offline Woodlands Support:** Interactive satellite/orthophoto base layers plus **offline `MBTiles` / cached `WMTS` region packs** for zero-cell woods operation.
