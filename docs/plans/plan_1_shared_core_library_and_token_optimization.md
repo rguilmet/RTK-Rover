@@ -1,9 +1,10 @@
 # Plan 1: Unified Shared Core Library (`Field_Instrument_Core`), Codebase Modularization & Token Optimization
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap (Consolidated November 21, 2026)  
-> **Document Version:** `1.0.0`  
+> **Status:** Active Execution Roadmap (Updated November 21, 2026)  
+> **Document Version:** `1.1.0`  
 > **Baselines:** `RTK_Rover v0.8.18` | `CAD v2.1.6` | `Magnetic_Field_Scanner v5.1.13`  
+> **Prerequisite Roadmap:** [`plan_0_field_survey_refinements.md`](plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`: executes `lvgl_port.c` split, `I2C1` dual-bus, & `matrix_math`/`ahrs_9dof` port ahead of Core extraction)  
 > **Companion Roadmap:** [`plan_2_rover_enhancements_and_android_companion.md`](plan_2_rover_enhancements_and_android_companion.md)  
 > **Supersedes / Consolidates:** [`archive/plan_project_structure_and_token_optimization.md`](archive/plan_project_structure_and_token_optimization.md), Phase 1 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), residual F-19 `COM2` naming cleanup from [`archive/plan_phase9_gps_disciplined_tdma.md`](archive/plan_phase9_gps_disciplined_tdma.md), and Section 7 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md).
 
@@ -16,7 +17,7 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 1. **Optimize AI Context & Token Efficiency:** Keep every active firmware module, documentation file, and planning roadmap compact enough to fit inside a single targeted file read (`<= 800 lines` and `< 46,080 bytes`), eliminate build-artifact search clutter (`202.36 MB`), prune obsolete stubs, and expand on-demand workspace skills.
 2. **Extract a Separate Unified Library Repository (`Field_Instrument_Core`):** Eliminate `~65+` duplicated ESP-IDF BSP, display, audio, I2C, IMU, RTC, logger, Wi-Fi portal, and math/fusion files currently copied between **`RTK_Rover` (`3.5B`)** and **`Magnetic_Field_Scanner` (`3.49 v3`, `v5.1.13`)** (and future Waveshare ESP32-S3 field instruments), shipping both consumers' hardest-won stability improvements into one SemVer Arduino library.
 
-**Sequencing Note:** **Phase 1.0** and **Phase 1.1** run **before** major feature additions in [Plan 2](plan_2_rover_enhancements_and_android_companion.md) so `ble_bridge`, `rtcm_arbiter`, `SEN0696` 3D AHRS, and Tile 1/3/4 UI extensions land inside small, cleanly decoupled modules rather than further bloating `lvgl_port.c` (`4,225 lines`).
+**Sequencing Note:** [**Plan 0**](plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`) pulls forward the `lvgl_port.c` (`4,225 lines`) modular split (9 files / 6 tiles) and the `I2C1` + `matrix_math` / `ahrs_9dof` port, so **Plan 1 Phases 1.0 & 1.1** finish the remaining file splits and Core decoupling **before** [`Field_Instrument_Core`](plan_2_rover_enhancements_and_android_companion.md) extraction and Plan 2 (`BLE` / Android Slave Mode).
 
 ---
 
@@ -24,10 +25,10 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 
 ### 2.1 Files Exceeding the Single-Read Cap (`800 lines` / `46,080 bytes`)
 
-| Tracked File | Bytes | Lines | Cap Overrun | Disposition in Plan 1 |
+| Tracked File | Bytes | Lines | Cap Overrun | Disposition Across Plan 0 -> Plan 1 |
 | :--- | :---: | :---: | :---: | :--- |
-| `CHANGELOG.md` | `205,400 B` | `1,497 L` | `4.5x B / 1.9x L` | Phase 1.0: Rolling archive split (`< v0.8.0` -> archive) |
-| `src/lvgl_port/lvgl_port.c` | `193,724 B` | `4,225 L` | `4.2x B / 5.3x L` | Phase 1.1: Split into Core display port + `6` UI files |
+| `CHANGELOG.md` | `205,400 B` | `1,497 L` | `4.5x B / 1.9x L` | Plan 1 Phase 1.0: Rolling archive split (`< v0.8.0` -> archive) |
+| `src/lvgl_port/lvgl_port.c` | `193,724 B` | `4,225 L` | `4.2x B / 5.3x L` | **Moved to Plan 0 Phase 0.1 (`9` files / `6` tiles)** |
 | `src/e220_driver/e220_driver.cpp` | `68,372 B` | `1,596 L` | `1.5x B / 2.0x L` | Phase 1.1: Split into `3` units + internal header |
 | `src/um982_driver/um982_driver.cpp` | `47,460 B` | `1,146 L` | `1.03x B / 1.4x L` | Phase 1.1: Split into `2` units + finish F-19 `COM2` cleanup |
 | `src/waypoint_manager/waypoint_manager.cpp` | `39,796 B` | `1,017 L` | `1.27x L` | Phase 1.1: Split CSV store vs. survey logger (`2` files) |
@@ -94,9 +95,8 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
 4. **Display Core vs. App UI Separation:** `lvgl_port_core.c` owns QSPI/DMA/PSRAM wrapping (`heap_caps_malloc_extmem_enable(64)` -> `4096`) and generic locks; app tiles stay in `RTK_Rover`.
 
 **Exact File Splits & Cleanups (`v0.8.18`):**
-1. **Split `src/lvgl_port/lvgl_port.c` (`4,225 L` -> `8` Files <= `750 L`):**
-   * `lvgl_port_core.c` (`~460 L`): QSPI panel/touch init via `BoardDisplayCfg_t`, `24`-line DMA bounce buffers, PSRAM UI allocation wrapping, LVGL task & mutex.
-   * `lvgl_ui_internal.h` + `ui_header_nav.c` (`~550 L`), `ui_tile0_guidance.c` (`~750 L`), `ui_tile1_logger_settings.c` (`~700 L`), `ui_tile2_csv_browser.c` (`~450 L`), `ui_tile3_compass_level.c` (`~430 L`), `ui_tile4_diagnostics.c` (`~520 L`).
+1. **`src/lvgl_port/` (`Done in Plan 0 Phase 0.1` -> Core Decouple Here):**
+   * `lvgl_port.c` is split into `9` files (`6` tiles including `ui_tile5_settings.c`) in Plan 0 Phase 0.1. In Phase 1.1, parameterize `lvgl_port_core.c` (`BoardDisplayCfg_t`, PSRAM `extmem_enable(64)` wrapper, mutex) so `ui_header_nav.c` and `ui_tile0..tile5*.c` stay strictly sketch-local in `RTK_Rover`.
 2. **Split `src/e220_driver/e220_driver.cpp` (`1,596 L` -> `3` Units + `e220_driver_internal.h`):**
    * `e220_config_mode3.cpp` (`~520 L`), `e220_rtcm_gatekeeper.cpp` (`~400 L` -- exposing clean RTCM3 validation hook for Plan 2's `rtcm_arbiter`), `e220_tdma_scheduler.cpp` (`~550 L`).
 3. **Split `src/um982_driver/um982_driver.cpp` (`1,146 L` -> `2` Units + Finish Residual F-19 `COM2` Cleanup):**
@@ -105,10 +105,10 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
 4. **Split `src/waypoint_manager/waypoint_manager.cpp` (`1,017 L` -> `2` Units):**
    * `waypoint_csv_store.cpp` + `waypoint_survey_log.cpp` (with injected FS + mutex).
 5. **Slim `RTK_Rover.ino` (`932 L` -> `< 650 L`):**
-   * Extract Priority-4 ES8311 `task_audio_beep` + `beepQueue` into `src/rover_audio/` and AXP2101 auto-shutdown / startup power logic into `src/rover_power/` (also staging Plan 2's low-battery SD flush hook).
-6. **Decouple Core Candidates & Port `MFS` Math/Fusion:**
+   * Extract Priority-4 ES8311 `task_audio_beep` + `beepQueue` into `src/rover_audio/` and AXP2101 auto-shutdown / startup power logic into `src/rover_power/` (also staging Plan 2's `< 3.40 V` low-battery SD flush hook).
+6. **Decouple Core Candidates & Finish Math/Fusion Separation:**
    * Strip `settings_manager.h` from `imu_bsp.c`; inject UTC offset & remove `um982_driver.h` from `rtc_bsp.cpp`; convert `sen0696_driver.cpp` to `FicSen0696_t`; align `nmea_logger.cpp` and `route_logger.cpp` to `rtcm_logger`'s decoupled `s_buf_mux`/`s_file_mux`.
-   * Port & generalize `MFS/src/matrix_math/matrix_math.h` (`float`/`double`, remove `5000.0` assumption) and refactor `MadgwickAHRS` + 50-sample stationary gyro FOC into instance-safe `ahrs_9dof.h/.cpp` (ready for Plan 2's `SEN0696` fusion).
+   * Ensure `src/matrix_math/` and `src/sensor_fusion/` (`ahrs_9dof`, seeded in Plan 0 Phase 0.6 from `MFS`) have zero app-specific headers so `MFS` adopts them unchanged in Phase 1.3.
    * *Optional Python split:* When modifying `scripts/e220_pacer.py` or `scripts/cogo_solver.py`, extract `rover_protocol.py` (updating `scripts/update_e220_pacer.sh` together!) and `cogo_math.py`.
 
 ### Phase 1.2 -- Separate Unified Library Repository (`Field_Instrument_Core`)
@@ -168,5 +168,5 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 | Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` (1 shared library)** |
 | In-tree build clutter (`RTK_Rover/build/`) | `202.36 MB` (`2,613` files) | **`0 B`** |
 | Active `CHANGELOG.md` size | `1,497 L` / `205 KB` | **`< 450 L` / `< 35 KB`** |
-| Active `docs/plans/` documents | `7` legacy overlapping plans | **`2` consolidated active plans + `archive/`** |
-| Cross-project fusion readiness (`matrix_math` + `ahrs_9dof`) | `MFS`-only | **Shared by `MFS` & `RTK_Rover` ([Plan 2](plan_2_rover_enhancements_and_android_companion.md))** |
+| Active `docs/plans/` documents | `7` legacy overlapping plans | **`3` sequenced plans (`Plan 0 -> 1 -> 2`) + `archive/`** |
+| Cross-project fusion readiness (`matrix_math` + `ahrs_9dof`) | `MFS`-only | **Ported in Plan 0; shared in Core (`MFS` & `RTK_Rover`)** |

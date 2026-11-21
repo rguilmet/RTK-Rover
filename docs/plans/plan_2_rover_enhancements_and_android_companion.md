@@ -1,10 +1,10 @@
 # Plan 2: 3.5B Rover Sensor Enhancements, BLE/NTRIP Bridge & Android Companion ("Slave Mode")
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap (Consolidated November 21, 2026)  
-> **Document Version:** `1.1.0`  
+> **Status:** Active Execution Roadmap (Updated November 21, 2026)  
+> **Document Version:** `1.2.0`  
 > **Baselines:** `RTK_Rover v0.8.18` | `CAD v2.1.6` | `e220_pacer.py v3.7.1`  
-> **Prerequisite Structure Plan:** [`plan_1_shared_core_library_and_token_optimization.md`](plan_1_shared_core_library_and_token_optimization.md) (Phase 1.1 splits + shared `matrix_math`/`ahrs_9dof`)  
+> **Prerequisite Plans:** [`plan_0_field_survey_refinements.md`](plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`: 6-tile UI, `SEN0696` `I2C1` 9-DOF fusion, `settings.json` NTRIP schema) -> [`plan_1_shared_core_library_and_token_optimization.md`](plan_1_shared_core_library_and_token_optimization.md) (Phase 1.1 splits & `Field_Instrument_Core`)  
 > **Consolidates:** Phases 3-5 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), Phases 7.1-7.5 of [`archive/plan_phase7_cellular_ntrip_bridge.md`](archive/plan_phase7_cellular_ntrip_bridge.md), and Sections 4-6 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md) (retiring the `3.49B-v2` hardware migration).
 
 ---
@@ -18,7 +18,7 @@ Per project direction, the Rover keeps its proven **`Waveshare ESP32-S3-Touch-LC
 * **Beam Orientation Sensors (`GX-12` Bulkhead):** DFRobot Gravity `SEN0696` (`BMI323 + BMM350 + BMP581`, I2C `0x4A..0x4D`, `1 Hz` driver shipped in `v0.8.15..v0.8.18`), with legacy SparkFun `MMC5983MA` (`0x30`) retained as an auto-detected Tier-B fallback.
 
 ### 1.2 100% Standalone Guarantee + Bidirectional Android "Slave Mode"
-All 5 existing standalone LVGL tiles, tactile audio/Geiger guidance, LoRa RTK, CSV waypoint browsing, `1 Hz` route logging, and multi-epoch survey logging MUST remain **100% functional without a phone**. When linked over **BLE 5.0 NUS**, the `3.5B` Rover seamlessly operates as an interactive smart sensor head (**Slave Mode**) alongside the Android companion (`RTK-Rover-Mobile`): streaming `5-10 Hz` telemetry, receiving filtered cellular NTRIP RTCM3 corrections alongside LoRa, accepting live stakeout targets, remote survey/route triggers, LoRa rate switches, and waypoint file syncs -- with one-tap `[LOCAL CONTROL]` reclaim on the `3.5B` screen at any time.
+All `6` standalone LVGL tiles (delivered in Plan 0: Navigation, Survey Logger, CSV Browser, Compass/Level, Diagnostics, and Quick Settings), tactile L/R audio/Geiger guidance, LoRa RTK, `1 Hz` route logging, and multi-epoch survey logging MUST remain **100% functional without a phone**. When linked over **BLE 5.0 NUS**, the `3.5B` Rover seamlessly operates as an interactive smart sensor head (**Slave Mode**) alongside the Android companion (`RTK-Rover-Mobile`): streaming `5-10 Hz` telemetry, receiving filtered cellular NTRIP RTCM3 corrections alongside LoRa, accepting live stakeout targets, remote survey/route triggers, LoRa rate switches, and waypoint file syncs -- with one-tap `[LOCAL CONTROL]` reclaim on the `3.5B` screen at any time.
 
 ### 1.3 Verified `v0.8.18` Resource & Coexistence Envelope
 * **Flash (`app3M_fat9M_16MB`):** `1,705,510 B` used (`54%` of `3,145,728 B` -> `~1.44 MB` free).
@@ -30,46 +30,15 @@ All 5 existing standalone LVGL tiles, tactile audio/Geiger guidance, LoRa RTK, C
 
 ## 2. Part A -- Current-Hardware Rover Sensor, Kinematics & Power Enhancements
 
-### Phase 2.1 -- Beam `SEN0696` 10-DOF 3D AHRS, Calibration, Barometer & UI Integration
-*(Builds directly on Plan 1's shared `fic_matrix_math` + `fic_ahrs_9dof` and `v0.8.15..v0.8.18`'s shipped `sen0696_driver`.)*
+### Phase 2.1 -- Calibrated Beam Lever-Arm Qualification (Post-Plan-0 `SEN0696` Refinement)
+*(Core `SEN0696` `I2C1 GPIO 47/48` bus isolation, `matrix_math` ellipsoid `CAL MAG`, `FicAhrs9Dof_t` fusion, `BMP581` relative elevation, and Tile 3/4 UI cards are pulled forward into [**Plan 0 Phase 0.6**](plan_0_field_survey_refinements.md#7-phase-06----sen0696-i2c1-gpio-4748-isolation--beam-9-dof-fusion-v090). Plan 2 retains only post-`v0.9.0` calibrated lever-arm qualification and BLE remote calibration triggers.)*
 
-```mermaid
-flowchart TD
-    S["SEN0696 on Rigid Beam (0x4A)\nBMI323 + BMM350 + BMP581"] -->|Valid| BEAM["Beam Frame R_mount\n& Stationary Gyro FOC"]
-    M["MMC5983MA (0x30) + QMI8658"] -.->|Tier-B fallback| LEG["Legacy 9-DOF Path"]
-    Q["Onboard QMI8658 (0x6B)"] -->|Display Enclosure Only| POSE["LCD DisplayPose_t"]
-    UM["UM982 UNIHEADINGA\n(HDG FIX / HDG FLT)"] --> ARB{"Heading Arbiter\n& Online Teacher"}
-    BEAM --> AHRS["FicAhrs9Dof_t (Madgwick)\nBeam Pitch/Roll + World Omega_z"]
-    AHRS --> ARB
-    UM -->|HDG FIX| CAL["Auto-Calibrate:\nTrue-N Tare + B_ref/Bz_ref\n+ Beam Pitch Tare"]
-    ARB -->|No SLV| WALK{"Moving >= 0.70m?"}
-    WALK -->|Yes| DISP["HDG DISP"]
-    WALK -->|No| GATE{"Triple Iron Gate"}
-    GATE -->|Clean| COMP["Beam 9-DOF AHRS (HDG COMP)"]
-    GATE -->|Distorted| GYRO["Bias-Comp Gyro Coast (HDG GYRO/HOLD)"]
-```
-
-1. **Verified `v0.8.18` `SEN0696` Hardware Constraints & Bus-Rate Gate:**
-   * **No I2C Temperature Register:** `SEN0696`'s onboard I2C bridge (`0x0000..0x0021`) does **not** expose temperature (`Temp: N/A` observed in `v0.8.18`). Omit `beam_temp_c` rather than synthesizing fake temperature readouts.
-   * **Two-Phase `~10.3 ms` Prep Wait & Bus Decision Gate:** Each staggered `SEN0696` block (`Acc/Gyr`, `Mag`, `Baro`) holds `i2c_bsp_lock()` for `~10.3 ms` (`~31 ms` total). Select between two bus modes during Phase 2.1 bench bring-up:
-     * *Option A (`I2C0` Split-Rate):* Poll `Acc/Gyr` + `Mag` staggered at `10-15 Hz` and `BMP581` baro at `1-2 Hz` on shared `I2C0` (`7 ms` Tier-1/Tier-2 recovery active), acceptable only if a 30-min touch+SD soak hits `0` unrecovered stalls and Touch latency `< 50 ms`.
-     * *Option B (`I2C1` Isolated Bus on Freed `GPIO 47/48` -- Recommended for `25-40 Hz` AHRS):* Rewire `GX-12` `SDA/SCL` onto freed `GPIO 47/48` via Plan 1's dual-bus `fic_i2c_bsp` (`I2C_NUM_1`), completely eliminating `I2C0` touch/`QMI8658`/`AXP2101` bus contention and external cable-capacitance `err=0x103` faults.
-2. **Beam Frame Transform (`beam_imu_orient_mode` in `settings.json`) & Centripetal Gate:**
-   * Configurable `3x3` signed permutation `R_mount` maps `SEN0696` into canonical Beam Frame (`+X` pole center -> `ANT2`, `+Y` horizontal left, `+Z` plumb up `+1g`).
-   * Gate accelerometer gravity corrections strictly to `| ||a|| - 1g | < 0.12g` AND `|omega| < 12 deg/s`, preventing centrifugal error (`omega^2 * r_beam`) during pole spins.
-   * When `SEN0696` is online, drive `pole_bubble_x_deg` / `pole_bubble_y_deg` exclusively from beam attitude and dedicate `QMI8658` (`0x6B`) to `DisplayPose_t`.
-3. **3D AHRS, Ellipsoid Calibration, Online Teacher & Triple Iron Gate (`nav_engine`):**
-   * Run Plan 1's `FicAhrs9Dof_t` (Madgwick attitude + world-projected vertical yaw rate `omega_world_z = g_hat . (omega_beam - b_g)` + 50-sample stationary accel-variance gyro bias FOC).
-   * Add **`Tile 3 CAL MAG`** (and BLE remote command): `360-deg` rotation feeds `fic_matrix_math::get_calibration_matrices()` to compute 3D hard-iron offsets `(bx, by, bz)` + `3x3` soft-iron matrix `S`, persisted to `settings.json`.
-   * While `HDG_SRC_DUAL_FIX` and tilt `< 15 deg`, update circular EMA (`alpha = 0.05`) of `mag_true_north_offset_deg`, `B_ref`, `Bz_ref`, and `beam_pitch_tare_deg`.
-   * **Triple Iron-Anomaly Gate (`mag_anomaly = true`):** Trigger on `| ||B|| - B_ref | > 3.5 uT` (or `< 25` / `> 75 uT`), `|Bz_world - Bz_ref| > 3.0 uT`, OR gyro-vs-mag innovation `|wrap180(dPsi_mag - omega_world_z * dt)| > 4.0 deg` (`> 200 ms`). Coast via bias-compensated `HDG_SRC_GYRO`/`HOLD` and blend back after `>= 0.5 s` clean consistency. Keep `MMC5983MA` (`0x30`) as Tier-B fallback.
-4. **Calibrated Beam Lever-Arm Guard, `BMP581` Baro & `3.5B` UI Cards:**
-   * Add opt-in `apply_lever_arm_on_calibrated_beam` in `nav_compute_pole_tip_position()` once field trials verify `< 2 deg` canopy accuracy under `HDG_SRC_COMP`.
-   * Discipline `BMP581` `Baro Rel Elev` (`h_diff = tip_height_m - baro_alt_m`) while `RTK_FIXED`.
-   * Surface attitude, heading provenance (`BEAM 9DOF` / `IRON ANOMALY`), `CAL MAG`, and `Baro` inside Tile 3, Tile 4 (`SEN0696 ONLINE [BMI323+BMM350+BMP581]`), and Header `[CMP]` via C `snprintf()` + `lv_label_set_text()`. Preserve the `48 B` `RoverUplinkTelemetry_t` LoRa uplink binary format (`heading_source = 7`).
+1. **Calibrated Beam Lever-Arm Guard (`nav_compute_pole_tip_position()`):**
+   * Once outdoor `v0.9.0` canopy trials verify `< 2 deg` beam compass accuracy under `HDG_SRC_COMP`, qualify enabling opt-in `apply_lever_arm_on_calibrated_beam` so the Master -> Pole-Center lever-arm stays active smoothly when `ANT2` loses `SLV FIX`.
+2. **Core Refactor Alignment:** Migrate `SEN0696` + `ahrs_9dof` onto Plan 1's shared `Field_Instrument_Core` (`FicSen0696_t`, `FicAhrs9Dof_t`, `fic_matrix_math`).
 
 ### Phase 2.2 -- Proactive Low-Battery Data-Loss Protection (`AXP2101`)
-* In `rover_power`, debounce `AXP2101` `VBAT < 3.40 V` (`5 s` continuous while discharging on battery) to cleanly flush/close open `route_*.csv`, `rtcm`, `nmea`, and `serial` SD log handles, commit dirty `settings.json`, display a low-battery warning, and preserve all survey data before PMIC under-voltage cutoff.
+* Building on Plan 0's clean SD logger stop inside auto-off, debounce `AXP2101` `VBAT < 3.40 V` (`5 s` continuous while discharging on battery) in `rover_power` to flush/close open `route_*.csv`, `rtcm`, `nmea`, and `serial` SD log handles, commit dirty `settings.json`, display a low-battery warning, and preserve all survey data before PMIC under-voltage cutoff.
 
 ---
 
@@ -81,20 +50,16 @@ flowchart TD
    * Allocate all BLE RX (`4 KB`), TX (`2 KB`), and RPC command staging ring buffers (`>= 1 KB`) strictly in **Octal PSRAM**.
 2. **Strict Radio Mode Mutual Exclusion (`BLE` <-> `Wi-Fi Web Portal`):**
    * Field default: **BLE ON, Wi-Fi OFF** (`>= 100 KB` free internal `DRAM0` target after NimBLE init).
-   * Enabling Tile 1 `WIFI` cleanly disconnects & deinits BLE first (reclaiming `~35-55 KB` internal SRAM) before `WiFi.mode()`; toggling `WIFI` OFF re-starts BLE advertising automatically. Show mutual exclusion cleanly on Tile 1 (`BLE` / `WIFI`).
+   * Enabling **Tile 5 Quick Settings** `WIFI` cleanly disconnects & deinits BLE first (reclaiming `~35-55 KB` internal SRAM) before `WiFi.mode()`; toggling `WIFI` OFF re-starts BLE advertising automatically. Wire the reserved Row 4 `BLE` slot on `ui_tile5_settings.c` cleanly (`BLE` / `WIFI`).
 
 ### Phase 2.4 -- Core 0 Dual-Source RTCM3 Arbiter (`src/rtcm_arbiter/`)
 * Hook both `e220_rtcm_gatekeeper.cpp` (replaces direct call to `um982_forward_rtcm()`) and `ble_bridge` (`0xD3` RTCM3 frames) into Core 0 `rtcm_arbiter_submit(source, buf, len)` -> single shared **`CRC24Q == 0` Gatekeeper** -> **`um982_forward_rtcm()`** on **`UM982 COM1` (`Serial1`, `GPIO 17/18`)** protected by `s_com1_tx_mutex`. Zero `COM2` references.
 * **Source Selection Modes (`settings.json` + Android RPC):**
   * `AUTO` (Default): **LoRa primary**. If `now - last_lora_valid_rtcm_ms > 3000 ms`, immediately promote `BLE NTRIP` frames (`NTRIP: BLE`). Switch back to LoRa only after LoRa delivers `>= 3` consecutive valid frames (prevents boundary oscillation).
-  * `LORA_ONLY` / `NTRIP_ONLY`: Explicit user override from Tile 1/4 or Android app.
-* **`settings.json` NTRIP Schema & Persistence (`settings_manager`):**
-  * Persist NTRIP caster fields inside `/settings.json` on Rover SD/FFat (keeping private mountpoint/email profiles strictly in `RTK_Rover_Private/profiles/settings.json`, never hardcoded in public firmware):
-    * `rtcm_source_mode` (`"AUTO"` / `"LORA_ONLY"` / `"NTRIP_ONLY"`, default `"AUTO"`),
-    * `ntrip_host` (default `"rtk2go.com"`), `ntrip_host_ip` (IP fallback `"3.14.70.106"`), `ntrip_port` (`2101`),
-    * `ntrip_mountpoint` (default `""`, case-sensitive), `ntrip_user_email` (default `""`), `ntrip_password` (default `"none"`).
-  * Extend `SystemSettings` (`settings_manager.h/.cpp`, `~240 B` struct delta) with placeholder-overwrite protection mirroring `is_placeholder_ssid()` so `save_settings()` never strips or overwrites real private NTRIP credentials on SD/FFat.
-* **Non-Destructive `3.5B` UI Badging:** Header Row 1 adds `BLE` icon (Cyan connected / Amber adv / Dim OFF); Header Row 2 displays correction source (`LoRa -84dB` vs. `NTRIP BLE` vs. `NO CORR`) + diff age; Tile 4 adds `BLE & NTRIP Diagnostics` card (peer state, MTU, RX kbps, failover count).
+  * `LORA_ONLY` / `NTRIP_ONLY`: Explicit user override from Tile 5/Tile 4 or Android app.
+* **`settings.json` NTRIP Schema & Persistence (Pre-Delivered by Plan 0 Phase 0.5):**
+  * Consumes the NTRIP keys persisted by Plan 0 Phase 0.5 inside `/settings.json` (`rtcm_source_mode`, `ntrip_host`, `ntrip_host_ip`, `ntrip_port`, `ntrip_mountpoint`, `ntrip_user_email`, `ntrip_password`; private profiles stored strictly in `RTK_Rover_Private/profiles/settings.json`).
+* **Non-Destructive `3.5B` UI Badging:** Header Row 1 adds `BLE` icon (Cyan connected / Amber adv / Dim OFF); Header Row 2 displays correction source (`LoRa -84dB` vs. `NTRIP BLE` vs. `NO CORR`) + diff age; `ui_tile4_diagnostics.c` adds `BLE & NTRIP Diagnostics` card (peer state, MTU, RX kbps, failover count).
 
 ### Phase 2.5 -- Framed Telemetry & Bidirectional "Slave Mode" Control Protocol
 * **NUS RX Stream Demuxer:** Top-level state machine inspects incoming NUS RX chunks: frames starting with `0xD3` route to `rtcm_arbiter`; frames starting with `0xAA 0x55` (`[0xAA, 0x55, ver, msg_type, seq, len_lo, len_hi, payload..., crc16_lo, crc16_hi]`) route to `slave_rpc_dispatch()`.
@@ -173,7 +138,7 @@ flowchart LR
 | Gate | Quantitative Pass Criteria |
 | :--- | :--- |
 | **G1 (`3.5B` `SEN0696` AHRS)** | `0` unresolved `I2C` errors over 30-min soak (`I2C0` split or `I2C1 GPIO 47/48`); `beam_pitch` vs. `UM982` `baseline_pitch` `<= 1.0 deg`; `HDG_FIX` -> `SLV` dropout `[CMP]` switch in `0.0 s` (`< 2 deg` jump, `< 2 deg / 15 s` gyro iron coast); `48 B` LoRa uplink untouched; `stage2_bench_verify.py` `0` Trunc / `0` CRC. |
-| **G2 (`DRAM0` & Radio Exclusion)** | `arduino-cli` `--warnings default` = `0` warnings; static `DRAM0 <= 25%` (`< 80 KB`); BLE active + Wi-Fi OFF free internal `DRAM0 >= 100 KB`; `20x` consecutive `BLE <-> WIFI` Tile 1 toggles leave `0` leaked tasks, `0` crashes, and clean reconnect. |
+| **G2 (`DRAM0` & Radio Exclusion)** | `arduino-cli` `--warnings default` = `0` warnings; static `DRAM0 <= 25%` (`< 80 KB`); BLE active + Wi-Fi OFF free internal `DRAM0 >= 100 KB`; `20x` consecutive `BLE <-> WIFI` Tile 5 toggles leave `0` leaked tasks, `0` crashes, and clean reconnect. |
 | **G3 (RTCM3 Dual-Source Arbiter)** | Killing LoRa pacer fails over to `BLE NTRIP` within `<= 3.5 s` with **zero loss of `RTK FIX`** (`UM982 COM1`); resuming LoRa promotes back after `>= 3` clean frames; verified via `stage2_bench_verify.py` and field ridge-shadow walk. |
 | **G4 (Bidirectional Slave Mode)** | Phone tap-to-stake updates Rover `Tile 0` in `< 150 ms`; remote `LOG PIN`, `REC ON/OFF`, `4.8k/9.6k/19.2k` rate switch, `CAL MAG`, and BLE CSV push all return verified ACKs; `3.5B` `[LOCAL CONTROL]` tap restores standalone control instantaneously; Rover passes full field walk with Android phone completely OFF. |
 | **G5 (Power & Data Integrity)** | `AXP2101 < 3.40 V` test cleanly flushes/closes all SD logs + commits `settings.json` before shutdown; zero lost points in Android `Room` DB under sudden Rover battery removal. |
