@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.4.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.5.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -32,7 +32,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.4"
+__version__ = "v2.1.5"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -41,7 +41,7 @@ DXF_DIR = CAD_DIR / "dxf"
 
 REF_FILES = {
     "waveshare_body": STEP_DIR / "REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp",
-    "waveshare": STEP_DIR / "REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-facing-header.stp",
+    "waveshare": STEP_DIR / "REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-right-facing-header.stp",
     "um982": STEP_DIR / "REF-holybro-um982.stp",
     "e220": STEP_DIR / "REF-e220-module.stp",
     "power": STEP_DIR / "REF-power-module.stp",
@@ -1113,7 +1113,7 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     """Load all REF-*.stp hardware models and place them in exact assembly coordinates."""
     refs = {}
 
-    # 1. Waveshare 3.5B (fixed R6.0 body REF-Waveshare...stp + 2x16 angled header Solid[4] from ASM)
+    # 1. Waveshare 3.5B (fixed R6.0 body REF-Waveshare...stp + right-facing (+X) 2x16 angled header Solid[4] from ASM)
     ws_body = cq.importers.importStep(str(REF_FILES["waveshare_body"]))
     s_body_bb = ws_body.solids().vals()[3].BoundingBox()
     gx, gy, gz = 0.5 * (s_body_bb.xmin + s_body_bb.xmax), 0.5 * (s_body_bb.ymin + s_body_bb.ymax), s_body_bb.zmax

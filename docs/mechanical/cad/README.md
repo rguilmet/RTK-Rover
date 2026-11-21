@@ -1,12 +1,12 @@
-# RTK Rover Option A Mechanical Enclosure CAD (`v2.1.4`)
+# RTK Rover Option A Mechanical Enclosure CAD (`v2.1.5`)
 
 Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + standardized Option B2 **`10000 mAh`** Battery & `1/4"-20` Pole Mount Pod with removable **`5000 mAh`** adapter insert), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
 
-![Exploded CAD assembly of the RTK Rover v2.1.4 enclosure](previews/cad_preview_exploded.png)
+![Exploded CAD assembly of the RTK Rover v2.1.5 enclosure](previews/cad_preview_exploded.png)
 
 ---
 
-## 1. Key Architectural Improvements (`v2.0.0` - `v2.1.4`)
+## 1. Key Architectural Improvements (`v2.0.0` - `v2.1.5`)
 
 1. **Open-Frame Serviceability (`Back_Chassis_Frame` + Clean Lift-Off `Top_Cover`):**
    * **Every electronic module, connector, and tactile plunger** mounts directly to `Back_Chassis_Frame` (`3.0 mm` rear plate + full-width `R6.0` **Top L-Wall** bulkhead monolithically wrapping the upper `180 deg` (`Y = 173.2..180.0`) of both top-corner `M3` posts + open-inner Right **Button-Plunger Flange** & low rail at `Y = 20..52 mm` + continuous **Left/Bottom/Right `4.50 mm` inner cover-capture rim** (`1.60 mm` thick, `0.25 mm` slip) bracing `Top_Cover`'s open lower lip against inward flex + **`6` full-height open-top `M3` bosses** flush at `Z = -2.65 mm` for unobstructed `Dia 14.0 mm` soldering-iron insert installation), while `Top_Cover` wraps the lower `180 deg` (`Y <= 173.0`) of both top-corner posts behind a continuous `R6` front faceplate, carries gabled `USB-C` / `MicroSD` wall openings, and retains the `3` plungers via a **downward inverted-U capture comb** (`1.55 mm` travel).
@@ -37,9 +37,9 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 | Path | Purpose | Tooling |
 | :--- | :--- | :--- |
-| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.1.4`) | Python / CadQuery |
-| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 34-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.1.4`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
-| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.1.4`) | OpenSCAD `2026.11.18` (`Manifold`) |
+| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.1.5`) | Python / CadQuery |
+| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 34-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.1.5`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
+| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.1.5`) | OpenSCAD `2026.11.18` (`Manifold`) |
 | `step/REF-*.stp` (`12` files) | Exact hardware & battery reference models (including fixed `R6.0` `REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`) | SolidEdge / CadQuery |
 | `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Battery_Adapter_5000` + `Pole_Lid` + hardware) | SolidEdge |
 | `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Pole_Lid` + `10000 mAh` hardware) | SolidEdge |
@@ -54,7 +54,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 * **Waveshare `ESP32-S3-Touch-LCD-3.5B` (Portrait, `USB-C` Down):**
   * `61.00 x 92.44 mm` (**`R6.0` corners** matching datasheet and `REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`) mounted onto `4 x 13.5 mm` rear pillars off `Back_Chassis_Frame` (`M2` CSK screws from behind).
-  * `2x16` right-angle header faces left (`-X`); `PWR/RESET/BOOT` (`3` captive **round** `Dia 4.10 mm` plungers with `Dia 3.20 mm` guided noses) slide tool-free from `-X` into `Back_Chassis_Frame`'s open outer bearing flange (`X = 56.0..60.0`, low support rail `Z = -11.70`) and are retained cleanly by `Top_Cover`'s downward inverted-U capture comb (`X = 49.9..51.6`, `1.55 mm` linear travel = `0.30 mm` rest gap + `1.25 mm` active press stroke). The gabled `USB-C` bottom tunnel and right-wall `MicroSD` slot + finger scoop are cut into `Top_Cover`.
+  * `2x16` right-angle header faces right (`+X`, `X = -7.27..+7.87 mm`, `Z = -18.13..-9.30 mm`, from `REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-right-facing-header.stp`) beneath `Waveshare` (`10.13 mm` clear of `Speaker` cradle, `21.73 mm` clear of `Power Board`, and `2.52+ mm` vertically above the `RTC` cradle for unobstructed DuPont wire routing); `PWR/RESET/BOOT` (`3` captive **round** `Dia 4.10 mm` plungers with `Dia 3.20 mm` guided noses) slide tool-free from `-X` into `Back_Chassis_Frame`'s open outer bearing flange (`X = 56.0..60.0`, low support rail `Z = -11.70`) and are retained cleanly by `Top_Cover`'s downward inverted-U capture comb (`X = 49.9..51.6`, `1.55 mm` linear travel = `0.30 mm` rest gap + `1.25 mm` active press stroke). The gabled `USB-C` bottom tunnel and right-wall `MicroSD` slot + finger scoop are cut into `Top_Cover`.
 * **Under-Display RTC Button Cell (`REF-coin-cell.stp`):**
   * Snaps into the integral `ID 22.5 mm` C-clip cradle (`-Y` wire opening) directly under `Waveshare` (`X = +18.50, Y = 64.00`), leaving the lower under-Waveshare pocket open for the battery cable slot.
 * **Top Crown L-Bulkhead (Full-Width `R6.0` w/ `50/50` Split Corner Piers at `Y = 173.2 mm`, Integral to `Back_Chassis_Frame`):**

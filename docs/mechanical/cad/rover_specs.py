@@ -1,6 +1,6 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.1.4 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.5 enclosure.
 
-Architecture (v2.1.4 - Swapped E220 LoRa (+SMA) & Holybro UM982 for EMI Isolation):
+Architecture (v2.1.5 - Right-Facing (+X) Waveshare 2x16 Header Routing):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder at Y = 64.0, Holybro UM982,
      E220 LoRa, Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker
@@ -32,7 +32,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.4"
+__version__ = "v2.1.5"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -142,7 +142,7 @@ PB_W = 20.0
 PB_H = 80.0
 PB_HOLE_DX = 15.0
 PB_HOLE_DY = 75.0
-PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 12.67 mm clear of Header
+PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 21.73 mm clear of right-facing Header (-7.27)
 PB_CY = 91.00               # Y: [51.00, 131.00]; 5.1 mm above Bot-Left Pod M3 (45.9), 7.1 mm below Top-Left Pod M3 (138.1)
 PB_STANDOFF_H = 2.55        # +0.55 mm clear of -2.00 mm trace protrusion, full 5.00 mm Ruthex M2 pocket; peak -3.88 mm (1.48 mm below cover)
 
@@ -153,7 +153,7 @@ PB_STANDOFF_H = 2.55        # +0.55 mm clear of -2.00 mm trace protrusion, full 
 SPK_W = 28.0
 SPK_H = 28.0
 SPK_Z_THK = 10.0
-SPK_CX = -33.20             # Body X: [-47.20, -19.20]; 2.8+ mm clear of Bot-Left M3 (-50.3) & Header (-16.33)
+SPK_CX = -33.20             # Body X: [-47.20, -19.20]; 2.8+ mm clear of Bot-Left M3 (-50.3) & 10.13 mm clear of right-facing Header (-7.27)
 SPK_CY = 21.00              # Body Y: [7.00, 35.00], wire bump Y=[35.0, 37.0]; clears Bot-Left Pod M3 (38.1) by 1.1 mm
 SPK_PEDESTAL_H = 11.5       # Seating ridge at Z = -13.50 -> speaker front cone at Z = -3.50 (1.1 mm behind Top_Cover)
 SPK_WALL = 1.6              # 4-perimeter pocket wall (31.6 x 31.6 outer)

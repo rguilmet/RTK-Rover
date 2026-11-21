@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.4 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.4
+// RTK Rover Option A Enclosure v2.1.5 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.5
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================

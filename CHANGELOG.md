@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.5] - 2026-11-21
+### Changed & Improved
+- **Right-Facing (`+X`) Waveshare `2x16` Header Reference Model ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.5`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Replaced `REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-facing-header.stp` with [`REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-right-facing-header.stp`](docs/mechanical/cad/step/REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-right-facing-header.stp), pointing the `2x16` right-angle GPIO header inward (`+X`, `X = -7.27..+7.87 mm`, `Y = 32.33..73.64 mm`, `Z = -18.13..-9.30 mm`) underneath `Waveshare` (`10.13 mm` clear of `Speaker` cradle, `21.73 mm` clear of `Power Board`, and `2.52 mm` vertically above the `RTC` cradle `Z_top = -21.00 mm` for an estimated `2x16` DuPont housing) for clean cable routing.
+  - Re-exported [`RTK_Rover_Assembly_5000mAh.step`](docs/mechanical/cad/step/RTK_Rover_Assembly_5000mAh.step) and [`RTK_Rover_Assembly_10000mAh.step`](docs/mechanical/cad/step/RTK_Rover_Assembly_10000mAh.step), retired the superseded left-facing reference file, and verified `7/7` manifold checks plus **`34/34` `0.0000 mm^3` boolean interference checks**.
+
 ## [docs/mechanical/cad v2.1.4] - 2026-11-21
 ### Changed & Improved
 - **Swap `E220` LoRa (`+SMA`) & Holybro `UM982` Positions for EMI Isolation ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.4`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.4`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.4`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
