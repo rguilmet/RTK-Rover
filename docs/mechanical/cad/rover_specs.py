@@ -1,6 +1,8 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.1.5 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.6 enclosure.
 
-Architecture (v2.1.5 - Right-Facing (+X) Waveshare 2x16 Header Routing):
+Architecture (v2.1.6 - Recessed Rear UM982 M2 CSK Bores for Standard M2x12 Screws):
+- v2.1.6: Added UM_CSK_RECESS = 1.60 mm rear counterbore at the 4 Holybro UM982 M2
+  bores (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2x12 CSK).
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder at Y = 64.0, Holybro UM982,
      E220 LoRa, Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker
@@ -32,7 +34,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.5"
+__version__ = "v2.1.6"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -190,6 +192,7 @@ UM_LED_Y = UM_BOT_Y + 30.20             # 155.00
 UM_LED_X_LIST = [UM_LEFT_X + dx for dx in (9.90, 14.90, 19.90, 24.90)]  # [-17.30, -12.30, -7.30, -2.30]
 UM_SW_X = UM_LEFT_X + 24.90             # -2.30
 UM_SW_Y = UM_BOT_Y + 13.31              # 138.11
+UM_CSK_RECESS = 1.60                    # Rear counterbore depth (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2 x 12 mm CSK)
 
 # ==============================================================================
 # 6. E220 LoRa Module (from REF-e220-module.stp: 40.0 x 60.0 x 16.0H mm)

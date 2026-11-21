@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.6] - 2026-11-21
+### Changed & Improved
+- **Recessed Rear `UM982` CSK Pockets & Standardized 3-Kit Fastener BOM ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.6`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.6`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.6`, [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md), [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Added a **`1.60 mm`** (`UM_CSK_RECESS = 1.60`) rear cylindrical counterbore (`Dia 4.70 mm`) ahead of the `45-deg` self-supporting CSK seat at all `4` `Holybro UM982` mounting bores on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`92.85 cm^3`, [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl)), reducing effective clamp span from `10.80 mm` to **`9.20 mm`** so standard **`M2 x 12 mm` CSK** screws engage **`2.80 mm` (`7.0` threads)** with `1.20 mm` bottom margin in `UM982`'s `4.00 mm` tapped holes.
+  - Standardized all `26` enclosure screws across `3` standard metric kits (`6 x M3 x 8 mm CSK` top cover, `4 x M3 x 20 mm CSK` pod mount -- never `25 mm`, `4 x M2 x 20 mm CSK` Waveshare, `4 x M2 x 12 mm CSK` UM982, and `8 x M2 x 6 mm` button head + `8 x M2` flat washers for Power Board + E220).
+  - Re-exported [`RTK_Rover_Assembly_5000mAh.step`](docs/mechanical/cad/step/RTK_Rover_Assembly_5000mAh.step) and [`RTK_Rover_Assembly_10000mAh.step`](docs/mechanical/cad/step/RTK_Rover_Assembly_10000mAh.step), verified `7/7` manifold checks, **`34/34` `0.0000 mm^3` boolean interference checks**, OpenSCAD `Manifold --hardwarnings` on `back_print`, and zoomed rear-bore cross-section geometry.
+
 ## [docs/mechanical/cad v2.1.5] - 2026-11-21
 ### Changed & Improved
 - **Right-Facing (`+X`) Waveshare `2x16` Header Reference Model ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.5`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

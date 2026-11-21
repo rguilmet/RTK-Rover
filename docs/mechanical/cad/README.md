@@ -1,12 +1,12 @@
-# RTK Rover Option A Mechanical Enclosure CAD (`v2.1.5`)
+# RTK Rover Option A Mechanical Enclosure CAD (`v2.1.6`)
 
 Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + standardized Option B2 **`10000 mAh`** Battery & `1/4"-20` Pole Mount Pod with removable **`5000 mAh`** adapter insert), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
 
-![Exploded CAD assembly of the RTK Rover v2.1.5 enclosure](previews/cad_preview_exploded.png)
+![Exploded CAD assembly of the RTK Rover v2.1.6 enclosure](previews/cad_preview_exploded.png)
 
 ---
 
-## 1. Key Architectural Improvements (`v2.0.0` - `v2.1.5`)
+## 1. Key Architectural Improvements (`v2.0.0` - `v2.1.6`)
 
 1. **Open-Frame Serviceability (`Back_Chassis_Frame` + Clean Lift-Off `Top_Cover`):**
    * **Every electronic module, connector, and tactile plunger** mounts directly to `Back_Chassis_Frame` (`3.0 mm` rear plate + full-width `R6.0` **Top L-Wall** bulkhead monolithically wrapping the upper `180 deg` (`Y = 173.2..180.0`) of both top-corner `M3` posts + open-inner Right **Button-Plunger Flange** & low rail at `Y = 20..52 mm` + continuous **Left/Bottom/Right `4.50 mm` inner cover-capture rim** (`1.60 mm` thick, `0.25 mm` slip) bracing `Top_Cover`'s open lower lip against inward flex + **`6` full-height open-top `M3` bosses** flush at `Z = -2.65 mm` for unobstructed `Dia 14.0 mm` soldering-iron insert installation), while `Top_Cover` wraps the lower `180 deg` (`Y <= 173.0`) of both top-corner posts behind a continuous `R6` front faceplate, carries gabled `USB-C` / `MicroSD` wall openings, and retains the `3` plungers via a **downward inverted-U capture comb** (`1.55 mm` travel).
@@ -37,9 +37,9 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 | Path | Purpose | Tooling |
 | :--- | :--- | :--- |
-| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.1.5`) | Python / CadQuery |
-| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 34-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.1.5`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
-| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.1.5`) | OpenSCAD `2026.11.18` (`Manifold`) |
+| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, and Ruthex boss geometry (`v2.1.6`) | Python / CadQuery |
+| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 34-pair real-STEP collision audit, and STEP/STL/DXF exporter (`v2.1.6`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
+| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.1.6`) | OpenSCAD `2026.11.18` (`Manifold`) |
 | `step/REF-*.stp` (`12` files) | Exact hardware & battery reference models (including fixed `R6.0` `REF-Waveshare-ESP32-S3-Touch-LCD-3.5B.stp`) | SolidEdge / CadQuery |
 | `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Battery_Adapter_5000` + `Pole_Lid` + hardware) | SolidEdge |
 | `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Pole_Lid` + `10000 mAh` hardware) | SolidEdge |
@@ -61,7 +61,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
   * Top-Left & Top-Right `M3` corner posts (`(-54.2, 173.2)` and `(+54.2, 173.2)`) split their corner wrap cleanly `50/50`: `Back_Chassis_Frame`'s Top L-Wall continues around both `R6.0` corners down to `Y = 173.2 mm` (`Z = -2.65 mm`, flush with the insert bosses for open overhead soldering-iron access), while `Top_Cover`'s side walls wrap the lower `180 deg` (`Y <= 173.0 mm`) behind its continuous `2.40 mm` front faceplate (`0.20 mm` butt seam).
   * **Continuous Inner Cover-Capture Rim (`Back_Chassis_Frame`):** A `1.60 mm` wide x `4.50 mm` tall internal lip (`Z = -25.0..-20.5 mm`, `0.25 mm` slip clearance inside `Top_Cover` walls) ties boss-to-boss along the Left (`Y = 6.8..173.2 mm`), Bottom (`X = -54.2..+54.2 mm` beneath `USB-C`), Right-Lower (`Y = 6.8..22.5 mm`), and Right-Upper (`Y = 49.5..173.2 mm`, framing `MicroSD`) edges (`4.35 mm` overlap inside `Top_Cover`'s `Z = -24.85 mm` skirt) to prevent side-wall inward flex when handled.
   1. `GX-12` (`X = -39.50 mm`, **Z-centered at `Z = -14.00 mm`** in the `28.0 mm` main chassis): Pure round `Dia 12.2 mm` bore & `Dia 17.5 mm` inner nut relief (`2.6 mm` web).
-  2. Holybro `UM982` SMAs (Center bay `X = -9.80 mm`, Slave/Master at `X = -19.95, +0.35 mm, Z = -11.25 mm`, `20.3 mm` pitch): Pure round `Dia 10.5 mm` crown bores (`2.0 mm` localized web, `4-M2` rear screws on `7.8 mm` standoffs), acting as a shielded Faraday barrier between the `Power Board` and `E220`. `Top_Cover` aligns `4 x Dia 1.95 mm` LED light pipes + `Dia 3.4 mm` `SWITCH` pinhole over the label face.
+  2. Holybro `UM982` SMAs (Center bay `X = -9.80 mm`, Slave/Master at `X = -19.95, +0.35 mm, Z = -11.25 mm`, `20.3 mm` pitch): Pure round `Dia 10.5 mm` crown bores (`2.0 mm` localized web, `4-M2 x 12 mm CSK` rear screws via `1.60 mm` recessed rear pockets on `7.8 mm` standoffs), acting as a shielded Faraday barrier between the `Power Board` and `E220`. `Top_Cover` aligns `4 x Dia 1.95 mm` LED light pipes + `Dia 3.4 mm` `SWITCH` pinhole over the label face.
   3. `E220` SMA Bulkhead (Right bay `X = +29.00 mm, Z = -11.25 mm`, `38.0 mm` right of `Power Board`): `Dia 6.6 mm` bore with a **downward (`-Z_asm`) anti-rotation D-flat (`5.98 mm` across-flat, `Z_flat = -13.930 mm`)** matching `REF-sma-female-lora-connector.stp` (`Dia 11.5 mm` inner relief, `2.6 mm` web); `E220` PCB sits on **`8.50 mm` `M2` Ruthex standoffs** (`-3.00 mm` underside keepout at `Z = -19.50 mm`, `+0.50 mm` clear above Top-Right Rear Pod `M3` boss, `+1.10 mm` below `Top_Cover`).
 * **Left Power & Acoustic Stack (`Back_Chassis_Frame`):**
   * `20 x 80 x 20.57H mm` `Power Board` on **`2.55 mm` `M2` Ruthex standoffs** (`+0.55 mm` clear of `-2.00 mm` underside trace protrusion; full `5.00 mm` blind Ruthex pocket above `0.55 mm` closed rear skin; `1.48 mm` top clearance below `Top_Cover`).
@@ -90,12 +90,12 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
   * `10 x M3` (`Dia 4.0 x 6.7 mm`): `6` in `Back_Chassis_Frame` cover bosses + `4` in `Back_Chassis_Frame` rear Option B2 pod bosses.
   * `8 x M2` (`Dia 3.2 x 5.0 mm`): `4` in `Power Board` standoffs + `4` in `E220` standoffs.
   * `2 x 1/4"-20` (`Dia 8.0 x 13.7 mm`): in `Pole_Lid` spine (`38.1 mm` pitch).
-* **Metric Screws (`90-deg` flat-head CSK unless noted):**
+* **Metric Screws (`26` pcs + `8` flat washers, standardized across `3` metric kits):**
   * `6 x M3 x 8 mm` (or `10 mm`) `CSK` (front-entry `Top_Cover` closure into full-height `Z = -2.65 mm` bosses)
-  * `4 x M3 x 22 mm CSK` (standardized `Battery_Cradle` + `Pole_Lid` rear mount)
-  * `4 x M2 x 20 mm CSK` (`Waveshare` via rear of `Back_Chassis_Frame` pillars, `16.5 mm` span + `3.5 mm` thread engagement)
-  * `4 x M2 x 14 mm CSK` (`UM982` `4-M2` via rear of `Back_Chassis_Frame` pillars, `10.8 mm` span + `3.2 mm` thread engagement)
-  * `8 x M2 x 5 mm` pan head (`Power Board` + `E220`)
+  * `4 x M3 x 20 mm CSK` (standardized `Battery_Cradle` + `Pole_Lid` rear mount; `4.10 mm` thread engagement -- **never use `25 mm`**)
+  * `4 x M2 x 20 mm CSK` (`Waveshare` via rear of `Back_Chassis_Frame` pillars, `16.50 mm` span + `3.50 mm` thread engagement)
+  * `4 x M2 x 12 mm CSK` (`UM982` `4-M2` via `1.60 mm` recessed counterbores on `Back_Chassis_Frame`, `9.20 mm` effective span + `2.80 mm` / `7.0`-thread engagement)
+  * `8 x M2 x 6 mm` button head **+ `8 x M2` flat washers (`~0.3-0.5 mm`)** (`Power Board` + `E220`, `>= 0.8 mm` pocket bottom clearance)
 * **Light Pipes & Sealing:**
   * `4 x Dia 1.75 mm` clear PETG filament stubs pressed into `Top_Cover` `UM982` LED holes and trimmed flush.
   * Optional `1 mm` closed-cell neoprene/EVA foam pad behind the LiPo cell in `Battery_Cradle_*` and around the speaker rim.

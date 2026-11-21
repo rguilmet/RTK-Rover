@@ -1,6 +1,6 @@
-# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.1.5`)
+# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.1.6`)
 
-Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified metric screw stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.1.5`).
+Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified metric screw stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.1.6`).
 
 * **Enclosure Architecture & CAD Previews:** [`cad/README.md`](cad/README.md)
 * **Pre-Oriented Support-Free STL Files (`7` files):** [`cad/stl/`](cad/stl/)
@@ -39,7 +39,7 @@ Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **Orca
 | STL File | Vol (`cm^3`) | Layer / Walls / Infill | Adhesion & Print Notes |
 | :--- | :---: | :--- | :--- |
 | [`button_plungers_print.stl`](cad/stl/button_plungers_print.stl) | `0.62` | **`0.12-0.16 mm`**, `4` walls, **`100%` infill** | **Print first (~15 min) as a PETG tuning check.** Slow to `20-25 mm/s`, fan `40-50%`, min layer time `12-15 s`, **`4-5 mm` outer brim** so all `3` `Dia 3.20 / 4.10 mm` stems print cleanly round. |
-| [`back_chassis_print.stl`](cad/stl/back_chassis_print.stl) | `92.93` | `0.20 mm`, `4` walls, `25-30%` gyroid | Add a **`5 mm` outer brim** when printing open-air (prevents corner lift on the `120 x 180 mm` base). Keep seam aligned along a rear/interior corner. |
+| [`back_chassis_print.stl`](cad/stl/back_chassis_print.stl) | `92.85` | `0.20 mm`, `4` walls, `25-30%` gyroid | Add a **`5 mm` outer brim** when printing open-air (prevents corner lift on the `120 x 180 mm` base). Keep seam aligned along a rear/interior corner. |
 | [`top_cover_print.stl`](cad/stl/top_cover_print.stl) | `65.04` | `0.20 mm`, `4` walls, `25%` gyroid | Prints **face-down** (bed texture becomes front faceplate). Use **outer-only brim** (or skirt only) so brim never fills the flush glass opening or `1.90 mm` U-groove. |
 | [`pole_lid_print.stl`](cad/stl/pole_lid_print.stl) | `63.24` | `0.20 mm`, **`5-6` walls**, **`60-100%` gyroid** | Primary structural mount carrying the `1/4"-20` survey pole clamp. Use `100%` infill (or a `100%` infill modifier over the central spine) so clamp torque cannot crush the bosses. |
 | [`bat_cradle_print.stl`](cad/stl/bat_cradle_print.stl) | `32.14` | `0.20 mm`, **`5` walls**, `25%` gyroid | Setting `5` walls makes the `2.0 mm` outer/inner walls and `1.8 mm` Warren-truss web print as 100% solid perimeters. |
@@ -73,24 +73,25 @@ Standard ISO/DIN length convention applies throughout:
 
 ### Detailed Fastener Stack-Up Breakdown
 
-| Joint | Qty | Recommended Screw | Head Type | Acceptable Alt. | Stack Span | Thread Engagement | Max Safe Length |
+| Joint | Qty | Kit Screw | Head Type | Notes / Washer | Stack Span | Thread Engagement | Max Safe Length |
 | :--- | :---: | :--- | :--- | :--- | :---: | :---: | :---: |
-| **`Top_Cover` -> `Back_Chassis_Frame` (front closure)** | **`6`** | **`M3 x 8 mm`** *(ideal)* | `90-deg` Flat CSK | `M3 x 10 mm` CSK (`0.65 mm` bottom margin) | `2.65 mm` | `5.35 mm` (`8 mm`) / full `5.7 mm` (`10 mm`) | `10.65 mm` |
-| **`Pole_Lid` + `Battery_Cradle` -> `Back_Chassis_Frame`** | **`4`** | **`M3 x 22 mm`** *(ideal)* | `90-deg` Flat CSK | `M3 x 20 mm` CSK (`4.10 mm` engagement) | `15.90 mm` (`3.0 + 0.1 + 12.8`) | `6.10 mm` (`22 mm`, full `5.7 mm` Ruthex) | `22.80 mm` |
-| **`Waveshare 3.5B` -> Rear Pillars** | **`4`** | **`M2 x 20 mm`** | `90-deg` Flat CSK | -- | `16.50 mm` (`Z=-28.0..-11.50`) | `3.50 mm` into brass pillars | -- |
-| **`Holybro UM982` -> Rear Pillars** | **`4`** | **`M2 x 14 mm`** | `90-deg` Flat CSK | -- | `10.80 mm` (`Z=-28.0..-17.20`) | `3.20 mm` into UM982 housing | -- |
-| **`Power Board` PCB -> Stand-offs** | **`4`** | **`M2 x 5 mm`** | Pan / Button Head | `M2 x 6 mm` max (`0.6 mm` bottom margin) | `~1.6 mm` PCB | `~3.4 mm` into `4.0 mm` Ruthex | `~6.6 mm` (`5.0 mm` bore) |
-| **`E220 LoRa` PCB -> Stand-offs** | **`4`** | **`M2 x 5 mm`** | Pan / Button Head | `M2 x 6 mm` max (`0.6 mm` bottom margin) | `~1.6 mm` PCB | `~3.4 mm` into `4.0 mm` Ruthex | `~6.6 mm` (`5.0 mm` bore) |
+| **`Top_Cover` -> `Back_Chassis_Frame` (front closure)** | **`6`** | **`M3 x 8 mm`** | `90-deg` Flat CSK | Kit 3 (`M3` CSK; `M3 x 10 mm` also fits) | `2.65 mm` | `5.35 mm` (`~10.7` threads) | `10.65 mm` |
+| **`Pole_Lid` + `Battery_Cradle` -> `Back_Chassis_Frame`** | **`4`** | **`M3 x 20 mm`** | `90-deg` Flat CSK | Kit 3 (`M3` CSK; **never use `25 mm`**) | `15.90 mm` (`3.0 + 0.1 + 12.8`) | `4.10 mm` (`~8.2` threads) | `22.80 mm` |
+| **`Waveshare 3.5B` -> Rear Pillars** | **`4`** | **`M2 x 20 mm`** | `90-deg` Flat CSK | Kit 1 (`M2` CSK) | `16.50 mm` (`Z=-28.0..-11.50`) | `3.50 mm` into brass pillars | -- |
+| **`Holybro UM982` -> Rear Pillars (`1.60 mm` CSK recess)** | **`4`** | **`M2 x 12 mm`** | `90-deg` Flat CSK | Kit 1 (`M2` CSK; seated in `1.60 mm` recess) | `9.20 mm` (`Z=-26.4..-17.20`) | `2.80 mm` (`7.0` threads) | `13.20 mm` (`4.0 mm` hole) |
+| **`Power Board` PCB -> Stand-offs** | **`4`** | **`M2 x 6 mm`** | Button Head | Kit 2 (`M2` Button + **`1 x M2` flat washer**) | `~1.57 mm` PCB + `~0.3-0.5 mm` washer | `~3.9-4.1 mm` into `4.0 mm` Ruthex | `~6.9 mm` (`5.0 mm` bore) |
+| **`E220 LoRa` PCB -> Stand-offs** | **`4`** | **`M2 x 6 mm`** | Button Head | Kit 2 (`M2` Button + **`1 x M2` flat washer**) | `~1.50 mm` PCB + `~0.3-0.5 mm` washer | `~4.0-4.2 mm` into `4.0 mm` Ruthex | `~6.8 mm` (`5.0 mm` bore) |
 
-### Consolidated Fastener Shopping List (Stainless Steel 304 / A2-70 Recommended)
+### Consolidated Fastener Shopping / Kit-Picking List (All `26` Screws + `8` Washers from `3` Standard Kits)
 
-* **M3 Screws (`10` pcs total):**
+* **Kit 3 -- `M3` CSK Assortment (`10` pcs total):**
   * `6 x M3 x 8 mm` `90-deg` Flat-Head CSK *(or `M3 x 10 mm` CSK)* -- Top cover closure
-  * `4 x M3 x 22 mm` `90-deg` Flat-Head CSK *(or `M3 x 20 mm` CSK)* -- Rear battery & pole mount pod
-* **M2 Screws (`16` pcs total):**
+  * `4 x M3 x 20 mm` `90-deg` Flat-Head CSK *(**never use `25 mm`**, which exceeds `22.80 mm` max safe length and breaches the `1.10 mm` closed boss cap into internal hardware)* -- Rear battery & pole mount pod
+* **Kit 1 -- `M2` CSK Assortment (`8` pcs total):**
   * `4 x M2 x 20 mm` `90-deg` Flat-Head CSK -- Waveshare display mount (rear entry)
-  * `4 x M2 x 14 mm` `90-deg` Flat-Head CSK -- Holybro UM982 mount (rear entry)
-  * `8 x M2 x 5 mm` Pan or Button Head *(max `M2 x 6 mm`)* -- Power Board (`4`) + E220 LoRa (`4`)
+  * `4 x M2 x 12 mm` `90-deg` Flat-Head CSK -- Holybro `UM982` mount (rear entry via `1.60 mm` `CAD v2.1.6` recessed CSK pockets, leaving `1.20 mm` bottom margin in `UM982`'s `4.00 mm` tapped holes)
+* **Kit 2 -- `M2` Button-Head + Washer Kit (`8` screws + `8` flat washers):**
+  * `8 x M2 x 6 mm` Button Head + **`8 x M2` flat washers** (`0.3-0.5 mm` thick) -- Power Board (`4`) + E220 LoRa (`4`); the flat washer guarantees `>= 0.8 mm` bottom clearance above the `5.00 mm` blind Ruthex pocket floor
 * **Ruthex Heat-Set Inserts (`20` pcs total):**
   * `10 x M3` (`RX-M3x5.7`)
   * `8 x M2` (`RX-M2x4.0`)
@@ -109,11 +110,11 @@ Standard ISO/DIN length convention applies throughout:
 3. **Install Rear-Screwed Modules First (Must Precede Pod Mount):**
    * Snap `RTC` coin cell (`+` / wire harness toward `-Y`) into its under-display C-clip cradle (`(18.50, 64.00)`).
    * Mount `Waveshare 3.5B` with `4 x M2 x 20 mm CSK` from the rear (CSK heads flush at `Z = -28.0 mm`).
-   * Mount `Holybro UM982` (`( -9.80, 151.40 )`) with `4 x M2 x 14 mm CSK` from the rear.
+   * Mount `Holybro UM982` (`(-9.80, 151.40)`) with `4 x M2 x 12 mm CSK` from the rear (CSK heads seat inside the `1.60 mm` recessed pockets on `Back_Chassis_Frame`).
 4. **Install Remaining Interior Hardware:**
-   * Press `Speaker` into its lower-left pocket (`+Y` wires), and fasten `Power Board` (`4 x M2 x 5 mm`) + `E220 LoRa` (`4 x M2 x 5 mm`).
+   * Press `Speaker` into its lower-left pocket (`+Y` wires), and fasten `Power Board` (`4 x M2 x 6 mm` Button Head + `M2` flat washer) + `E220 LoRa` (`4 x M2 x 6 mm` Button Head + `M2` flat washer).
    * Fit `GX-12` bulkhead (`-39.50`) and `E220` D-flat `SMA` pigtail (`+29.00`).
    * Slide the `3` `Button_Plungers` from `-X` into the Right Flange (`PWR`, `RESET`, `BOOT`).
    * Plug and dress the `2x16` DuPont harness under `Waveshare` (`+X` right-facing header clears the `Speaker` by `10.13 mm` and clears the `RTC` cradle by `2.52+ mm`), and feed the battery `JST-PH` lead through `BAT_SLOT` (`(25.0, 35.5)`).
 5. **Close Front Cover:** Align `Top_Cover`'s downward inverted-U plunger comb straight down (`-Z`) onto `Back_Chassis_Frame` and torque `6 x M3 x 8 mm CSK` screws evenly; press `4` clear PETG light pipes into the LED bores and slide `Slim_Sun_Shield` into the front U-groove if used.
-6. **Attach Rear Battery & Pole Pod:** Route the LiPo cell (`+ Battery_Adapter_5000` if using `5000 mAh`) against the Bottom-Left Capture Corner with leads exiting Bottom-Right through `BAT_SLOT`, seat `Battery_Cradle` + `Pole_Lid`, and secure with `4 x M3 x 22 mm CSK` screws.
+6. **Attach Rear Battery & Pole Pod:** Route the LiPo cell (`+ Battery_Adapter_5000` if using `5000 mAh`) against the Bottom-Left Capture Corner with leads exiting Bottom-Right through `BAT_SLOT`, seat `Battery_Cradle` + `Pole_Lid`, and secure with `4 x M3 x 20 mm CSK` screws (never `25 mm`).

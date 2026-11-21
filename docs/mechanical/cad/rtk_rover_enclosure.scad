@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.5 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.5
+// RTK Rover Option A Enclosure v2.1.6 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.6
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -110,6 +110,7 @@ UM_LED_Y = UM_BOT_Y + 30.20;
 UM_LED_X_OFFS = [9.90, 14.90, 19.90, 24.90];
 UM_SW_X = UM_LEFT_X + 24.90;
 UM_SW_Y = UM_BOT_Y + 13.31;
+UM_CSK_RECESS = 1.60;                   // Rear counterbore depth (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2x12 CSK)
 
 // --- E220 LoRa (40 x 60 x 16H) ---
 E220_W = 40.0; E220_H = 60.0;
@@ -312,8 +313,11 @@ module back_chassis_frame() {
             translate([E220_CX + sx*E220_HOLE_DX/2, E220_CY + sy*E220_HOLE_DY/2, Z_PLATE_INNER + E220_STANDOFF_H - RUTHEX_M2_DEPTH])
                 cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
         }
-        for (dx = UM_M2_X_OFFS, dy = UM_M2_Y_OFFS)
-            csk_through(UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_OUTER, UM_BACK_Z - Z_PLATE_OUTER, HOLE_CLEAR_M2, 4.6, true);
+        for (dx = UM_M2_X_OFFS, dy = UM_M2_Y_OFFS) {
+            translate([UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_OUTER - 0.5])
+                cylinder(d=4.7, h=UM_CSK_RECESS + 0.46);
+            csk_through(UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_OUTER + UM_CSK_RECESS, UM_BACK_Z - (Z_PLATE_OUTER + UM_CSK_RECESS), HOLE_CLEAR_M2, 4.6, true);
+        }
         // Battery JST pass-through slot
         rrect(BAT_SLOT_W, BAT_SLOT_H, WALL_BACK + 1.0, 4.4, BAT_SLOT_CX, BAT_SLOT_CY, Z_PLATE_OUTER - 0.5);
         // UM982 L-wall recess & crown bores (E220 SMA w/ downward -Z_asm anti-rotation D-flat)

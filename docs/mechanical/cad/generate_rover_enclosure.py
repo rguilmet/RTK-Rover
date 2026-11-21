@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.5.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.6.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -32,7 +32,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.5"
+__version__ = "v2.1.6"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -433,8 +433,9 @@ def build_back_chassis_frame() -> cq.Workplane:
     for bore in e2_bores:
         plate = plate.cut(bore)
 
-    # 11. Holybro UM982 Standoffs (4 x Dia 5.4 mm up to Z = -17.20, rear M2 CSK pass-throughs)
+    # 11. Holybro UM982 Standoffs (4 x Dia 5.4 mm up to Z = -17.20, recessed rear M2 CSK for M2x12)
     um_pillar_h = (S.UM_BACK_Z - S.Z_PLATE_INNER) + 0.5
+    z_um_csk = S.Z_PLATE_OUTER + S.UM_CSK_RECESS
     um_bores = []
     for dx in S.UM_M2_X_OFFS:
         for dy in S.UM_M2_Y_OFFS:
@@ -447,10 +448,18 @@ def build_back_chassis_frame() -> cq.Workplane:
                 .extrude(um_pillar_h)
             )
             plate = plate.union(pil)
-            um_bores.append(make_csk_cone_through(
-                px, py, S.Z_PLATE_OUTER, S.UM_BACK_Z - S.Z_PLATE_OUTER,
+            cbore = (
+                cq.Workplane("XY")
+                .workplane(offset=S.Z_PLATE_OUTER - 0.5)
+                .center(px, py)
+                .circle(2.35)
+                .extrude(S.UM_CSK_RECESS + 0.46)
+            )
+            csk = make_csk_cone_through(
+                px, py, z_um_csk, S.UM_BACK_Z - z_um_csk,
                 S.HOLE_CLEAR_M2, 4.6, cone_from_bed=True
-            ))
+            )
+            um_bores.append(cbore.union(csk))
     for bore in um_bores:
         plate = plate.cut(bore)
 
