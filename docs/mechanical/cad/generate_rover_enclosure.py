@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.2.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.3.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -6,8 +6,9 @@ Architecture:
     Board w/ 5.0 mm M2 Ruthex blind pockets, Speaker open-center pocket frame),
     full-width R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0
     (Z-centered GX-12, E220 SMA w/ downward D-flat, UM982 SMAs), Right Button-Plunger
-    Flange + low support rail, 6 open-top full-height M3 bosses (Z = -2.65 mm), and
-    relocated horizontal under-Waveshare BAT_SLOT (25.0, 35.5).
+    Flange + low support rail, continuous Left/Bottom/Right 4.5 mm inner cover-capture
+    rim, 6 open-top full-height M3 bosses (Z = -2.65 mm), and relocated horizontal
+    under-Waveshare BAT_SLOT (25.0, 35.5).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
@@ -31,7 +32,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.2"
+__version__ = "v2.1.3"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -298,22 +299,28 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.union(plunger_blk).union(plunger_rail)
 
-    # 4. Left & Bottom thin perimeter registration tabs (Z = -25.0..-21.2, 0.25 mm inside Top_Cover walls)
-    reg_tabs = [
-        (-56.0, 46.0, 1.6, 12.0),   # Left lower between Speaker & Mid-Left
-        (-56.0, 154.0, 1.6, 12.0),  # Left upper near GX-12
-        (-10.0, 4.0, 12.0, 1.6),    # Bottom left of USB-C
-        ( 42.0, 4.0, 10.0, 1.6),    # Bottom right of USB-C
+    # 4. Continuous Inner Cover-Capture Rim (Left, Bottom, Right; Z = -25.0..-20.5, 0.25 mm inside Top_Cover)
+    # Braces Top_Cover's open perimeter lip against inward flex across all non-bulkhead edges.
+    x_rim_ctr = (S.CASE_W / 2.0 - S.WALL_SIDE - S.RIM_CLEAR) - S.RIM_THK / 2.0
+    y_rim_ctr = (S.WALL_BOT + S.RIM_CLEAR) + S.RIM_THK / 2.0
+    y_bot_m3 = S.COVER_M3_POINTS[0][1]
+    y_top_m3 = S.COVER_M3_POINTS[4][1]
+    x_bot_m3 = abs(S.COVER_M3_POINTS[0][0])
+    rim_segs = [
+        (-x_rim_ctr, 0.5 * (y_bot_m3 + y_top_m3), S.RIM_THK, y_top_m3 - y_bot_m3),                               # Left continuous (6.8..173.2)
+        (0.0,        y_rim_ctr,                   2.0 * x_bot_m3, S.RIM_THK),                                    # Bottom continuous under USB-C (-54.2..+54.2)
+        ( x_rim_ctr, 0.5 * (y_bot_m3 + S.PLUNGER_BLK_Y0 + 0.5), S.RIM_THK, (S.PLUNGER_BLK_Y0 + 0.5) - y_bot_m3), # Right lower (6.8..22.5)
+        ( x_rim_ctr, 0.5 * (S.PLUNGER_BLK_Y1 - 0.5 + y_top_m3), S.RIM_THK, y_top_m3 - (S.PLUNGER_BLK_Y1 - 0.5)), # Right upper (49.5..173.2)
     ]
-    for tx, ty, tw, th in reg_tabs:
-        tab = (
+    for rx, ry, rw, rh in rim_segs:
+        rim = (
             cq.Workplane("XY")
             .workplane(offset=S.Z_PLATE_INNER - 0.5)
-            .center(tx, ty)
-            .rect(tw, th)
-            .extrude(4.2)
+            .center(rx, ry)
+            .rect(rw, rh)
+            .extrude(S.RIM_H + 0.5)
         )
-        plate = plate.union(tab)
+        plate = plate.union(rim)
 
     # 5. Symmetric 6 x Front-Entry M3 Closure Bosses (full-height to Z=-2.65, 0.25 mm below Top_Cover inner face)
     # All 6 bosses stand flush with Top L-Wall / Right Flange for unobstructed top-level soldering-iron access.

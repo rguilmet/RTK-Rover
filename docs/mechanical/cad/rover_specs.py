@@ -1,13 +1,14 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.1.2 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.3 enclosure.
 
-Architecture (v2.1.2 - L-R Flipped Battery Pod/Adapter + Under-Waveshare BAT_SLOT):
+Architecture (v2.1.3 - Full Left/Bottom/Right Inner Cover-Capture Rim):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
-     (Waveshare 3.5B, underneath RTC Coin Cell holder, Holybro UM982, E220 LoRa,
-     Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker pocket
-     frame + ridge), full-width R6.0 Top L-Wall bulkhead w/ 50/50 split corner piers
-     at Y = 173.2..180.0 (GX-12 centered, E220 SMA w/ downward D-flat, UM982 SMAs),
-     Right Button-Plunger Flange + low rail, 6 open-top full-height M3 cover
-     bosses (Z = -2.65 mm), and relocated under-Waveshare BAT_SLOT (25.0, 35.5).
+     (Waveshare 3.5B, underneath RTC Coin Cell holder at Y = 64.0, Holybro UM982,
+     E220 LoRa, Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker
+     pocket frame + ridge), full-width R6.0 Top L-Wall bulkhead w/ 50/50 split
+     corner piers at Y = 173.2..180.0 (GX-12 centered, E220 SMA w/ downward D-flat,
+     UM982 SMAs), Right Button-Plunger Flange + low rail, continuous Left/Bottom/Right
+     4.5 mm inner cover-capture rim, 6 open-top full-height M3 cover bosses
+     (Z = -2.65 mm), and relocated under-Waveshare BAT_SLOT (25.0, 35.5).
   2. Top_Cover: Clean lift-off shell with ZERO connectors/modules mounted on it;
      flush glass opening, USB-C tunnel, MicroSD slot + finger scoop, speaker
      acoustic grille slots, 4 x UM982 status LED light pipes + SWITCH pinhole,
@@ -31,7 +32,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.2"
+__version__ = "v2.1.3"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -57,6 +58,11 @@ FIT_CLEAR = 0.25        # General module XY slip clearance per side
 NOTCH_CLEAR = 0.20      # Top_Cover lap clearance around Back_Chassis_Frame L-wall & right flange
 HOLE_CLEAR_M2 = 2.30    # M2 pass-through bore
 HOLE_CLEAR_M3 = 3.40    # M3 pass-through bore
+
+# Inner Perimeter Capture Rim on Back_Chassis_Frame (captures Top_Cover lip on Left, Bottom, Right)
+RIM_CLEAR = FIT_CLEAR   # 0.25 mm PETG slip inside Top_Cover inner walls (X=+/-57.0, Y=3.0)
+RIM_THK = 1.60          # 4 solid perimeters @ 0.4 mm nozzle (X=[+/-55.15, +/-56.75], Y=[3.25, 4.85])
+RIM_H = 4.50            # Z = -25.0..-20.5 mm (4.35 mm engagement overlap inside Top_Cover Z=-24.85)
 
 # Ruthex Heat-Set Insert Specs (user-supplied)
 RUTHEX_M2_OD = 3.2

@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.2 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.20 mirror of rover_specs.py v2.1.2
+// RTK Rover Option A Enclosure v2.1.3 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.3
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -32,6 +32,9 @@ FIT_CLEAR = 0.25;
 NOTCH_CLEAR = 0.20;
 HOLE_CLEAR_M2 = 2.30;
 HOLE_CLEAR_M3 = 3.40;
+RIM_CLEAR = FIT_CLEAR;
+RIM_THK = 1.60;
+RIM_H = 4.50;
 
 // --- Ruthex Heat-Set Inserts ---
 RUTHEX_M2_OD = 3.2;  RUTHEX_M2_DEPTH = 5.0;  RUTHEX_M2_BOSS = 6.2;
@@ -215,6 +218,11 @@ module back_chassis_frame() {
     wrap_h = (CASE_H - TOP_CORNER_SPLIT_Y) + 1.0;
     wrap_cx = TOP_CORNER_WRAP_X_IN + wrap_w/2;
     wrap_cy = TOP_CORNER_SPLIT_Y + wrap_h/2;
+    x_rim_ctr = (CASE_W/2 - WALL_SIDE - RIM_CLEAR) - RIM_THK/2;
+    y_rim_ctr = (WALL_BOT + RIM_CLEAR) + RIM_THK/2;
+    y_bot_m3 = COVER_M3_POINTS[0][1];
+    y_top_m3 = COVER_M3_POINTS[4][1];
+    x_bot_m3 = abs(COVER_M3_POINTS[0][0]);
 
     difference() {
         union() {
@@ -242,11 +250,13 @@ module back_chassis_frame() {
                        0.5*(Z_PLATE_INNER + PLUNGER_RAIL_Z_TOP) - 0.25])
                 cube([(PLUNGER_BLK_X0 + 0.5) - PLUNGER_RAIL_X0, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
                       PLUNGER_RAIL_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
-            // Perimeter registration tabs
-            for (t = [[-56.0, 46.0, 1.6, 12.0], [-56.0, 154.0, 1.6, 12.0],
-                      [-10.0,  4.0, 12.0, 1.6], [ 42.0,   4.0, 10.0, 1.6]])
-                translate([t[0], t[1], Z_PLATE_INNER + 1.8])
-                    cube([t[2], t[3], 4.2], center=true);
+            // Continuous Left, Bottom, and Right inner cover-capture rim (Z = -25.0..-20.5)
+            for (t = [[-x_rim_ctr, 0.5*(y_bot_m3 + y_top_m3), RIM_THK, y_top_m3 - y_bot_m3],
+                      [ 0.0,       y_rim_ctr,                2*x_bot_m3, RIM_THK],
+                      [ x_rim_ctr, 0.5*(y_bot_m3 + PLUNGER_BLK_Y0 + 0.5), RIM_THK, (PLUNGER_BLK_Y0 + 0.5) - y_bot_m3],
+                      [ x_rim_ctr, 0.5*(PLUNGER_BLK_Y1 - 0.5 + y_top_m3), RIM_THK, y_top_m3 - (PLUNGER_BLK_Y1 - 0.5)]])
+                translate([t[0], t[1], Z_PLATE_INNER + (RIM_H - 0.5)/2])
+                    cube([t[2], t[3], RIM_H + 0.5], center=true);
             // Symmetric 6 x Cover M3 bosses (full height up to COVER_BOSS_Z_TOP = -2.65)
             for (p = COVER_M3_POINTS)
                 translate([p[0], p[1], Z_PLATE_OUTER + 0.5])

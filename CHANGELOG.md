@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.3] - 2026-11-21
+### Added & Improved
+- **Continuous Left/Bottom/Right Inner Cover-Capture Rim on `Back_Chassis_Frame` ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.3`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Replaced the `4` short perimeter registration tabs with a continuous **`1.60 mm` wide x `4.50 mm` tall** inner capture rim (`RIM_CLEAR = 0.25 mm`, `RIM_THK = 1.60 mm`, `RIM_H = 4.50 mm`, spanning `Z = -25.0..-20.5 mm`) on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`92.28 cm^3`, [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl)), running boss-to-boss along the Left (`Y = 6.8..173.2 mm`), Bottom (`X = -54.2..+54.2 mm` continuously under `USB-C`), Right-Lower (`Y = 6.8..22.5 mm`), and Right-Upper (`Y = 49.5..173.2 mm`, including beneath `MicroSD`) edges (`4.35 mm` vertical capture engagement inside `Top_Cover`'s `Z = -24.85 mm` skirt) to brace all open side walls against inward handling flex.
+  - Verified `7/7` single-solid manifold checks, **`34/34` `0.0000 mm^3` boolean interference checks**, `0.0000 mm^3` overhead `Dia 14.0 mm` soldering-iron clearance on all `6` `M3` bosses, and clean OpenSCAD `Manifold --hardwarnings` on `back_print`.
+
 ## [docs/mechanical/cad v2.1.2] - 2026-11-20
 ### Changed & Improved
 - **Left-Right Mirrored Battery Pod / `5000 mAh` Adapter & Under-Waveshare `BAT_SLOT` ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.2`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.2`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.2`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
