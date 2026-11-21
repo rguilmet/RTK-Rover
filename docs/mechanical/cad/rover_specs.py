@@ -1,6 +1,6 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.1.3 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.1.4 enclosure.
 
-Architecture (v2.1.3 - Full Left/Bottom/Right Inner Cover-Capture Rim):
+Architecture (v2.1.4 - Swapped E220 LoRa (+SMA) & Holybro UM982 for EMI Isolation):
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
      (Waveshare 3.5B, underneath RTC Coin Cell holder at Y = 64.0, Holybro UM982,
      E220 LoRa, Power Board w/ 5.0 mm M2 Ruthex blind pockets, open-center Speaker
@@ -32,7 +32,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.3"
+__version__ = "v2.1.4"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -170,8 +170,8 @@ UM_SMA_PITCH = 20.30
 UM_SMA_EDGE_X = 7.25        # Relative to UM left edge
 UM_SMA_Z_FROM_BACK = 5.95   # Measured Z=5.95 from back Z=0.0 (= 8.45 from front Z=14.40)
 
-UM_CX = 31.60               # X: [+14.20, +49.00]; clears Top-Right M3 (+50.5) by 1.50 mm
-UM_LEFT_X = UM_CX - UM_W / 2.0          # +14.20
+UM_CX = -9.80               # X: [-27.20, +7.60]; center Faraday barrier (1.80 mm right of PB -29.0, 1.40 mm left of E220 +9.0)
+UM_LEFT_X = UM_CX - UM_W / 2.0          # -27.20
 UM_TOP_Y = 178.00           # Body Y: [124.80, 178.00]; 2.0 mm local roof web (178.0..180.0); 26.08 mm clear above LCD
 UM_BOT_Y = UM_TOP_Y - UM_BODY_H         # +124.80
 UM_CY = 0.5 * (UM_BOT_Y + UM_TOP_Y)     # +151.40
@@ -179,16 +179,16 @@ UM_BACK_Z = -17.20          # Standoffs = 7.80 mm off Back Plate Z=-25.0 (4-M2 r
 UM_FRONT_Z = UM_BACK_Z + UM_Z_THK       # -2.80 (0.40 mm behind Top_Cover inside Z=-2.40)
 UM_SMA_Z = UM_BACK_Z + UM_SMA_Z_FROM_BACK  # -11.25
 
-UM_SMA_SLAVE_X = UM_LEFT_X + UM_SMA_EDGE_X              # +21.45
-UM_SMA_MASTER_X = UM_SMA_SLAVE_X + UM_SMA_PITCH         # +41.75
+UM_SMA_SLAVE_X = UM_LEFT_X + UM_SMA_EDGE_X              # -19.95
+UM_SMA_MASTER_X = UM_SMA_SLAVE_X + UM_SMA_PITCH         # +0.35
 UM_SMA_ACCESS_DIA = 10.5
 
 # UM982 rear 4-M2 hole positions & front LED / SWITCH exact offsets from REF-holybro-um982.stp
 UM_M2_X_OFFS = [2.85, 31.95]
 UM_M2_Y_OFFS = [5.80, 46.30]
 UM_LED_Y = UM_BOT_Y + 30.20             # 155.00
-UM_LED_X_LIST = [UM_LEFT_X + dx for dx in (9.90, 14.90, 19.90, 24.90)]  # [24.10, 29.10, 34.10, 39.10]
-UM_SW_X = UM_LEFT_X + 24.90             # 39.10
+UM_LED_X_LIST = [UM_LEFT_X + dx for dx in (9.90, 14.90, 19.90, 24.90)]  # [-17.30, -12.30, -7.30, -2.30]
+UM_SW_X = UM_LEFT_X + 24.90             # -2.30
 UM_SW_Y = UM_BOT_Y + 13.31              # 138.11
 
 # ==============================================================================
@@ -198,25 +198,25 @@ E220_W = 40.0
 E220_H = 60.0
 E220_HOLE_DX = 35.0
 E220_HOLE_DY = 55.0
-E220_CX = -7.20             # X: [-27.20, +12.80]; 1.8 mm clear of PB (-29.0) & 1.4 mm clear of UM982 (+14.2)
+E220_CX = 29.00             # X: [+9.00, +49.00]; 38.0 mm clear of Power Board (-29.0), 1.4 mm right of UM982 (+7.6), 1.2 mm clear of Mid-Right M3 (+50.2)
 E220_CY = 134.00            # Y: [104.00, 164.00]; 5.28 mm above glass, 1.4+ mm clear below LoRa SMA tail (165.4)
-E220_STANDOFF_H = 3.05      # Flush with -3.00 mm underside trace protrusion (+0.05 mm clear); top at -8.95 mm
+E220_STANDOFF_H = 8.50      # Underside trace (-3.0 mm) at Z=-19.50 (+0.50 mm clear above Top-Right POD M3 -20.0); top at -3.50 (1.10 mm below cover)
 
 # ==============================================================================
 # 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall
 # ==============================================================================
 TOP_CORNER_SPLIT_Y = 173.2  # 50/50 split plane through top-corner M3 bosses (+-54.2, 173.2); Back wraps Y=173.2..180, Top_Cover wraps Y<=173.0
-TOP_CORNER_WRAP_X_IN = 50.6 # Inner X edge of upper corner piers (0.30 mm inside Dia 7.8 boss for clean non-tangent union; 1.60 mm clear of UM982, 2.35 mm clear of GX-12 relief)
+TOP_CORNER_WRAP_X_IN = 50.6 # Inner X edge of upper corner piers (0.30 mm inside Dia 7.8 boss for clean non-tangent union; 1.60 mm clear of E220, 2.35 mm clear of GX-12 relief)
 
 # LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, downward -Z_asm anti-rotation D-flat)
-E220_SMA_X = -7.20          # 32.3 mm right of GX-12, 28.65 mm left of UM982 Slave
+E220_SMA_X = 29.00          # Centered over E220; 28.65 mm right of UM982 Master (+0.35), 15.85 mm wall to Top-Right pier (+50.6)
 E220_SMA_Z = UM_SMA_Z       # -11.25
 E220_SMA_DIA = 6.6
 E220_SMA_FLAT = 5.98        # Across-flat height from +Z crown to -Z flat (flat at Z=-13.930, 0.125 mm clear of -13.805)
 E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
 
 # GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, Z-centered in main body)
-GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.2) & E220 (-27.2)
+GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.2) & UM982 (-27.2)
 GX12_Z = -14.00             # Exact center of 28.0 mm main chassis Z = [0.00, -28.00]
 GX12_HOLE_DIA = 12.2        # Pure round M12 x 0.75 barrel clearance (no teardrop)
 GX12_NUT_RECESS_DIA = 17.5

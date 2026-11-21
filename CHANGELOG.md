@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.1.4] - 2026-11-21
+### Changed & Improved
+- **Swap `E220` LoRa (`+SMA`) & Holybro `UM982` Positions for EMI Isolation ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.4`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.4`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.4`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**
+  - Moved the shielded Holybro `UM982` module to the upper-center bay (`UM_CX = -9.80 mm`, Slave/Master SMAs at `X = -19.95, +0.35 mm`, shifted [`Top_Cover.step`](docs/mechanical/cad/step/Top_Cover.step) `4` LED light pipes + `SWITCH` pinhole accordingly), placing `UM982`'s metal RF shield as a Faraday barrier between the switching `Power Board` (`X_max = -29.00 mm`) and LoRa transceiver.
+  - Moved the `E220` LoRa module (`E220_CX = +29.00 mm`) and matching `D`-flat `E220 SMA` crown bulkhead (`E220_SMA_X = +29.00 mm`) to the far-right bay (`38.0 mm` clear of `Power Board`), and raised `E220_STANDOFF_H` from `3.05 mm` to **`8.50 mm`** on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`92.93 cm^3`) so `E220`'s `-3.00 mm` underside keepout (`Z = -19.50 mm`) clears the Top-Right Rear Pod `M3` boss `(+42.0, 142.0)` (`Z_top = -20.00 mm`) by `+0.50 mm` with `1.10 mm` headroom under `Top_Cover`.
+  - Regenerated [`RTK_Rover_Interfaces_2D.dxf`](docs/mechanical/cad/dxf/RTK_Rover_Interfaces_2D.dxf), assemblies, STLs, and previews; verified `7/7` manifold checks, **`34/34` `0.0000 mm^3` boolean interference checks**, `0.0000 mm^3` hardware-to-hardware upper-bay clearances, and clean OpenSCAD `Manifold --hardwarnings` builds on `back_print` & `top_print`.
+
 ## [docs/mechanical/cad v2.1.3] - 2026-11-21
 ### Added & Improved
 - **Continuous Left/Bottom/Right Inner Cover-Capture Rim on `Back_Chassis_Frame` ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.1.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.1.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.1.3`, [`docs/mechanical/cad/README.md`](docs/mechanical/cad/README.md)):**

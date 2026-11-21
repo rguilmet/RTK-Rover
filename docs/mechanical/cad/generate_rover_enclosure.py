@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.3.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.1.4.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -32,7 +32,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.1.3"
+__version__ = "v2.1.4"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -416,8 +416,8 @@ def build_back_chassis_frame() -> cq.Workplane:
     for bore in pb_bores:
         plate = plate.cut(bore)
 
-    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -21.95, flush with -3.0 mm back trace clearance)
-    e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -21.95
+    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -16.50, clears POD M3 -20.0 by 0.50 mm)
+    e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -16.50
     e2_bores = []
     for dx in (-S.E220_HOLE_DX / 2.0, S.E220_HOLE_DX / 2.0):
         for dy in (-S.E220_HOLE_DY / 2.0, S.E220_HOLE_DY / 2.0):
@@ -1142,7 +1142,7 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     pm_cx, pm_cy = 0.5 * (pbb.xmin + pbb.xmax), 0.5 * (pbb.ymin + pbb.ymax)
     refs["power"] = pm.translate((S.PB_CX - pm_cx, S.PB_CY - pm_cy, S.Z_PLATE_INNER + S.PB_STANDOFF_H))
 
-    # 4. E220 Module (PCB Z=0 -> Z_PLATE_INNER + E220_STANDOFF_H = -21.0)
+    # 4. E220 Module (PCB Z=0 -> Z_PLATE_INNER + E220_STANDOFF_H = -16.50)
     e2 = cq.importers.importStep(str(REF_FILES["e220"]))
     ebb = e2.val().BoundingBox()
     e2_cx, e2_cy = 0.5 * (ebb.xmin + ebb.xmax), 0.5 * (ebb.ymin + ebb.ymax)

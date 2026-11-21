@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.1.3 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.3
+// RTK Rover Option A Enclosure v2.1.4 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.21 mirror of rover_specs.py v2.1.4
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -93,7 +93,7 @@ SPK_PEDESTAL_H = 11.5; SPK_WALL = 1.6; SPK_RIDGE_W = 2.0;
 
 // --- Holybro UM982 (34.8 x 53.2 x 14.4H) ---
 UM_W = 34.80; UM_BODY_H = 53.20; UM_Z_THK = 14.40;
-UM_CX = 31.60;
+UM_CX = -9.80;
 UM_LEFT_X = UM_CX - UM_W / 2.0;
 UM_TOP_Y = 178.00;
 UM_BOT_Y = UM_TOP_Y - UM_BODY_H;
@@ -114,9 +114,9 @@ UM_SW_Y = UM_BOT_Y + 13.31;
 // --- E220 LoRa (40 x 60 x 16H) ---
 E220_W = 40.0; E220_H = 60.0;
 E220_HOLE_DX = 35.0; E220_HOLE_DY = 55.0;
-E220_CX = -7.20; E220_CY = 134.00;
-E220_STANDOFF_H = 3.05;
-E220_SMA_X = -7.20; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
+E220_CX = 29.00; E220_CY = 134.00;
+E220_STANDOFF_H = 8.50;
+E220_SMA_X = 29.00; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
 
 // --- GX-12 Compass Bulkhead & 50/50 Split Top-Corner Crown Span ---
 TOP_CORNER_SPLIT_Y = 173.2;
