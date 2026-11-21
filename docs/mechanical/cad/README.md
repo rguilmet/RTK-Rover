@@ -74,6 +74,8 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 ## 5. Verification & Snapmaker 2.0 PETG Print Guide
 
+> **Detailed Print Profile & Complete BOM:** See [`../printing_and_bom_guide.md`](../printing_and_bom_guide.md) for full Snapmaker 2.0 slicer settings, per-part overrides, Ruthex heat-set insert specs, verified screw stack-up calculations, and assembly order.
+
 * **Automated Real-Hardware Audit:** `python generate_rover_enclosure.py` verified single-solid manifold geometry on all `6` enclosure parts (`3` solids on `Button_Plungers`), flush `[-60.00, 60.00] x [0.00, 180.00] mm` outer envelope, **`0.0000 mm^3` overlap across all `11` printed-part pairs**, and **`0.0000 mm^3` overlap across all `23` enclosure-vs-real-`REF-*.stp` hardware pairs**.
 * **Snapmaker 2 PETG Settings:**
   * Apply a thin washable **PVA glue stick** release/barrier layer on smooth/matte sheets (or print on textured PEI) and wait until the bed cools **below `30 deg C`** before removing large flat parts.
