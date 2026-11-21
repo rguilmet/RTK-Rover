@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Status:** Active Immediate Execution Roadmap (November 21, 2026)  
-> **Document Version:** `1.0.0`  
+> **Document Version:** `1.1.0`  
 > **Baseline:** `RTK_Rover v0.8.18` | `CAD v2.1.6` | `e220_pacer.py v3.7.1`  
 > **Target Releases:** `v0.8.19` (Phases 0.1-0.5: LVGL Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
 > **Execution Order:** **Plan 0 (`v0.8.19` - `v0.9.0`)** -> [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](plan_2_rover_enhancements_and_android_companion.md)
@@ -143,6 +143,9 @@ Upgrade `RoverBeep_t` and Priority-4 `task_audio_beep` ([`RTK_Rover.ino`](../../
    * Add JSON-configurable `3x3` signed `beam_imu_orient_mode` (`settings.json`), supporting the verified `-Z` inverted beam mount (`Acc Z = -1.046g`), plus centripetal accel gate (`| ||a|| - 1g | < 0.12g` & `|omega| < 12 deg/s`).
    * Implement `Tile 3` / `Tile 5` **`CAL MAG`** 360-deg spin ellipsoid wizard solving hard-iron offset + `3x3` soft-iron matrix (persisted in `settings.json`), online `UM982 HDG_FIX` circular True-North + `B_ref`/`Bz_ref` teacher, triple-condition iron anomaly gate (`|B|`, `Bz`, gyro-mag innovation -> bias-compensated `HDG_SRC_GYRO`/`HOLD`), `BMP581` `Baro Rel Elev` (`no beam_temp_c` -- not in `SEN0696` I2C bridge), and Tile 3/4 `Beam 10DOF` status (`MMC5983MA` `0x30` kept as Tier-B fallback).
    * Keep `48 B` `RoverUplinkTelemetry_t` binary-compatible (`heading_source = 7`) and keep `QMI8658` dedicated to enclosure `DisplayPose_t` whenever `SEN0696` is online.
+4. **Wiring Diagram & Pin Allocation Documentation Sync (`GPIO 47/48` -> `I2C1`):**
+   * Update [`scripts/generate_wiring_diagrams.py`](../../scripts/generate_wiring_diagrams.py) (bump `__version__`) and regenerate `docs/schematics/wiring_diagram_3_5B_current.svg` / `.png` showing the `GX-12` bulkhead `SEN0696` `SDA/SCL` routed to dedicated `I2C1` (`GPIO 47/48`) instead of shared `I2C0` (`GPIO 7/8`), including external pull-up and Gravity 4-pin color-code notes.
+   * Synchronize [`docs/schematics/system_wiring_schematics.md`](../schematics/system_wiring_schematics.md), [`docs/project_overview.md`](../project_overview.md), and the `3.5B` header pin-allocation artifacts (`docs/schematics/RTK_Rover_3.5B_Header_Pin_Mapping-rev4.{csv,xlsx}` and `RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`, bumping to `rev5` or updating in place) alongside `user_config.h` (`ROVER_PIN_I2C1_SDA` / `ROVER_PIN_I2C1_SCL`).
 
 ---
 
@@ -151,4 +154,4 @@ Upgrade `RoverBeep_t` and Priority-4 `task_audio_beep` ([`RTK_Rover.ino`](../../
 1. **Build & Memory Gate:** `arduino-cli --warnings default` = **`0` warnings** after Phase 0.1 and each subsequent phase; static `DRAM0 <= 25%` (`< 80 KB`); `[MEM] Post-Setup Heap` internal free `>= 150 KB`; all files in `src/lvgl_port/` `<= 800 L`.
 2. **UI & Ergonomics Gate:** Verify `6`-tile wrap symmetry, `5x3` `94x44 px` Tile 5 touch hit reliability, whitespace margins on `Tile 0` `304x210` Line+Bullseye canvas, Line-Up heading arrow sign against rotated tracks, and `<`/`>` advancement after `[SWAP]`.
 3. **Audio & Power Gate:** Verify rising (`Left -> move Right`) vs falling (`Right -> move Left`) vs steady (`On-Line`) tones, `16.4 ft` (`5.0 m` w/ `4.8/5.3 m` hysteresis) audio transition, `REC ON` / motion auto-off inhibit, 30s countdown cancel, and clean SD logger close before PMIC shutdown.
-4. **Config & Sensor Gate:** Verify `settings.json` round-trip preserves private `ntrip_*` fields + `cal` fields without overwrite; verify `0` `I2C0` stalls over 30-min `I2C1` soak + `< 2 deg` static beam compass accuracy (`HDG_FIX` dropout -> `[CMP]` switch in `0.0 s`); run `python scripts/check_secrets.py` (`[PASS] 100% CLEAN`) and release sequentially via `RTK_Rover` SemVer tags.
+4. **Config, Sensor & Docs Gate:** Verify `settings.json` round-trip preserves private `ntrip_*` fields + `cal` fields without overwrite; verify `0` `I2C0` stalls over 30-min `I2C1` soak + `< 2 deg` static beam compass accuracy (`HDG_FIX` dropout -> `[CMP]` switch in `0.0 s`); visually inspect regenerated wiring diagrams and confirm pin-allocation table parity with `user_config.h` before releasing `v0.9.0`; run `python scripts/check_secrets.py` (`[PASS] 100% CLEAN`) and release sequentially via `RTK_Rover` SemVer tags.
