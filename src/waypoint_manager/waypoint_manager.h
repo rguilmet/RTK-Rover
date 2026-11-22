@@ -54,6 +54,7 @@ int16_t waypoint_find_by_poly_order(int16_t target_order);
 bool        waypoint_is_derived_mode(void);
 const char* waypoint_get_prefix_options(void);
 const char* waypoint_get_note_tag_options(void);
+const char* waypoint_get_note_tag_label(uint8_t idx);
 void        waypoint_format_next_survey_label(char *buf, size_t max_len);
 void        waypoint_invalidate_survey_cache(void);
 void        waypoint_update_survey_averaging(const RoverUIData_t *live_state,

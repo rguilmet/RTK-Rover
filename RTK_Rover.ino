@@ -38,8 +38,11 @@ bool sd_card_mounted = false;
 bool sd_card_use_spi = false;
 
 typedef struct {
-    uint16_t freq_hz;
-    uint16_t duration_ms;
+    uint16_t freq1_hz;
+    uint16_t dur1_ms;
+    uint16_t gap_ms;
+    uint16_t freq2_hz;
+    uint16_t dur2_ms;
 } RoverBeep_t;
 
 static QueueHandle_t roverStateQueue = NULL;
@@ -48,6 +51,10 @@ static esp_codec_dev_handle_t playback_handle = NULL;
 static volatile bool     pending_tare_level   = false;
 static portMUX_TYPE      s_pwr_snapshot_mux   = portMUX_INITIALIZER_UNLOCKED;
 static Axp2101Status_t   s_pwr_snapshot       = {};
+static portMUX_TYPE      s_imu_snapshot_mux   = portMUX_INITIALIZER_UNLOCKED;
+static float             s_snapshot_bubble_x  = 0.0f;
+static float             s_snapshot_bubble_y  = 0.0f;
+static float             s_snapshot_pole_tilt = 0.0f;
 
 // =========================================================================
 // Backlight PWM Control (GPIO 6 on ESP32-S3-Touch-LCD-3.5B)
@@ -117,7 +124,15 @@ static void audio_bsp_init(void)
 extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 {
     if (beepQueue) {
-        RoverBeep_t b = { freq_hz, duration_ms };
+        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0 };
+        xQueueSend(beepQueue, &b, 0);
+    }
+}
+
+extern "C" void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms, uint16_t freq2_hz, uint16_t dur2_ms)
+{
+    if (beepQueue) {
+        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms };
         xQueueSend(beepQueue, &b, 0);
     }
 }
@@ -125,6 +140,35 @@ extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 extern "C" void trigger_tare_pole_level(void)
 {
     pending_tare_level = true;
+}
+
+static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint16_t dur_ms)
+{
+    if (!playback_handle || !pcm_buf || dur_ms == 0) return;
+    uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)dur_ms) / 1000U;
+    if (total_samples == 0) return;
+
+    float phase = 0.0f;
+    float phase_inc = (freq_hz > 0) ? (2.0f * (float)M_PI * (float)freq_hz / (float)AUDIO_SAMPLE_RATE) : 0.0f;
+    uint32_t written = 0;
+
+    while (written < total_samples) {
+        uint32_t rem   = total_samples - written;
+        uint32_t chunk = (rem < 256U) ? rem : 256U;
+        if (freq_hz == 0) {
+            memset(pcm_buf, 0, chunk * 2U * sizeof(int16_t));
+        } else {
+            for (uint32_t i = 0; i < chunk; i++) {
+                int16_t s = (phase < (float)M_PI) ? 6000 : -6000;
+                pcm_buf[i * 2U]      = s;
+                pcm_buf[i * 2U + 1U] = s;
+                phase += phase_inc;
+                if (phase >= 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
+            }
+        }
+        esp_codec_dev_write(playback_handle, pcm_buf, chunk * 2U * sizeof(int16_t));
+        written += chunk;
+    }
 }
 
 // =========================================================================
@@ -140,21 +184,19 @@ void task_audio_beep(void *pvParameters)
 
     for (;;) {
         if (beepQueue && xQueueReceive(beepQueue, &beep_req, portMAX_DELAY) == pdPASS) {
-            if (playback_handle && !current_settings.is_muted && beep_req.freq_hz > 0 && beep_req.duration_ms > 0) {
-                uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)beep_req.duration_ms) / 1000;
-                float phase = 0.0f;
-                float phase_inc = 2.0f * (float)M_PI * (float)beep_req.freq_hz / (float)AUDIO_SAMPLE_RATE;
-                uint32_t written = 0;
-                while (written < total_samples) {
-                    for (int i = 0; i < 256; i++) {
-                        int16_t s = (phase < (float)M_PI) ? 6000 : -6000;
-                        s_beep_pcm[i * 2]     = s;
-                        s_beep_pcm[i * 2 + 1] = s;
-                        phase += phase_inc;
-                        if (phase >= 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
-                    }
-                    esp_codec_dev_write(playback_handle, s_beep_pcm, sizeof(s_beep_pcm));
-                    written += 256;
+            if (playback_handle && !current_settings.is_muted) {
+                if (beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) {
+                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq1_hz, beep_req.dur1_ms);
+                }
+                if (beep_req.gap_ms > 0) {
+                    audio_write_tone_or_silence(s_beep_pcm, 0, beep_req.gap_ms);
+                }
+                if (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0) {
+                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq2_hz, beep_req.dur2_ms);
+                }
+                if ((beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) ||
+                    (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0)) {
+                    audio_write_tone_or_silence(s_beep_pcm, 0, 4);
                 }
             }
         }
@@ -228,6 +270,13 @@ void task_rover_core0(void *pvParameters)
             } else {
                 state.has_active_target = false;
             }
+
+            // Attach Core 1 calibrated pole tilt snapshot so survey CSV averaging logs actual tilt
+            portENTER_CRITICAL(&s_imu_snapshot_mux);
+            state.pole_bubble_x_deg = s_snapshot_bubble_x;
+            state.pole_bubble_y_deg = s_snapshot_bubble_y;
+            state.pole_tilt_deg     = s_snapshot_pole_tilt;
+            portEXIT_CRITICAL(&s_imu_snapshot_mux);
 
             // Update Multi-Epoch Survey Logger State
             waypoint_update_survey_averaging(&state,
@@ -334,6 +383,20 @@ void task_display_and_audio(void *pvParameters)
     DisplayPose_t    cached_pose       = DISPLAY_POSE_FLAT;
     float            cached_acc[3]     = {0.0f, 0.0f, 0.0f};
     float            cached_gyr[3]     = {0.0f, 0.0f, 0.0f};
+    float            prev_imu_acc[3]   = {0.0f, 0.0f, 0.0f};
+    bool             prev_imu_valid    = false;
+    uint32_t         last_imu_motion_ms = 0;
+    float            prev_10dof_acc[3] = {0.0f, 0.0f, 0.0f};
+    bool             prev_10dof_valid  = false;
+    double           motion_anchor_lat = 0.0;
+    double           motion_anchor_lon = 0.0;
+    bool             motion_anchor_valid = false;
+    uint32_t         last_gnss_motion_ms = 0;
+
+    uint32_t         s_auto_off_idle_s      = 0;
+    uint8_t          s_auto_off_countdown_s = 0;
+    bool             s_auto_off_inhibited   = false;
+    char             s_auto_off_reason[16]  = "";
 
     for (;;) {
         uint32_t now = millis();
@@ -357,6 +420,30 @@ void task_display_and_audio(void *pvParameters)
                                         &cached_bubble_x,
                                         &cached_bubble_y,
                                         &cached_pose);
+
+            float imu_pole_tilt = sqrtf(cached_bubble_x * cached_bubble_x +
+                                        cached_bubble_y * cached_bubble_y);
+            portENTER_CRITICAL(&s_imu_snapshot_mux);
+            s_snapshot_bubble_x  = cached_bubble_x;
+            s_snapshot_bubble_y  = cached_bubble_y;
+            s_snapshot_pole_tilt = imu_pole_tilt;
+            portEXIT_CRITICAL(&s_imu_snapshot_mux);
+
+            float gyr_mag = sqrtf(cached_gyr[0] * cached_gyr[0] +
+                                  cached_gyr[1] * cached_gyr[1] +
+                                  cached_gyr[2] * cached_gyr[2]);
+            float acc_delta = prev_imu_valid
+                ? (fabsf(cached_acc[0] - prev_imu_acc[0]) +
+                   fabsf(cached_acc[1] - prev_imu_acc[1]) +
+                   fabsf(cached_acc[2] - prev_imu_acc[2]))
+                : 0.0f;
+            if (gyr_mag >= 8.0f || acc_delta >= 0.08f) {
+                last_imu_motion_ms = (now == 0) ? 1 : now;
+            }
+            prev_imu_acc[0] = cached_acc[0];
+            prev_imu_acc[1] = cached_acc[1];
+            prev_imu_acc[2] = cached_acc[2];
+            prev_imu_valid  = true;
 
             // Poll outboard MMC5983MA 3-Axis 18-bit AMR Compass (if auto-detected at boot)
             mmc5983ma_poll(cached_bubble_y, cached_bubble_x, &cached_mag);
@@ -420,6 +507,22 @@ void task_display_and_audio(void *pvParameters)
                     s_10dof_in_cycle = false;
                     s_10dof_step     = 0;
                     if (ok) {
+                        float beam_gyr_mag = sqrtf(beam_state.gyro_dps[0] * beam_state.gyro_dps[0] +
+                                                   beam_state.gyro_dps[1] * beam_state.gyro_dps[1] +
+                                                   beam_state.gyro_dps[2] * beam_state.gyro_dps[2]);
+                        float beam_acc_delta = prev_10dof_valid
+                            ? (fabsf(beam_state.accel_g[0] - prev_10dof_acc[0]) +
+                               fabsf(beam_state.accel_g[1] - prev_10dof_acc[1]) +
+                               fabsf(beam_state.accel_g[2] - prev_10dof_acc[2]))
+                            : 0.0f;
+                        if (beam_gyr_mag >= 8.0f || beam_acc_delta >= 0.08f) {
+                            last_imu_motion_ms = (now == 0) ? 1 : now;
+                        }
+                        prev_10dof_acc[0] = beam_state.accel_g[0];
+                        prev_10dof_acc[1] = beam_state.accel_g[1];
+                        prev_10dof_acc[2] = beam_state.accel_g[2];
+                        prev_10dof_valid  = true;
+
                         Serial.printf("[10DOF] Acc(g):%+.3f,%+.3f,%+.3f | Gyr(dps):%+.2f,%+.2f,%+.2f | Mag(uT):%+.2f,%+.2f,%+.2f (|B|=%.1f) | P:%.2fhPa\n",
                                       beam_state.accel_g[0], beam_state.accel_g[1], beam_state.accel_g[2],
                                       beam_state.gyro_dps[0], beam_state.gyro_dps[1], beam_state.gyro_dps[2],
@@ -437,36 +540,94 @@ void task_display_and_audio(void *pvParameters)
             }
         }
 
-        // Auto-shutdown on battery inactivity timeout
+        // Auto-shutdown on battery inactivity timeout (motion/logger-safe + 30s warning modal)
         static uint32_t s_battery_since_ms = 0;
         static uint32_t s_last_touch_seen_ms = 0;
         static uint32_t s_last_poweroff_attempt_ms = 0;
+        static uint8_t  s_last_warn_sec = 0;
         uint32_t touch_act_ms = rover_get_last_user_activity_ms();
         if (touch_act_ms != s_last_touch_seen_ms) {
             s_last_touch_seen_ms = touch_act_ms;
             s_battery_since_ms = now; // User interacted: reset timeout window
+            s_last_warn_sec = 0;
         }
 
-        if (pwr.vbus_good || ui_state.survey_in_progress || ui_state.speed_m_s >= 0.30f) {
-            s_battery_since_ms = now; // On USB power, active survey, or walking motion: hold timer reset
+        bool motion_active = (ui_state.speed_m_s >= 0.30f) ||
+                             (last_imu_motion_ms != 0 && (now - last_imu_motion_ms) < 3000U) ||
+                             (last_gnss_motion_ms != 0 && (now - last_gnss_motion_ms) < 5000U);
+
+        const char *inhibit_reason = NULL;
+        if (current_settings.auto_shutdown_battery_min == 0) {
+            inhibit_reason = "Disabled";
+        } else if (pwr.vbus_good) {
+            inhibit_reason = "USB Power";
+        } else if (is_wifi_active() || is_wifi_starting()) {
+            inhibit_reason = "Wi-Fi ON";
+        } else if (ui_state.survey_in_progress) {
+            inhibit_reason = "Survey";
+        } else if (route_logger_is_active()) {
+            inhibit_reason = "REC ON";
+        } else if (nmea_logger_is_active()) {
+            inhibit_reason = "NMEA Log";
+        } else if (rtcm_logger_is_active()) {
+            inhibit_reason = "RTCM Log";
+        } else if (motion_active) {
+            inhibit_reason = "Motion";
+        }
+
+        if (inhibit_reason != NULL) {
+            s_battery_since_ms = now; // Inhibit active: hold timer reset
+            s_last_warn_sec = 0;
+            s_auto_off_idle_s = 0;
+            s_auto_off_countdown_s = 0;
+            s_auto_off_inhibited = true;
+            strncpy(s_auto_off_reason, inhibit_reason, sizeof(s_auto_off_reason) - 1);
+            s_auto_off_reason[sizeof(s_auto_off_reason) - 1] = '\0';
         } else {
             if (s_battery_since_ms == 0) s_battery_since_ms = now;
-            if (current_settings.auto_shutdown_battery_min > 0) {
-                uint32_t timeout_ms = (uint32_t)current_settings.auto_shutdown_battery_min * 60000ULL;
-                if ((now - s_battery_since_ms >= timeout_ms) &&
-                    (s_last_poweroff_attempt_ms == 0 || (now - s_last_poweroff_attempt_ms >= 30000U))) {
-                    s_last_poweroff_attempt_ms = (now == 0) ? 1 : now;
-                    Serial.printf("[POWER] Battery inactivity timeout (%u min) expired -> Initiating clean shutdown.\n",
-                                  current_settings.auto_shutdown_battery_min);
-                    if (settings_dirty) {
-                        settings_dirty = false;
-                        save_settings();
-                    }
-                    play_rover_beep(800, 300);
-                    vTaskDelay(pdMS_TO_TICKS(350));
-                    axp2101_bsp_power_off();
-                    s_battery_since_ms = millis(); // Prevent repeated beep/flash loop if PMIC I2C power-off fails
+            s_auto_off_inhibited = false;
+            s_auto_off_reason[0] = '\0';
+
+            uint32_t timeout_ms    = (uint32_t)current_settings.auto_shutdown_battery_min * 60000UL;
+            uint32_t warn_start_ms = (timeout_ms > 30000UL) ? (timeout_ms - 30000UL) : 0UL;
+            uint32_t idle_ms       = now - s_battery_since_ms;
+            s_auto_off_idle_s      = idle_ms / 1000UL;
+
+            if ((idle_ms >= timeout_ms) &&
+                (s_last_poweroff_attempt_ms == 0 || (now - s_last_poweroff_attempt_ms >= 30000U))) {
+                s_last_poweroff_attempt_ms = (now == 0) ? 1 : now;
+                s_auto_off_countdown_s = 0;
+                Serial.printf("[POWER] Battery inactivity timeout (%u min) expired -> Flushing loggers & shutting down.\n",
+                              current_settings.auto_shutdown_battery_min);
+                if (route_logger_is_active()) route_logger_stop();
+                if (nmea_logger_is_active())  nmea_logger_stop();
+                if (rtcm_logger_is_active())  rtcm_logger_stop();
+                if (settings_dirty) {
+                    settings_dirty = false;
+                    save_settings();
                 }
+                if (serial_logger_is_active()) serial_logger_stop();
+                play_rover_beep(800, 300);
+                vTaskDelay(pdMS_TO_TICKS(350));
+                axp2101_bsp_power_off();
+                s_battery_since_ms = millis(); // Prevent repeated beep/flash loop if PMIC I2C power-off fails
+                s_last_warn_sec = 0;
+            } else if (idle_ms >= warn_start_ms) {
+                uint32_t rem_s = (timeout_ms - idle_ms + 999UL) / 1000UL;
+                if (rem_s > 30UL) rem_s = 30UL;
+                if (rem_s == 0UL) rem_s = 1UL;
+                s_auto_off_countdown_s = (uint8_t)rem_s;
+                if (s_auto_off_countdown_s != s_last_warn_sec) {
+                    s_last_warn_sec = s_auto_off_countdown_s;
+                    if (s_last_warn_sec == 30 || s_last_warn_sec == 20 || s_last_warn_sec == 10 ||
+                        (s_last_warn_sec >= 1 && s_last_warn_sec <= 5)) {
+                        play_rover_beep((s_last_warn_sec <= 5) ? 1600 : 1200,
+                                        (s_last_warn_sec <= 5) ? 80 : 50);
+                    }
+                }
+            } else {
+                s_auto_off_countdown_s = 0;
+                s_last_warn_sec = 0;
             }
         }
 
@@ -474,6 +635,25 @@ void task_display_and_audio(void *pvParameters)
         // (Note: Dirty settings persistence runs in background loop() and audio beeps run in task_audio_beep
         //  so UI rendering and IMU updates are never stalled by flash/SD writes or audio synthesis.)
         if (xQueueReceive(roverStateQueue, &ui_state, pdMS_TO_TICKS(33)) == pdPASS) {
+            // GNSS tip displacement anchor (>= 1.5 m) keeps Auto-Off reset during slow canopy walking
+            if (ui_state.fix_type != GNSS_FIX_NONE && fabs(ui_state.tip_lat) > 0.0001) {
+                if (!motion_anchor_valid) {
+                    motion_anchor_lat   = ui_state.tip_lat;
+                    motion_anchor_lon   = ui_state.tip_lon;
+                    motion_anchor_valid = true;
+                } else {
+                    double disp_m = 0.0;
+                    nav_compute_target_guidance(motion_anchor_lat, motion_anchor_lon, 0.0f,
+                                                ui_state.tip_lat, ui_state.tip_lon,
+                                                &disp_m, NULL, NULL, NULL, NULL);
+                    if (disp_m >= 1.5) {
+                        motion_anchor_lat   = ui_state.tip_lat;
+                        motion_anchor_lon   = ui_state.tip_lon;
+                        last_gnss_motion_ms = (now == 0) ? 1 : now;
+                    }
+                }
+            }
+
             ui_state.imu_pitch_deg     = cached_imu_pitch;
             ui_state.imu_roll_deg      = cached_imu_roll;
             ui_state.pole_bubble_x_deg = cached_bubble_x;
@@ -490,6 +670,11 @@ void task_display_and_audio(void *pvParameters)
             ui_state.is_charging         = pwr.is_charging;
             ui_state.vbus_present        = pwr.vbus_good;
             ui_state.vbus_voltage        = pwr.vbus_voltage_v;
+            ui_state.auto_off_idle_s     = s_auto_off_idle_s;
+            ui_state.auto_off_countdown_s = s_auto_off_countdown_s;
+            ui_state.auto_off_inhibited  = s_auto_off_inhibited;
+            strncpy(ui_state.auto_off_reason, s_auto_off_reason, sizeof(ui_state.auto_off_reason) - 1);
+            ui_state.auto_off_reason[sizeof(ui_state.auto_off_reason) - 1] = '\0';
 
             // Attach MMC5983MA Magnetometer Telemetry
             ui_state.mag_present         = cached_mag.present;
@@ -503,6 +688,7 @@ void task_display_and_audio(void *pvParameters)
             ui_state.mag_set_reset_count = cached_mag.set_reset_count;
 
             float pole_tilt_deg = sqrtf(cached_bubble_x * cached_bubble_x + cached_bubble_y * cached_bubble_y);
+            ui_state.pole_tilt_deg = pole_tilt_deg;
 
             // Phase 5 & Phase 8: Deep-Woods Heading Fallback (Kinematic Displacement + 9-DOF Compass + Gyro Yaw)
             nav_heading_9dof_update(ui_state.tip_lat,
@@ -533,18 +719,58 @@ void task_display_and_audio(void *pvParameters)
                 ui_state.rel_bearing_deg = rel;
             }
 
+            // Unified Mode 1 Hysteresis (< 4.8 m Bullseye entry, > 5.3 m Line-Up exit)
+            static bool    s_mode1_bullseye   = false;
+            static int16_t s_mode1_last_b_idx = -1;
+            bool           mode1_entered_bullseye = false;
+            bool           has_mode1_line         = false;
+            NavLineStakeout_t mode1_stakeout      = {};
+            double            mode1_dist_b_m      = 0.0;
+
+            if (rover_get_tile0_nav_mode() == 1) {
+                WaypointRecord_t wp_a, wp_b;
+                int16_t idx_a = -1, idx_b = -1;
+                waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+                if (idx_a >= 0 && idx_b >= 0) {
+                    has_mode1_line = true;
+                    nav_compute_line_stakeout(ui_state.tip_lat, ui_state.tip_lon,
+                                              wp_a.latitude, wp_a.longitude,
+                                              wp_b.latitude, wp_b.longitude,
+                                              &mode1_stakeout);
+                    nav_compute_target_guidance(ui_state.tip_lat, ui_state.tip_lon, 0.0f,
+                                                wp_b.latitude, wp_b.longitude,
+                                                &mode1_dist_b_m, NULL, NULL, NULL, NULL);
+                    if (idx_b != s_mode1_last_b_idx) {
+                        s_mode1_last_b_idx = idx_b;
+                        s_mode1_bullseye   = (mode1_dist_b_m < 4.8);
+                    } else if (!s_mode1_bullseye && mode1_dist_b_m < 4.8) {
+                        s_mode1_bullseye       = true;
+                        mode1_entered_bullseye = true;
+                    } else if (s_mode1_bullseye && mode1_dist_b_m > 5.3) {
+                        s_mode1_bullseye = false;
+                    }
+                } else {
+                    s_mode1_bullseye   = false;
+                    s_mode1_last_b_idx = -1;
+                }
+            } else {
+                s_mode1_bullseye   = false;
+                s_mode1_last_b_idx = -1;
+            }
+            ui_state.mode1_bullseye_active = s_mode1_bullseye;
+
             // Feed fully augmented & fused state (including Battery, IMU, and Woods Fallback Heading) to E220 Uplink Telemetry
             e220_feed_telemetry_state(&ui_state);
 
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
 
-            // 7. Proximity Audio Synthesis (Geiger Counter or Standard Beeps)
+            // 7. Proximity & Directional Line-Follow Audio Synthesis (Geiger Counter or Standard Beeps)
             if (current_settings.audio_nav_mode != AUDIO_NAV_MUTE &&
                 !current_settings.is_muted && current_settings.volume > 0 &&
                 ui_state.has_active_target &&
                 (ui_state.fix_type == GNSS_FIX_RTK_FIXED || ui_state.fix_type == GNSS_FIX_RTK_FLOAT || ui_state.fix_type == GNSS_FIX_DGPS) &&
-                ui_state.distance_to_target_m > 0.0) {
+                (ui_state.distance_to_target_m > 0.0 || has_mode1_line)) {
 
                 static uint32_t s_last_audio_ms = 0;
                 static int16_t  s_last_audio_target_idx = -1;
@@ -552,87 +778,115 @@ void task_display_and_audio(void *pvParameters)
                     s_last_audio_target_idx = ui_state.active_target_idx;
                     s_last_audio_ms = 0;
                 }
-                double d = ui_state.distance_to_target_m;
-                if (rover_get_tile0_nav_mode() == 1) {
-                    WaypointRecord_t wp_a, wp_b;
-                    int16_t idx_a = -1, idx_b = -1;
-                    waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
-                    if (idx_a >= 0 && idx_b >= 0) {
-                        NavLineStakeout_t stakeout;
-                        nav_compute_line_stakeout(ui_state.tip_lat, ui_state.tip_lon,
-                                                  wp_a.latitude, wp_a.longitude,
-                                                  wp_b.latitude, wp_b.longitude,
-                                                  &stakeout);
-                        d = fabs(stakeout.offset_m);
-                    }
-                }
 
-                if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
-                    if (d <= 2.0) {
-                        uint32_t interval_ms = 1000;
-                        uint16_t freq_hz = 900;
-                        uint16_t dur_ms = 15;
+                if (has_mode1_line && !s_mode1_bullseye) {
+                    // Signed Directional Left/Right Line-Follow Audio (faster closer to line)
+                    double abs_off = fabs(mode1_stakeout.offset_m);
+                    if (abs_off <= 5.0) {
+                        uint32_t interval_ms = 1500;
+                        if (abs_off <= 0.05)      interval_ms = 400;
+                        else if (abs_off <= 0.25) interval_ms = 250;
+                        else if (abs_off <= 0.75) interval_ms = 450;
+                        else if (abs_off <= 1.50) interval_ms = 750;
+                        else if (abs_off <= 3.00) interval_ms = 1100;
+                        else                      interval_ms = 1500;
 
-                        if (d <= 0.02) {          // Bullseye (<= 2cm / 0.8 in)
-                            interval_ms = 80;
-                            freq_hz     = 2400;
-                            dur_ms      = 35;
-                        } else if (d <= 0.10) {   // 2 .. 10 cm
-                            interval_ms = 90;
-                            freq_hz     = 2000;
-                            dur_ms      = 10;
-                        } else if (d <= 0.30) {   // 10 .. 30 cm
-                            interval_ms = 160;
-                            freq_hz     = 1750;
-                            dur_ms      = 12;
-                        } else if (d <= 0.70) {   // 30 .. 70 cm
-                            interval_ms = 320;
-                            freq_hz     = 1400;
-                            dur_ms      = 15;
-                        } else if (d <= 1.20) {   // 70 .. 120 cm
-                            interval_ms = 600;
-                            freq_hz     = 1100;
-                            dur_ms      = 18;
-                        } else {                  // 1.2 .. 2.0 m
-                            interval_ms = 1000;
-                            freq_hz     = 900;
-                            dur_ms      = 20;
+                        if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
+                            interval_ms = (interval_ms * 7U) / 10U;
                         }
 
                         uint32_t now_ms = millis();
                         if (now_ms - s_last_audio_ms >= interval_ms) {
                             s_last_audio_ms = now_ms;
-                            play_rover_beep(freq_hz, dur_ms);
+                            if (abs_off <= 0.05) {
+                                // On-Line: crisp steady high pip
+                                play_rover_beep(1800, 30);
+                            } else if (mode1_stakeout.offset_m < -0.05) {
+                                // Left of A->B: rising 2-tone chirp -> steer RIGHT
+                                play_rover_dual_beep(660, 30, 25, 1100, 40);
+                            } else {
+                                // Right of A->B: falling 2-tone chirp -> steer LEFT
+                                play_rover_dual_beep(1100, 30, 25, 660, 40);
+                            }
                         }
                     }
-                } else if (current_settings.audio_nav_mode == AUDIO_NAV_BEEPS) {
-                    if (d <= 5.0) {
-                        uint32_t interval_ms = 1200;
-                        uint16_t freq_hz = 1200;
-                        uint16_t dur_ms = 50;
+                } else {
+                    if (has_mode1_line && mode1_entered_bullseye) {
+                        // Acquisition chime on < 4.8 m Mode 1 handoff into Bullseye proximity audio
+                        play_rover_dual_beep(1400, 45, 30, 2000, 70);
+                        s_last_audio_ms = millis();
+                    }
 
-                        if (d <= 0.10) {          // Very close (<= 10 cm)
-                            interval_ms = 200;
-                            freq_hz     = 2000;
-                            dur_ms      = 40;
-                        } else if (d <= 0.50) {   // 10 .. 50 cm
-                            interval_ms = 400;
-                            freq_hz     = 1600;
-                            dur_ms      = 45;
-                        } else if (d <= 2.0) {    // 0.5 .. 2.0 m
-                            interval_ms = 800;
-                            freq_hz     = 1400;
-                            dur_ms      = 50;
-                        } else {                  // 2.0 .. 5.0 m
-                            interval_ms = 1500;
-                            freq_hz     = 1200;
-                            dur_ms      = 50;
-                        }
+                    double d = has_mode1_line ? mode1_dist_b_m : ui_state.distance_to_target_m;
+                    if (d > 0.0) {
+                        if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
+                            if (d <= 2.0) {
+                                uint32_t interval_ms = 1000;
+                                uint16_t freq_hz = 900;
+                                uint16_t dur_ms = 15;
 
-                        uint32_t now_ms = millis();
-                        if (now_ms - s_last_audio_ms >= interval_ms) {
-                            s_last_audio_ms = now_ms;
-                            play_rover_beep(freq_hz, dur_ms);
+                                if (d <= 0.02) {          // Bullseye (<= 2cm / 0.8 in)
+                                    interval_ms = 80;
+                                    freq_hz     = 2400;
+                                    dur_ms      = 35;
+                                } else if (d <= 0.10) {   // 2 .. 10 cm
+                                    interval_ms = 90;
+                                    freq_hz     = 2000;
+                                    dur_ms      = 10;
+                                } else if (d <= 0.30) {   // 10 .. 30 cm
+                                    interval_ms = 160;
+                                    freq_hz     = 1750;
+                                    dur_ms      = 12;
+                                } else if (d <= 0.70) {   // 30 .. 70 cm
+                                    interval_ms = 320;
+                                    freq_hz     = 1400;
+                                    dur_ms      = 15;
+                                } else if (d <= 1.20) {   // 70 .. 120 cm
+                                    interval_ms = 600;
+                                    freq_hz     = 1100;
+                                    dur_ms      = 18;
+                                } else {                  // 1.2 .. 2.0 m
+                                    interval_ms = 1000;
+                                    freq_hz     = 900;
+                                    dur_ms      = 20;
+                                }
+
+                                uint32_t now_ms = millis();
+                                if (now_ms - s_last_audio_ms >= interval_ms) {
+                                    s_last_audio_ms = now_ms;
+                                    play_rover_beep(freq_hz, dur_ms);
+                                }
+                            }
+                        } else if (current_settings.audio_nav_mode == AUDIO_NAV_BEEPS) {
+                            if (d <= 5.0) {
+                                uint32_t interval_ms = 1200;
+                                uint16_t freq_hz = 1200;
+                                uint16_t dur_ms = 50;
+
+                                if (d <= 0.10) {          // Very close (<= 10 cm)
+                                    interval_ms = 200;
+                                    freq_hz     = 2000;
+                                    dur_ms      = 40;
+                                } else if (d <= 0.50) {   // 10 .. 50 cm
+                                    interval_ms = 400;
+                                    freq_hz     = 1600;
+                                    dur_ms      = 45;
+                                } else if (d <= 2.0) {    // 0.5 .. 2.0 m
+                                    interval_ms = 800;
+                                    freq_hz     = 1400;
+                                    dur_ms      = 50;
+                                } else {                  // 2.0 .. 5.0 m
+                                    interval_ms = 1500;
+                                    freq_hz     = 1200;
+                                    dur_ms      = 50;
+                                }
+
+                                uint32_t now_ms = millis();
+                                if (now_ms - s_last_audio_ms >= interval_ms) {
+                                    s_last_audio_ms = now_ms;
+                                    play_rover_beep(freq_hz, dur_ms);
+                                }
+                            }
                         }
                     }
                 }
@@ -917,6 +1171,7 @@ void loop()
             btn_is_pressed   = true;
             long_press_fired = false;
             btn_press_start  = millis();
+            rover_note_user_activity();
         } else if (!long_press_fired && (millis() - btn_press_start >= 1500)) {
             long_press_fired = true;
             Serial.println("BOOT Long-Press: Taking Screenshot...");

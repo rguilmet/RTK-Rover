@@ -57,7 +57,7 @@ void nav_compute_line_stakeout(double tip_lat,
                                double lon_b,
                                NavLineStakeout_t *result_out);
 
-// Format bearing as surveyor quadrant (e.g. "S 62°15'12\" E" or "N 45°00' E")
+// Format bearing as surveyor quadrant (e.g. "S 62 deg 15'12\" E" or "N 45 deg 00' E")
 void nav_format_quadrant_bearing(float bearing_deg, char *buf, size_t buf_len);
 
 // Format station in surveying stationing format (e.g. "Sta 4+20.5 ft" or "Sta 1+28.2 m")

@@ -219,7 +219,7 @@ extern "C" void nav_format_quadrant_bearing(float bearing_deg, char *buf, size_t
         }
     }
 
-    snprintf(buf, buf_len, "%c %02d°%02d'%04.1f\" %c", ns, deg, min, sec, ew);
+    snprintf(buf, buf_len, "%c %02d deg %02d'%04.1f\" %c", ns, deg, min, sec, ew);
 }
 
 extern "C" void nav_format_station(double station_m, char *buf, size_t buf_len)

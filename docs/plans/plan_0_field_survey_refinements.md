@@ -1,10 +1,10 @@
 # Plan 0: Field Survey Refinements, 6-Tile Ergonomic UI, Auto-Off & SEN0696 I2C1 Fusion
 
 > [!NOTE]
-> **Status:** Active Immediate Execution Roadmap (November 21, 2026)  
-> **Document Version:** `1.1.0`  
-> **Baseline:** `RTK_Rover v0.8.18` | `CAD v2.1.6` | `e220_pacer.py v3.7.1`  
-> **Target Releases:** `v0.8.19` (Phases 0.1-0.5: LVGL Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
+> **Status:** Active Immediate Execution Roadmap -- Phases 0.1-0.5 Complete in `v0.8.19`, Phase 0.6 (`v0.9.0`) Pending (November 22, 2026)  
+> **Document Version:** `1.2.0`  
+> **Baseline:** `RTK_Rover v0.8.19` | `CAD v2.2.2` | `e220_pacer.py v3.7.1`  
+> **Target Releases:** `v0.8.19` (Released: LVGL 11-File Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
 > **Execution Order:** **Plan 0 (`v0.8.19` - `v0.9.0`)** -> [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](plan_2_rover_enhancements_and_android_companion.md)
 
 ---
@@ -24,25 +24,25 @@ Extended dense-canopy walking evaluation (`2h 40m`, `9,109` 1 Hz epochs, `7,481 
 
 ---
 
-## 2. Phase 0.1 -- `lvgl_port.c` (`4,225 L`) Modular Split First (`v0.8.19-alpha`)
+## 2. Phase 0.1 -- `lvgl_port.c` (`4,225 L`) Modular Split First (Completed in `v0.8.19`)
 
 ### Why Split `lvgl_port.c` Ahead of Plan 0 UI Changes
 1. Avoids editing 5 existing tiles and building a brand-new 6th tile (`Quick Settings`) inside a `4,225-line` / `193 KB` monolith (`5.3x` the `800 L` single-read limit).
-2. Unlocks small, single-read `< 750 L` UI modules immediately for Plan 0 (`Tile 0/1/3/4/5`), Plan 1 Core extraction, and Plan 2 BLE/NTRIP indicators.
+2. Unlocks small, single-read `< 770 L` UI modules immediately for Plan 0 (`Tile 0/1/3/4/5`), Plan 1 Core extraction, and Plan 2 BLE/NTRIP indicators.
 3. Preserves all `AGENTS.md` invariants untouched: `heap_caps_malloc_extmem_enable(64)` -> `4096` PSRAM widget routing, `LV_USE_FLOAT = 0` (`snprintf()` + `lv_label_set_text()`), `rover_lvgl_lock()/unlock()`, and zero `i2c_bsp` calls inside LVGL locks.
 
-### Target `9`-File Architecture under `src/lvgl_port/` (`Zero Functional Change Gate`)
-* `lvgl_port_core.c` (`~460 L`): QSPI `AXS15231B` init, `24`-line DMA bounce buffers, PSRAM wrapping helpers, LVGL task & mutex, touch read callback.
-* `lvgl_ui_internal.h` (`~140 L`): Shared widget pointers, tile switching helpers, palette constants, and `update_*` declarations across `6` tiles.
-* `ui_header_nav.c` (`~550 L`): Persistent `320x74` 4-row status header, `320x32` bottom nav bar (`6` tiles: `< Prev` / `Next >` ring wrapping), plus the new 30s Auto-Shutdown modal hook.
-* `ui_tile0_guidance.c` (`~750 L`): Point Guidance, Unified Line+Bullseye Stakeout, and 2D Map View.
-* `ui_tile1_survey.c` (`~350 L`): Dedicated Field Survey Logger tile.
-* `ui_tile2_waypoints.c` (`~450 L`): Multi-file CSV Waypoint Browser.
-* `ui_tile3_compass.c` (`~430 L`): Dual-Antenna Compass dial, `224 px` Pole Bubble Level, `TARE` & `CAL MAG`.
-* `ui_tile4_diagnostics.c` (`~520 L`): Dual-Power UPS, LoRa RF card, UM982 State/LOGLIST, Beam `10DOF` & Auto-Off status.
-* `ui_tile5_settings.c` (`~400 L`): Dedicated `5x3` Quick Settings Deck + Wi-Fi/Power/LoRa status footer.
+### Verified `11`-File Architecture under `src/lvgl_port/` (Every File `<= 764 L`)
+* `lvgl_port_core.c` (`334 L`): QSPI `AXS15231B` init, `24`-line DMA bounce buffers, PSRAM wrapping helpers, LVGL task & mutex, touch read callback.
+* `lvgl_ui_internal.h` (`180 L`): Shared widget pointers, tile switching helpers, palette constants, and `update_*` declarations across `6` tiles.
+* `ui_header_nav.c` (`597 L`): Persistent `320x74` 4-row status header, `320x32` bottom nav bar (`6` tiles: `< Prev` / `Next >` ring wrapping), plus the 30s Auto-Shutdown modal overlay.
+* `ui_tile0_guidance.c` (`727 L`), `ui_tile0_views.c` (`764 L`), `ui_tile0_map.c` (`432 L`): Tile 0 split cleanly across `3` `< 770 L` modules covering Point Guidance, Unified Line+Bullseye Stakeout, and 2D Map View.
+* `ui_tile1_survey.c` (`277 L`): Dedicated Field Survey Logger tile + Pre-Log Survey Quality card.
+* `ui_tile2_waypoints.c` (`121 L`): Multi-file CSV Waypoint Browser.
+* `ui_tile3_compass.c` (`195 L`): Dual-Antenna Compass dial, `224 px` Pole Bubble Level, `TARE` & `CAL MAG`.
+* `ui_tile4_diagnostics.c` (`654 L`): Dual-Power UPS, LoRa RF card, UM982 State/LOGLIST, Beam `10DOF` & Auto-Off status.
+* `ui_tile5_settings.c` (`707 L`): Dedicated `5x3` Quick Settings Deck + Wi-Fi/Auto-Off/LoRa status footer.
 
-**Phase 0.1 Gate:** Split first with zero UI layout changes; compile with `--warnings default` (`0` warnings) and verify static `DRAM0 <= 25%` (`< 80 KB`) before Phase 0.2.
+**Phase 0.1 Gate (Verified):** Split completed with zero UI layout drift before Phase 0.2; full Phases 0.1-0.5 release `v0.8.19` compiles with `--warnings default` (`0` warnings, `54%` flash, `20%` static `DRAM0`).
 
 ---
 

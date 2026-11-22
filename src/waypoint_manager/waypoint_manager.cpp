@@ -51,15 +51,23 @@ static const char *kPrefixDropdownStr =
 static const char *kNoteTags[] = {
     "",
     "Found Iron Pipe",
-    "Found Rebar",
-    "Found Stone Bound",
+    "Found Capped Rebar",
+    "Found Stone Mon",
+    "Found Mag Nail",
+    "NO PIN - Search Pt",
+    "NO PIN - Marked Spot",
+    "Unknown Pin/Pipe",
     "Set Temp Flag",
     "Mag Anomaly Only",
     "Obstructed Sky",
     "Needs Verification"
 };
+static const size_t kNoteTagCount = sizeof(kNoteTags) / sizeof(kNoteTags[0]);
 static const char *kNoteTagDropdownStr =
-    "(No Tag)\nFound Iron Pipe\nFound Rebar\nFound Stone Bound\nSet Temp Flag\nMag Anomaly Only\nObstructed Sky\nNeeds Verification";
+    "(No Tag)\nFound Iron Pipe\nFound Capped Rebar\nFound Stone Mon\n"
+    "Found Mag Nail\nNO PIN - Search Pt\nNO PIN - Marked Spot\n"
+    "Unknown Pin/Pipe\nSet Temp Flag\nMag Anomaly Only\n"
+    "Obstructed Sky\nNeeds Verification";
 
 extern "C" bool waypoint_is_derived_mode(void) {
     return (g_survey_prefix_idx == 0);
@@ -87,6 +95,10 @@ extern "C" const char* waypoint_get_prefix_options(void) {
 
 extern "C" const char* waypoint_get_note_tag_options(void) {
     return kNoteTagDropdownStr;
+}
+
+extern "C" const char* waypoint_get_note_tag_label(uint8_t idx) {
+    return (idx < kNoteTagCount) ? kNoteTags[idx] : "";
 }
 
 static void create_default_sample_waypoints_if_missing(void)
@@ -476,6 +488,7 @@ extern "C" void waypoint_manager_init(void)
 extern "C" void waypoint_select_next(void)
 {
     if (g_waypoint_count <= 0) return;
+    g_stakeout_custom_pair = false;
     g_active_waypoint_idx = (g_active_waypoint_idx + 1) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
     g_waypoint_change_seq = g_waypoint_change_seq + 1;
@@ -486,6 +499,7 @@ extern "C" void waypoint_select_next(void)
 extern "C" void waypoint_select_prev(void)
 {
     if (g_waypoint_count <= 0) return;
+    g_stakeout_custom_pair = false;
     g_active_waypoint_idx = (g_active_waypoint_idx - 1 + g_waypoint_count) % g_waypoint_count;
     current_settings.active_waypoint_index = g_active_waypoint_idx;
     g_waypoint_change_seq = g_waypoint_change_seq + 1;
@@ -496,6 +510,7 @@ extern "C" void waypoint_select_prev(void)
 extern "C" void waypoint_select_index(int16_t idx)
 {
     if (idx >= 0 && idx < g_waypoint_count) {
+        g_stakeout_custom_pair = false;
         g_active_waypoint_idx = idx;
         current_settings.active_waypoint_index = g_active_waypoint_idx;
         g_waypoint_change_seq = g_waypoint_change_seq + 1;
@@ -845,7 +860,7 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     snprintf(ts_buf, sizeof(ts_buf), "%04u-%02u-%02u_%02u-%02u-%02u.%03u%c%03d",
              lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second, ms, sign, abs_offset);
 
-    uint8_t tag_idx = g_survey_note_tag_idx < 8 ? g_survey_note_tag_idx : 0;
+    uint8_t tag_idx = (g_survey_note_tag_idx < kNoteTagCount) ? g_survey_note_tag_idx : 0;
     char note_buf[96] = {0};
 
     WaypointRecord_t active_wp;
@@ -903,7 +918,8 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
 static float          survey_sum_vacc       = 0.0f;
 static float          survey_sum_hdop       = 0.0f;
 static float          survey_sum_tilt       = 0.0f;
-static float          survey_sum_hdg        = 0.0f;
+static double         survey_sum_hdg_sin    = 0.0;
+static double         survey_sum_hdg_cos    = 0.0;
 static uint16_t       survey_hdg_valid_cnt  = 0;
 static uint16_t       survey_hdg_fix_cnt    = 0;
 static uint8_t        survey_max_sats       = 0;
@@ -928,7 +944,8 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
         survey_sum_vacc       = 0.0f;
         survey_sum_hdop       = 0.0f;
         survey_sum_tilt       = 0.0f;
-        survey_sum_hdg        = 0.0f;
+        survey_sum_hdg_sin    = 0.0;
+        survey_sum_hdg_cos    = 0.0;
         survey_hdg_valid_cnt  = 0;
         survey_hdg_fix_cnt    = 0;
         survey_max_sats       = 0;
@@ -953,7 +970,9 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
         survey_sum_tilt += pole_tilt;
 
         if (live_state->heading_valid) {
-            survey_sum_hdg += live_state->true_heading_deg;
+            double h_rad = (double)live_state->true_heading_deg * (M_PI / 180.0);
+            survey_sum_hdg_sin += sin(h_rad);
+            survey_sum_hdg_cos += cos(h_rad);
             survey_hdg_valid_cnt++;
             if (live_state->heading_is_fixed) {
                 survey_hdg_fix_cnt++;
@@ -988,7 +1007,16 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
             float  avg_vacc = survey_sum_vacc / (float)survey_epoch_cnt;
             float  avg_hdop = survey_sum_hdop / (float)survey_epoch_cnt;
             float  avg_tilt = survey_sum_tilt / (float)survey_epoch_cnt;
-            float  avg_hdg  = (survey_hdg_valid_cnt > 0) ? (survey_sum_hdg / (float)survey_hdg_valid_cnt) : -1.0f;
+            float  avg_hdg  = -1.0f;
+            if (survey_hdg_valid_cnt > 0) {
+                if (fabs(survey_sum_hdg_sin) < 1e-9 && fabs(survey_sum_hdg_cos) < 1e-9) {
+                    avg_hdg = 0.0f;
+                } else {
+                    double h_deg = atan2(survey_sum_hdg_sin, survey_sum_hdg_cos) * (180.0 / M_PI);
+                    if (h_deg < 0.0) h_deg += 360.0;
+                    avg_hdg = (float)h_deg;
+                }
+            }
             const char *hdg_fix_str = (survey_hdg_fix_cnt > (survey_epoch_cnt / 2)) ? "HDG_FIX" :
                                       ((survey_hdg_valid_cnt > 0) ? "HDG_FLT" : "NONE");
 

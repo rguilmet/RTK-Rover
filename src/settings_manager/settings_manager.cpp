@@ -56,7 +56,14 @@ struct SystemSettings current_settings = {
     5,                // auto_shutdown_battery_min (5 min default timeout on battery only; 0 = disabled)
     -14.2f,           // mag_true_north_offset_deg (Default WMM declination for ME/NH until UM982 HDG FIX tares it)
     52.5f,            // mag_field_ref_uT (Default ambient geomagnetic field magnitude in uT)
-    false             // mag_cal_valid (Set true automatically once UM982 HDG FIX calibrates compass)
+    false,            // mag_cal_valid (Set true automatically once UM982 HDG FIX calibrates compass)
+    "AUTO",           // rtcm_source_mode ("AUTO", "LORA", or "NTRIP")
+    "rtk2go.com",     // ntrip_host
+    "3.14.70.106",    // ntrip_host_ip (fallback numeric host IP)
+    2101,             // ntrip_port
+    "",               // ntrip_mountpoint (private user config)
+    "",               // ntrip_user_email (private user config)
+    "none"            // ntrip_password
 };
 
 volatile bool settings_dirty = false;
@@ -101,7 +108,14 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.auto_shutdown_battery_min == b.auto_shutdown_battery_min &&
            a.mag_true_north_offset_deg == b.mag_true_north_offset_deg &&
            a.mag_field_ref_uT          == b.mag_field_ref_uT &&
-           a.mag_cal_valid             == b.mag_cal_valid;
+           a.mag_cal_valid             == b.mag_cal_valid &&
+           strcmp(a.rtcm_source_mode, b.rtcm_source_mode) == 0 &&
+           strcmp(a.ntrip_host,       b.ntrip_host)       == 0 &&
+           strcmp(a.ntrip_host_ip,    b.ntrip_host_ip)    == 0 &&
+           a.ntrip_port                == b.ntrip_port &&
+           strcmp(a.ntrip_mountpoint, b.ntrip_mountpoint) == 0 &&
+           strcmp(a.ntrip_user_email, b.ntrip_user_email) == 0 &&
+           strcmp(a.ntrip_password,   b.ntrip_password)   == 0;
 }
 
 extern "C" void mark_settings_dirty(void) {
@@ -128,6 +142,60 @@ static bool is_placeholder_ssid(const char *ssid) {
     if (strcasecmp(ssid, "Your-SSID") == 0) return true;
     if (strcasecmp(ssid, "SSID") == 0) return true;
     return false;
+}
+
+static bool is_placeholder_ntrip_value(const char *val) {
+    if (!val || val[0] == '\0') return true;
+    if (strcasecmp(val, "YOUR_MOUNTPOINT") == 0) return true;
+    if (strcasecmp(val, "YOUR-MOUNTPOINT") == 0) return true;
+    if (strcasecmp(val, "MOUNTPOINT") == 0) return true;
+    if (strcasecmp(val, "YOUR_EMAIL") == 0) return true;
+    if (strcasecmp(val, "YOUR-EMAIL") == 0) return true;
+    if (strcasecmp(val, "user@example.com") == 0) return true;
+    if (strcasecmp(val, "PLACEHOLDER") == 0) return true;
+    return false;
+}
+
+static void trim_and_copy_str(const char *src, char *dst, size_t dst_sz) {
+    if (!src || !dst || dst_sz == 0) return;
+    while (*src == ' ' || *src == '\t' || *src == '\r' || *src == '\n') src++;
+    strncpy(dst, src, dst_sz - 1);
+    dst[dst_sz - 1] = '\0';
+    int len = strlen(dst);
+    while (len > 0 && (dst[len - 1] == ' ' || dst[len - 1] == '\r' || dst[len - 1] == '\n' || dst[len - 1] == '\t')) {
+        dst[--len] = '\0';
+    }
+}
+
+static void apply_ntrip_fields_from_doc(const JsonDocument &doc, SystemSettings *out) {
+    if (!doc["rtcm_source_mode"].isNull()) trim_and_copy_str(doc["rtcm_source_mode"], out->rtcm_source_mode, sizeof(out->rtcm_source_mode));
+    if (!doc["ntrip_host"].isNull())       trim_and_copy_str(doc["ntrip_host"],       out->ntrip_host,       sizeof(out->ntrip_host));
+    if (!doc["ntrip_host_ip"].isNull())    trim_and_copy_str(doc["ntrip_host_ip"],    out->ntrip_host_ip,    sizeof(out->ntrip_host_ip));
+    if (!doc["ntrip_port"].isNull())       out->ntrip_port = doc["ntrip_port"];
+    if (!doc["ntrip_mountpoint"].isNull()) trim_and_copy_str(doc["ntrip_mountpoint"], out->ntrip_mountpoint, sizeof(out->ntrip_mountpoint));
+    if (!doc["ntrip_user_email"].isNull()) trim_and_copy_str(doc["ntrip_user_email"], out->ntrip_user_email, sizeof(out->ntrip_user_email));
+    if (!doc["ntrip_password"].isNull())   trim_and_copy_str(doc["ntrip_password"],   out->ntrip_password,   sizeof(out->ntrip_password));
+}
+
+static bool read_ntrip_config_from_file(fs::FS &fs, const char *path, SystemSettings *out) {
+    if (!fs.exists(path)) return false;
+    File f = fs.open(path, "r");
+    if (!f || f.size() == 0) {
+        if (f) f.close();
+        return false;
+    }
+    JsonDocument d;
+    DeserializationError err = deserializeJson(d, f);
+    f.close();
+    if (err) return false;
+
+    const char *mp = d["ntrip_mountpoint"] | "";
+    const char *em = d["ntrip_user_email"] | "";
+    if (is_placeholder_ntrip_value(mp) && is_placeholder_ntrip_value(em)) {
+        return false;
+    }
+    apply_ntrip_fields_from_doc(d, out);
+    return true;
 }
 
 static void backup_file(fs::FS &fs, const char *src_path, const char *bak_path) {
@@ -395,6 +463,17 @@ extern "C" void load_settings(void) {
     if (!doc["mag_field_ref_uT"].isNull()) current_settings.mag_field_ref_uT = doc["mag_field_ref_uT"];
     if (!doc["mag_cal_valid"].isNull()) current_settings.mag_cal_valid = doc["mag_cal_valid"];
 
+    apply_ntrip_fields_from_doc(doc, &current_settings);
+    if (is_placeholder_ntrip_value(current_settings.ntrip_mountpoint) &&
+        is_placeholder_ntrip_value(current_settings.ntrip_user_email)) {
+        if (read_ntrip_config_from_file(get_active_fs(), "/settings.json.bak", &current_settings) ||
+            read_ntrip_config_from_file(FFat, "/settings.json", &current_settings) ||
+            read_ntrip_config_from_file(FFat, "/settings.json.bak", &current_settings)) {
+            Serial.printf("[SETTINGS] Recovered NTRIP config from backup: host='%s' mount='%s'\n",
+                          current_settings.ntrip_host, current_settings.ntrip_mountpoint);
+        }
+    }
+
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
     if (sd_card_mounted && !migrate_e220_profile) {
         backup_file(FFat, "/settings.json", "/settings.json.bak");
@@ -444,6 +523,18 @@ extern "C" void save_settings(void) {
         }
     }
 
+    // Safeguard 1b: Never overwrite user NTRIP config on disk with empty/placeholder defaults
+    if (is_placeholder_ntrip_value(current_settings.ntrip_mountpoint) &&
+        is_placeholder_ntrip_value(current_settings.ntrip_user_email)) {
+        if (read_ntrip_config_from_file(get_active_fs(), "/settings.json", &current_settings) ||
+            read_ntrip_config_from_file(get_active_fs(), "/settings.json.bak", &current_settings) ||
+            read_ntrip_config_from_file(FFat, "/settings.json", &current_settings) ||
+            read_ntrip_config_from_file(FFat, "/settings.json.bak", &current_settings)) {
+            Serial.printf("[SETTINGS] Preserved existing NTRIP config: host='%s' mount='%s'\n",
+                          current_settings.ntrip_host, current_settings.ntrip_mountpoint);
+        }
+    }
+
     JsonDocument doc;
     doc["minutesOffsetToUTC"]        = current_settings.minutesOffsetToUTC;
     doc["timezone_label"]            = current_settings.timezone_label;
@@ -482,6 +573,13 @@ extern "C" void save_settings(void) {
     doc["mag_true_north_offset_deg"] = current_settings.mag_true_north_offset_deg;
     doc["mag_field_ref_uT"]          = current_settings.mag_field_ref_uT;
     doc["mag_cal_valid"]             = current_settings.mag_cal_valid;
+    doc["rtcm_source_mode"]          = current_settings.rtcm_source_mode;
+    doc["ntrip_host"]                = current_settings.ntrip_host;
+    doc["ntrip_host_ip"]             = current_settings.ntrip_host_ip;
+    doc["ntrip_port"]                = current_settings.ntrip_port;
+    doc["ntrip_mountpoint"]          = current_settings.ntrip_mountpoint;
+    doc["ntrip_user_email"]          = current_settings.ntrip_user_email;
+    doc["ntrip_password"]            = current_settings.ntrip_password;
 
     String output;
     serializeJsonPretty(doc, output);

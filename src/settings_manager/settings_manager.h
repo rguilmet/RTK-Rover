@@ -30,7 +30,7 @@ struct SystemSettings {
     uint8_t  e220_tx_power_dbm;
     uint16_t e220_subpacket_bytes;
     bool     e220_lbt_enable;
-    uint8_t  survey_avg_seconds;
+    uint8_t  survey_avg_seconds;        // Averaging duration (1, 5, 10, or 30s)
     char     default_label_prefix[16];
     char     active_waypoint_file[48];
     int16_t  active_waypoint_index;
@@ -51,6 +51,13 @@ struct SystemSettings {
     float    mag_true_north_offset_deg; // Auto-calibrated True-North compass tare from UM982 HDG FIX
     float    mag_field_ref_uT;          // Ambient geomagnetic field reference magnitude (uT)
     bool     mag_cal_valid;             // True once UM982 HDG FIX has auto-calibrated the compass
+    char     rtcm_source_mode[16];      // "AUTO", "LORA", or "NTRIP"
+    char     ntrip_host[64];            // e.g. "rtk2go.com"
+    char     ntrip_host_ip[32];         // Fallback numeric host IP (e.g. "3.14.70.106")
+    uint16_t ntrip_port;                // Default 2101
+    char     ntrip_mountpoint[48];      // Private NTRIP mountpoint (empty default in public repo)
+    char     ntrip_user_email[64];      // Private NTRIP user/email (empty default in public repo)
+    char     ntrip_password[32];        // Default "none"
 };
 
 extern struct SystemSettings current_settings;

@@ -208,12 +208,14 @@ typedef struct {
     float            rel_bearing_deg;    // Relative to rover heading (-180..+180)
     float            d_north_m;          // Target offset North from Rover Tip (m)
     float            d_east_m;           // Target offset East from Rover Tip (m)
+    bool             mode1_bullseye_active; // Unified Mode 1 (< 4.8m / > 5.3m hysteresis) Bullseye state
 
     // IMU & Pole Bubble Level (QMI8658)
     float            imu_pitch_deg;
     float            imu_roll_deg;
     float            pole_bubble_x_deg;  // Tared pole tilt Roll
     float            pole_bubble_y_deg;  // Tared pole tilt Pitch
+    float            pole_tilt_deg;      // Total tared pole tilt magnitude (deg)
     DisplayPose_t    display_pose;
     float            imu_acc[3];         // Accel X, Y, Z (g)
     float            imu_gyr[3];         // Gyro X, Y, Z (deg/s)
@@ -235,6 +237,10 @@ typedef struct {
     bool             is_charging;
     bool             vbus_present;
     float            vbus_voltage;
+    uint32_t         auto_off_idle_s;      // Seconds elapsed on battery inactivity timer
+    uint8_t          auto_off_countdown_s; // 30..1 during active shutdown warning modal, 0 otherwise
+    bool             auto_off_inhibited;   // True when USB, Wi-Fi, REC, NMEA/RTCM, Survey, Motion, or Disabled holds timer
+    char             auto_off_reason[16];  // Short ASCII inhibit reason ("USB Power", "Wi-Fi ON", "REC ON", "Motion", "Disabled", etc.)
 
     // Survey Logging State (Tile 2 BOOT button)
     bool             survey_in_progress;
@@ -257,6 +263,7 @@ void request_e220_config_write(void);
 void send_um982_com1_command(const char *cmd);
 void send_um982_com2_test_pulse(void);
 void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms);
+void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms, uint16_t freq2_hz, uint16_t dur2_ms);
 
 #ifdef __cplusplus
 }

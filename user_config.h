@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.8.18"
+#define ROVER_FIRMWARE_VERSION "v0.8.19"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -74,8 +74,7 @@
 
 // =========================================================================
 // Physical BOOT Button (GPIO 0)
-// Short-Press (Tile 2 ONLY) = Log Survey Waypoint
-// Long-Press (All Screens)  = Save Screenshot to SD Card
+// Long-Press (>= 1.5s, All Screens) = Save Screenshot to SD Card; any press resets Auto Power-Off idle timer
 // =========================================================================
 #define ROVER_PIN_BOOT_BTN        0
 
