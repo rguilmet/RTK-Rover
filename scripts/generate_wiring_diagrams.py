@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Circle, Polygon, Rectangle
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.3.1"
+__version__ = "v1.4.0"
 
 
 def draw_chip_box(ax, x, y, w, h, title, subtitle, facecolor="#1E293B", edgecolor="#38BDF8", title_color="#F8FAFC", sub_color="#94A3B8", lw=2.2):
@@ -740,8 +740,8 @@ def _draw_waveshare_35b_pcb(ax, x, y, w, h):
         "2:5V", "4:GND", "6:IO19", "8:IO20", "10:IO11", "12:IO10", "14:IO9", "16:IO17",
         "18:IO18", "20:IO0", "22:RST", "24:PWR", "26:SCL7", "28:SDA8", "30:GND", "32:3V3"
     ]
-    active_odd = {0, 2, 3, 4, 5, 6, 7, 14, 15}
-    active_even = {7, 8, 12, 13, 14, 15}
+    active_odd = {0, 2, 3, 4, 5, 6, 7, 10, 11, 14, 15}
+    active_even = {7, 8, 14, 15}
 
     pin_coords = {}
     px_l = x + 0.16
@@ -1069,7 +1069,7 @@ def _draw_top_antennas(ax, lora_x, ant1_x, ant2_x, lora_base_y=25.40, bar_y=25.9
 
 
 def generate_3_5b_current_diagram(out_dir: str):
-    """Generates clean white-background Arduino-style high-level wiring diagram for current v0.8.18."""
+    """Generates clean white-background Arduino-style high-level wiring diagram for v0.9.0 (I2C1 SEN0696)."""
     fig, ax = plt.subplots(figsize=(13.5, 15.75), dpi=300)
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
@@ -1081,8 +1081,8 @@ def generate_3_5b_current_diagram(out_dir: str):
     # 1. Top-Left Title & Date (Arduino / MFS Style)
     ax.text(0.9, 30.65, "RTK Rover High-Level Wiring Diagram", color="#0F172A", fontsize=21, fontweight="normal",
             ha="left", va="center", family="sans-serif")
-    ax.text(0.9, 29.92, "2026-11-18  |  Firmware v0.8.18  (Waveshare 3.5B + UM982 + E220 + SEN0696 + Switched 5V Power Module)",
-            color="#334155", fontsize=10.5, ha="left", va="center", family="sans-serif")
+    ax.text(0.9, 29.92, "2026-11-22  |  Firmware v0.9.0  (Waveshare 3.5B + UM982 + E220 + SEN0696 on I2C1 IO47/48 + Switched 5V)",
+            color="#334155", fontsize=10.3, ha="left", va="center", family="sans-serif")
 
     # 2. Hardware Modules (Waveshare y=13.0..24.0; Header pins at y=21.85 down to 14.35)
     lora_pins = _draw_e220_module(ax, 1.85, 17.00, 4.30, 6.00)
@@ -1097,12 +1097,13 @@ def generate_3_5b_current_diagram(out_dir: str):
     ax.text(4.00, 16.52, "Ebyte E220-900T30S (LoRa 1W)", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
     ax.text(4.00, 16.08, "115200 Mode0 / 9600 Mode3 Cfg", color="#475569", fontsize=7.6, ha="center", va="center")
 
-    ax.text(13.20, 12.42, "Waveshare ESP32-S3 Touch LCD 3.5B", color="#0F172A", fontsize=9.8, fontweight="bold", ha="center", va="center")
-    ax.text(13.20, 11.88, "Internal I2C0 (IO7/8): 0x18 ES8311 | 0x20 TCA9554 | 0x34 AXP2101\n0x3B Touch | 0x51 RTC | 0x6B QMI8658",
-            color="#475569", fontsize=6.6, ha="center", va="center")
+    ax.text(13.05, 12.64, "Waveshare ESP32-S3 Touch LCD 3.5B", color="#0F172A", fontsize=9.8, fontweight="bold", ha="center", va="center")
+    ax.text(13.05, 12.14, "I2C0 (IO7/8): Touch/AXP/TCA/RTC/IMU/ES8311\nI2C1 (IO47 SDA / IO48 SCL): SEN0696 Isolated",
+            color="#475569", fontsize=6.5, ha="center", va="center")
 
     ax.text(22.10, 16.92, "Holybro H-RTK UM982 (Single-UART COM1)", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
-    ax.text(22.27, 11.88, "DFRobot Gravity 10DOF (SEN0696) 0x4A", color="#0F172A", fontsize=9.4, fontweight="bold", ha="center", va="center")
+    ax.text(22.48, 11.88, "DFRobot SEN0696 10DOF (0x4A @ I2C1)", color="#0F172A", fontsize=8.7, fontweight="bold", ha="center", va="center",
+            bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
     ax.text(9.18, 24.55, "1S Li-Ion / LiPo Battery\n(Direct to 3.5B BAT JST)", color="#0F172A", fontsize=7.8, fontweight="bold", ha="center", va="center")
     ax.text(4.72, 6.72, "Custom Switched +5.00V Power Module", color="#0F172A", fontsize=9.0, fontweight="bold", ha="center", va="center")
 
@@ -1146,26 +1147,39 @@ def generate_3_5b_current_diagram(out_dir: str):
     ax.text(17.62, esp_pins[18][1] - 0.18, "COM1 RX<-IO18", color="#0F172A", fontsize=6.5, fontweight="bold",
             ha="center", va="center", bbox=dict(boxstyle="round,pad=0.05", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
 
-    # 7. SEN0696 <-> Waveshare 3.5B I2C0 Gravity 4-Pin Cable (Straight Horizontal!)
-    _ortho_wire(ax, [esp_pins[26], sen_pins["SCL"]], color="#2563EB", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[26][1] + 0.17, "SCL Blu", color="#1E3A8A", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
+    # 7. SEN0696 <-> Waveshare 3.5B Isolated I2C1 (P21 IO47 SDA / P23 IO48 SCL) + Power (P30 GND / P32 3V3)
+    # Power leads straight across on right header
+    _ortho_wire(ax, [esp_pins[30], sen_pins["GND"]], color="#0F172A", lw=3.0, z=6)
+    ax.text(17.48, esp_pins[30][1] + 0.14, "GND Blk", color="#0F172A", fontsize=6.2, fontweight="bold", ha="center", va="center",
+            bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
+    _ortho_wire(ax, [esp_pins[32], sen_pins["VCC"]], color="#EF4444", lw=3.0, z=6)
+    ax.text(17.48, esp_pins[32][1] - 0.17, "3V3 Red", color="#991B1B", fontsize=6.2, fontweight="bold", ha="center", va="center",
+            bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
 
-    _ortho_wire(ax, [esp_pins[28], sen_pins["SDA"]], color="#16A34A", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[28][1] + 0.15, "SDA Grn", color="#14532D", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
+    # Isolated I2C1 signals routed cleanly under 3.5B PCB caption (clear of P26/P28 I2C0 internal pins)
+    _ortho_wire(ax, [esp_pins[21], (8.45, esp_pins[21][1]), (8.45, 11.55), (17.00, 11.55), (17.00, sen_pins["SDA"][1]), sen_pins["SDA"]],
+                color="#16A34A", lw=3.0, z=6.2)
+    _ortho_wire(ax, [esp_pins[23], (8.08, esp_pins[23][1]), (8.08, 11.24), (16.65, 11.24), (16.65, sen_pins["SCL"][1]), sen_pins["SCL"]],
+                color="#2563EB", lw=3.0, z=6.2)
+    ax.text(7.25, esp_pins[21][1] + 0.14, "I2C1 SDA (IO47)", color="#14532D", fontsize=6.2, fontweight="bold",
+            ha="center", va="center", bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
+    ax.text(7.25, esp_pins[23][1] - 0.14, "I2C1 SCL (IO48)", color="#1E3A8A", fontsize=6.2, fontweight="bold",
+            ha="center", va="center", bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
+    ax.text(13.05, 10.90, "Isolated I2C1 Gravity Bus: SDA Grn (IO47) / SCL Blu (IO48) @ 400 kHz",
+            color="#1E293B", fontsize=6.3, fontweight="bold", ha="center", va="center",
+            bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.92), zorder=7)
+    ax.text(17.32, sen_pins["SCL"][1] + 0.16, "SCL Blu", color="#1E3A8A", fontsize=6.2, fontweight="bold", ha="center", va="center", zorder=7)
+    ax.text(17.50, sen_pins["SDA"][1] + 0.15, "SDA Grn", color="#14532D", fontsize=6.2, fontweight="bold", ha="center", va="center", zorder=7)
 
-    _ortho_wire(ax, [esp_pins[30], sen_pins["GND"]], color="#0F172A", lw=3.2, z=6)
-    _ortho_wire(ax, [esp_pins[32], sen_pins["VCC"]], color="#EF4444", lw=3.2, z=6)
-    ax.text(17.05, esp_pins[32][1] - 0.18, "3V3 Red", color="#991B1B", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
-
-    # 8. Magenta Box: Optional Bench Hardening (4.7K External I2C0 Pull-Ups + Legacy MMC5983MA)
+    # 8. Magenta Box: External 4.7K I2C1 Pull-Ups + Legacy MMC5983MA on I2C0
     mag_box = FancyBboxPatch(
         (17.35, 7.95), 8.35, 3.55,
         boxstyle="round,pad=0.0,rounding_size=0.14",
         facecolor="#FFFDFE", edgecolor="#EC4899", lw=1.8, zorder=2
     )
     ax.add_patch(mag_box)
-    ax.text(25.45, 11.18, "Optional Bench Hardening / Fallback", color="#DB2777",
-            fontsize=8.6, fontweight="bold", ha="right", va="center", zorder=4)
+    ax.text(25.45, 11.18, "External I2C1 Pull-Ups / I2C0 Fallback", color="#DB2777",
+            fontsize=8.3, fontweight="bold", ha="right", va="center", zorder=4)
 
     tx_scl, tx_sda, tx_3v3 = 17.95, 18.45, 18.95
     _junc_dot(ax, tx_scl, sen_pins["SCL"][1])
@@ -1180,14 +1194,14 @@ def generate_3_5b_current_diagram(out_dir: str):
     ax.plot([21.35, 21.85], [9.25,  9.25],  color="#EF4444", lw=2.2, zorder=6)
     _junc_dot(ax, 21.85, 9.25)
 
-    ax.text(22.25, 9.50, "4.7K Pull-Ups to 3V3\n(SEN0696 End)\n\nAlt/Legacy Compass:\nQwiic MMC5983MA\n(I2C Addr 0x30)",
-            color="#334155", fontsize=7.2, ha="left", va="center", zorder=5)
+    ax.text(22.25, 9.50, "4.7K Pull-Ups to 3V3\n(I2C1 IO47/48 Recommended)\n\nTier-B Fallback on I2C0:\nQwiic MMC5983MA (0x30)",
+            color="#334155", fontsize=7.0, ha="left", va="center", zorder=5)
 
     # 9. Power Module Inputs (From 3.5B Header Left: P1 VBAT, P29 GND, P31 3V3)
     _ortho_wire(ax, [esp_pins[1],  (8.85, esp_pins[1][1]),  (8.85, pwr_pins["VBAT_IN"][1]), pwr_pins["VBAT_IN"]], color="#991B1B", lw=3.0, z=6)
     _ortho_wire(ax, [esp_pins[29], (9.20, esp_pins[29][1]), (9.20, pwr_pins["GND_IN"][1]),  pwr_pins["GND_IN"]],  color="#0F172A", lw=2.8, z=6)
     _ortho_wire(ax, [esp_pins[31], (9.52, esp_pins[31][1]), (9.52, pwr_pins["3V3_EN"][1]),  pwr_pins["3V3_EN"]],  color="#F97316", lw=2.8, z=6)
-    ax.text(8.68, 16.05, "VBAT\n(P1)", color="#991B1B", fontsize=6.8, fontweight="bold", ha="right", va="center",
+    ax.text(8.68, 21.35, "VBAT\n(P1)", color="#991B1B", fontsize=6.8, fontweight="bold", ha="right", va="center",
             bbox=dict(boxstyle="round,pad=0.04", facecolor="#FFFFFF", edgecolor="none", alpha=0.90), zorder=7)
     ax.text(8.22, pwr_pins["GND_IN"][1] + 0.18, "GND", color="#0F172A", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
     ax.text(8.22, pwr_pins["3V3_EN"][1] + 0.18, "3V3", color="#C2410C", fontsize=6.4, fontweight="bold", ha="center", va="center", zorder=7)
@@ -1213,15 +1227,15 @@ def generate_3_5b_current_diagram(out_dir: str):
         "- 1S LiPo plugs directly into 3.5B BAT JST (AXP2101 500mA Chg)\n"
         "- NEVER tie +5.00V Boost Output to 3.5B Pin 2 (5V / VBUS)\n"
         "- Power Module feeds SEPARATE +5V/GND pairs to UM982 & E220\n"
-        "- Off-State Leak: 0.00 uA; see Figure 1B for Module Schematic\n"
-        "- Battery Est (1S 3.7V @ ~806mA): 3Ah ~3.2-3.4h | 10Ah ~10.6-11.2h\n"
-        "- COM2 (IO47/48) Freed | BOOT (IO0) Long-Press >= 1.5s Screenshot"
+        "- SEN0696 isolated on I2C1 (IO47 SDA/IO48 SCL; 0x103 free I2C0)\n"
+        "- Gravity vs Qwiic: Green=SDA(D/T), Blue=SCL(C/R), Red=3V3\n"
+        "- Battery Est (1S 3.7V @ ~806mA): 3Ah ~3.2-3.4h | 10Ah ~10.6-11.2h"
     )
     ax.text(0.95, 3.00, notes, color="#1E293B", fontsize=7.4, family="monospace",
             ha="left", va="center", linespacing=1.35)
 
     # 13. Bottom-Right Blue Monospaced Pinout Legend (Exact MFS_Wiring_Diagram.png Style!)
-    ax.text(12.25, 5.82, "Waveshare ESP32-S3 Touch LCD 3.5B (v0.8.18)",
+    ax.text(12.25, 5.82, "Waveshare ESP32-S3 Touch LCD 3.5B (v0.9.0)",
             color="#0F172A", fontsize=10.8, fontweight="normal", ha="left", va="center", family="sans-serif")
     pin_table = (
         "Pin       GPIO       Function      Target / Connection (Color / Note)\n"
@@ -1230,9 +1244,9 @@ def generate_3_5b_current_diagram(out_dir: str):
         "P1        BAT        VBAT_OUT      -> Power Module VBAT IN (DkRed)\n"
         "P5..P15   IO21..42   E220_CTRL     AUX, NRST*, M0, M1, TXD, RXD (Left)\n"
         "P16,P18   IO17,18    UM982_COM1    <- TXD0 / -> RXD0 @ 115200 (Teal/Cyan)\n"
-        "P26,P28   IO7,8      I2C0_BUS      SEN0696 SCL/SDA 400k (Grav Blu/Grn)\n"
-        "P29,P30   GND        SYS_GND       -> Power Module GND / SEN0696 - (Blk)\n"
-        "P31,P32   3V3        +3.3V_OUT     P31->PwrMod EN (Org) | P32->SEN+ (Red)\n"
+        "P21,P23   IO47,48    I2C1_BUS      SEN0696 SDA/SCL 400k (Grav Grn/Blu)\n"
+        "P26,P28   IO7,8      I2C0_BUS      Internal Slaves + Opt MMC5983MA (0x30)\n"
+        "P29..P32  GND,3V3    PWR_RAILS     P31->PwrMod EN | P30/P32->SEN0696 -/+\n"
         "PwrMod    +5V/GND    DUAL_5V_OUT   Two Separate 5V/GND Pairs: UM982 & E220"
     )
     ax.text(12.25, 3.25, pin_table, color="#0018A8", fontsize=7.2, fontweight="bold",
@@ -1246,6 +1260,51 @@ def generate_3_5b_current_diagram(out_dir: str):
     plt.close(fig)
     print(f"[+] Saved: {svg_path}")
     print(f"[+] Saved: {png_path}")
+
+
+def generate_3_5b_header_wiring_guide_rev5(out_dir: str):
+    """Generates rev5 32-pin 3.5B connector wiring guide moving 10DOF to I2C1 (IO47/48)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rev4_path = os.path.join(out_dir, "RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png")
+    out_path = os.path.join(out_dir, "RTK_Rover_3.5B_Header_Wiring_Guide-rev5.png")
+    stock_path = os.path.join(repo_root, "docs", "images", "Waveshare_3.5B_Stock_Header_Pinout.png")
+    if os.path.exists(rev4_path):
+        base_src = rev4_path
+    elif os.path.exists(out_path):
+        base_src = out_path
+    else:
+        base_src = stock_path
+    if not os.path.exists(base_src) or not os.path.exists(stock_path):
+        print("[!] Skipping rev5 guide generation (missing rev4/rev5/stock base PNGs)")
+        return
+
+    img = Image.open(base_src).convert("RGB")
+    stock = Image.open(stock_path).convert("RGB")
+
+    # Restore clean stock background over legacy 10DOF_SCL / 10DOF_SDA right of ESP_SCL / ESP_SDA (pins 26 & 28)
+    clean_patch = stock.crop((425, 258, 520, 294))
+    img.paste(clean_patch, (425, 258))
+
+    draw = ImageDraw.Draw(img)
+    font = None
+    for fname in ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf", "arial.ttf"):
+        if os.path.exists(fname):
+            font = ImageFont.truetype(fname, 13)
+            break
+    if font is None:
+        font = ImageFont.load_default()
+
+    # Right-align 10DOF_SDA / 10DOF_SCL cleanly onto Pin 21 (GPIO47) & Pin 23 (GPIO48) left callouts
+    # Blue #0018E0 matches existing E220 / UM982 project callout style
+    callout_col = (0, 24, 210)
+    draw.rectangle((10, 225, 113, 259), fill=(255, 255, 255))
+    draw.text((111, 226), "10DOF_SDA", fill=callout_col, font=font, anchor="ra")
+    draw.text((111, 243), "10DOF_SCL", fill=callout_col, font=font, anchor="ra")
+
+    img.save(out_path, format="PNG")
+    print(f"[+] Saved: {out_path}")
 
 
 def generate_power_module_diagram(out_dir: str):
@@ -1424,6 +1483,7 @@ if __name__ == "__main__":
     os.makedirs(schem_dir, exist_ok=True)
     generate_3_5b_current_diagram(schem_dir)
     generate_power_module_diagram(schem_dir)
+    generate_3_5b_header_wiring_guide_rev5(schem_dir)
     if args.legacy:
         generate_3_5b_diagram(schem_dir)
         generate_3_49_v2_diagram(schem_dir)

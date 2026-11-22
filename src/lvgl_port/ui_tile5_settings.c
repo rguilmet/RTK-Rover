@@ -70,6 +70,7 @@ void update_all_control_buttons(void)
     static int s_last_units = -1;
     static int s_last_tare = -1;
     static int s_last_autooff = -1;
+    static int s_last_calmag = -1;
 
     // Row 1, Col 0: VOL: 80% / VOL: MUTE
     int cur_vol = (int)current_settings.volume;
@@ -266,6 +267,21 @@ void update_all_control_buttons(void)
                 snprintf(ao_buf, sizeof(ao_buf), "AUTO-OFF\n%d min", cur_autooff);
                 lv_label_set_text(t5_autooff_btn_lbl, ao_buf);
                 lv_obj_set_style_bg_color(t5_autooff_btn, lv_color_hex(0x2F3B4C), 0);
+            }
+        }
+    }
+
+    // Row 5, Col 1: CAL MAG (Reflects 3D Ellipsoid Calibration Status, jumps to Tile 3)
+    int cur_calmag = current_settings.mag_ellipsoid_cal_valid ? 1 : 0;
+    if (cur_calmag != s_last_calmag) {
+        s_last_calmag = cur_calmag;
+        if (t5_calmag_btn && t5_calmag_btn_lbl) {
+            if (cur_calmag) {
+                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG:\nOK");
+                lv_obj_set_style_bg_color(t5_calmag_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else {
+                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
+                lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
             }
         }
     }

@@ -1,9 +1,9 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.8.0`  
-**Last Updated:** November 16, 2026  
-**Firmware Target:** `v0.8.12`  
-**Python Ecosystem Target:** `e220_pacer.py v3.7.0`  
+**Document Version:** `v2.9.0`  
+**Last Updated:** November 22, 2026  
+**Firmware Target:** `v0.9.0`  
+**Python Ecosystem Target:** `e220_pacer.py v3.7.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
 This document serves as the master technical specification for the **RTK Rover** project. It details the mechanical setup, dual-antenna lever-arm kinematics, electrical pinouts, FreeRTOS + LVGL 9 firmware architecture, operational modes, and companion Python scripts.
@@ -71,12 +71,12 @@ These coordinates are displayed live under `[ANT2 SLAVE]` on Tile 4.
 * **Closed-Form Geodetic Conversion:** The ESP32 driver converts base ECEF coordinates into WGS84 Latitude, Longitude, and Height via closed-form Bowring equations in $O(1)$ time with sub-millimeter precision.
 * **Dedicated Observer Card:** Tile 4 displays Base ID, differential correction age, exact WGS84 coordinates, altitude, ECEF vectors, and RTCM 1005 / MSM message counters.
 
-### E. Deep-Woods Heading Fallback Architecture ("Walk 3 Steps" Displacement + Gyro Yaw)
-In dense forest canopy where secondary (Slave) antenna carrier tracking drops, the firmware implements an autonomous multi-tier heading fallback pipeline:
-* **Tier 1 (Dual-Antenna RTK Moving Baseline):** `HDG FIX` / `HDG FLT` ($0.2^\circ$ precision) whenever the UM982 resolves carrier phase.
-* **Tier 2 (Kinematic Geodetic Displacement Azimuth):** When dual-antenna lock is lost, `nav_heading_displacement_update()` tracks total WGS84 displacement from the last stationary anchor. Upon moving $\ge 0.70\text{ m}$ ($2\text{--}3$ walking paces), it computes geographic azimuth via `nav_compute_target_guidance()`. Unlike receiver Doppler COG, this displacement azimuth is **velocity-independent**, resolving accurate headings even when crawling at $< 0.4\text{ m/s}$ through thick brush. Displayed as `HDG WALK` (`WLK`, Cyan `#06B6D4`).
-* **Tier 3 (50 Hz QMI8658 Gyroscope Yaw Integration):** When the surveyor pauses, stands over a pin, or rotates in place, the Z-axis gyroscope integrates angular velocity ($\Delta \psi = \omega_z \cdot \Delta t$) with a 60-second hold window. This preserves compass and map orientation while stationary. Displayed as `HDG GYRO` (`GYR`, Blue `#3B82F6`).
-* **UM982 Fallback Protection:** `handle_uniheadinga_sentence()` selectively invalidates only dual-antenna heading when Slave tracking is lost, strictly preserving displacement, gyro, COG, and hold headings instead of zeroing orientation twice per second.
+### E. Deep-Woods Heading Fallback, `SEN0696` Beam Fusion & `CAL MAG`
+In dense forest canopy where secondary (Slave) antenna carrier tracking drops, the firmware executes a zero-lag multi-tier heading hierarchy (`nav_heading_beam_update()` + `ahrs_9dof` + `matrix_math`):
+* **Tier 1 (`HDG_SRC_DUAL_FIX` / `DUAL_FLT`):** Carrier-phase moving-baseline heading (`0.2 deg` precision) whenever `UM982` resolves `ANT2`, continuously teaching the magnetic True-North declination tare, reference field magnitude `B_ref`, reference vertical component `Bz_ref`, and crossbar pitch tare (`atan2` circular averaging) with an immediate `0.0 s` switchover (`s_last_disp_ms = 0`) when `SLV` drops out.
+* **Tier 2A (`SEN0696` Beam 9-DOF AHRS -> `HDG_SRC_COMPASS`, `[CMP]` Teal `#14B8A6`):** Isolated onto `I2C1` (`GPIO 47/48` at `400 kHz`, automatic `I2C0` bench fallback), polling `BMI323 + BMM350` at `25-30 Hz` (`~3 Hz BMP581` baro) through an instance-safe Madgwick 9-DOF filter (`src/sensor_fusion/ahrs_9dof.{h,cpp}`) with `beam_imu_orient_mode` (default `4` = Face-Down `(+X,-Y,-Z)`), 50-sample stationary accel-variance gyro FOC, `360-deg` PSRAM ellipsoid `CAL MAG` calibration (`matrix_math.h` 9-param fit w/ 4-param sphere fallback), and a triple-condition iron anomaly gatekeeper (`|B|`, `Bz`, 200 ms gyro-mag innovation + 500 ms recovery hysteresis). Onboard `QMI8658` remains dedicated to enclosure `DisplayPose_t` whenever `SEN0696` is active.
+* **Tier 2B (Fallback Legacy `MMC5983MA 0x30` on `I2C0`):** Retained as Tier-B fallback with `SET`/`RESET` degaussing coil bridge offset calibration if `SEN0696` is absent.
+* **Tier 3/4 (`HDG_WALK`, `HDG_GYRO`, `HDG_HOLD`):** Kinematic displacement (`>= 0.70 m`, `WLK` Cyan), bias-compensated gyro coasting during iron anomalies or pivots (`GYR` Blue), and stationary zero-drift hold (`HLD` Slate).
 
 ---
 
@@ -89,11 +89,12 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 
 | Subsystem | Signal Label | ESP32-S3 GPIO | ESP32 Direction | Function / Bus Assignment |
 | :--- | :--- | :--- | :--- | :--- |
-| **UM982 COM1** | `UM982_TXD0` | `GPIO 17` | **ESP32 RX** (`Serial1`) | UM982 COM1 TX $\rightarrow$ ESP32 RX (`115200 8N1`, NMEA, Heading & Responses) |
-| **UM982 COM1** | `UM982_RXD0` | `GPIO 18` | **ESP32 TX** (`Serial1`) | ESP32 TX $\rightarrow$ UM982 COM1 RX (`115200 8N1`, RTCM3 & Config commands) |
-| **Legacy COM2** | `(Freed in v0.8.0)` | `GPIO 47 / 48` | **Spare / Freed** | Previously `Serial2` COM2 (consolidated onto `COM1` in Phase 8) |
-| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`115200 8N1` Transparent / `9600` Config) |
-| **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX $\rightarrow$ E220 RXD |
+| **UM982 COM1** | `UM982_TXD0` | `GPIO 17` | **ESP32 RX** (`Serial1`) | UM982 COM1 TX -> ESP32 RX (`115200 8N1`, NMEA, Heading & Responses) |
+| **UM982 COM1** | `UM982_RXD0` | `GPIO 18` | **ESP32 TX** (`Serial1`) | ESP32 TX -> UM982 COM1 RX (`115200 8N1`, RTCM3 & Config commands) |
+| **Beam 10DOF `I2C1`** | `10DOF_SDA` | `GPIO 47` (`P21`) | **I2C1 Open-Drain** | Isolated `I2C_NUM_1` SDA (`400 kHz`, Gravity Green `D/T` -> `SEN0696 0x4A..0x4D` + `4.7 kOhm` pull-up; freed from legacy COM2) |
+| **Beam 10DOF `I2C1`** | `10DOF_SCL` | `GPIO 48` (`P23`) | **I2C1 Clock** | Isolated `I2C_NUM_1` SCL (`400 kHz`, Gravity Blue `C/R` -> `SEN0696` + `4.7 kOhm` pull-up; auto `I2C0` bench fallback) |
+| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD -> ESP32 RX (`115200 8N1` Transparent / `9600` Config) |
+| **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX -> E220 RXD |
 | **E220 Control** | `E220_AUX` | `GPIO 21` | **ESP32 Input** | Busy (`LOW`) / Idle & Ready (`HIGH`) status |
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |
 | **E220 Control** | `E220_M0` | `GPIO 39` | **ESP32 Output** | Mode 0 (`LOW` = Transparent, `HIGH` = Config) |
@@ -105,18 +106,21 @@ In dense forest canopy where secondary (Slave) antenna carrier tracking drops, t
 
 ---
 
-## 5. FreeRTOS & LVGL 9 Firmware Architecture
+## 5. FreeRTOS, Core Libraries & LVGL 9 Architecture
 
 ### Core Separation
-* **Core 0 (`task_rover_core0` / `"RoverCore0"`, Priority 4 — Zero I2C Access):**
+* **Core 0 (`task_rover_core0` / `"RoverCore0"`, Priority 4 -- Zero I2C Access):**
   * Polls `E220` (`Serial0`), logs raw wire-tap bytes to `rtcm-base_*.txt`, stages incoming bytes in a 1,536-byte **Sliding-Window Store-and-Verify RTCM3 Gatekeeper** (`0xD3` + `CRC24Q == 0` with rate-adaptive truncation timeouts `280 / 380 / 480 ms`), and forwards **only verified intact RTCM3 frames** atomically to `UM982 COM1` (`Serial1` via `s_com1_tx_mutex`) while tracking `IO21` `AUX` falling-edge interrupts, consolidated `Second 0` uplink (`500..660 / 670..760 / 730..810 ms`) + Mode 0 RSSI polling (`680..920 ms`), and cold-boot `pkt_raw == 0x00` handling.
   * Polls `UM982 COM1` (`Serial1`) through the 3-way line demultiplexer to parse `$GPGGA` (2 Hz), `$GPRMC` (1 Hz), `$GPGST` (2 Hz), `$GPGSV` (1 Hz), `$GNGGAH` (1 Hz slave data), `#BASEINFOA` (1 Hz base station data), `#UNIHEADINGA` (2 Hz), and `#VERSIONA`/`#MODEA`/`#CONFIGA`/`#LOGLISTA` command responses.
   * Runs 30Hz lever-arm kinematic projection and geodesic target guidance (`nav_engine`), waking within `<= 2 ms` via `g_waypoint_change_seq` whenever the operator selects a new waypoint or file.
-* **Core 1 (`task_audio_beep` Priority 4, `rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2, `loopTask` Priority 1 — Exclusive I2C0 Owner):**
-  * **`task_audio_beep` (`"RoverAudio"`, Priority 4):** Dedicated real-time audio synthesizer blocking on `beepQueue` (`portMAX_DELAY`) and driving the ES8311 I2S codec within `< 1 ms` of touch contact, completely decoupled from UI rendering and filesystem writes.
-  * **`rover_lvgl_port_task` (Priority 3):** Renders the `320x480` Portrait LVGL 9 interface protected by `rover_lvgl_lock()` / `rover_lvgl_unlock()`, executing `0 ms` same-frame target guidance readout updates (`refresh_t0_guidance_readout_immediately()`) inside button callbacks.
-  * **`task_display_and_audio` (`"RoverUI"`, Priority 2):** Exclusively owns `I2C_NUM_0` (`400 kHz`, `.scl_wait_us = 20000`, serialized via `i2c_bus_mutex` with 18-clock GPIO SCL warm-reset bus-clear `i2c_bsp_gpio_bus_clear()` and automatic `i2c_master_bus_reset()` recovery): polls `AXS15231B` touch (`30 Hz`), `QMI8658` IMU (`10-50 Hz` independent of LVGL mutex), `PCF85063` RTC (`1 Hz` cached + one-shot GNSS UTC sync), and `AXP2101` battery/VBUS telemetry (`0.5 Hz`). Synthesizes distance-proportional proximity Geiger/Beep events into `beepQueue` and generates hardware BMP screenshots on `GPIO 0` long-press.
+* **Core 1 (`task_audio_beep` Priority 4, `rover_lvgl_port_task` Priority 3, `task_display_and_audio` Priority 2, `loopTask` Priority 1 -- Exclusive I2C0 & I2C1 Owner):**
+  * **`task_audio_beep` (`"RoverAudio"`, Priority 4):** Dedicated real-time audio synthesizer blocking on `beepQueue` (`portMAX_DELAY`) and driving the ES8311 I2S codec within `< 1 ms` of touch contact (supports dual-tone L/R chirps and clean PCM silence gaps), completely decoupled from UI rendering and filesystem writes.
+  * **`rover_lvgl_port_task` (Priority 3):** Renders the modular 6-tile `320x480` Portrait LVGL 9 interface (`src/lvgl_port/`, 11 files `<= 764 L` each) protected by `rover_lvgl_lock()` / `rover_lvgl_unlock()`, executing `0 ms` same-frame target guidance readout updates (`refresh_t0_guidance_readout_immediately()`) inside button callbacks.
+  * **`task_display_and_audio` (`"RoverUI"`, Priority 2):** Exclusively owns both `I2C_NUM_0` (`GPIO 7/8`) and `I2C_NUM_1` (`GPIO 47/48`) (`400 kHz`, `.scl_wait_us = 20000`, independent `s_ports[2]` mutexes, 18-clock GPIO SCL warm-reset bus-clear, and automatic `i2c_master_bus_reset()` recovery): polls `AXS15231B` touch (`30 Hz`), `SEN0696` (`25-30 Hz` fast IMU+Mag / `~3 Hz` `BMP581`), `QMI8658` display pose (`10-50 Hz`), `PCF85063` RTC (`1 Hz`), and `AXP2101` power (`0.5 Hz`). Synthesizes proximity Geiger/Beep and L/R line-follow chirps, manages `CAL MAG` PSRAM capture + safe Auto-Off countdown/logger flush, and saves hardware BMP screenshots on `GPIO 0` long-press.
   * **`loopTask` (Priority 1):** Executes 5-second quiet-debounced `save_settings()` with smart `FFat` mirror skip (`non_index_settings_equal()`, avoiding 1.5s internal flash erases when stepping `active_waypoint_index` with MicroSD mounted), services the HTTP web portal (`handle_wifi_server()`), and flushes PSRAM ring buffers (`serial_logger`, `nmea_logger`, `rtcm_logger`) to MicroSD with task-scoped `s_io_owner_task` re-entrancy protection.
+* **Portable Zero-App-Dependency Math & Fusion Modules (Seeded for Plan 1 `Field_Instrument_Core`):**
+  * [`src/matrix_math/matrix_math.h`](../src/matrix_math/matrix_math.h) (`745 L`): Linear solvers, `3x3` Jacobi eigensolver, 9-param ellipsoid + 4-param flat-spin sphere fit w/ RMS validation, and `kabsch_align_3x3_f32`.
+  * [`src/sensor_fusion/ahrs_9dof.{h,cpp}`](../src/sensor_fusion/ahrs_9dof.cpp) (`116 / 513 L`): Instance-safe `Ahrs9DofState_t`, 8 right-handed axis orientation modes, stationary accel-variance gyro FOC, and Madgwick 9-DOF fusion.
 
 ### Memory Partitioning: Internal `DRAM0` vs. 8 MB Octal PSRAM (`v0.7.5` - `v0.7.7`)
 Because prebuilt Arduino-ESP32 (`v3.3.x`, `qio_opi`) compiles with `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 4096` and `CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL = 0`, explicit memory-tier partitioning is enforced so `esp_wifi_init()` / `esp_wifi_start()` (and future BLE NUS stacks) always retain $\ge 150\text{ KB}$ of contiguous internal 8-bit/DMA SRAM:
@@ -139,51 +143,17 @@ Because prebuilt Arduino-ESP32 (`v3.3.x`, `qio_opi`) compiles with `CONFIG_SPIRA
 * **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`, `OFF`), Slave satellites (`SV: X`), Baseline length (`BL: 55.5cm`), and True Heading (`Hdg: XXX.X`).
 * **Row 4:** Ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt Montserrat font (`0.00000000, 0.00000000, 0.000 m`).
 
-### Tile Walkthrough
-* **Tile 0 (Screen 1) -- Multi-Mode Navigation & Pin Seeker:**
-  * Interactive tri-state navigation badge in top-left corner cycles through three specialized navigation modes:
-    1. **`[TACTICAL GUIDANCE]` (Cyan):** Course-Up dynamic canvas auto-scaling from $500\text{ m} \rightarrow 5\text{ m}$. Rotating antenna crossbar with colored tips (Green ANT1, Amber ANT2) and green field-of-view guidance wedge. Line-of-sight tracking vector, turn prompt, distance readout, cardinal North/East offsets, 64-point breadcrumb trail, and high-precision Bullseye mode automatically active at $\le 1.5\text{ m}$ ($1\text{ m}$, $20\text{ cm}$, and $2\text{ cm}$ rings with ES8311 proximity audio lock cues).
-    2. **`[LINE STAKEOUT]` (Amber):** Directs surveyor along a boundary line between Point A and Point B. Displays vertical centerline baseline with traverse chevron, decluttered vector geometry (text labels moved to top marquee row to eliminate button overlap), perpendicular tie-line, live rover marker, one-tap swap (`[<-> SWAP]`) to reverse line direction, and scaled 4-row readout deck (Row 1: 16pt offset magnitude, Row 2: ASCII lateral steer cues `<<<`/`>>>`, Row 3: station progress `Sta: 0+78.6 ft`, Row 4: cadastral deed bearing).
-    3. **`[MAP VIEW]` (Emerald Green):** Cadastral 2D tangent-plane projection canvas with interactive single-touch drag pan and right-edge HUD Zoom buttons (`[+]` in, `[-]` out, `[FIT]` bounding box, `[CTR]` center on rover). Renders closed boundary polygon connecting all points with positive `poly_order` ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$), dashed tie-lines for negative tie points ($-k$ connecting to vertex $k$), color-coded pins (Gold for boundary vertices, Orange for reference/tie pins, Cyan for active target), 128-point historical route trail (toggleable via `"map_show_route_trail"`), live rover marker with heading beam, and geodetic center coordinates.
-  * Route recording toggle (`REC ON` / `REC OFF`).
-* **Tile 1 (Screen 2) -- Field Survey Logger & Quick Settings:**
-  * **Row 1 (`y = 8`):** Symmetrical Location ID Prefix dropdown (`<DERIVED>`, `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`) and Averaging duration button (`1s`, `5s`, `10s`, `30s`).
-  * **Row 2 (`y = 44`):** Quick Note Tag dropdown (`Found Iron Pipe`, `Found Rebar`, `Found Stone Bound`, `Set Temp Flag`, etc.).
-  * **Row 3 (`y = 82`):** Next ID row (`ID: <label>`) in Montserrat 14 `#FFCC00` with circular marquee for long compound labels.
-  * **Row 4 (`y = 108`):** Multi-epoch averaging progress bar.
-  * **Row 5 (`y = 124`):** Large `[LOG PIN NOW]` button with visual feedback.
-  * **Row 6 (`y = 172`):** Last logged pin label and destination CSV path (`/survey_logged_pins.csv`).
-  * **Row 7 (`y = 218`):** Subtle horizontal divider line separating survey controls from settings.
-  * **Quick Settings Consolidated 3x4 Grid (`y = 238..360`):**
-    * Row 1: `VOL: 20%..100% / MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: 20%..100%`
-    * Row 2: `SERIAL: ON/OFF`, `NMEA: ON/OFF`, `RTCM: ON/OFF`
-    * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
-    * Row 4: `WIFI: CONN/STA/AP/OFF` (Multi-state color feedback), `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k / 4.8k`
-    * Row 5: Centered Wi-Fi status & web portal URL (`http://<ip>/`).
-* **Tile 2 (Screen 3) -- Waypoint CSV Browser & Multi-File Selector:**
-  * Top navigation bar with `< Prev` and `Next >` file buttons and circular marquee for filenames.
-  * Instant sub-25ms touch responsiveness powered by a 20 ms LVGL polling loop and RAM survey stem cache (`s_stem_cache`), eliminating SD card blocking.
-  * Ingests standard 19-column and 20-column CSV files with `poly_order` cadastral signed sequence numbering.
-  * Dynamic scanning of `/waypoints.csv` and all `/waypoints_*.csv` with alphabetical sorting.
-  * Scrollable table of waypoints; tapping any row selects it as the active navigation target.
-  * Remembers and restores the active file and active waypoint index across reboots.
-* **Tile 3 (Screen 4) -- Dual-Antenna Compass & Bubble Level:**
-  * Numerical True Heading readout in prominent 24pt font (`Heading: 162.4`).
-  * Baseline length ($55.5\text{ cm}$) and pitch ($^\circ$) verification with display pose indicator.
-  * Enlarged $224\text{ px}$ diameter spirit bubble level with Course-Up 8-point compass ring (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) keeping heading UP (12 o'clock).
-  * Compact **Tare** button (`62x28 px`) nested in the bottom-right of the circle's bounding rectangle (`TARE` Blue / `RST` Orange).
-  * Centered Pole Tilt angle readout (`dX` / `dY`) below circle.
-* **Tile 4 (Screen 5) -- Hardware Diagnostics & Live Observers:**
-  * **Pinned Top Header Deck:** Fixed firmware header (`RTK ROVER v0.8.12` in Montserrat 16 White).
-  * **Dual-Power & UPS Card:** Displays external VBUS status (`AXP2101` `0x00` `VBUS_GOOD` register bit + masked ADC voltage), VBAT 5V boost peripheral power rail, internal battery voltage/percentage, charging/float status, and auto-shutdown timer countdown.
-  * **Pinned LoRa RF Survey Card ($y = 26$):** Elevated to the top of the tile for permanent visibility of noise floor, packet RSSI (`5 s` Second 0 consolidated macro-cycle updates with `6.0 s` freshness window), AUX edges, RTCM message counters, and truncation drops.
-  * **Expanded Scrollable Container (+57 px Viewport):** Multi-line auto-wrapping telemetry cards:
-    * Storage status in Electric Cyan (`#22D3EE`).
-    * Antenna Master (ANT1) and Slave (ANT2) metrics with live coordinates.
-    * Base Station observer card (ID, RTCM differential age, WGS84 coordinates, ECEF vectors, message counters).
-    * 6-DOF IMU telemetry (Pitch, Roll, 3-axis Accel, 3-axis Gyro, Tare offsets).
-    * UM982 COM1/COM2 baud rates, byte throughput, and error counters.
-    * E220 LoRa hardware register decode and boot-time `M0`/`M1` pin continuity self-test.
+### UI 6-Tile Symmetric Structure (`320x480` Portrait)
+Symmetric ring navigation wraps seamlessly around **Tile 0 (Navigation)** (`< Prev` -> `Tile 5 Quick Settings`, `Next >` -> `Tile 1 Survey`): `[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> [Tile 2: Waypoints] <-> [Tile 3: Compass] <-> [Tile 4: Diag]`.
+
+* **Tile 0 (Navigation) -- 3-Mode Tactical Guidance, Unified Line+Bullseye & Map:**
+  * Cycles cleanly across `Mode 0 [POINT]`, `Mode 1 [LINE STAKEOUT / LINE BULLSEYE]`, and `Mode 2 [MAP VIEW]` (`48 px` horizontal & generous top/bottom canvas whitespace). Outside `5.0 m` (`4.8/5.3 m` hysteresis), Mode 1 draws the `A -> B` vertical baseline with rotated `true_heading_deg - line_bearing_deg` heading arrow and plays signed L/R chirps (`660->1100 Hz` steer RIGHT / `1100->660 Hz` steer LEFT / `1800 Hz` on-line); inside `4.8 m`, chimes and transitions to `LINE BULLSEYE` with overlaid `A -> B` property chord.
+* **Tile 1 (Survey) -- Dedicated Field Survey Logger:**
+  * `40 px` Prefix + Averaging (`1s/5s/10s/30s`) & all `12` field monument `kNoteTags` (`kNoteTagCount`), `52 px` `[LOG]` button echoing the active tag, live Pre-Log Survey Quality card (`Fix/SV/HDOP/H/V-Acc/Tilt/dN/dE`), Core 1 `pole_tilt_deg` snapshot capture, and circular `atan2` heading averaging.
+* **Tile 2 (Waypoints) -- Multi-File CSV Browser:** Instant `<25 ms` RAM stem-cached file/waypoint selector with `poly_order` boundary/tie rendering (`[SWAP]` auto-clear on target step).
+* **Tile 3 (Compass) -- Dual-Antenna + Beam 9-DOF Compass, Plumb Bubble & `CAL MAG`:** `224 px` Course-Up bubble level, `TARE`, left-side `CAL MAG` 360-deg PSRAM spin wizard, heading provenance badges (`DUAL FIX/FLT`, `BEAM 9DOF`, `WALK`, `GYRO COAST`, `HOLD`), `[IRON ANOMALY]` warning, `[BEAM 10DOF I2C1]` status, and `Baro Rel Elev`.
+* **Tile 4 (Diag) -- Dual-Bus `I2C0/I2C1` & Subsystem Observers:** Fixed header (`RTK ROVER v0.9.0`), LoRa RF survey card, Storage, `ANT1/ANT2`, Base Station, `SEN0696` (`Orient`, `FOC`, `3D-Cal`, `BMP581`) + `QMI8658` pose, dual `I2C0/I2C1` error counters, Auto-Off countdown status, UM982 COM1, and E220 self-test.
+* **Tile 5 (Settings) -- Dedicated `5x3` (`94 x 44 px`) Quick Settings & Status Footer:** `VOL/AUD/BRI`, `SERIAL/NMEA/RTCM`, `TELEM/IMU/TOUCH`, `WIFI/UNITS/LORA`, `AUTO-OFF` (`5m/15m/30m/OFF`), `CAL MAG` (`CAL MAG: OK` green when calibrated), dimmed `BLE: PLAN2` slot, and PSRAM-routed `Wi-Fi` / `Auto-Off` / `LoRa` footer. Plus motion/REC-safe Auto-Off `lv_layer_top()` 30s countdown modal & clean SD logger flush, and `settings.json` `ntrip_*` + `mag_*` persistence (`Plan 0 COMPLETE`).
 
 ---
 

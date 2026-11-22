@@ -16,13 +16,14 @@
  * @brief Persistent state and latest physical readings for DFRobot SEN0696 (10DOF IMU).
  */
 typedef struct {
-    bool     present;          // True if detected on I2C0 and verified PID >= 0x0010 at boot
+    bool     present;          // True if detected on I2C1 or I2C0 and verified PID >= 0x0010 at boot
     bool     id_valid;         // True if REG_I2C_PID >= 0x0010
     bool     configured;       // True if Normal mode + +/-2g + +/-250dps writes succeeded
-    bool     valid;            // True if the latest sample read all 3 blocks cleanly
+    bool     valid;            // True if the latest sample read cleanly
     bool     accel_gyro_valid; // True if latest 12-byte IMU block read passed sanity checks
     bool     mag_valid;        // True if latest 12-byte magnetometer block passed sanity checks
     bool     press_valid;      // True if latest 4-byte barometer block passed sanity checks
+    uint8_t  i2c_bus;          // Active I2C peripheral port (1 = isolated I2C1, 0 = shared I2C0 fallback)
     uint8_t  i2c_addr;         // Detected 7-bit I2C address (0 if not found)
     uint16_t vid;              // REG_I2C_VID (0x0000), expected 0x3343 (DFRobot)
     uint16_t pid;              // REG_I2C_PID (0x0001), expected >= 0x0010 (10DOF)
@@ -39,13 +40,19 @@ typedef struct {
 } sen0696_state_t;
 
 /**
- * @brief Quietly probes [addr_min..addr_max] on shared I2C0 without tripping bus recovery.
+ * @brief Quietly probes [addr_min..addr_max] on a specific I2C port (0 or 1) without tripping recovery.
  * @return First responding 7-bit I2C address, or 0 if no SEN0696 responded.
+ */
+uint8_t sen0696_detect_i2c_addr_on_bus(uint8_t bus_port, uint8_t addr_min, uint8_t addr_max);
+
+/**
+ * @brief Quietly probes [addr_min..addr_max] preferring isolated I2C1, falling back to I2C0.
+ * @return First responding 7-bit I2C address, or 0 if no SEN0696 responded on either bus.
  */
 uint8_t sen0696_detect_i2c_addr(uint8_t addr_min, uint8_t addr_max);
 
 /**
- * @brief Initializes DFRobot SEN0696 on I2C0 (uniform 400 kHz), attaches persistent handle, and reads initial sample.
+ * @brief Initializes DFRobot SEN0696 (prefers I2C1 IO47/48, falls back to I2C0 IO7/8).
  *
  * Configures Normal operating mode (+/-2g accel, +/-250dps gyro) and waits for first sensor
  * conversion settling. Note: DFRobot's SEN0696 onboard I2C bridge firmware (regs 0x0000..0x0021)
@@ -59,22 +66,24 @@ bool sen0696_init(uint8_t addr_min, uint8_t addr_max, sen0696_state_t *out_state
 bool sen0696_is_present(void);
 
 /**
+ * @brief Returns active I2C bus port for SEN0696 (1 = I2C1, 0 = I2C0 fallback).
+ */
+uint8_t sen0696_get_i2c_bus(void);
+
+/**
  * @brief Returns consecutive error count (useful for backing off poll cadence when disconnected).
  */
 uint8_t sen0696_get_consec_fails(void);
 
 /**
- * @brief Executes one staggered acquisition step (step 0=IMU, 1=Mag, 2=Baro/Finalize).
- *
- * Holds i2c_bsp_lock() atomically across each single block's [write -> 10 ms -> read]
- * sequence so Touch (0x3B) and QMI8658 (0x6B) never split an active SEN0696 transaction,
- * while capping max single-tick bus lock hold time to ~10.3 ms across 3 RoverUI ticks.
- *
- * @param step      0, 1, or 2.
- * @param out_state Optional snapshot updated cleanly after step 2 completes (may be NULL).
- * @return true after step 2 if all 3 sensor blocks succeeded on this cycle.
+ * @brief Executes one staggered acquisition step (step 0=IMU, 1=Mag, 2=Baro/Finalize) for I2C0 fallback.
  */
 bool sen0696_poll_step(uint8_t step, sen0696_state_t *out_state);
+
+/**
+ * @brief High-rate single-tick acquisition for isolated I2C1 (~25-30 Hz IMU + Mag, or Baro when read_baro=true).
+ */
+bool sen0696_poll_fast(bool read_baro, sen0696_state_t *out_state);
 
 /**
  * @brief Convenience blocking call that executes steps 0, 1, and 2 sequentially.

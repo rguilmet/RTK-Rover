@@ -1,11 +1,11 @@
 # Plan 0: Field Survey Refinements, 6-Tile Ergonomic UI, Auto-Off & SEN0696 I2C1 Fusion
 
 > [!NOTE]
-> **Status:** Active Immediate Execution Roadmap -- Phases 0.1-0.5 Complete in `v0.8.19`, Phase 0.6 (`v0.9.0`) Pending (November 22, 2026)  
-> **Document Version:** `1.2.0`  
-> **Baseline:** `RTK_Rover v0.8.19` | `CAD v2.2.2` | `e220_pacer.py v3.7.1`  
-> **Target Releases:** `v0.8.19` (Released: LVGL 11-File Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
-> **Execution Order:** **Plan 0 (`v0.8.19` - `v0.9.0`)** -> [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](plan_2_rover_enhancements_and_android_companion.md)
+> **Status:** Complete -- Phases 0.1-0.5 Shipped in `v0.8.19`; Phase 0.6 Shipped in `v0.9.0` (November 22, 2026)  
+> **Document Version:** `v1.3.0`  
+> **Baseline:** `RTK_Rover v0.9.0` | `CAD v2.2.2` | `e220_pacer.py v3.7.1`  
+> **Delivered Releases:** `v0.8.19` (LVGL 11-File Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
+> **Execution Order:** **Plan 0 (`v0.8.19` - `v0.9.0`, COMPLETE)** -> [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](plan_2_rover_enhancements_and_android_companion.md)
 
 ---
 
@@ -131,21 +131,19 @@ Upgrade `RoverBeep_t` and Priority-4 `task_audio_beep` ([`RTK_Rover.ino`](../../
 
 ---
 
-## 7. Phase 0.6 -- `SEN0696` `I2C1` (`GPIO 47/48`) Isolation & Beam 9-DOF Fusion (`v0.9.0`)
+## 7. Phase 0.6 -- `SEN0696` `I2C1` (`GPIO 47/48`) Isolation & Beam 9-DOF Fusion (Completed in `v0.9.0`)
 
 *(Pulled forward from Plan 2 Phase 2.1 per field finding: `977` `I2C0` stalls & `38.4% HLD` heading rate.)*
-1. **Isolated `I2C1` Bus (`I2C_NUM_1` on Freed `GPIO 47/48`):**
-   * Configure optional secondary `I2C1` bus in `user_config.h` and [`i2c_bsp.c`](../../src/i2c_bsp/i2c_bsp.c) (preserving 18-clock GPIO bus-clear, `.scl_wait_us = 20000`, `i2c_bsp_lock()`, and two-tier runtime recovery on both buses; retain `I2C0` fallback auto-probe if `SEN0696` is still strapped on `I2C0` on an un-rewired bench unit).
-   * Separates `10.3 ms` `SEN0696` block transactions and external `GX-12` cable capacitance from internal `Touch(0x3B)`, `QMI8658(0x6B)`, `AXP2101(0x34)`, and `ES8311(0x18)`, enabling `20-40 Hz` AHRS polling without `I2C0` stalls.
-2. **Pure Math & Instance-Safe 9-DOF AHRS Port (`src/matrix_math/` + `src/sensor_fusion/`):**
-   * Port `Magnetic_Field_Scanner`'s `matrix_math.h` (generalized `float`/`double` 9-param ellipsoid fit, `jacobi_eigen_3x3`, `get_calibration_matrices`, `kabsch_align_3x3`) and refactor `MadgwickAHRS` + 50-sample stationary accel-variance gyro FOC into instance-safe `ahrs_9dof` (seeded cleanly for Plan 1 Core extraction!).
-3. **Beam Alignment, Ellipsoid `CAL MAG` & Heading Fusion (`nav_engine` + UI):**
-   * Add JSON-configurable `3x3` signed `beam_imu_orient_mode` (`settings.json`), supporting the verified `-Z` inverted beam mount (`Acc Z = -1.046g`), plus centripetal accel gate (`| ||a|| - 1g | < 0.12g` & `|omega| < 12 deg/s`).
-   * Implement `Tile 3` / `Tile 5` **`CAL MAG`** 360-deg spin ellipsoid wizard solving hard-iron offset + `3x3` soft-iron matrix (persisted in `settings.json`), online `UM982 HDG_FIX` circular True-North + `B_ref`/`Bz_ref` teacher, triple-condition iron anomaly gate (`|B|`, `Bz`, gyro-mag innovation -> bias-compensated `HDG_SRC_GYRO`/`HOLD`), `BMP581` `Baro Rel Elev` (`no beam_temp_c` -- not in `SEN0696` I2C bridge), and Tile 3/4 `Beam 10DOF` status (`MMC5983MA` `0x30` kept as Tier-B fallback).
-   * Keep `48 B` `RoverUplinkTelemetry_t` binary-compatible (`heading_source = 7`) and keep `QMI8658` dedicated to enclosure `DisplayPose_t` whenever `SEN0696` is online.
-4. **Wiring Diagram & Pin Allocation Documentation Sync (`GPIO 47/48` -> `I2C1`):**
-   * Update [`scripts/generate_wiring_diagrams.py`](../../scripts/generate_wiring_diagrams.py) (bump `__version__`) and regenerate `docs/schematics/wiring_diagram_3_5B_current.svg` / `.png` showing the `GX-12` bulkhead `SEN0696` `SDA/SCL` routed to dedicated `I2C1` (`GPIO 47/48`) instead of shared `I2C0` (`GPIO 7/8`), including external pull-up and Gravity 4-pin color-code notes.
-   * Synchronize [`docs/schematics/system_wiring_schematics.md`](../schematics/system_wiring_schematics.md), [`docs/project_overview.md`](../project_overview.md), and the `3.5B` header pin-allocation artifacts (`docs/schematics/RTK_Rover_3.5B_Header_Pin_Mapping-rev4.{csv,xlsx}` and `RTK_Rover_3.5B_Header_Wiring_Guide-rev4.png`, bumping to `rev5` or updating in place) alongside `user_config.h` (`ROVER_PIN_I2C1_SDA` / `ROVER_PIN_I2C1_SCL`).
+1. **Isolated `I2C1` Bus (`I2C_NUM_1` on Freed `GPIO 47/48`, Shipped):**
+   * Added dual-port `I2C0/I2C1` arbitration in `user_config.h` (`ROVER_PIN_I2C1_SDA = GPIO 47`, `ROVER_PIN_I2C1_SCL = GPIO 48`, `400 kHz`) and [`i2c_bsp.c`](../../src/i2c_bsp/i2c_bsp.c) (18-clock GPIO bus-clear, `.scl_wait_us = 20000`, independent `s_ports[2]` mutexes, two-tier runtime recovery, and automatic `I2C0` fallback probe in `sen0696_init()` for un-rewired bench units).
+   * Isolates `10.3 ms` `SEN0696` transactions and external `GX-12` cable capacitance from internal `Touch(0x3B)`, `QMI8658(0x6B)`, `AXP2101(0x34)`, and `ES8311(0x18)`, enabling `25-30 Hz` fast IMU/Mag polling (`~3 Hz` baro) on `I2C1`.
+2. **Pure Math & Instance-Safe 9-DOF AHRS Port (`src/matrix_math/` + `src/sensor_fusion/`, Shipped):**
+   * Ported `matrix_math.h` (generalized `float`/`double` 9-param ellipsoid fit w/ 4-param sphere fallback for flat spins, `jacobi_eigen_3x3`, `get_calibration_matrices`, `kabsch_align_3x3_f32`) and created zero-app-dependency instance-safe `ahrs_9dof.{h,cpp}` (`Ahrs9DofState_t`, 50-sample stationary accel-variance gyro FOC, `0.12g` / `12 dps` accel gate) ready for Plan 1 `Field_Instrument_Core`.
+3. **Beam Alignment, Ellipsoid `CAL MAG` & Heading Fusion (`nav_engine` + UI, Shipped):**
+   * Added `beam_imu_orient_mode` (`settings.json`, default `4` = Face-Down `(+X, -Y, -Z)` for `-1.0g -> +1.0g` beam mount) and opt-in `apply_lever_arm_on_calibrated_beam`.
+   * Implemented Tile 3 / Tile 5 **`CAL MAG`** 360-deg spin ellipsoid wizard (300-pt PSRAM buffer, live RMS residual, `settings.json` persistence), online `UM982 HDG_FIX` circular teacher (`mag_true_north_offset_deg`, `mag_field_ref_uT`, `mag_bz_ref_uT`, `beam_pitch_tare_deg`), triple-condition iron anomaly gatekeeper (`|B|`, `Bz`, 200 ms gyro-mag innovation + 500 ms hysteresis), fixed `0.0 s` `[CMP]` switchover on `SLV` dropout, added `BMP581` `RTK_FIX`-disciplined `Baro Rel Elev`, kept `QMI8658` dedicated to enclosure `DisplayPose_t` when `SEN0696` is active, kept Tier-B `MMC5983MA` `0x30` fallback, and preserved `48 B` `RoverUplinkTelemetry_t` binary compat (`heading_source = 7`).
+4. **Wiring Diagram & Pin Allocation Documentation Sync (`rev5`, Shipped):**
+   * Bumped [`scripts/generate_wiring_diagrams.py`](../../scripts/generate_wiring_diagrams.py) (`v1.4.0`), regenerated `wiring_diagram_3_5B_current.{svg,png}`, replaced `rev4` with [`RTK_Rover_3.5B_Header_Wiring_Guide-rev5.png`](../schematics/RTK_Rover_3.5B_Header_Wiring_Guide-rev5.png) & [`rev5.csv`](../schematics/RTK_Rover_3.5B_Header_Pin_Mapping-rev5.csv), and synchronized [`docs/schematics/system_wiring_schematics.md`](../schematics/system_wiring_schematics.md) (`v1.3.0`), [`docs/project_overview.md`](../project_overview.md) (`v2.9.0`), [`docs/user_manual.md`](../user_manual.md) (`v1.9.0`), and [`CHANGELOG.md`](../../CHANGELOG.md) (`v0.9.0`).
 
 ---
 

@@ -580,41 +580,77 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
         lv_label_set_text(t4_power_lbl, buf);
     }
 
-    // 9. Update Tile 4: IMU, Pole Tilt & MMC5983MA 9-DOF Compass Diagnostics
+    // 9. Update Tile 4: Beam 10DOF (SEN0696), QMI8658 & Compass Diagnostics
     if (t4_imu_lbl) {
-        char mag_line[128];
-        if (d->mag_present) {
-            snprintf(mag_line, sizeof(mag_line),
-                     "Mag(0x30): %.1fuT (X:%+.1f Y:%+.1f Z:%+.1f) %s\n"
-                     "Compass: %.1f deg | Tare:%+.1f deg [%s] | SR:%lu (%.1fC)",
+        const char *pose_tag = (d->display_pose == DISPLAY_POSE_VERTICAL) ? "VERT" :
+                               (d->display_pose == DISPLAY_POSE_ANGLED)   ? "ANG"  : "FLAT";
+        if (d->beam_10dof_present) {
+            char rel_elev_str[24];
+            if (d->beam_baro_bias_valid) {
+                nav_format_height(d->beam_baro_rel_elev_m, rel_elev_str, sizeof(rel_elev_str));
+            } else {
+                snprintf(rel_elev_str, sizeof(rel_elev_str), "--");
+            }
+            snprintf(buf, buf_sz,
+                     "[BEAM 10DOF & IMU] SEN0696@0x%02X [%s:%s]\n"
+                     "Beam P:%+.1f R:%+.1f deg | M%u FOC:%s\n"
+                     "Mag:%.1fuT %s | Cal3D:%s Tare:%+.1f\n"
+                     "BMP581:%.1fhPa RelElev:%s\n"
+                     "QMI8658:%s P:%+.1f R:%+.1f | Lev:%.2fm[%s]",
+                     (unsigned)(d->beam_10dof_addr ? d->beam_10dof_addr : ROVER_I2C_ADDR_BEAM_IMU),
+                     (d->beam_10dof_bus == 1U) ? "I2C1" : "I2C0",
+                     d->beam_10dof_valid ? "ONLINE" : "ERR",
+                     d->beam_pitch_deg,
+                     d->beam_roll_deg,
+                     (unsigned)current_settings.beam_imu_orient_mode,
+                     d->beam_gyro_foc_locked ? "OK" : "WAIT",
                      d->mag_total_uT,
-                     d->mag_uT[0], d->mag_uT[1], d->mag_uT[2],
                      d->mag_anomaly ? "[IRON!]" : "[OK]",
-                     d->mag_heading_deg,
+                     d->mag_ellipsoid_cal_valid ? "YES" : "NO",
                      d->mag_tare_offset_deg,
-                     d->mag_cal_valid ? "AUTO-CAL" : "DEFAULT",
-                     (unsigned long)d->mag_set_reset_count,
-                     d->mag_die_temp_c);
+                     d->beam_pressure_hpa,
+                     rel_elev_str,
+                     pose_tag,
+                     d->imu_pitch_deg,
+                     d->imu_roll_deg,
+                     current_settings.antenna_height_m,
+                     current_settings.apply_lever_arm ? "ON" : "OFF");
         } else {
-            snprintf(mag_line, sizeof(mag_line),
-                     "Mag(0x30): MMC5983MA Not Detected (6-DOF Mode)");
+            char mag_line[128];
+            if (d->mag_present) {
+                snprintf(mag_line, sizeof(mag_line),
+                         "Mag(0x30): %.1fuT (X:%+.1f Y:%+.1f Z:%+.1f) %s\n"
+                         "Compass: %.1f deg | Tare:%+.1f deg [%s] | SR:%lu (%.1fC)",
+                         d->mag_total_uT,
+                         d->mag_uT[0], d->mag_uT[1], d->mag_uT[2],
+                         d->mag_anomaly ? "[IRON!]" : "[OK]",
+                         d->mag_heading_deg,
+                         d->mag_tare_offset_deg,
+                         d->mag_cal_valid ? "AUTO-CAL" : "DEFAULT",
+                         (unsigned long)d->mag_set_reset_count,
+                         d->mag_die_temp_c);
+            } else {
+                snprintf(mag_line, sizeof(mag_line),
+                         "10DOF: -- | MAG(0x30): Not Detected (6-DOF Mode)");
+            }
+            snprintf(buf, buf_sz,
+                     "[IMU & 9-DOF COMPASS] QMI8658 [%s]\n"
+                     "Live: Pitch:%+.1f deg | Roll:%+.1f deg\n"
+                     "Acc(g): X:%+.2f Y:%+.2f Z:%+.2f\n"
+                     "Gyr(d/s): X:%+.1f Y:%+.1f Z:%+.1f\n"
+                     "Tare: P:%+.1f R:%+.1f | Lever: %.2fm [%s]\n"
+                     "%s",
+                     pose_tag,
+                     d->imu_pitch_deg,
+                     d->imu_roll_deg,
+                     d->imu_acc[0], d->imu_acc[1], d->imu_acc[2],
+                     d->imu_gyr[0], d->imu_gyr[1], d->imu_gyr[2],
+                     current_settings.pole_tilt_tare_pitch_deg,
+                     current_settings.pole_tilt_tare_roll_deg,
+                     current_settings.antenna_height_m,
+                     current_settings.apply_lever_arm ? "ON" : "OFF",
+                     mag_line);
         }
-        snprintf(buf, buf_sz,
-                 "[IMU & 9-DOF COMPASS] QMI8658 + MMC5983MA\n"
-                 "Live: Pitch:%+.1f deg | Roll:%+.1f deg\n"
-                 "Acc(g): X:%+.2f Y:%+.2f Z:%+.2f\n"
-                 "Gyr(d/s): X:%+.1f Y:%+.1f Z:%+.1f\n"
-                 "Tare: P:%+.1f deg R:%+.1f deg | Lever: %.2fm [%s]\n"
-                 "%s",
-                 d->imu_pitch_deg,
-                 d->imu_roll_deg,
-                 d->imu_acc[0], d->imu_acc[1], d->imu_acc[2],
-                 d->imu_gyr[0], d->imu_gyr[1], d->imu_gyr[2],
-                 current_settings.pole_tilt_tare_pitch_deg,
-                 current_settings.pole_tilt_tare_roll_deg,
-                 current_settings.antenna_height_m,
-                 current_settings.apply_lever_arm ? "ON" : "OFF",
-                 mag_line);
         lv_label_set_text(t4_imu_lbl, buf);
     }
 
@@ -643,12 +679,25 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
         lv_label_set_text(t4_wifi_lbl, buf);
     }
 
-    // 11. Update Tile 4: I2C Bus Diagnostics
+    // 11. Update Tile 4: I2C0 (Internal) & I2C1 (Isolated Beam 10DOF) Bus Diagnostics
     if (t4_i2c_lbl) {
+        const char *beam_stat = "--";
+        if (d->beam_10dof_present) {
+            if (d->beam_10dof_bus == 0U) {
+                beam_stat = d->beam_10dof_valid ? "OK(I2C0)" : "ERR(I2C0)";
+            } else {
+                beam_stat = d->beam_10dof_valid ? "OK" : "ERR";
+            }
+        }
         snprintf(buf, buf_sz,
-                 "[I2C0 BUS STATUS @ 400kHz]\n"
-                 "TCA:OK | AXP:OK | Touch:OK | RTC:OK | IMU:OK | ES8311:OK | MAG(0x30):%s",
-                 d->mag_present ? "OK" : "--");
+                 "[I2C0 IO7/8 @ 400kHz] Err:%lu | MAG(0x30):%s\n"
+                 "TCA/AXP/Touch/RTC/IMU/ES8311: OK\n"
+                 "[I2C1 IO47/48 @ 400kHz] Err:%lu | 10DOF(0x%02X):%s",
+                 (unsigned long)d->i2c0_err_count,
+                 (!d->beam_10dof_present && d->mag_present) ? "OK" : "--",
+                 (unsigned long)d->i2c1_err_count,
+                 (unsigned)(d->beam_10dof_addr ? d->beam_10dof_addr : ROVER_I2C_ADDR_BEAM_IMU),
+                 beam_stat);
         lv_label_set_text(t4_i2c_lbl, buf);
     }
 }

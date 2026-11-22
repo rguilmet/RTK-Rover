@@ -64,18 +64,19 @@ bool sen0696_write_reg16(uint16_t reg16, uint16_t val16)
         (uint8_t)((val16 >> 8) & 0xFFU),
     };
 
-    if (!i2c_bsp_lock(150)) {
+    const uint8_t bus = s_state.i2c_bus;
+    if (!i2c_bsp_lock_port(bus, 150)) {
         return false;
     }
     if (beam_imu_dev_handle == nullptr) {
-        i2c_bsp_unlock();
+        i2c_bsp_unlock_port(bus);
         return false;
     }
     const esp_err_t err = i2c_master_transmit(beam_imu_dev_handle, tx, sizeof(tx), kI2cXferTimeoutMs);
-    i2c_bsp_unlock();
+    i2c_bsp_unlock_port(bus);
 
     if (err == ESP_OK || err == ESP_ERR_TIMEOUT || err == ESP_ERR_INVALID_STATE) {
-        i2c_bsp_report_status(beam_imu_dev_handle, "Write", (int)err);
+        i2c_bsp_report_status_port(bus, beam_imu_dev_handle, "Write", (int)err);
     }
     return (err == ESP_OK);
 }
@@ -91,13 +92,14 @@ bool sen0696_read_reg(uint16_t reg16, uint8_t *out, size_t len)
         (uint8_t)((reg16 >> 8) & 0xFFU),
     };
 
-    // Hold i2c_bsp_lock atomically across [write reg -> 10 ms -> read] so Touch(0x3B) and QMI8658(0x6B)
+    const uint8_t bus = s_state.i2c_bus;
+    // Hold bus lock atomically across [write reg -> 10 ms -> read] so another device
     // cannot split an active SEN0696 bridge transaction or trigger mid-transaction bus resets.
-    if (!i2c_bsp_lock(150)) {
+    if (!i2c_bsp_lock_port(bus, 150)) {
         return false;
     }
     if (beam_imu_dev_handle == nullptr) {
-        i2c_bsp_unlock();
+        i2c_bsp_unlock_port(bus);
         return false;
     }
 
@@ -107,11 +109,11 @@ bool sen0696_read_reg(uint16_t reg16, uint8_t *out, size_t len)
         err = i2c_master_receive(beam_imu_dev_handle, out, len, kI2cXferTimeoutMs);
     }
 
-    i2c_bsp_unlock();
+    i2c_bsp_unlock_port(bus);
 
     // Feed only bus stalls (ESP_ERR_TIMEOUT / ESP_ERR_INVALID_STATE) and successes into runtime bus recovery
     if (err == ESP_OK || err == ESP_ERR_TIMEOUT || err == ESP_ERR_INVALID_STATE) {
-        i2c_bsp_report_status(beam_imu_dev_handle, "Read", (int)err);
+        i2c_bsp_report_status_port(bus, beam_imu_dev_handle, "Read", (int)err);
     }
     return (err == ESP_OK);
 }
@@ -232,18 +234,27 @@ void copy_state_out(sen0696_state_t *out_state)
 
 } // namespace
 
-uint8_t sen0696_detect_i2c_addr(uint8_t addr_min, uint8_t addr_max)
+uint8_t sen0696_detect_i2c_addr_on_bus(uint8_t bus_port, uint8_t addr_min, uint8_t addr_max)
 {
-    if (addr_min > addr_max || addr_max > 0x77U) {
+    if (bus_port > 1U || addr_min > addr_max || addr_max > 0x77U) {
         return 0U;
     }
 
     for (uint8_t addr = addr_min; addr <= addr_max; ++addr) {
-        if (i2c_bsp_probe_optional_addr(addr)) {
+        if (i2c_bsp_probe_optional_addr_port(bus_port, addr)) {
             return addr;
         }
     }
     return 0U;
+}
+
+uint8_t sen0696_detect_i2c_addr(uint8_t addr_min, uint8_t addr_max)
+{
+    uint8_t addr = sen0696_detect_i2c_addr_on_bus(1U, addr_min, addr_max);
+    if (addr != 0U) {
+        return addr;
+    }
+    return sen0696_detect_i2c_addr_on_bus(0U, addr_min, addr_max);
 }
 
 bool sen0696_init(uint8_t addr_min, uint8_t addr_max, sen0696_state_t *out_state)
@@ -251,20 +262,23 @@ bool sen0696_init(uint8_t addr_min, uint8_t addr_max, sen0696_state_t *out_state
     memset(&s_state, 0, sizeof(s_state));
     s_link_suppressed = false;
 
-    if (user_i2c_port0_handle == nullptr) {
-        copy_state_out(out_state);
-        return false;
+    uint8_t bus = 1U;
+    uint8_t addr = (user_i2c_port1_handle != nullptr)
+                       ? sen0696_detect_i2c_addr_on_bus(1U, addr_min, addr_max)
+                       : 0U;
+    if (addr == 0U && user_i2c_port0_handle != nullptr) {
+        bus  = 0U;
+        addr = sen0696_detect_i2c_addr_on_bus(0U, addr_min, addr_max);
     }
-
-    const uint8_t addr = sen0696_detect_i2c_addr(addr_min, addr_max);
     if (addr == 0U) {
         copy_state_out(out_state);
         return false;
     }
 
+    s_state.i2c_bus  = bus;
     s_state.i2c_addr = addr;
 
-    if (!i2c_bsp_attach_beam_imu(addr)) {
+    if (!i2c_bsp_attach_beam_imu_port(bus, addr)) {
         copy_state_out(out_state);
         return false;
     }
@@ -303,6 +317,11 @@ bool sen0696_is_present(void)
     return s_state.present;
 }
 
+uint8_t sen0696_get_i2c_bus(void)
+{
+    return s_state.i2c_bus;
+}
+
 uint8_t sen0696_get_consec_fails(void)
 {
     return s_state.consec_fails;
@@ -317,7 +336,8 @@ bool sen0696_poll_step(uint8_t step, sen0696_state_t *out_state)
 
     if (step == 0U) {
         // When repeatedly failing (e.g. unplugged cable), check NACK cleanly before spending 10 ms waits
-        s_link_suppressed = (s_state.consec_fails >= 15U) && !i2c_bsp_probe_optional_addr(s_state.i2c_addr);
+        s_link_suppressed = (s_state.consec_fails >= 15U) &&
+                            !i2c_bsp_probe_optional_addr_port(s_state.i2c_bus, s_state.i2c_addr);
         if (s_link_suppressed) {
             s_state.accel_gyro_valid = false;
             s_state.mag_valid        = false;
@@ -350,6 +370,53 @@ bool sen0696_poll_step(uint8_t step, sen0696_state_t *out_state)
             s_state.consec_fails++;
         }
         if (!s_link_suppressed && (s_state.consec_fails % kReconfigFailMod) == 0U) {
+            s_state.configured = sen0696_configure_device();
+        }
+    }
+
+    copy_state_out(out_state);
+    return s_state.valid;
+}
+
+bool sen0696_poll_fast(bool read_baro, sen0696_state_t *out_state)
+{
+    if (!s_state.present) {
+        copy_state_out(out_state);
+        return false;
+    }
+
+    s_link_suppressed = (s_state.consec_fails >= 15U) &&
+                        !i2c_bsp_probe_optional_addr_port(s_state.i2c_bus, s_state.i2c_addr);
+    if (s_link_suppressed) {
+        s_state.accel_gyro_valid = false;
+        s_state.mag_valid        = false;
+        s_state.press_valid      = false;
+        s_state.valid            = false;
+        if (s_state.consec_fails < 255U) {
+            s_state.consec_fails++;
+        }
+        copy_state_out(out_state);
+        return false;
+    }
+
+    sen0696_read_acc_gyr_block(&s_state);
+    if (read_baro) {
+        sen0696_read_press_block(false, &s_state);
+    } else {
+        sen0696_read_mag_block(&s_state);
+    }
+
+    const bool aux_ok = read_baro ? s_state.press_valid : s_state.mag_valid;
+    if (s_state.accel_gyro_valid && aux_ok) {
+        s_state.valid          = true;
+        s_state.consec_fails   = 0U;
+        s_state.last_sample_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    } else {
+        s_state.valid = false;
+        if (s_state.consec_fails < 255U) {
+            s_state.consec_fails++;
+        }
+        if ((s_state.consec_fails % kReconfigFailMod) == 0U) {
             s_state.configured = sen0696_configure_device();
         }
     }

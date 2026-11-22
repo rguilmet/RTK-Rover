@@ -51,6 +51,13 @@ struct SystemSettings {
     float    mag_true_north_offset_deg; // Auto-calibrated True-North compass tare from UM982 HDG FIX
     float    mag_field_ref_uT;          // Ambient geomagnetic field reference magnitude (uT)
     bool     mag_cal_valid;             // True once UM982 HDG FIX has auto-calibrated the compass
+    uint8_t  beam_imu_orient_mode;      // Signed axis permutation 0..7 (default 4: Face-Down 0 deg)
+    float    mag_hard_iron_uT[3];       // 3D hard-iron bias center (uT)
+    float    mag_soft_iron[9];          // Row-major 3x3 soft-iron ellipsoid correction matrix
+    bool     mag_ellipsoid_cal_valid;   // True once 360-deg ellipsoid CAL MAG completed cleanly
+    float    mag_bz_ref_uT;             // Learned world-vertical magnetic component (uT)
+    float    beam_pitch_tare_deg;       // Learned pitch offset (beam_pitch_deg - baseline_pitch_deg)
+    bool     apply_lever_arm_on_calibrated_beam; // Opt-in lever-arm when HDG_SRC_COMP has calibrated beam
     char     rtcm_source_mode[16];      // "AUTO", "LORA", or "NTRIP"
     char     ntrip_host[64];            // e.g. "rtk2go.com"
     char     ntrip_host_ip[32];         // Fallback numeric host IP (e.g. "3.14.70.106")

@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.8.19"
+#define ROVER_FIRMWARE_VERSION "v0.9.0"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -41,6 +41,14 @@
 // =========================================================================
 #define ROVER_PIN_I2C0_SCL        (GPIO_NUM_7)
 #define ROVER_PIN_I2C0_SDA        (GPIO_NUM_8)
+
+// =========================================================================
+// Isolated Secondary I2C1 Bus (Outboard Beam 10DOF SEN0696 on Freed Pins)
+// P21 = IO47 (SDA / Gravity Green D/T), P23 = IO48 (SCL / Gravity Blue C/R)
+// =========================================================================
+#define ROVER_PIN_I2C1_SDA        (GPIO_NUM_47)
+#define ROVER_PIN_I2C1_SCL        (GPIO_NUM_48)
+#define ROVER_I2C1_SPEED_HZ       400000
 
 #define ROVER_I2C_ADDR_TCA9554    0x20
 #define ROVER_I2C_ADDR_MAG        0x30  // SparkFun Qwiic Micro MMC5983MA 3-Axis 18-bit AMR Compass (Auto-Detected)
@@ -91,10 +99,10 @@
 #define ROVER_PIN_UM982_TXD0      17  // Connected to ESP32 RX (Serial1 RX)
 #define ROVER_PIN_UM982_RXD0      18  // Connected to ESP32 TX (Serial1 TX: Commands + RTCM3)
 
-// Legacy COM2 Pin Definitions (Unused / Freed in v0.8.0 Single-UART Mode)
+// Legacy COM2 Pin Definitions (Unused in Single-UART Mode; GPIO 47/48 assigned to I2C1 SEN0696)
 #define ROVER_UM982_COM2_BAUD     115200
-#define ROVER_PIN_UM982_TXD1      (-1) // Freed (was GPIO 47)
-#define ROVER_PIN_UM982_RXD1      (-1) // Freed (was GPIO 48)
+#define ROVER_PIN_UM982_TXD1      (-1) // Assigned to ROVER_PIN_I2C1_SDA (GPIO 47)
+#define ROVER_PIN_UM982_RXD1      (-1) // Assigned to ROVER_PIN_I2C1_SCL (GPIO 48)
 
 // =========================================================================
 // Ebyte E220-900T30S LoRa Module Mapping & Radio Configuration

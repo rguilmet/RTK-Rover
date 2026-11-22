@@ -69,7 +69,35 @@ void nav_format_distance(double meters, char *buf, int buf_len);
 void nav_format_height(double meters, char *buf, int buf_len);
 void nav_format_offset(float meters, char *buf, int buf_len);
 
-// Phase 5 & Phase 8: Woods Heading Fallback Engine (Kinematic Displacement + 9-DOF Compass + Gyro Yaw)
+// Phase 5, Phase 8 & v0.9.0: Woods Heading Fallback Engine
+typedef struct {
+    double   tip_lat;
+    double   tip_lon;
+    float    yaw_rate_cw_dps;         // Clockwise world-vertical yaw rate (+ = turn right / increasing az)
+    float    pole_tilt_deg;
+    bool     mag_present;
+    bool     mag_valid;
+    float    raw_mag_heading_deg;
+    float    mag_total_uT;
+    float    mag_bz_world_uT;
+    bool     has_bz_world;
+    bool     is_beam_10dof;
+    float    beam_pitch_deg;
+    float    um982_baseline_pitch_deg;
+    uint32_t now_ms;
+    bool     dual_antenna_valid;
+    bool     dual_antenna_fixed;
+    float    dual_heading_deg;
+} NavHeadingSensorInput_t;
+
+void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
+                             bool *heading_valid_out,
+                             float *true_heading_out,
+                             HeadingSource_t *heading_src_out,
+                             float *disp_dist_out,
+                             float *mag_true_heading_out,
+                             bool *mag_anomaly_out);
+
 void nav_heading_displacement_update(double tip_lat,
                                     double tip_lon,
                                     float gyr_z_dps,

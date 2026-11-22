@@ -2,15 +2,20 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.8.19`  
+**Firmware Version:** `v0.9.0`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
-**Architecture & Plans:** [Plan 0: Field Survey Refinements (Next Steps)](docs/plans/plan_0_field_survey_refinements.md) | [Plan 1: Shared Core Library & Token Optimization](docs/plans/plan_1_shared_core_library_and_token_optimization.md) | [Plan 2: Rover Enhancements & Android Companion](docs/plans/plan_2_rover_enhancements_and_android_companion.md) | [Archived Plans](docs/plans/archive/README.md)
+**Architecture & Plans:** [Plan 0: Field Survey Refinements (Complete)](docs/plans/plan_0_field_survey_refinements.md) | [Plan 1: Shared Core Library & Token Optimization](docs/plans/plan_1_shared_core_library_and_token_optimization.md) | [Plan 2: Rover Enhancements & Android Companion](docs/plans/plan_2_rover_enhancements_and_android_companion.md) | [Archived Plans](docs/plans/archive/README.md)
 
 ---
 
 ## 1. Overview & Key Capabilities
+
+* **Plan 0 Field Survey Refinements, 6-Tile Ergonomic UI & Isolated `I2C1` Beam 9-DOF Fusion (`v0.8.19` - `v0.9.0`):**
+  * **6-Tile Symmetric UI & Modular LVGL Split (`src/lvgl_port/`, `v0.8.19`):** Refactored the monolithic `4,225`-line UI into `11` `< 770 L` modules and centered `Tile 0` in a symmetric 6-tile wrap ring (`[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> ... <-> [Tile 4: Diag]`). Dedicated **Tile 5 Quick Settings** provides a `5x3` `94 x 44 px` touch deck (`VOL/AUD/BRI`, `SERIAL/NMEA/RTCM`, `TELEM/IMU/TOUCH`, `WIFI/UNITS/LORA`, `AUTO-OFF` `5m/15m/30m/OFF`, `CAL MAG`, reserved `BLE: PLAN2`), while dedicated **Tile 1 Survey** adds `40 px` controls, all `12` monument `kNoteTags`, active-tag `52 px` `LOG` button, pre-log quality card, Core 1 `pole_tilt_deg` capture, and circular `atan2` heading averaging.
+  * **Unified 3-Mode `Tile 0`, Directional `L/R` Audio & Motion/REC-Safe Auto-Off (`v0.8.19`):** Mode 1 unifies Line-Up (`rotated true_heading_deg - line_bearing_deg` arrow, `48 px` horizontal whitespace, signed `ES8311` rising/falling `L/R` chirps) with `< 4.8 m` / `> 5.3 m` hysteresis transitioning cleanly to `LINE BULLSEYE` with overlaid `A -> B` property chord. Auto-Off inhibits shutdown during USB power, Wi-Fi, surveys, `REC ON`, NMEA/RTCM logging, walking motion, or touch, raising a `30 s` countdown modal (`TAP ANYWHERE TO CANCEL`) and flushing SD loggers cleanly before `AXP2101` power-off. Persists `ntrip_*` fields in `settings.json`.
+  * **Isolated `I2C1` (`GPIO 47/48`) `SEN0696` Beam 10-DOF & Portable 9-DOF Fusion (`v0.9.0`):** Isolates external `GX-12` `DFRobot SEN0696` (`BMI323 + BMM350 + BMP581`, `0x4A..0x4D`) onto `I2C_NUM_1` (`GPIO 47 SDA / GPIO 48 SCL @ 400 kHz`, automatic `I2C0` bench fallback), polling at `25-30 Hz` (`~3 Hz` baro) with zero `I2C0` contention while keeping onboard `QMI8658` dedicated to enclosure `DisplayPose_t`. Ports zero-app-dependency [`src/matrix_math/`](src/matrix_math/matrix_math.h) + [`src/sensor_fusion/ahrs_9dof.{h,cpp}`](src/sensor_fusion/ahrs_9dof.cpp) (`beam_imu_orient_mode = 4` Face-Down default, 50-sample stationary accel-variance gyro FOC, `CAL MAG` 360-deg PSRAM ellipsoid fit, online `HDG_FIX` circular teacher, triple-condition iron anomaly gate, `0.0 s` `[CMP]` switchover, `BMP581` `Baro Rel Elev`, Tier-B `MMC5983MA` fallback, and `48 B` telemetry binary compat).
 
 * **Architecture 2B Asynchronous Ping-Pong Mailbox LoRa Transport, Consolidated Macro-Cycle & Mode 0/3 Hardening (`v0.8.12` & `e220_pacer.py v3.7.0`):**
   * **Asynchronous Ping-Pong Mailboxes & `<= 200 B` Coalescing (`e220_pacer.py v3.7.0`):** Decouples TCP RTCM3 ingestion onto a dedicated background ingress thread that CRC24Q-verifies frames, drops empty MSMs (`<= 28 B`), and overwrites per-message-type mailboxes in place (zero epoch queue lag). The TX scheduler prioritizes static metadata (`1005/1006/1033/1230`), uses starvation-fair round robin (`now - last_tx`) with a GPS `1074` tie-breaker across active constellations, expires stale dynamic MSM frames (`2.5 s` TTL), and packs compatible small frames (`<= 200 B`, e.g., `1006+1230` or `+1084`) into a single Regime A UART write.
@@ -63,16 +68,15 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
   * **Row 2 (Master Antenna ANT1):** RTK Fix badge (`RTK FIX`, `RTK FLT`, `DGPS`, `SINGLE`, `OFF`), Satellites used/in-view, horizontal accuracy estimate ($+/-\text{cm}$), RTCM differential age, and `"LoRa: "` signal strength with multi-tier color coding.
   * **Row 3 (Slave Antenna ANT2):** Heading Fix badge (`HDG FIX`, `HDG FLT`, `OFF`), Slave satellites, measured baseline length ($55.5\text{ cm}$), baseline pitch ($^\circ$), and true heading ($^\circ$).
   * **Row 4:** Streamlined ground-tip Latitude, Longitude, and Ellipsoidal Height in 14pt font.
-* **Field Survey Logger & Consolidated Quick Settings (Tile 1):**
-  * Integrated `<DERIVED>` prefix mode and clean prefixes (`PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`).
-  * Universal collision-free `_Lxxx` numbering scanning `/survey_logged_pins.csv` with zero UI loop disk I/O latency.
-  * Multi-epoch averaging (`1s`, `5s`, `10s`, `30s`), visual progress bar, large `[LOG PIN NOW]` button, and circular marquee ID label.
-  * **Consolidated $3\times 4$ Quick Settings Grid (12 Buttons):**
-    * Row 1: `VOL: xx%` / `VOL: MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: xx%`
+* **Field Survey Logger (Tile 1) & Dedicated Quick Settings (Tile 5):**
+  * **Tile 1 (Survey):** `<DERIVED>` and 9 explicit prefixes (`PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`), collision-free `_Lxxx` numbering, all 12 field monument `kNoteTags`, `1s/5s/10s/30s` circular heading + pole-tilt averaging, visual progress bar, active-tag `[LOG]` button, and pre-log survey quality summary (`Fix/SV/HDOP/H/V-Acc/Tilt/dN/dE`).
+  * **Tile 5 (`5x3` `94 x 44 px` Quick Settings Grid, 15 Slots):**
+    * Row 1: `VOL: xx% / MUTE`, `AUD: GEIGER / BEEPS / MUTE`, `BRI: xx%`
     * Row 2: `SERIAL: ON/OFF`, `NMEA: ON/OFF`, `RTCM: ON/OFF`
     * Row 3: `TELEM: ON/OFF`, `IMU: ON/OFF`, `TOUCH: ON/OFF`
     * Row 4: `WIFI: CONN/STA/AP/OFF`, `UNITS: IMP/SI`, `LORA: 19.2k / 9.6k / 4.8k`
-  * Centered Wi-Fi status banner below grid (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
+    * Row 5: `AUTO-OFF: 5m/15m/30m/OFF`, `CAL MAG` (`OK` green when calibrated), `BLE: PLAN2` (reserved)
+  * Bottom PSRAM-allocated status footer displaying Wi-Fi SSID/IP/Portal URL, Auto-Off idle countdown, and active LoRa profile.
 * **Multi-File Waypoint Browser & Selector (Tile 2):**
   * Multi-file CSV selector scanning `/waypoints.csv` and all `/waypoints_*.csv` on MicroSD card or internal flash.
   * Dynamic circular marquee autoscroll for long waypoint labels and filenames.
@@ -114,21 +118,24 @@ The user interface is optimized for high-contrast sunlight readability on the Wa
 | ![Tile 0: Line Stakeout Mode](docs/images/screenshot_tile0_line_stakeout.png) | ![Tile 0: 2D Cadastral Map View](docs/images/screenshot_tile0_map_view.png) |
 | *Deed baseline vector, perpendicular tie-line, lateral offset, and quadrant bearing.* | *Closed parcel boundary polygon (`poly_order > 0`), dashed tie-lines (`-k`), and HUD zoom/pan.* |
 
-### Tile 1: Field Survey Logger & Quick Settings
+### Tile 1: Dedicated Field Survey Logger
 ![Tile 1: Field Survey Logger and Quick Settings](docs/images/screenshot_tile1_survey_settings.png)
-*Figure 2: Row 1 Prefix & Avg duration, Row 2 Note Tag, Row 3 ID with marquee, Row 4 progress bar, Row 5 Log Pin Now, Row 6 Logged info, and Quick Settings deck.*
+*Figure 2: Dedicated Survey Logger (Row 1 Prefix & Avg duration, Row 2 12-option Note Tag dropdown, Row 3 ID with marquee, Row 4 progress bar, Row 5 active-tag Log button, Row 6 Pre-Log Quality & Logged summary). Quick Settings now lives on Tile 5.*
 
 ### Tile 2: Multi-File Waypoint Browser & Selector
 ![Tile 2: Multi-File Waypoint Browser](docs/images/screenshot_tile2_waypoint_browser.png)
 *Figure 3: Multi-file selector bar with circular marquee, waypoint table with tap-to-select target guidance.*
 
-### Tile 3: Dual-Antenna Compass & Plumb Bubble Level
+### Tile 3: Dual-Antenna Compass, Beam 9-DOF, `CAL MAG` & Plumb Bubble Level
 ![Tile 3: Dual-Antenna Compass and Bubble Level](docs/images/screenshot_tile3_compass_level.png)
-*Figure 4: 24pt True Heading readout, 224px spirit bubble level with Course-Up 8-point compass ring, compact Tare button, and pole tilt metrics.*
+*Figure 4: 24pt True Heading readout w/ provenance & iron anomaly status, 224px spirit bubble level with Course-Up 8-point compass ring, `CAL MAG` 360-deg wizard, `TARE` button, `BEAM 10DOF I2C1` / `Baro Rel Elev`, and pole tilt metrics.*
 
 ### Tile 4: Hardware Diagnostics & Live Observers
 ![Tile 4: Hardware Diagnostics](docs/images/screenshot_tile4_diagnostics.png)
-*Figure 5: Pinned firmware header, dual-row logging buttons, MicroSD storage status, ANT1, ANT2, dedicated Base Station card, 6-DOF IMU, and COM/LoRa metrics.*
+*Figure 5: Pinned firmware header, LoRa RF survey card, MicroSD storage status, ANT1, ANT2, Base Station card, `SEN0696` (`Orient`/`FOC`/`3D-Cal`/`BMP581`) + `QMI8658` Pose, dual `I2C0/I2C1` error counters, Auto-Off countdown status, and UM982/E220 metrics.*
+
+### Tile 5: Dedicated `5x3` Quick Settings Deck
+* 15 enlarged `94 x 44 px` field controls (`VOL`, `AUD`, `BRI`, `SERIAL`, `NMEA`, `RTCM`, `TELEM`, `IMU`, `TOUCH`, `WIFI`, `UNITS`, `LORA`, `AUTO-OFF`, `CAL MAG`, reserved `BLE: PLAN2`) above a dedicated Wi-Fi/Auto-Off/LoRa status footer.
 
 ---
 
@@ -138,8 +145,9 @@ The user interface is optimized for high-contrast sunlight readability on the Wa
 | :--- | :--- | :--- |
 | **Display & MCU** | **Waveshare ESP32-S3-Touch-LCD-3.5B** | 3.5" $320 \times 480$ IPS portrait capacitive touch LCD (`AXS15231B`), ESP32-S3 (16MB Flash, 8MB Octal PSRAM), `AXP2101` PMIC, `QMI8658` 6-axis IMU, `PCF85063` RTC, `ES8311` audio codec, `TCA9554` IO expander, MicroSD slot. |
 | **GNSS Module** | **Holybro H-RTK Unicore UM982** | Dual-antenna multi-band RTK GNSS receiver (GPS L1/L2/L5, GLONASS G1/G2, Galileo E1/E5a/E5b, BeiDou B1I/B2I/B3I). |
-| **Antennas** | **Dual Helix / Patch GNSS Antennas** | Separated by $55.5\text{ cm}$ along a lightweight rigid T-bar crossbar. |
-| **RTCM Radio** | **Ebyte E220-900T30S** | 900MHz LoRa UART transceiver module (30dBm / 1W max power). |
+| **Antennas** | **Dual Helix / Patch GNSS Antennas** | Separated by `55.5 cm` along a lightweight rigid T-bar crossbar. |
+| **RTCM Radio** | **Ebyte E220-900T30S** | 900MHz LoRa UART transceiver module (`30 dBm` / `1 W` max power). |
+| **Beam 10-DOF IMU** | **DFRobot Gravity `SEN0696`** | External `BMI323` 6-DOF + `BMM350` mag + `BMP581` baro (`0x4A`) isolated on `I2C1` (`GPIO 47/48`) w/ auto `I2C0` fallback; optional legacy `MMC5983MA` (`0x30`) on `I2C0`. |
 
 ---
 
@@ -151,21 +159,23 @@ All peripheral UART pin labels are **device-relative** (`<DEV>_TXD` is an output
 | :--- | :--- | :--- | :--- | :--- |
 | **UM982 COM1** | `UM982_TXD0` | `GPIO 17` | **ESP32 RX** (`Serial1`) | UM982 COM1 TX $\rightarrow$ ESP32 RX (`115200 8N1`, NMEA, Heading & Responses) |
 | **UM982 COM1** | `UM982_RXD0` | `GPIO 18` | **ESP32 TX** (`Serial1`) | ESP32 TX $\rightarrow$ UM982 COM1 RX (`115200 8N1`, RTCM3 & Config commands) |
-| **Legacy COM2** | `(Freed in v0.8.0)` | `GPIO 47 / 48` | **Spare / Freed** | Previously `Serial2` COM2 (consolidated onto `COM1` in Phase 8) |
-| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD $\rightarrow$ ESP32 RX (`115200 8N1` Transparent / `9600` Config) |
-| **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX $\rightarrow$ E220 RXD |
+| **Legacy COM2 / Freed** | `10DOF_SDA / SCL` | `GPIO 47 / 48` | **I2C1 Master** (`P21/23`) | Isolated `I2C_NUM_1` (`400 kHz`, Gravity Grn/Blu -> `SEN0696 0x4A` + `4.7 kOhm` pull-ups; freed from COM2 in `v0.8.0`) |
+| **E220 LoRa** | `E220_TXD` | `GPIO 41` | **ESP32 RX** (`Serial0`) | E220 TXD -> ESP32 RX (`115200 8N1` Transparent / `9600` Config) |
+| **E220 LoRa** | `E220_RXD` | `GPIO 42` | **ESP32 TX** (`Serial0`) | ESP32 TX -> E220 RXD |
 | **E220 Control** | `E220_AUX` | `GPIO 21` | **ESP32 Input** | Module Busy (`LOW`) / Idle & Ready (`HIGH`) status |
 | **E220 Control** | `E220_RST` | `GPIO 38` | **ESP32 Output** | Hardware Reset (`HIGH` = normal operation) |
 | **E220 Control** | `E220_M0` | `GPIO 39` | **ESP32 Output** | Mode 0 (`LOW` = Transparent Mode, `HIGH` = Config Mode) |
 | **E220 Control** | `E220_M1` | `GPIO 40` | **ESP32 Output** | Mode 1 (`LOW` = Transparent Mode, `HIGH` = Config Mode) |
-| **Internal I2C0** | `ESP_SCL` / `SDA` | `GPIO 7` / `8` | **I2C Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`), optional `MMC5983MA` (`0x30`) at `400 kHz` |
+| **Internal I2C0** | `ESP_SCL` / `SDA` | `GPIO 7` / `8` | **I2C0 Master** | Shared by Touch (`0x3B`), TCA9554 (`0x20`), AXP2101 (`0x34`), RTC (`0x51`), IMU (`0x6B`), ES8311 (`0x18`), opt. `MMC5983MA` (`0x30`) at `400 kHz` |
 | **LCD QSPI** | `CS/CLK/D0..3` | `12, 5, 1..4` | **QSPI Master** | `AXS15231B` $320 \times 480$ Portrait Display (`GPIO 6` Backlight PWM) |
 | **SD Card** | `D0/CMD/CLK` | `9, 10, 11` | **1-Bit SD_MMC / SPI** | 3-stage mount fallback (`SD_MMC` 1-bit `EXIO3=High-Z` $\rightarrow$ `EXIO3=LOW` $\rightarrow$ `SD` SPI) |
 | **BOOT Button** | `BOOT_SWITCH` | `GPIO 0` | **ESP32 Input** | **Long-Press ($\ge 1.5\text{ s}$):** Capture full-screen BMP screenshot to storage |
 
 ---
 
-## 5. FreeRTOS Dual-Core Architecture
+## 5. FreeRTOS Dual-Core & Dual-Bus Architecture
+
+* **Portable Core Modules (`src/`):** [`src/matrix_math/matrix_math.h`](src/matrix_math/matrix_math.h) and [`src/sensor_fusion/ahrs_9dof.{h,cpp}`](src/sensor_fusion/ahrs_9dof.cpp) (`0` app dependencies) + [`src/lvgl_port/`](src/lvgl_port) (`11` UI modules `<= 764 L`).
 
 ```mermaid
 flowchart TD
@@ -174,17 +184,16 @@ flowchart TD
         RTCM_FWD --> COM1_TX["UM982 COM1 UART1 TX (IO18 @ 115200, Mutex)"]
         COM1_RX["UM982 COM1 UART1 RX (IO17 @ 115200)"] --> NMEA_PARSE["NMEA, UNIHEADINGA & BASEINFOA Demux\n(GPGGA, GPRMC, GPGST, GPGSV, GNGGAH, BASEINFOA)"]
         NMEA_PARSE --> KINEMATICS["3D Lever-Arm & Ground Tip Kinematics\n(Midpoint 27.75cm, Height 1.80m)"]
-        KINEMATICS --> NAV_ENGINE["Geodesic Nav Engine\n(Range, Bearing, Offsets)"]
+        KINEMATICS --> NAV_ENGINE["Geodesic Nav Engine\n(beam_9dof + CAL MAG + Iron Gatekeeper)"]
         NAV_ENGINE --> QUEUE["roverStateQueue (xQueueOverwrite)"]
     end
 
-    subgraph Core1["Core 1: Real-Time Audio, UI Rendering & Background Storage (Priorities 4, 3, 2, 1)"]
-        AUDIO_QUEUE["beepQueue (FreeRTOS Queue)"] --> CODEC["RoverAudio Task (Priority 4)\n<1ms ES8311 I2S Tone Synthesizer"]
-        QUEUE --> UI_UPDATE["RoverUI Task (Priority 2)\nupdate_rover_ui() & Proximity Geiger"]
-        I2C_POLL["Shared I2C0 Bus Driver (400 kHz, 18-clk Bus Clear)\n• Touch AXS15231B (30 Hz)\n• IMU QMI8658 12-byte burst (10-50 Hz)\n• RTC PCF85063 (1 Hz)\n• PMIC AXP2101 (0.5 Hz)"]
-        UI_UPDATE --> LVGL["lvgl_port_task (Priority 3)\nLVGL 9 QSPI Refresh & 0ms Same-Frame Callbacks"]
+    subgraph Core1["Core 1: Real-Time Audio, UI Rendering & Dual-Bus I2C (Priorities 4, 3, 2, 1)"]
+        AUDIO_QUEUE["beepQueue (FreeRTOS Queue)"] --> CODEC["RoverAudio Task (Priority 4)\n<1ms ES8311 L/R Chirps & Geiger"]
+        QUEUE --> UI_UPDATE["RoverUI Task (Priority 2)\nAuto-Off Guard, CAL MAG & Screenshots"]
+        I2C_POLL["I2C0 (IO7/8): Touch/IMU/RTC/AXP/ES8311\nI2C1 (IO47/48): Isolated SEN0696 10DOF 25-30Hz"] --> UI_UPDATE
+        UI_UPDATE --> LVGL["lvgl_port_task (Priority 3)\n6-Tile PSRAM LVGL 9 QSPI Refresh"]
         SETTINGS["loopTask (Priority 1)\n5s Debounced Settings & Smart FFat Skip\nLossless SD Serial/NMEA/RTCM Log Flush"] --> STORAGE["MicroSD Card / FFat Mirror"]
-        SCREENSHOT["Screenshot Engine (GPIO 0 Long-Press)"] --> BMP_OUT["BMP Generator -> /screenshots/"]
     end
 ```
 
@@ -218,6 +227,12 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
   "brightness": 80,
   "volume": 40,
   "is_muted": false,
+  "auto_shutdown_battery_min": 5,
+  "beam_imu_orient_mode": 4,
+  "mag_ellipsoid_cal_valid": false,
+  "rtcm_source_mode": "AUTO",
+  "ntrip_host": "rtk2go.com",
+  "ntrip_port": 2101,
   "wifi_ssid": "YourWiFiSSID",
   "wifi_password": "YourWiFiPassword",
   "enable_serial_logging": true,

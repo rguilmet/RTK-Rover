@@ -142,8 +142,18 @@ typedef enum {
     HDG_SRC_GYRO,        // 4: IMU Gyroscope dead-reckoning hold during pauses (< 60s)
     HDG_SRC_COG,         // 5: Kinematic Course-Over-Ground from walking motion (> 0.4 m/s)
     HDG_SRC_HOLD,        // 6: Stationary hold of last valid heading (< 0.2 m/s)
-    HDG_SRC_COMP         // 7: 9-DOF Tilt-Compensated MMC5983MA + QMI8658 Compass Fusion
+    HDG_SRC_COMP         // 7: 9-DOF Tilt-Compensated Beam (SEN0696) or MMC5983MA Compass Fusion
 } HeadingSource_t;
+
+// =========================================================================
+// 360-Degree Ellipsoid Magnetometer Calibration State (Tile 3 CAL MAG)
+// =========================================================================
+typedef enum {
+    MAG_CAL_IDLE       = 0,
+    MAG_CAL_COLLECTING = 1,
+    MAG_CAL_SUCCESS    = 2,
+    MAG_CAL_FAILED     = 3
+} MagCalStatus_t;
 
 // =========================================================================
 // Master Rover State Snapshot (Passed via FreeRTOS Queue to UI at 30Hz)
@@ -220,16 +230,35 @@ typedef struct {
     float            imu_acc[3];         // Accel X, Y, Z (g)
     float            imu_gyr[3];         // Gyro X, Y, Z (deg/s)
 
-    // 3-Axis AMR Magnetometer / 9-DOF Compass (SparkFun MMC5983MA @ 0x30, Auto-Detected)
-    bool             mag_present;        // True if MMC5983MA (0x30, Reg 0x2F == 0x30) detected at boot
+    // 3-Axis AMR Magnetometer / 9-DOF Compass (Beam SEN0696 @ I2C1 0x4A or Legacy MMC5983MA @ 0x30)
+    bool             mag_present;        // True if SEN0696 or MMC5983MA detected at boot
     bool             mag_cal_valid;      // True once True-North tare learned from UM982 HDG FIX or settings.json
-    bool             mag_anomaly;        // True if |B| deviates > 3.5 uT from ambient reference (iron pipe/fence)
-    float            mag_uT[3];          // SET/RESET bridge-offset-cancelled Bx, By, Bz (uT)
+    bool             mag_anomaly;        // True if |B|, Bz, or gyro-mag innovation trips iron anomaly gatekeeper
+    float            mag_uT[3];          // Calibrated Bx, By, Bz (uT)
     float            mag_total_uT;       // Total magnetic field magnitude ||B|| (uT)
     float            mag_heading_deg;    // Tilt-compensated True-North magnetic heading (0..360 deg)
     float            mag_tare_offset_deg;// Learned True-North tare offset (absorbs declination + mounting angle)
     float            mag_die_temp_c;     // MMC5983MA internal die temperature (deg C)
     uint32_t         mag_set_reset_count;// Number of hardware SET/RESET degaussing pulses executed
+
+    // Beam 10DOF IMU, BMP581 Barometer, 3D Ellipsoid Calibration & I2C Bus Diagnostics (v0.9.0)
+    bool             beam_10dof_present;     // True if SEN0696 detected on I2C1 (preferred) or I2C0 fallback
+    bool             beam_10dof_valid;       // True while SEN0696 poll stream is actively healthy
+    uint8_t          beam_10dof_bus;         // Active bus (1 = isolated I2C1 IO47/48, 0 = shared I2C0 IO7/8)
+    uint8_t          beam_10dof_addr;        // Detected 7-bit address (0x4A..0x4D)
+    bool             beam_gyro_foc_locked;   // True once 50-sample stationary accel-var gyro FOC locked
+    float            beam_pitch_deg;         // Gated 3D beam pitch angle (deg)
+    float            beam_roll_deg;          // Gated 3D beam roll angle (deg)
+    float            beam_pressure_hpa;      // BMP581 barometric pressure (hPa)
+    float            beam_baro_rel_elev_m;   // RTK_FIX-disciplined barometric elevation estimate (m)
+    bool             beam_baro_bias_valid;   // True once RTK_FIX disciplined QNH/baro elevation bias
+    bool             mag_ellipsoid_cal_valid;// True when 360-deg hard/soft-iron ellipsoid fit is active
+    uint8_t          mag_cal_status;         // MagCalStatus_t
+    uint8_t          mag_cal_progress_pct;   // 0..100% live 12-sector spin coverage progress
+    uint16_t         mag_cal_samples;        // Spatially-thinned calibration points captured
+    float            mag_cal_rms_pct;        // Post-fit spherical residual RMS (%)
+    uint32_t         i2c0_err_count;         // Total error recoveries on I2C0
+    uint32_t         i2c1_err_count;         // Total error recoveries on I2C1
 
     // Power & Battery (AXP2101)
     float            battery_voltage;
@@ -258,6 +287,8 @@ typedef struct {
 // =========================================================================
 void trigger_survey_waypoint_log(void);
 void trigger_tare_pole_level(void);
+void trigger_mag_cal_start_or_finish(void);
+void trigger_mag_cal_cancel(void);
 void request_e220_config_read(void);
 void request_e220_config_write(void);
 void send_um982_com1_command(const char *cmd);

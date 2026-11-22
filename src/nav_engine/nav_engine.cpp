@@ -36,13 +36,17 @@ extern "C" void nav_compute_pole_tip_position(double master_lat,
     double tip_lon = master_lon;
     double tip_alt = master_alt_m - (double)current_settings.antenna_height_m;
 
-    // Apply Master->Pole-Center lever-arm correction strictly when dual-antenna carrier phase heading is active.
-    // Fallback headings (COG/HOLD/DISP/GYRO/COMP) do NOT know the 555mm beam orientation relative to the body
-    // and would inject up to 27.75 cm horizontal error if projected along motion/magnetic azimuth.
+    // Apply Master->Pole-Center lever-arm correction when dual-antenna carrier phase heading is active,
+    // or when opt-in calibrated rigid-beam 9-DOF compass lock is explicitly qualified.
     bool dual_antenna_locked = heading_valid &&
                                (heading_source == HDG_SRC_DUAL_FIX ||
                                 heading_source == HDG_SRC_DUAL_FLT);
-    if (current_settings.apply_lever_arm && dual_antenna_locked && fabs(master_lat) > 0.0001) {
+    bool calibrated_beam_locked = current_settings.apply_lever_arm_on_calibrated_beam &&
+                                  heading_valid &&
+                                  (heading_source == HDG_SRC_COMP) &&
+                                  current_settings.mag_cal_valid &&
+                                  current_settings.mag_ellipsoid_cal_valid;
+    if (current_settings.apply_lever_arm && (dual_antenna_locked || calibrated_beam_locked) && fabs(master_lat) > 0.0001) {
         double half_baseline_m = (double)current_settings.antenna_spacing_m * 0.5;
         double az_rad    = (double)(true_heading_deg + current_settings.baseline_mount_offset_deg) * DEG_TO_RAD;
         double pitch_rad = (double)baseline_pitch_deg * DEG_TO_RAD;
@@ -434,6 +438,12 @@ static uint32_t s_last_update_ms   = 0;
 static uint32_t s_last_disp_ms     = 0;
 static uint32_t s_last_tare_save_ms= 0;
 static float    s_last_saved_tare  = -999.0f;
+static float    s_prev_mag_raw_hdg = 0.0f;
+static bool     s_has_prev_mag     = false;
+static float    s_innov_deg        = 0.0f;
+static uint32_t s_innov_bad_since_ms = 0;
+static bool     s_anom_latched     = false;
+static uint32_t s_clean_since_ms   = 0;
 
 static float wrap_angle_180(float deg)
 {
@@ -451,11 +461,239 @@ static float wrap_angle_360(float deg)
 
 extern "C" void nav_heading_displacement_reset(void)
 {
-    s_has_anchor     = false;
-    s_fused_valid    = false;
-    s_fused_src      = HDG_SRC_NONE;
-    s_last_update_ms = 0;
-    s_last_disp_ms   = 0;
+    s_has_anchor         = false;
+    s_fused_valid        = false;
+    s_fused_src          = HDG_SRC_NONE;
+    s_last_update_ms     = 0;
+    s_last_disp_ms       = 0;
+    s_has_prev_mag       = false;
+    s_innov_deg          = 0.0f;
+    s_innov_bad_since_ms = 0;
+    s_anom_latched       = false;
+    s_clean_since_ms     = 0;
+}
+
+extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
+                                        bool *heading_valid_out,
+                                        float *true_heading_out,
+                                        HeadingSource_t *heading_src_out,
+                                        float *disp_dist_out,
+                                        float *mag_true_heading_out,
+                                        bool *mag_anomaly_out)
+{
+    if (!in) {
+        return;
+    }
+
+    float dt_s = (s_last_update_ms > 0 && in->now_ms >= s_last_update_ms)
+                 ? ((float)(in->now_ms - s_last_update_ms) / 1000.0f)
+                 : 0.033f;
+    s_last_update_ms = in->now_ms;
+
+    bool  mag_anomaly  = false;
+    float mag_true_hdg = 0.0f;
+
+    // 1. Evaluate Triple-Condition Iron Anomaly Gatekeeper & True-North Online Teacher
+    if (in->mag_present && in->mag_valid) {
+        bool plausible_earth = (in->mag_total_uT >= 25.0f && in->mag_total_uT <= 75.0f);
+        float ref_uT = (current_settings.mag_field_ref_uT > 10.0f) ? current_settings.mag_field_ref_uT : 52.5f;
+        bool mag_spike = (!plausible_earth) ||
+                         (current_settings.mag_cal_valid && fabsf(in->mag_total_uT - ref_uT) > 3.5f);
+
+        bool bz_spike = (in->has_bz_world &&
+                         current_settings.mag_cal_valid &&
+                         fabsf(current_settings.mag_bz_ref_uT) > 5.0f &&
+                         fabsf(in->mag_bz_world_uT - current_settings.mag_bz_ref_uT) > 3.0f);
+
+        bool innov_trip = false;
+        if (s_has_prev_mag && dt_s > 0.0f && dt_s < 0.5f && plausible_earth) {
+            float d_mag = wrap_angle_180(in->raw_mag_heading_deg - s_prev_mag_raw_hdg);
+            float d_gyr = in->yaw_rate_cw_dps * dt_s;
+            float innov_step = wrap_angle_180(d_mag - d_gyr);
+            s_innov_deg = s_innov_deg * 0.88f + innov_step;
+            if (s_innov_deg > 90.0f)  s_innov_deg = 90.0f;
+            if (s_innov_deg < -90.0f) s_innov_deg = -90.0f;
+            if (fabsf(s_innov_deg) > 4.0f) {
+                if (s_innov_bad_since_ms == 0) {
+                    s_innov_bad_since_ms = in->now_ms;
+                }
+                innov_trip = ((in->now_ms - s_innov_bad_since_ms) >= 200U);
+            } else {
+                s_innov_bad_since_ms = 0;
+            }
+        } else {
+            s_innov_bad_since_ms = 0;
+        }
+        s_prev_mag_raw_hdg = in->raw_mag_heading_deg;
+        s_has_prev_mag     = true;
+
+        bool raw_anom = (mag_spike || bz_spike || innov_trip);
+        if (raw_anom) {
+            s_anom_latched   = true;
+            s_clean_since_ms = 0;
+        } else if (s_anom_latched) {
+            if (s_clean_since_ms == 0) {
+                s_clean_since_ms = in->now_ms;
+            } else if ((in->now_ms - s_clean_since_ms) >= 500U) {
+                s_anom_latched = false;
+                s_innov_deg    = 0.0f;
+            }
+        }
+        mag_anomaly = s_anom_latched;
+
+        // Continuous True-North Auto-Calibration whenever UM982 has Integer Dual-Antenna HDG FIX
+        if (in->dual_antenna_valid && in->dual_antenna_fixed &&
+            plausible_earth && !mag_spike && in->pole_tilt_deg < 15.0f) {
+            float measured_offset = wrap_angle_180(in->dual_heading_deg - in->raw_mag_heading_deg);
+            if (!current_settings.mag_cal_valid) {
+                current_settings.mag_true_north_offset_deg = measured_offset;
+                current_settings.mag_field_ref_uT          = in->mag_total_uT;
+                if (in->has_bz_world) {
+                    current_settings.mag_bz_ref_uT = in->mag_bz_world_uT;
+                }
+                if (in->is_beam_10dof && fabsf(in->um982_baseline_pitch_deg) < 25.0f) {
+                    current_settings.beam_pitch_tare_deg = in->beam_pitch_deg - in->um982_baseline_pitch_deg;
+                }
+                current_settings.mag_cal_valid = true;
+                s_last_saved_tare              = measured_offset;
+                s_last_tare_save_ms            = in->now_ms;
+                mark_settings_dirty();
+            } else {
+                float err_deg = wrap_angle_180(measured_offset - current_settings.mag_true_north_offset_deg);
+                // Reject sudden magnetic spikes (>15 deg jump in a single epoch) during auto-tare
+                if (fabsf(err_deg) < 15.0f && !raw_anom) {
+                    current_settings.mag_true_north_offset_deg =
+                        wrap_angle_180(current_settings.mag_true_north_offset_deg + 0.05f * err_deg);
+                    current_settings.mag_field_ref_uT =
+                        0.95f * current_settings.mag_field_ref_uT + 0.05f * in->mag_total_uT;
+                    if (in->has_bz_world) {
+                        if (fabsf(current_settings.mag_bz_ref_uT) < 1.0f) {
+                            current_settings.mag_bz_ref_uT = in->mag_bz_world_uT;
+                        } else {
+                            current_settings.mag_bz_ref_uT =
+                                0.95f * current_settings.mag_bz_ref_uT + 0.05f * in->mag_bz_world_uT;
+                        }
+                    }
+                    if (in->is_beam_10dof && fabsf(in->um982_baseline_pitch_deg) < 25.0f) {
+                        float pitch_err = in->beam_pitch_deg - in->um982_baseline_pitch_deg;
+                        current_settings.beam_pitch_tare_deg =
+                            0.95f * current_settings.beam_pitch_tare_deg + 0.05f * pitch_err;
+                    }
+
+                    if (fabsf(wrap_angle_180(current_settings.mag_true_north_offset_deg - s_last_saved_tare)) >= 0.5f &&
+                        (in->now_ms - s_last_tare_save_ms >= 60000U)) {
+                        s_last_saved_tare   = current_settings.mag_true_north_offset_deg;
+                        s_last_tare_save_ms = in->now_ms;
+                        mark_settings_dirty();
+                    }
+                }
+            }
+        }
+
+        mag_true_hdg = wrap_angle_360(in->raw_mag_heading_deg + current_settings.mag_true_north_offset_deg);
+    } else {
+        s_has_prev_mag       = false;
+        s_innov_deg          = 0.0f;
+        s_innov_bad_since_ms = 0;
+        s_anom_latched       = false;
+        s_clean_since_ms     = 0;
+    }
+
+    if (mag_true_heading_out) *mag_true_heading_out = mag_true_hdg;
+    if (mag_anomaly_out)      *mag_anomaly_out      = mag_anomaly;
+
+    // 2. Tier 1: Dual-Antenna Primary Source Available (HDG_SRC_DUAL_FIX / HDG_SRC_DUAL_FLT)
+    // Clear s_last_disp_ms = 0 so SLV dropouts switch instantaneously (0.0 s) to [CMP] instead of stale WALK hold.
+    if (in->dual_antenna_valid) {
+        s_anchor_lat         = in->tip_lat;
+        s_anchor_lon         = in->tip_lon;
+        s_has_anchor         = true;
+        s_fused_heading      = in->dual_heading_deg;
+        s_fused_valid        = true;
+        s_fused_src          = in->dual_antenna_fixed ? HDG_SRC_DUAL_FIX : HDG_SRC_DUAL_FLT;
+        s_last_disp_ms       = 0;
+        s_innov_deg          = 0.0f;
+        s_innov_bad_since_ms = 0;
+
+        if (heading_valid_out) *heading_valid_out = true;
+        if (true_heading_out)  *true_heading_out  = in->dual_heading_deg;
+        if (heading_src_out)   *heading_src_out   = s_fused_src;
+        if (disp_dist_out)     *disp_dist_out     = 0.0f;
+        return;
+    }
+
+    // 3. Tier 2..4: Woods Fallback (Slave Antenna lock lost under canopy)
+    if (!s_has_anchor || s_anchor_lat == 0.0 || s_anchor_lon == 0.0) {
+        s_anchor_lat   = in->tip_lat;
+        s_anchor_lon   = in->tip_lon;
+        s_has_anchor   = (in->tip_lat != 0.0 && in->tip_lon != 0.0);
+        s_last_disp_ms = 0;
+    }
+
+    // Compute displacement distance and geodetic delta from anchor
+    double lat1 = s_anchor_lat * DEG_TO_RAD;
+    double lat2 = in->tip_lat * DEG_TO_RAD;
+    double lon1 = s_anchor_lon * DEG_TO_RAD;
+    double lon2 = in->tip_lon * DEG_TO_RAD;
+    double r_m = WGS84_A, r_n = WGS84_A;
+    wgs84_radii((lat1 + lat2) * 0.5, &r_m, &r_n);
+    double dn = (lat2 - lat1) * r_m;
+    double de = (lon2 - lon1) * r_n * cos((lat1 + lat2) * 0.5);
+    double dist_m = sqrt(dn * dn + de * de);
+
+    // Displacement trigger: Moving >= 0.70m (~2 to 3 paces)
+    if (dist_m >= 0.70) {
+        double az_rad = atan2(de, dn);
+        double az_deg = az_rad * (180.0 / M_PI);
+        if (az_deg < 0.0) az_deg += 360.0;
+
+        s_fused_heading = (float)az_deg;
+        s_fused_valid   = true;
+        s_fused_src     = HDG_SRC_DISP;
+        s_last_disp_ms  = in->now_ms;
+
+        s_anchor_lat = in->tip_lat;
+        s_anchor_lon = in->tip_lon;
+        dist_m = 0.0;
+    } else {
+        bool in_walk_window = (s_fused_valid && s_last_disp_ms > 0 && (in->now_ms - s_last_disp_ms <= 3000U));
+        float rot_thresh_dps = in->is_beam_10dof ? 1.0f : 1.5f;
+        bool is_rotating = (fabsf(in->yaw_rate_cw_dps) >= rot_thresh_dps);
+
+        if (in_walk_window) {
+            s_fused_src = HDG_SRC_DISP;
+        } else if (in->mag_present && in->mag_valid && !mag_anomaly) {
+            // Tier 3: 9-DOF Tilt-Compensated Beam (SEN0696) or MMC5983MA Compass + Gyro Fusion
+            if (!s_fused_valid) {
+                s_fused_heading = mag_true_hdg;
+                s_fused_valid   = true;
+            } else {
+                float pred = s_fused_heading;
+                float comp_thresh = in->is_beam_10dof ? 0.25f : 1.5f;
+                if (fabsf(in->yaw_rate_cw_dps) >= comp_thresh && dt_s > 0.0f && dt_s < 0.5f) {
+                    pred = wrap_angle_360(pred + in->yaw_rate_cw_dps * dt_s);
+                }
+                float mag_err = wrap_angle_180(mag_true_hdg - pred);
+                s_fused_heading = wrap_angle_360(pred + 0.05f * mag_err);
+            }
+            s_fused_src = HDG_SRC_COMP;
+        } else if (s_fused_valid) {
+            // Tier 4: 6-DOF Gyro / Hold Fallback (when magnetometer absent or during iron anomaly)
+            if (is_rotating) {
+                if (dt_s > 0.0f && dt_s < 0.5f) {
+                    s_fused_heading = wrap_angle_360(s_fused_heading + in->yaw_rate_cw_dps * dt_s);
+                }
+                s_fused_src = HDG_SRC_GYRO;
+            } else {
+                s_fused_src = HDG_SRC_HOLD;
+            }
+        }
+    }
+
+    if (heading_valid_out) *heading_valid_out = s_fused_valid;
+    if (true_heading_out)  *true_heading_out  = s_fused_heading;
+    if (heading_src_out)   *heading_src_out   = s_fused_src;
+    if (disp_dist_out)     *disp_dist_out     = (float)dist_m;
 }
 
 extern "C" void nav_heading_9dof_update(double tip_lat,
@@ -477,143 +715,22 @@ extern "C" void nav_heading_9dof_update(double tip_lat,
                                         float *mag_true_heading_out,
                                         bool *mag_anomaly_out)
 {
-    bool  mag_anomaly  = false;
-    float mag_true_hdg = 0.0f;
+    NavHeadingSensorInput_t in = {};
+    in.tip_lat             = tip_lat;
+    in.tip_lon             = tip_lon;
+    in.yaw_rate_cw_dps     = gyr_z_dps;
+    in.pole_tilt_deg       = pole_tilt_deg;
+    in.mag_present         = mag_present;
+    in.mag_valid           = mag_valid;
+    in.raw_mag_heading_deg = raw_mag_heading_deg;
+    in.mag_total_uT        = mag_total_uT;
+    in.now_ms              = now_ms;
+    in.dual_antenna_valid  = dual_antenna_valid;
+    in.dual_antenna_fixed  = dual_antenna_fixed;
+    in.dual_heading_deg    = dual_heading_deg;
 
-    // 1. Evaluate Magnetometer Iron-Pipe / Steel Anomaly & True-North Tare Alignment
-    if (mag_present && mag_valid) {
-        bool plausible_earth_field = (mag_total_uT >= 25.0f && mag_total_uT <= 75.0f);
-        float ref_uT = (current_settings.mag_field_ref_uT > 10.0f) ? current_settings.mag_field_ref_uT : 52.5f;
-        bool field_spike = (current_settings.mag_cal_valid && fabsf(mag_total_uT - ref_uT) > 3.5f);
-        mag_anomaly = (!plausible_earth_field || field_spike);
-
-        // Continuous True-North Auto-Calibration whenever UM982 has Integer Dual-Antenna HDG FIX
-        if (dual_antenna_valid && dual_antenna_fixed && plausible_earth_field && pole_tilt_deg < 15.0f) {
-            float measured_offset = wrap_angle_180(dual_heading_deg - raw_mag_heading_deg);
-            if (!current_settings.mag_cal_valid) {
-                current_settings.mag_true_north_offset_deg = measured_offset;
-                current_settings.mag_field_ref_uT          = mag_total_uT;
-                current_settings.mag_cal_valid             = true;
-                s_last_saved_tare                          = measured_offset;
-                s_last_tare_save_ms                        = now_ms;
-                mark_settings_dirty();
-            } else {
-                float err_deg = wrap_angle_180(measured_offset - current_settings.mag_true_north_offset_deg);
-                // Reject sudden magnetic spikes (>15 deg jump in a single epoch) during auto-tare
-                if (fabsf(err_deg) < 15.0f && !field_spike) {
-                    current_settings.mag_true_north_offset_deg =
-                        wrap_angle_180(current_settings.mag_true_north_offset_deg + 0.05f * err_deg);
-                    current_settings.mag_field_ref_uT =
-                        0.95f * current_settings.mag_field_ref_uT + 0.05f * mag_total_uT;
-
-                    if (fabsf(wrap_angle_180(current_settings.mag_true_north_offset_deg - s_last_saved_tare)) >= 0.5f &&
-                        (now_ms - s_last_tare_save_ms >= 60000)) {
-                        s_last_saved_tare   = current_settings.mag_true_north_offset_deg;
-                        s_last_tare_save_ms = now_ms;
-                        mark_settings_dirty();
-                    }
-                }
-            }
-        }
-
-        mag_true_hdg = wrap_angle_360(raw_mag_heading_deg + current_settings.mag_true_north_offset_deg);
-    }
-
-    if (mag_true_heading_out) *mag_true_heading_out = mag_true_hdg;
-    if (mag_anomaly_out)      *mag_anomaly_out      = mag_anomaly;
-
-    // 2. Tier 1: Dual-Antenna Primary Source Available (HDG_SRC_DUAL_FIX / HDG_SRC_DUAL_FLT)
-    if (dual_antenna_valid) {
-        s_anchor_lat     = tip_lat;
-        s_anchor_lon     = tip_lon;
-        s_has_anchor     = true;
-        s_fused_heading  = dual_heading_deg;
-        s_fused_valid    = true;
-        s_fused_src      = dual_antenna_fixed ? HDG_SRC_DUAL_FIX : HDG_SRC_DUAL_FLT;
-        s_last_update_ms = now_ms;
-        s_last_disp_ms   = now_ms;
-
-        if (heading_valid_out) *heading_valid_out = true;
-        if (true_heading_out)  *true_heading_out  = dual_heading_deg;
-        if (heading_src_out)   *heading_src_out   = s_fused_src;
-        if (disp_dist_out)     *disp_dist_out     = 0.0f;
-        return;
-    }
-
-    // 3. Tier 2..4: Woods Fallback (Slave Antenna lock lost under canopy)
-    if (!s_has_anchor || s_anchor_lat == 0.0 || s_anchor_lon == 0.0) {
-        s_anchor_lat     = tip_lat;
-        s_anchor_lon     = tip_lon;
-        s_has_anchor     = (tip_lat != 0.0 && tip_lon != 0.0);
-        s_last_update_ms = now_ms;
-        s_last_disp_ms   = now_ms;
-    }
-
-    // Compute displacement distance and geodetic delta from anchor
-    double lat1 = s_anchor_lat * DEG_TO_RAD;
-    double lat2 = tip_lat * DEG_TO_RAD;
-    double lon1 = s_anchor_lon * DEG_TO_RAD;
-    double lon2 = tip_lon * DEG_TO_RAD;
-    double r_m = WGS84_A, r_n = WGS84_A;
-    wgs84_radii((lat1 + lat2) * 0.5, &r_m, &r_n);
-    double dn = (lat2 - lat1) * r_m;
-    double de = (lon2 - lon1) * r_n * cos((lat1 + lat2) * 0.5);
-    double dist_m = sqrt(dn * dn + de * de);
-
-    float dt_s = (s_last_update_ms > 0 && now_ms >= s_last_update_ms) ? (float)(now_ms - s_last_update_ms) / 1000.0f : 0.033f;
-    s_last_update_ms = now_ms;
-
-    // Displacement trigger: Moving >= 0.70m (~2 to 3 paces)
-    if (dist_m >= 0.70) {
-        double az_rad = atan2(de, dn);
-        double az_deg = az_rad * (180.0 / M_PI);
-        if (az_deg < 0.0) az_deg += 360.0;
-
-        s_fused_heading = (float)az_deg;
-        s_fused_valid   = true;
-        s_fused_src     = HDG_SRC_DISP;
-        s_last_disp_ms  = now_ms;
-
-        s_anchor_lat = tip_lat;
-        s_anchor_lon = tip_lon;
-        dist_m = 0.0;
-    } else {
-        bool in_walk_window = (s_fused_valid && s_last_disp_ms > 0 && (now_ms - s_last_disp_ms <= 3000));
-        bool is_rotating    = (fabsf(gyr_z_dps) >= 1.5f);
-
-        if (in_walk_window) {
-            s_fused_src = HDG_SRC_DISP;
-        } else if (mag_present && mag_valid && !mag_anomaly) {
-            // Tier 3: 9-DOF Tilt-Compensated MMC5983MA Compass + QMI8658 Gyro Complementary Filter
-            if (!s_fused_valid) {
-                s_fused_heading = mag_true_hdg;
-                s_fused_valid   = true;
-            } else {
-                float pred = s_fused_heading;
-                if (is_rotating && dt_s > 0.0f && dt_s < 0.5f) {
-                    pred = wrap_angle_360(pred + gyr_z_dps * dt_s);
-                }
-                float mag_err = wrap_angle_180(mag_true_hdg - pred);
-                s_fused_heading = wrap_angle_360(pred + 0.04f * mag_err);
-            }
-            s_fused_src = HDG_SRC_COMP;
-        } else if (s_fused_valid) {
-            // Tier 4: 6-DOF Gyro / Hold Fallback (when MMC5983MA not installed or during iron anomaly)
-            if (is_rotating) {
-                if (dt_s > 0.0f && dt_s < 0.5f) {
-                    s_fused_heading = wrap_angle_360(s_fused_heading + gyr_z_dps * dt_s);
-                }
-                s_fused_src = HDG_SRC_GYRO;
-            } else {
-                s_fused_src = HDG_SRC_HOLD;
-            }
-        }
-    }
-
-    if (heading_valid_out) *heading_valid_out = s_fused_valid;
-    if (true_heading_out)  *true_heading_out  = s_fused_heading;
-    if (heading_src_out)   *heading_src_out   = s_fused_src;
-    if (disp_dist_out)     *disp_dist_out     = (float)dist_m;
+    nav_heading_beam_update(&in, heading_valid_out, true_heading_out, heading_src_out,
+                            disp_dist_out, mag_true_heading_out, mag_anomaly_out);
 }
 
 extern "C" void nav_heading_displacement_update(double tip_lat,

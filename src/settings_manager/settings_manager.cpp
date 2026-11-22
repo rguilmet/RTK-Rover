@@ -4,6 +4,7 @@
 #include <SD_MMC.h>
 #include <SD.h>
 #include <FFat.h>
+#include <math.h>
 #include <string.h>
 
 extern bool sd_card_use_spi;
@@ -57,6 +58,13 @@ struct SystemSettings current_settings = {
     -14.2f,           // mag_true_north_offset_deg (Default WMM declination for ME/NH until UM982 HDG FIX tares it)
     52.5f,            // mag_field_ref_uT (Default ambient geomagnetic field magnitude in uT)
     false,            // mag_cal_valid (Set true automatically once UM982 HDG FIX calibrates compass)
+    4,                // beam_imu_orient_mode (4 = Face-Down 0 deg for inverted beam SEN0696 mount AccZ=-1g)
+    {0.0f, 0.0f, 0.0f}, // mag_hard_iron_uT
+    {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f}, // mag_soft_iron (identity)
+    false,            // mag_ellipsoid_cal_valid
+    0.0f,             // mag_bz_ref_uT
+    0.0f,             // beam_pitch_tare_deg
+    false,            // apply_lever_arm_on_calibrated_beam (conservative default until field-qualified)
     "AUTO",           // rtcm_source_mode ("AUTO", "LORA", or "NTRIP")
     "rtk2go.com",     // ntrip_host
     "3.14.70.106",    // ntrip_host_ip (fallback numeric host IP)
@@ -109,6 +117,13 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.mag_true_north_offset_deg == b.mag_true_north_offset_deg &&
            a.mag_field_ref_uT          == b.mag_field_ref_uT &&
            a.mag_cal_valid             == b.mag_cal_valid &&
+           a.beam_imu_orient_mode      == b.beam_imu_orient_mode &&
+           memcmp(a.mag_hard_iron_uT, b.mag_hard_iron_uT, sizeof(a.mag_hard_iron_uT)) == 0 &&
+           memcmp(a.mag_soft_iron, b.mag_soft_iron, sizeof(a.mag_soft_iron)) == 0 &&
+           a.mag_ellipsoid_cal_valid   == b.mag_ellipsoid_cal_valid &&
+           a.mag_bz_ref_uT             == b.mag_bz_ref_uT &&
+           a.beam_pitch_tare_deg       == b.beam_pitch_tare_deg &&
+           a.apply_lever_arm_on_calibrated_beam == b.apply_lever_arm_on_calibrated_beam &&
            strcmp(a.rtcm_source_mode, b.rtcm_source_mode) == 0 &&
            strcmp(a.ntrip_host,       b.ntrip_host)       == 0 &&
            strcmp(a.ntrip_host_ip,    b.ntrip_host_ip)    == 0 &&
@@ -462,6 +477,48 @@ extern "C" void load_settings(void) {
     if (!doc["mag_true_north_offset_deg"].isNull()) current_settings.mag_true_north_offset_deg = doc["mag_true_north_offset_deg"];
     if (!doc["mag_field_ref_uT"].isNull()) current_settings.mag_field_ref_uT = doc["mag_field_ref_uT"];
     if (!doc["mag_cal_valid"].isNull()) current_settings.mag_cal_valid = doc["mag_cal_valid"];
+    if (!doc["beam_imu_orient_mode"].isNull()) {
+        uint8_t mode = doc["beam_imu_orient_mode"];
+        if (mode < 8U) current_settings.beam_imu_orient_mode = mode;
+    }
+    if (doc["mag_hard_iron_uT"].is<JsonArrayConst>()) {
+        JsonArrayConst arr = doc["mag_hard_iron_uT"].as<JsonArrayConst>();
+        if (arr.size() >= 3U) {
+            float v[3] = {arr[0], arr[1], arr[2]};
+            if (isfinite(v[0]) && isfinite(v[1]) && isfinite(v[2]) &&
+                fabsf(v[0]) < 500.0f && fabsf(v[1]) < 500.0f && fabsf(v[2]) < 500.0f) {
+                memcpy(current_settings.mag_hard_iron_uT, v, sizeof(v));
+            }
+        }
+    }
+    if (doc["mag_soft_iron"].is<JsonArrayConst>()) {
+        JsonArrayConst arr = doc["mag_soft_iron"].as<JsonArrayConst>();
+        if (arr.size() >= 9U) {
+            float m[9];
+            bool ok_m = true;
+            for (int i = 0; i < 9; i++) {
+                m[i] = arr[i];
+                if (!isfinite(m[i]) || fabsf(m[i]) > 3.0f) {
+                    ok_m = false;
+                }
+            }
+            if (ok_m && m[0] >= 0.3f && m[4] >= 0.3f && m[8] >= 0.3f) {
+                memcpy(current_settings.mag_soft_iron, m, sizeof(m));
+            }
+        }
+    }
+    if (!doc["mag_ellipsoid_cal_valid"].isNull()) current_settings.mag_ellipsoid_cal_valid = doc["mag_ellipsoid_cal_valid"];
+    if (!doc["mag_bz_ref_uT"].isNull()) {
+        float bz = doc["mag_bz_ref_uT"];
+        if (isfinite(bz)) current_settings.mag_bz_ref_uT = bz;
+    }
+    if (!doc["beam_pitch_tare_deg"].isNull()) {
+        float bp = doc["beam_pitch_tare_deg"];
+        if (isfinite(bp)) current_settings.beam_pitch_tare_deg = bp;
+    }
+    if (!doc["apply_lever_arm_on_calibrated_beam"].isNull()) {
+        current_settings.apply_lever_arm_on_calibrated_beam = doc["apply_lever_arm_on_calibrated_beam"];
+    }
 
     apply_ntrip_fields_from_doc(doc, &current_settings);
     if (is_placeholder_ntrip_value(current_settings.ntrip_mountpoint) &&
@@ -573,6 +630,21 @@ extern "C" void save_settings(void) {
     doc["mag_true_north_offset_deg"] = current_settings.mag_true_north_offset_deg;
     doc["mag_field_ref_uT"]          = current_settings.mag_field_ref_uT;
     doc["mag_cal_valid"]             = current_settings.mag_cal_valid;
+    doc["beam_imu_orient_mode"]      = current_settings.beam_imu_orient_mode;
+    {
+        JsonArray hi = doc["mag_hard_iron_uT"].to<JsonArray>();
+        for (int i = 0; i < 3; i++) {
+            hi.add(current_settings.mag_hard_iron_uT[i]);
+        }
+        JsonArray si = doc["mag_soft_iron"].to<JsonArray>();
+        for (int i = 0; i < 9; i++) {
+            si.add(current_settings.mag_soft_iron[i]);
+        }
+    }
+    doc["mag_ellipsoid_cal_valid"]   = current_settings.mag_ellipsoid_cal_valid;
+    doc["mag_bz_ref_uT"]             = current_settings.mag_bz_ref_uT;
+    doc["beam_pitch_tare_deg"]       = current_settings.beam_pitch_tare_deg;
+    doc["apply_lever_arm_on_calibrated_beam"] = current_settings.apply_lever_arm_on_calibrated_beam;
     doc["rtcm_source_mode"]          = current_settings.rtcm_source_mode;
     doc["ntrip_host"]                = current_settings.ntrip_host;
     doc["ntrip_host_ip"]             = current_settings.ntrip_host_ip;

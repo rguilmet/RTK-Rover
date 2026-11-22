@@ -6,8 +6,8 @@ IO3,,,,LCD_DC,LCD_QSPI_IO2,,,,,,,,,
 IO4,,,,,LCD_QSPI_IO3,,,,,,,,,
 IO5,,,,LCD_SPI_SCLK,LCD_QSPI_SCLK,,,,,,,,,
 IO6,,,,LCD_BL,,,,,,,,,,
-IO7,26,ESP_SCL,TWI_CLK,TP_SCL,,,AU_SCL,RTC_SCL,IMU_SCL,AXP_SCL,,,10DOF_SCL,Shared I2C0 SCL (400kHz; 18-clock bus-clear)
-IO8,28,ESP_SDA,TWI_SDA,TP_SDA,,,AU_SDA,RTC_SDA,IMU_SDA,AXP_SDA,,,10DOF_SDA,Shared I2C0 SDA (400kHz;  Addr 0x30 auto-detected)
+IO7,26,ESP_SCL,TWI_CLK,TP_SCL,,,AU_SCL,RTC_SCL,IMU_SCL,AXP_SCL,,,,Shared I2C0 SCL (400kHz; 18-clock bus-clear; opt legacy MMC5983MA 0x30)
+IO8,28,ESP_SDA,TWI_SDA,TP_SDA,,,AU_SDA,RTC_SDA,IMU_SDA,AXP_SDA,,,,Shared I2C0 SDA (400kHz; opt legacy MMC5983MA 0x30 auto-detected)
 IO9,14,ESP_MISO,,,,SD_MISO,,,,,,,,
 IO10,12,ESP_MOSI,,,,SD_MOSI,,,,,,,,
 IO11,10,ESP_SCLK,,,,SD_SCLK,,,,,,,,
@@ -30,8 +30,8 @@ IO43,27,ESP_TXD,,,,,,,,,,,,Hardware UART0 TX (USB Serial)
 IO44,25,ESP_RXD,,,,,,,,,,,,Hardware UART0 RX (USB Serial)
 IO45,17,IO45,CAM_D0,,,,,,,,,,,Strapping: VDD_SPI @ Boot
 IO46,19,IO46,CAM_D3,,,,,,,,,,,Strapping: ROM MSG @ Boot
-IO47,21,IO47,CAM_D1,,,,,,,,,,,
-IO48,23,IO48,CAM_D2,,,,,,,,,,,
+IO47,21,IO47,CAM_D1,,,,,,,,,,10DOF_SDA,Isolated I2C1 SDA (400kHz; SEN0696 0x4A Gravity Green D/T; 4.7K pull-up to 3V3)
+IO48,23,IO48,CAM_D2,,,,,,,,,,10DOF_SCL,Isolated I2C1 SCL (400kHz; SEN0696 0x4A Gravity Blue C/R; 4.7K pull-up to 3V3)
 EXIO01,,,CAM_PWDN,,,,,,,,,,,Camera Power Down
 EXIO02,,,,LCD_RST,,,,,,,,,,LCD Hardware Reset
 EXIO03,,,,TP_INT,,,,,,,,,,Touch Panel Interrupt
@@ -41,11 +41,11 @@ EXIO06,,,,,,,,,,AXP_IRQ,,,,AXP2101 PMIC Interrupt
 EXIO07,,,,,,,PA_CTRL,,,SYS_OUT,,,,ES8311 PA Speaker Amp Enable & Power Latch
 RST,22,,,,,,,,,,,,,
 PWRON,24,,,,,,,,,,,,,
-VBAT,1,VBAT,,,,,,,,,5V,5V,,External 5V USB Rail (UM982 5V_IN + E220 VCC + ESP32 VBUS)
-5V,2,5V,,,,,,,,,GND,GND,,Common System Star Ground
-GND,3,GND,,,,,,,,,,,,
-GND,4,GND,,,,,,,,,,,,Regulated +3.3V DC (Qwiic Red Wire)
-GND,29,GND,,,,,,,,,,,,
-GND,30,GND,,,,,,,,,,,,
-3V3,31,3V3,,,,,,,,,,,,
-3V3,32,3V3,,,,,,,,,,,,
+VBAT,1,VBAT,,,,,,,,,,,,Power Module VBAT IN (Dark Red; Switched +5.00V boost feeds separate UM982 5V_IN & E220 VCC pairs)
+5V,2,5V,,,,,,,,,,,,USB-C VBUS +5V Rail ONLY (DO NOT tie MT3608 +5.00V boost output to Pin 2)
+GND,3,GND,,,,,,,,,,,,Common System Star Ground
+GND,4,GND,,,,,,,,,,,,Common System Star Ground
+GND,29,GND,,,,,,,,,,,,Power Module GND IN (Black; common star ground return)
+GND,30,GND,,,,,,,,,,,10DOF_GND,SEN0696 10DOF GND (Gravity Black wire)
+3V3,31,3V3,,,,,,,,,,,,Power Module 3V3_EN (Orange; R2 10K -> NPN base -> NDP6020P high-side gate)
+3V3,32,3V3,,,,,,,,,,,10DOF_3V3,Regulated +3.3V DC -> SEN0696 10DOF VCC (Gravity Red wire)

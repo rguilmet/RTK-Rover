@@ -1,9 +1,9 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.8.0`  
-**Firmware Version:** `v0.7.7`  
-**Last Updated:** November 7, 2026  
-**Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S  
+**Document Version:** `v1.9.0`  
+**Firmware Version:** `v0.9.0`  
+**Last Updated:** November 22, 2026  
+**Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S, DFRobot SEN0696 10-DOF Beam IMU  
 
 ---
 
@@ -11,16 +11,17 @@
 1. [Introduction & System Overview](#1-introduction--system-overview)
 2. [Hardware Setup & Power-On Procedure](#2-hardware-setup--power-on-procedure)
 3. [Persistent 4-Row Top Status Header Bar](#3-persistent-4-row-top-status-header-bar)
-4. [Tile 0: Pin Seeker & Tactical Guidance](#4-tile-0-pin-seeker--tactical-guidance)
-5. [Tile 1: Field Survey Logger & Quick Settings](#5-tile-1-field-survey-logger--quick-settings)
+4. [Tile 0: Pin Seeker & 3-Mode Tactical Guidance (Point / Line+Bullseye / Map)](#4-tile-0-pin-seeker--3-mode-tactical-guidance-point--linebullseye--map)
+5. [Tile 1: Dedicated Field Survey Logger](#5-tile-1-dedicated-field-survey-logger)
 6. [Tile 2: Multi-File Waypoint Browser & Selector](#6-tile-2-multi-file-waypoint-browser--selector)
-7. [Tile 3: Dual-Antenna Compass & Plumb Bubble Level](#7-tile-3-dual-antenna-compass--plumb-bubble-level)
-8. [Tile 4: Hardware Diagnostics & Live Observers](#8-tile-4-hardware-diagnostics--live-observers)
-9. [Hardware Screenshot Engine](#9-hardware-screenshot-engine)
-10. [Wireless Web File Portal & Field Maintenance](#10-wireless-web-file-portal--field-maintenance)
-11. [Configuration Reference (`settings.json`)](#11-configuration-reference-settingsjson)
-12. [Troubleshooting & Field Diagnostics FAQ](#12-troubleshooting--field-diagnostics-faq)
-13. [Bi-Directional LoRa Protocol & Base Station Integration](#13-bi-directional-lora-protocol--base-station-integration)
+7. [Tile 3: Dual-Antenna & Beam 9-DOF Compass, Plumb Bubble Level & CAL MAG](#7-tile-3-dual-antenna--beam-9-dof-compass-plumb-bubble-level--cal-mag)
+8. [Tile 4: Hardware Diagnostics & Live Dual-Bus (I2C0/I2C1) Observers](#8-tile-4-hardware-diagnostics--live-dual-bus-i2c0i2c1-observers)
+9. [Tile 5: Dedicated 5x3 Quick Settings Deck & Safe Auto-Off](#9-tile-5-dedicated-5x3-quick-settings-deck--safe-auto-off)
+10. [Hardware Screenshot Engine](#10-hardware-screenshot-engine)
+11. [Wireless Web File Portal & Field Maintenance](#11-wireless-web-file-portal--field-maintenance)
+12. [Configuration Reference (`settings.json`)](#12-configuration-reference-settingsjson)
+13. [Troubleshooting & Field Diagnostics FAQ](#13-troubleshooting--field-diagnostics-faq)
+14. [Bi-Directional LoRa Protocol & Base Station Integration](#14-bi-directional-lora-protocol--base-station-integration)
 
 ---
 
@@ -88,14 +89,14 @@ The **RTK Rover** is a dual-antenna, high-precision centimeter GNSS rover engine
 
 ## 3. Persistent 4-Row Top Status Header Bar
 
-The top 74 pixels of the display remain permanently visible across all 5 operational screens.
+The top 74 pixels of the display remain permanently visible across all 6 operational tiles (`[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> [Tile 2: Waypoints] <-> [Tile 3: Compass] <-> [Tile 4: Diag]`).
 
 ![Top Status Header Bar](docs/images/screenshot_header_bar.png)
 *Figure 1: Persistent 4-row status header bar showing system time, battery, ANT1 fix, ANT2 fix, and ground-tip coordinates.*
 
 ### Row 1: System Time, Power & Environment
 * **Date & Time:** Local calendar date (`YYYY-MM-DD`) and 24-hr time (`HH:MM:SS TZ`) computed from UTC using `minutesOffsetToUTC` and synchronized with GNSS atomic clocks.
-* **Units Badge:** `SI` (meters/centimeters) or `IMP` (feet/inches). Tap to toggle on Tile 1.
+* **Units Badge:** `SI` (meters/centimeters) or `IMP` (feet/inches). Tap `UNITS` on Tile 5 Quick Settings to toggle.
 * **Wi-Fi Indicator:** Compact icon-only symbol (`LV_SYMBOL_WIFI`) with distinct multi-state colors:
   * **Electric Cyan (`#22D3EE`):** Connected to local router (`STA`).
   * **Vivid Violet (`#A855F7`):** Access Point hotspot active (`AP`).
@@ -123,11 +124,12 @@ The top 74 pixels of the display remain permanently visible across all 5 operati
 
 ### Row 3: Slave Antenna (ANT2 - Heading) & Woods Fallback Metrics
 * **Heading Fix Badge:**
-  * `HDG FIX` (Bright Green `#00FF88`): Dual-antenna carrier-phase integer ambiguity resolved ($0.2^\circ$ accuracy).
+  * `HDG FIX` (Bright Green `#00FF88`): Dual-antenna carrier-phase integer ambiguity resolved (`0.2 deg` accuracy). Continuously teaches magnetic declination, `B_ref`, `Bz_ref`, and beam pitch tare.
   * `HDG FLT` (Yellow `#FFCC00`): Dual-antenna carrier-phase solution converging.
-  * `HDG WALK` / `WLK` (Cyan `#06B6D4`): Deep-woods kinematic displacement heading established from $\ge 0.70\text{ m}$ (2–3 paces) movement with 3.0s walk persistence filter. Velocity-independent.
-  * `HDG GYRO` / `GYR` (Blue `#3B82F6`): In-place pivot yaw integration ($|\omega_z| \ge 1.5^\circ/\text{s}$) when turning the pole.
-  * `HDG HLD` / `HLD` (Slate `#94A3B8`): Stationary zero-drift hold ($0.0^\circ/\text{s}$ drift) freezing heading when stationary.
+  * `HDG CMP` / `CMP` (Teal `#14B8A6`): Calibrated Beam 9-DOF AHRS (`SEN0696` `BMI323+BMM350` on `I2C1 GPIO 47/48`) or Tier-B `MMC5983MA` fallback, engaging immediately (`0.0 s` switchover) on Slave dropout.
+  * `HDG WALK` / `WLK` (Cyan `#06B6D4`): Deep-woods kinematic displacement heading established from `>= 0.70 m` (2-3 paces) movement with 3.0s walk persistence filter. Velocity-independent.
+  * `HDG GYRO` / `GYR` (Blue `#3B82F6`): In-place pivot yaw integration or bias-compensated gyro coasting during localized iron anomalies (`|B|`, `Bz`, or 200 ms gyro-mag mismatch).
+  * `HDG HLD` / `HLD` (Slate `#94A3B8`): Stationary zero-drift hold (`0.0 deg/s` drift) freezing heading when stationary.
   * `[OFF]` (Red `#EF4444`): External USB 5V rail disconnected.
   * `NO HDG` (Red `#FF4444`): Heading unavailable; prompts user to walk 2–3 paces to establish displacement azimuth.
 * **Slave Satellites:** Number of satellites tracked by secondary RF path (`SV: 26`).
@@ -189,37 +191,30 @@ When you close within $1.5\text{ m}$ of the target, the navigation engine automa
 
 Tile 0 features an interactive tri-state navigation badge in the top-left corner of the canvas. Tapping the badge cycles through three specialized navigation modes:
 ```
-[TACTICAL GUIDANCE] (Cyan) ──> [LINE STAKEOUT] (Amber) ──> [MAP VIEW] (Emerald Green) ──> [TACTICAL GUIDANCE]
+[POINT] (Cyan) -> [LINE STAKEOUT / LINE BULLSEYE] (Amber) -> [MAP VIEW] (Emerald Green) -> [POINT]
 ```
 
 ---
 
-### Line Stakeout Mode (Station & Offset)
+### Mode 1: Unified Line + Bullseye Stakeout (Primary Boundary Mode)
 
 ![Tile 0: Line Stakeout Mode](docs/images/screenshot_tile0_line_stakeout.png)
-*Figure 2C: Line Stakeout mode showing Point A to Point B deed baseline, perpendicular offset tie-line, stationing, and quadrant bearing.*
+*Figure 2C: Mode 1 Line Stakeout showing Point A to Point B deed baseline, perpendicular offset tie-line, stationing, and ASCII quadrant bearing.*
 
-When the mode badge is set to `LINE STAKEOUT` (Amber `#D97706`):
-* **Baseline Definition ($A \rightarrow B$):** Directs the surveyor along the boundary line between Point A (Station $0+00$) and Point B (Target).
-  * **Auto-Pairing:** By default, Point B is the actively selected target (`Index`), and Point A is the preceding waypoint (`Index - 1`, wrapping around to close parcels).
-  * **One-Tap Swap (`[ <-> SWAP ]`):** Tap the target row label (`A -> B [SWAP]`) to reverse the line direction instantly. This enables walking backwards along a boundary line with Station counting up in your walking direction and Left/Right cues matching your eyes.
-* **Decluttered Vector Canvas:**
-  * **Centerline Baseline:** An Electric Cyan vertical baseline ($x = 152$) runs from Point A at the bottom ($y = 185$) to Point B at the top ($y = 35$) with a directional traverse chevron at the top.
-  * **Pure Vector Geometry:** Text labels have been removed from the canvas surface to prevent visual overlap with buttons, steering cues, and notes. Point A and B identifiers scroll cleanly on the top marquee row.
-  * **Perpendicular Tie-Line:** A dynamic horizontal line drops perpendicularly from the Rover marker to the baseline, color-coded green when on-line and amber when off-line.
-  * **Live Rover Marker:** Placed at cross-track offset $x$ and along-track station $y$. Turns bright green when on the line ($\le 2\text{ cm}$), and amber with a heading beam when off-line.
+When the mode badge is set to Mode 1 (`LINE STAKEOUT` -> `LINE BULLSEYE`, Amber `#D97706`):
+* **Baseline Definition (`A -> B`):** Directs the surveyor along the boundary line between Point A (Station `0+00`) and Point B (Target).
+  * **Auto-Pairing & Clean Step Advance:** By default, Point B is the active target (`Index`), and Point A is `Index - 1` (wrapping around to close parcels). Stepping `< Prev` or `Next >` automatically clears `[SWAP]` pairing so `A -> B` advances to the new leg.
+  * **One-Tap Swap (`[<-> SWAP]`):** Tap the target row label (`A -> B [SWAP]`) to reverse line direction cleanly in place.
+* **Hysteresis Transition Around Target `B` (`5.0 m` / `16.4 ft`):**
+  * **Line-Up Phase (`> 5.0 m`, exit hysteresis `> 5.3 m`):** Shows the vertical baseline pulled inward (`y = 46..178 px`, horizontal clamp `[-104, +104] px` leaving `48 px` margins on both sides), perpendicular tie-line, compact distance/bearing cue to `B`, and **Line-Up heading arrow** rotated cleanly to `true_heading_deg - line_bearing_deg`. `t0_tgt_hdg_lbl` displays `Line: XXX.X deg`.
+  * **Bullseye Finish Phase (`< 4.8 m` acquisition chime -> `LINE BULLSEYE`):** Automatically transitions to centered concentric target rings (`5.0 m` outer / `1.5 m` inner, auto-zooming to `1.5 m / 0.5 m` inside `1.5 m`) **with the `A -> B` property chord overlay drawn straight through the target**, giving simultaneous pin range and line offset!
+* **Signed Directional `L/R` Audio (`ES8311`):**
+  * During Line-Up (`> 4.8 m`), left-of-line (`offset_m < -0.05 m`) plays a **rising chirp (`660 -> 1100 Hz`, steer RIGHT `>>>`)**, right-of-line plays a **falling chirp (`1100 -> 660 Hz`, steer LEFT `<<<`)**, and on-line (`<= 0.05 m`) plays a **steady `1800 Hz` pip**, speeding up from `1500 ms` to `250 ms` as you approach the line. Crossing inside `4.8 m` emits a `1400 -> 2000 Hz` acquisition chime and hands off to Bullseye proximity audio.
 * **Scaled 4-Row Readout Deck Below Canvas:**
-  * **Row 1 (Offset Magnitude & Direction - 16pt Bold):**
-    * `[OK] ON LINE (0.01 ft)`: Within $\pm 2\text{ cm}$ threshold (Bright Green `#00FF88`).
-    * `125.96 ft RIGHT`: Displaced right of deed line (Amber `#F59E0B`).
-    * `125.96 ft LEFT`: Displaced left of deed line (Amber `#F59E0B`).
-  * **Row 2 (Lateral Steer Prompt - 14pt):**
-    * `[OK] ON LINE - PROCEED ON BEARING`
-    * `<<< MOVE LEFT TO LINE`
-    * `MOVE RIGHT TO LINE >>>`
-  * **Row 3 (Longitudinal Progress - 12pt):** Formatted in standard surveying stationing: `Sta: 0+78.6 ft (26.8%) | Rem: 215.1 ft`.
-  * **Row 4 (Cadastral Deed Bearing - 12pt):** Formatted in surveying quadrant notation: `Deed: N 56°00'12" W (304.0 deg)`.
-* **Eyes-Free Line Audio Guidance:** In `AUD: GEIGER` mode, proximity audio tracks your perpendicular distance to the deed line. Clicks accelerate as you step toward the line, bursting into a solid $2,400\text{ Hz}$ confirmation tone when you stand within $2\text{ cm}$ of the line.
+  * **Row 1:** `[OK] ON LINE (0.01 ft)` green or `X.XX ft RIGHT` / `LEFT` amber (unsigned magnitude).
+  * **Row 2:** `<<< MOVE LEFT TO LINE` / `MOVE RIGHT TO LINE >>>` / `[OK] ON LINE - PROCEED ON BEARING`.
+  * **Row 3:** `Sta: 0+78.6 ft (26.8%) | Rem: 215.1 ft`.
+  * **Row 4:** Pure ASCII cadastral bearing (`Deed: N 56d00'12" W (304.0 deg)`).
 
 ---
 
@@ -254,82 +249,28 @@ When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
 
 ---
 
-## 5. Tile 1: Field Survey Logger & Quick Settings
+## 5. Tile 1: Dedicated Field Survey Logger
 
-Tile 1 provides tools for recording high-precision RTK averaged ground control points and accessing field system settings.
+Removing the Quick Settings buttons to Tile 5 gives Tile 1 (`ui_tile1_survey.c`) spacious controls optimized for tough field monument logging:
 
-![Tile 1: Field Survey Logger and Quick Settings](docs/images/screenshot_tile1_survey_settings.png)
-*Figure 3: Field Survey point logger and persistent Quick Settings deck.*
+![Tile 1: Field Survey Logger](docs/images/screenshot_tile1_survey_settings.png)
+*Figure 3: Dedicated Field Survey point logger with 40 px dropdowns, 12 monument tags, 52 px LOG button, and pre-log quality card.*
 
 ### Survey Logger Controls
 
-#### Row 1: Location ID Prefix & Averaging Duration
-* **Prefix Dropdown (`145x30 px`):** Selects the category or naming mode for the point:
-  * `<DERIVED>` (Index 0): Derives the point name directly from the currently active navigation target label (e.g. `PIN_NW_01` $\rightarrow$ `PIN_NW_01_L001`). If no waypoints are loaded, cleanly falls back to `WP_L001`.
-  * `PIN`: Formats as `PIN_L001`, `PIN_L002`, ...
-  * `PIPE`: Formats as `PIPE_L001`, `PIPE_L002`, ...
-  * `MONUMENT`: Formats as `MONUMENT_L001`, `MONUMENT_L002`, ...
-  * `STAKE`: Formats as `STAKE_L001`, ...
-  * `CORNER`: Formats as `CORNER_L001`, ...
-  * `FENCE`: Formats as `FENCE_L001`, ...
-  * `TREE`: Formats as `TREE_L001`, ...
-  * `UTILITY`: Formats as `UTILITY_L001`, ...
-  * `WP`: Formats as `WP_L001`, ...
-* **Averaging Duration Button (`145x30 px`):** Cycles through averaging integration windows: `Avg: 1s` $\rightarrow$ `Avg: 5s` $\rightarrow$ `Avg: 10s` $\rightarrow$ `Avg: 30s`.
+#### Row 1: Location ID Prefix & Averaging Duration (`40 px` tall)
+* **Prefix Dropdown:** `<DERIVED>` (uses active navigation target stem, e.g. `PIN_NW_01 -> PIN_NW_01_L001`), plus `PIN`, `PIPE`, `MONUMENT`, `STAKE`, `CORNER`, `FENCE`, `TREE`, `UTILITY`, `WP`.
+* **Averaging Duration Button:** Cycles `Avg: 1s -> Avg: 5s -> Avg: 10s -> Avg: 30s`. Uses circular vector averaging (`atan2(sum_sin, sum_cos)`) for heading and captures real Core 1 `pole_tilt_deg` via lock-free snapshot into `/survey_logged_pins.csv`.
 
-#### Row 2: Quick Note Tag Dropdown
-* Selects standardized feature notes: `(No Tag)`, `Found Iron Pipe`, `Found Rebar`, `Found Stone Bound`, `Set Temp Flag`, `Mag Anomaly Only`, `Obstructed Sky`, or `Needs Verification`.
+#### Row 2: Monument / Note Tag Dropdown (`40 px` tall, `12` standardized `kNoteTags`)
+* `(No Tag)`, `Found Iron Pipe`, `Found Capped Rebar`, `Found Stone Mon`, `Found Mag Nail`, `NO PIN - Search Pt`, `NO PIN - Marked Spot`, `Unknown Pin/Pipe`, `Set Temp Flag`, `Mag Anomaly Only`, `Obstructed Sky`, `Needs Verification`.
 
-#### Row 3: Next Location ID Row
-* Displays `ID: <next_label>` in Montserrat 14 `#FFCC00`.
-* **Collision-Free Numbering:** Automatically scans `/survey_logged_pins.csv` for the highest existing number for that exact stem and assigns $N_{\text{max}} + 1$.
-* **Circular Marquee:** If a compound name exceeds container width, it scrolls continuously across the row.
+#### Row 3 & Row 4: Next ID Marquee & Progress Bar
+* Displays collision-free `ID: <next_label>` in Montserrat 14 `#FFCC00` with circular marquee, plus 0-100% multi-epoch averaging bar.
 
-#### Row 4: Multi-Epoch Averaging Progress Bar
-* Fills smoothly from 0% to 100% during RTK multi-epoch averaging.
-
-#### Row 5: `[LOG PIN NOW]` Button (`300x40 px`)
-* **Idle:** Green button displaying `LOG PIN NOW`.
-* **Averaging:** Orange button displaying `AVERAGING RTK... X% (N pts)`.
-
-#### Row 6: Logged Status
-* Displays the most recently saved point label and target storage file:
-  ```
-  Logged: PIN_NW_01_L001
-  File: /survey_logged_pins.csv
-  ```
-
----
-
-### Quick Settings Controls (Consolidated 3x4 Grid - 12 Buttons)
-
-The bottom deck provides instantaneous touch control over hardware preferences in a clean 3-column by 4-row layout ($94 \times 27\text{ px}$ buttons with generous $8\text{ px}$ vertical and $9\text{ px}$ horizontal spacing):
-
-| Column 1 (Left) | Column 2 (Center) | Column 3 (Right) |
-| :--- | :--- | :--- |
-| **Row 1:** `VOL: 20%..100%` / `MUTE` | **Row 1:** `AUD: GEIGER / BEEPS / MUTE` | **Row 1:** `BRI: 20%..100%` |
-| **Row 2:** `SERIAL: ON/OFF` | **Row 2:** `NMEA: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
-| **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
-| **Row 4:** `WIFI: ON/OFF` | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `LORA: 19.2k / 9.6k / 4.8k` |
-
-* **Button Descriptions:**
-  * `VOL: xx%` / `VOL: MUTE`: Cycles master speaker output through 20%, 40%, 60%, 80%, 100%, and MUTE.
-  * `AUD: GEIGER / BEEPS / MUTE`: Cycles proximity audio navigation modes (saved to `/settings.json`).
-  * `BRI: xx%`: Cycles LCD backlight brightness through 20%, 40%, 60%, 80%, and 100%.
-  * `SERIAL: ON/OFF`: Toggles real-time USB CDC Serial logging output on/off.
-  * `NMEA: ON/OFF`: Toggles raw UM982 NMEA logging to `/nmea/nmea_YYYYMMDD_HHMMSS.log`.
-  * `RTCM: ON/OFF`: Toggles raw incoming RTCM3 differential stream logging to `/rtcm/`.
-  * `TELEM: ON/OFF`: Toggles 5-second `[TELEM]` diagnostic serial output.
-  * `IMU: ON/OFF`: Toggles 10 Hz raw IMU serial streaming.
-  * `TOUCH: ON/OFF`: Toggles touch coordinate serial debugging.
-  * `WIFI: CONN/STA/AP/OFF`: Controls the 2.4 GHz Wi-Fi radio and HTML5 Web File Portal with live multi-state color coding and instant cancellation:
-    * `WIFI: CONN` (Vivid Amber `#D97706`): Actively connecting to local router SSID. Tapping the button again while in `WIFI: CONN` immediately aborts the connection attempt (`<= 100 ms`) and powers off the radio.
-    * `WIFI: STA` (Emerald Green `#107C41`): Connected to local router (`http://<local-ip>/`). The web portal becomes immediately accessible upon DHCP IP acquisition prior to background NTP clock synchronization.
-    * `WIFI: AP` (Vivid Violet `#7C3AED`): Standalone SoftAP hotspot active (`http://192.168.4.1/`, SSID `RTK-Rover`).
-    * `WIFI: OFF` (Navy Blue `#1B6CA8`): Wi-Fi radio powered off.
-  * `UNITS: IMP/SI`: Toggles between Imperial (feet/inches) and Metric (meters/centimeters).
-  * `LORA: 19.2k / 9.6k / 4.8k`: Cycles remote over-the-air LoRa air-rate switching between standard ($19.2\text{ kbps}$), deep-woods canopy ($9.6\text{ kbps}$), and maximum-penetration slow mode ($4.8\text{ kbps}$). Shows amber `REQ: <rate>` while negotiating with the Base Station.
-* **Row 5 (y=332):** Centered Wi-Fi status indicator (`Wi-Fi: Inactive (Tap to start)` / `Portal: http://...`).
+#### Row 5: Active-Tag `[LOG]` Button (`300 x 52 px`) & Pre-Log Quality Card
+* **Idle:** Green button echoing the active note tag (or Sky Blue `#0284C7` for `NO PIN` search/marked points so monument misses are unmistakable).
+* **Pre-Log Survey Quality Summary Card:** Displays live Fix/SV/HDOP, Horizontal/Vertical accuracy (`H/V-Acc`), real-time `Pole Tilt`, active target deltas (`dN / dE`), and last logged point + `/survey_logged_pins.csv` status.
 
 ---
 
@@ -369,67 +310,64 @@ timestamp,firmware_ver,label,latitude,longitude,elevation,poly_order,pos_fix,hdg
 
 ---
 
-## 7. Tile 3: Dual-Antenna Compass & Plumb Bubble Level
+## 7. Tile 3: Dual-Antenna & Beam 9-DOF Compass, Plumb Bubble Level & `CAL MAG`
 
-Tile 3 is designed for pole plumb alignment, bracket tilt calibration, and heading verification.
+Tile 3 (`ui_tile3_compass.c`) integrates dual-antenna heading, Beam 10-DOF 9-axis fusion (`SEN0696` on `I2C1 GPIO 47/48`), pole plumb alignment, and `360-deg` magnetometer calibration:
 
 ![Tile 3: Dual-Antenna Compass and Bubble Level](docs/images/screenshot_tile3_compass_level.png)
-*Figure 5: 24pt True Heading readout, 224px spirit bubble level with Course-Up 8-point compass ring, and compact Tare button.*
+*Figure 5: 24pt True Heading readout w/ provenance & iron anomaly warning, 224px spirit bubble level, `CAL MAG`, `TARE`, and `Baro Rel Elev`.*
 
-### True Heading Readout
-* Prominent 24pt Montserrat font displays true geographic azimuth (e.g. `Heading: 162.4`).
-* Baseline length (`Baseline: 0.554 m`) and pitch (`Pitch: +0.2 deg`) provide real-time hardware integrity checks.
-* **Display Pose Indicator:** Classifies physical display orientation (`Held Flat`, `Handheld Viewing Angle`, `Clipped Vertically to Pole`).
+### True Heading, Provenance & Beam Telemetry
+* Prominent 24pt Montserrat readout displays true geographic azimuth (`Heading: 162.4 deg`) alongside active source provenance (`DUAL FIX`, `DUAL FLT`, `BEAM 9DOF`, `WALK`, `GYRO COAST`, `HOLD`) and `[IRON ANOMALY]` orange highlight whenever nearby metal triggers gyro coasting (`|B|`, `Bz`, or 200 ms gyro-mag divergence).
+* Baseline length (`BL: 55.4 cm`), crossbar pitch (`Pitch: +0.2 deg`), Beam 10-DOF status (`[BEAM 10DOF I2C1]`), and `RTK_FIX`-disciplined **`Baro Rel Elev`** (`BMP581` relative vertical elevation).
+* **Display Pose Indicator:** Onboard `QMI8658` remains dedicated to physical display orientation (`Held Flat`, `Handheld Viewing Angle`, `Clipped Vertically to Pole`) whenever `SEN0696` is online.
 
-### 224px Plumb Bubble Level & Course-Up Compass Ring
-* **Dynamic Course-Up 8-Point Compass Ring:** The 8 cardinal points (`N`, `NE`, `E`, `SE`, `S`, `SW`, `W`, `NW`) orbit around the bubble level ring in real time, keeping your physical heading oriented **UP** at 12 o'clock. North is rendered in bright red (`#EF4444`).
-* **2D Bubble Motion:** Driven by onboard QMI8658 accelerometer:
-  * Tipping pole Left moves bubble Left.
-  * Tipping pole Right moves bubble Right.
-  * Tipping pole Forward moves bubble Up.
-  * Tipping pole Backward moves bubble Down.
-* **Compact Tare Button (`62x28 px`):**
-  * When clipping the display to an angled pole clamp, hold the survey pole perfectly plumb using a physical bubble level vial, then tap **`TARE`** (Blue).
-  * The current display bracket angle is recorded into `settings.json` and zeroed out. The button turns Orange displaying **`RST`**.
-  * Tapping **`RST`** clears the calibration and restores factory level alignment.
-* **Pole Tilt Angles:** Readout below circle reports angular deflection in degrees (`dX: +0.2 deg | dY: -0.1 deg`).
+### 224px Plumb Bubble Level, `CAL MAG` & `TARE`
+* **Dynamic Course-Up 8-Point Compass Ring:** Keeps physical heading UP (`12 o'clock`) with North in bright red.
+* **360-Deg Magnetometer Ellipsoid Calibration (`CAL MAG`, Left Side `80x28 px`):**
+  1. Tap `CAL MAG` on Tile 3 (or via the Tile 5 Quick Settings shortcut) to start the `300`-sample PSRAM ellipsoid capture.
+  2. Rotate the pole `360 deg` smoothly while gently tilting to cover all `16` sectors (`SectorMask` + live RMS coaching).
+  3. Tap `FINISH CAL` once sufficient spatial coverage is captured (`FIT OK` saves hard-iron offset & `3x3` soft-iron matrix cleanly to `settings.json`). During `CAL MAG`, battery Auto-Off is automatically inhibited.
+* **Compact `TARE` Button (Right Side):** Hold pole physically plumb and tap **`TARE`** (`Blue` -> **`RST`** Orange) to zero display/beam pitch-roll offsets and persist them into `settings.json`.
 
 ---
 
-## 8. Tile 4: Hardware Diagnostics & Live Observers
+## 8. Tile 4: Hardware Diagnostics & Live Dual-Bus (`I2C0`/`I2C1`) Observers
 
-Tile 4 is a comprehensive live diagnostic suite for field troubleshooting and sensor health auditing.
+Tile 4 (`ui_tile4_diagnostics.c`) provides live troubleshooting telemetry across all hardware buses:
 
 ![Tile 4: Hardware Diagnostics](docs/images/screenshot_tile4_diagnostics.png)
-*Figure 6: Pinned diagnostic header deck, interactive logging toggles, and live subsystem observer blocks.*
+*Figure 6: Pinned diagnostic header deck, LoRa RF survey card, and live subsystem observer blocks.*
 
-### Pinned Top Control Deck & Elevated RF Survey Card
-* **Pinned Firmware Header:** Fixed header displaying `"RTK ROVER v0.7.7"` in Montserrat 16 White (`#FFFFFF`).
-* **Pinned LoRa RF Survey Card ($y=26$):** Elevated to the top of the tile to provide permanent visibility of RF link health without scrolling:
-  * Live ambient noise floor (`Noise: -102dBm`).
-  * Last received packet signal strength (`Pkt: -84dBm`).
-  * Mode 0 hardware `AUX` edge interrupt counter and pulse width (`Edges: N low: X.Xms`).
-  * RTCM3 frame counters: Station ARP (`1005`/`1006`), GPS MSM4 (`1074`), GLONASS MSM4 (`1084`), Galileo MSM4 (`1094`), and GLONASS Biases (`1230`).
-  * Frame error and mid-frame truncation drops (`Err: N Trunc: N`).
-
-### Expanded Scrollable Diagnostic Container (+57 px Viewport)
-With the logging buttons consolidated into the Tile 1 Quick Settings grid, the scrollable diagnostic container viewport is expanded from $231\text{ px}$ to **$288\text{ px}$** ($+57\text{ px}$ vertical space):
-* **Storage Status:** Displayed in Electric Cyan (`#22D3EE`): MicroSD mount state, card size, used space, free space, and internal FFat health.
-* **Antenna 1 (Master):** Fix state, SV used/view, HDOP, VDOP, horizontal accuracy, vertical accuracy, and differential age.
-* **Antenna 2 (Slave):** Heading fix, Slave SVs, Slave HDOP, measured baseline length, baseline pitch, and live ANT2 WGS84 coordinates (`Pos: Lat, Lon`, `Alt`).
-* **Base Station Observer:** Sky blue (`#38BDF8`) card reporting:
-  * Base Station ID (`#<id>`)
-  * Differential correction age (`Diff: X.Xs`)
-  * Base Station WGS84 Position (`Lat, Lon`, `Alt`)
-  * Base Station ECEF Vectors (`X, Y, Z` in meters)
-  * RTCM Message Counters (RTCM 1005 Station ARP frames and MSM multi-signal frames).
-* **6-DOF IMU Telemetry:** Pitch, Roll, 3-axis Accelerometer (`Acc(g): X, Y, Z`), 3-axis Gyroscope (`Gyr(d/s): X, Y, Z`), calibrated tare offsets, and kinematic lever-arm compensation status.
-* **UM982 COM1 Metrics:** Active `COM1` multiplexed baud rate (`115200`), byte throughput counters, sentence counts, and checksum error counters.
-* **E220 LoRa Configuration & Hardware Wire Self-Test:** RF Channel, frequency (`925.125 MHz`), operating air data rate (`19.2 / 9.6 / 4.8 kbps`), transmit power (`30 dBm` field / `21 dBm` close bench), UART baud (`115200`), hardware register dump, and boot-time `M0`/`M1` pin continuity self-test (`M0:OK M1:OK`). Alerts in bold red if a jumper wire is loose or floating.
+* **Pinned Top Deck:** Fixed firmware header (`RTK ROVER v0.9.0`) + elevated LoRa RF Survey Card (`Noise`, `Pkt`, `AUX` edges, `RTCM3` counters, `Err/Trunc` drops) + `Auto-Off` idle countdown/inhibit status.
+* **Dual-Bus & Sensor Health Cards:**
+  * **Dual `I2C0 / I2C1` Status (`t4_i2c_lbl`):** Separate `I2C0` (`GPIO 7/8`) & `I2C1` (`GPIO 47/48`) bus error counters and `10DOF` active bus indicator (`0` expected `I2C0` stalls with `SEN0696` isolated on `I2C1`).
+  * **Beam 10-DOF & Pose (`t4_imu_lbl`):** Reports `SEN0696` bus/status, `Orient: M4`, 50-sample stationary gyro `FOC`, `3D-Cal` ellipsoid fit status, `BMP581` pressure (`hPa`) + `Baro Rel Elev`, alongside onboard `QMI8658` display pose (`Pitch`/`Roll`).
+  * **Storage, `ANT1`, `ANT2`, Base Station (`ECEF` -> `WGS84`), `UM982 COM1`, Dual-Power `UPS` (`VBUS_GOOD` + `MT3608`), and `E220` Pin Self-Test.**
 
 ---
 
-## 9. Hardware Screenshot Engine
+## 9. Tile 5: Dedicated `5x3` Quick Settings Deck & Safe Auto-Off
+
+Centered directly `1` tap `< Prev` from Tile 0, **Tile 5 (`ui_tile5_settings.c`)** features a `5x3` grid of large `94 x 44 px` touch buttons (`10 px` row gap) and a live Wi-Fi / Auto-Off / LoRa footer:
+
+| Column 1 (Left) | Column 2 (Center) | Column 3 (Right) |
+| :--- | :--- | :--- |
+| **Row 1:** `VOL: 20%..100%` / `MUTE` | **Row 1:** `AUD: GEIGER / BEEPS / MUTE` | **Row 1:** `BRI: 20%..100%` |
+| **Row 2:** `SERIAL: ON/OFF` | **Row 2:** `NMEA: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
+| **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
+| **Row 4:** `WIFI: CONN/STA/AP/OFF` | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `LORA: 19.2k / 9.6k / 4.8k` |
+| **Row 5:** `AUTO-OFF: 5m/15m/30m/OFF` | **Row 5:** `CAL MAG` (`OK` Green / Ready Blue) | **Row 5:** `BLE: PLAN2` (Reserved) |
+
+* **`WIFI: CONN/STA/AP/OFF`:** Amber `CONN` (tap again `<= 100 ms` to cancel) -> Emerald Green `STA` (`http://<local-ip>/`, live immediately on DHCP) -> Violet `AP` (`http://192.168.4.1/`, SSID `RTK-Rover`) -> Navy Blue `OFF`.
+* **`LORA: 19.2k / 9.6k / 4.8k`:** Cycles OTA air-rate switching via 4-ACK `Second 1` / Mode 3 `Second 2` sync + 60s rollback failsafe.
+* **`AUTO-OFF` (`5m / 15m / 30m / DISABLED`) & Motion/REC-Safe Shutdown Guard:**
+  * Idle shutdown on battery is automatically **inhibited** while external `USB` power is present, `Wi-Fi` is active, a `Survey` or `CAL MAG` is active, **`REC ON` route recording**, **`NMEA` log**, or **`RTCM` log** is running, physical motion is detected (`speed >= 0.30 m/s`, IMU delta, or `>= 1.5 m` GNSS displacement), or touch/`BOOT` input occurs.
+  * When an uninhibited idle timer expires, a full-screen `lv_layer_top()` **`30 s` countdown modal (`TAP ANYWHERE TO CANCEL`)** alerts with warning beeps (`30, 20, 10, 5..1 s`) and cleanly stops & flushes active loggers (`route`, `nmea`, `rtcm`, `save_settings`, `serial`) before cutting `AXP2101` PMIC power.
+
+---
+
+## 10. Hardware Screenshot Engine
 
 The rover features a dedicated hardware screenshot engine for capturing field verification images directly to storage.
 
@@ -443,13 +381,13 @@ The rover features a dedicated hardware screenshot engine for capturing field ve
 
 ---
 
-## 10. Wireless Web File Portal & Field Maintenance
+## 11. Wireless Web File Portal & Field Maintenance
 
 When maintenance or data offload is required in the field, the rover hosts an HTML5 web portal.
 
-1. **Activate Wi-Fi:** Tap the `Wi-Fi` button on Tile 1 (Row 3).
+1. **Activate Wi-Fi:** Tap the `WIFI` button on Tile 5 (Row 4).
 2. **Connect Device:** Connect your smartphone, tablet, or laptop to the local Wi-Fi access point configured in `settings.json` (or connect directly to the rover's SoftAP).
-3. **Open Browser:** Navigate to `http://<rover-ip>/` (IP address is displayed in Row 4 of Quick Settings on Tile 1).
+3. **Open Browser:** Navigate to `http://<rover-ip>/` (IP address is displayed in the bottom status footer on Tile 5).
 4. **Web Portal Features:**
    * **Survey Logs:** Download `/survey_logged_pins.csv` directly into your GIS or CAD workflow.
    * **Route Tracks:** Download `/routes/route_*.csv` for trajectory mapping and walking surveys.
@@ -460,7 +398,7 @@ When maintenance or data offload is required in the field, the rover hosts an HT
 
 ---
 
-## 11. Configuration Reference (`settings.json`)
+## 12. Configuration Reference (`settings.json`)
 
 All operational parameters are stored in `/settings.json` on the MicroSD card and mirrored to internal flash:
 
@@ -474,7 +412,7 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 | `apply_lever_arm` | Boolean | `true` | Enables 3D kinematic projection to pole centerline and ground tip. |
 | `pole_tilt_tare_pitch_deg` | Float | `0.0` | Recorded bracket pitch angle tare offset. |
 | `pole_tilt_tare_roll_deg` | Float | `0.0` | Recorded bracket roll angle tare offset. |
-| `e220_channel` | Integer | `75` | LoRa RF channel (`75` = $925.125\text{ MHz}$, clean US ISM band). |
+| `e220_channel` | Integer | `75` | LoRa RF channel (`75` = `925.125 MHz`, clean US ISM band). |
 | `e220_uart_baud` | Integer | `115200` | Baud rate between ESP32 and E220 transceiver. |
 | `e220_air_rate_kbps` | Float | `19.2` | LoRa over-the-air data transmission rate (`19.2`, `9.6`, or `4.8` kbps). |
 | `audio_nav_mode` | Integer | `1` | Proximity navigation audio mode (`0` = Beeps, `1` = Geiger Clicks, `2` = Mute). |
@@ -484,11 +422,23 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 | `active_waypoint_index` | Integer | `0` | Active selected waypoint index (restored on boot). |
 | `brightness` | Integer | `80` | Backlight brightness percentage (`20`, `40`, `60`, `80`, `100`). |
 | `volume` | Integer | `40` | Audio volume percentage (`0` = Mute, `20`, `40`, `60`, `80`, `100`). |
-| `auto_shutdown_battery_min` | Integer | `5` | Idle timeout in minutes before soft power-off when running on battery (`0` = disabled). |
+| `auto_shutdown_battery_min` | Integer | `5` | Idle timeout on battery (`0`, `5`, `15`, `30`; inhibited by motion/`REC`/Wi-Fi/USB). |
+| `beam_imu_orient_mode` | Integer | `4` | Beam `SEN0696` `3x3` axis alignment index (`0..7`, default `4` = Face-Down `(+X,-Y,-Z)`). |
+| `mag_hard_iron_uT` | Float[3] | `[0,0,0]` | Hard-iron `[bx,by,bz]` offset solved by `CAL MAG` 360-deg ellipsoid fit (`uT`). |
+| `mag_soft_iron` | Float[9] | Identity | `3x3` soft-iron correction matrix (row-major) from `CAL MAG` fit. |
+| `mag_ellipsoid_cal_valid` | Boolean | `false` | `true` once `CAL MAG` 3D ellipsoid calibration has converged. |
+| `mag_true_north_offset_deg` | Float | `0.0` | Declination / alignment tare continuously learned from `UM982 HDG FIX`. |
+| `mag_field_ref_uT` / `mag_bz_ref_uT` | Float | `45.0 / 0.0` | Learned reference ambient magnetic magnitude and vertical Z component (`uT`). |
+| `beam_pitch_tare_deg` | Float | `0.0` | Beam AHRS pitch offset learned against `UM982` moving-baseline pitch. |
+| `apply_lever_arm_on_calibrated_beam` | Boolean | `false` | Opt-in flag enabling beam tilt lever-arm projection during single-antenna `RTK FIX`. |
+| `rtcm_source_mode` | String | `"AUTO"` | RTCM input source policy (`"AUTO"`, `"LORA"`, `"NTRIP"`). |
+| `ntrip_host` / `ntrip_host_ip` | String | `"rtk2go.com"` | NTRIP caster hostname and resolved IP address (Plan 2 BLE bridge). |
+| `ntrip_port` | Integer | `2101` | NTRIP caster TCP port. |
+| `ntrip_mountpoint` / `ntrip_user_email` / `ntrip_password` | String | `""` / `""` / `"none"` | NTRIP mountpoint and credentials (protected against default overwrite on save). |
 
 ---
 
-## 12. Troubleshooting & Field Diagnostics FAQ
+## 13. Troubleshooting & Field Diagnostics FAQ
 
 ### Q1: Antenna 1 shows `SINGLE` or `DGPS`, but never achieves `RTK FIX`.
 * **Cause 1: Differential Link Down.** Check Row 2 `RTCM: X.Xs`. If age exceeds $5.0\text{ s}$ or reads `None`, the rover is not receiving RTCM packets. Inspect LoRa antenna connection and verify E220 RF channel on Tile 4 matches the Base Station transmitter (`Channel 75` / `925.125 MHz`).
@@ -504,9 +454,9 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 * **Cause:** The display is mounted on an angled bracket. Hold the survey pole plumb using a physical bubble vial, navigate to Tile 3, and tap **`TARE`**. The bubble will center at $(0.0^\circ, 0.0^\circ)$ and store the bracket compensation offset permanently.
 
 ### Q5: How do I back up my survey data in the field?
-* Tap `Wi-Fi` on Tile 1, connect with your phone, open `http://<rover-ip>/`, tap `/survey_logged_pins.csv`, and save to your mobile device. You can also power down the rover and remove the MicroSD card to read it directly on a computer.
+* Tap `WIFI` on Tile 5, connect with your phone, open `http://<rover-ip>/`, tap `/survey_logged_pins.csv`, and save to your mobile device. You can also power down the rover and remove the MicroSD card to read it directly on a computer.
 
-### Q6: What happens when I tap `WIFI: OFF` on Tile 1, and how do I diagnose router connection issues?
+### Q6: What happens when I tap `WIFI: OFF` on Tile 5, and how do I diagnose router connection issues?
 * **Connection Sequence:** Tapping `WIFI: OFF` (Navy Blue) changes the button to `WIFI: CONN` (Amber) while scanning all 2.4 GHz channels for the `wifi_ssid` in `/settings.json` (up to 20 seconds).
   * **Router Found (`STA`):** Button turns Emerald Green (`WIFI: STA`) and displays `Portal: http://<router-ip>/`.
   * **Field / Away from Router (`AP` Fallback):** If the configured router is out of range (or unconfigured), the Rover automatically launches its standalone SoftAP (`SSID: RTK-Rover`, password `12345678`), turns the button Violet (`WIFI: AP`), and serves the portal at `http://192.168.4.1/`.
@@ -514,15 +464,15 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 
 ---
 
-## 13. Bi-Directional LoRa Protocol & Base Station Integration
+## 14. Bi-Directional LoRa Protocol & Base Station Integration
 
-The RTK Rover implements a bi-directional telemetry and remote control protocol operating over the Ebyte E220 900 MHz LoRa link (`e220_pacer.py v3.7.0` + `v0.8.12`).
+The RTK Rover implements a bi-directional telemetry and remote control protocol operating over the Ebyte E220 900 MHz LoRa link (`e220_pacer.py v3.7.1` + `v0.9.0`).
 
-### 13.1 Content-Independent Macro-Cycle & Half-Duplex Uplink Slot
-* Base Station (`e220_pacer.py v3.7.0`) streams continuously across `Seconds 1..(N-1)` of the GPS-disciplined macro-cycle (`--macro-cycle-s`, default `5 s`, optional `10 s`) with zero per-second RSSI pauses.
+### 14.1 Content-Independent Macro-Cycle & Half-Duplex Uplink Slot
+* Base Station (`e220_pacer.py v3.7.1`) streams continuously across `Seconds 1..(N-1)` of the GPS-disciplined macro-cycle (`--macro-cycle-s`, default `5 s`, optional `10 s`) with zero per-second RSSI pauses.
 * During `Second 0` (`UTC_Second % 5 == 0`), Base enforces a rate-aligned TX cutoff (`450 ms` @ `4.8k`, `620 ms` @ `9.6k`, `680 ms` @ `>= 19.2k`) before opening the half-duplex Rover uplink slot (`500..660 ms` @ `4.8k`, `670..760 ms` @ `9.6k`, `730..810 ms` @ `>= 19.2k`), followed by one post-uplink Mode 0 RSSI query (`680..920 ms`).
 
-### 13.2 48-Byte V3 Uplink Telemetry Frame
+### 14.2 48-Byte V3 Uplink Telemetry Frame
 * **Sync Preamble:** `0xAA 0x55` (distinct from RTCM3 `0xD3` to prevent false-framing).
 * **Payload (42 Bytes):**
   * Sub-millimeter ground-tip coordinates (`tip_lat`, `tip_lon`, `tip_height_m`) and horizontal accuracy (`h_acc_mm`).
@@ -534,13 +484,13 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
   * Master & Slave satellite counts, True Heading centidegrees, battery percentage and millivolts, Rover packet RSSI, live ambient noise floor, sequence counter, and firmware SemVer (`fw_major.fw_minor.fw_patch`).
 * **Integrity:** Protected by a 16-bit CRC16-CCITT checksum.
 
-### 13.3 Touchscreen Remote 3-Rate Air-Rate Switching
+### 14.3 Touchscreen Remote 3-Rate Air-Rate Switching
 * **Field Problem:** Deep timber or dense foliage can cause fringe RF packet loss at $19.2\text{ kbps}$. Switching down to $9.6\text{ kbps}$ (`+3 dB`) or $4.8\text{ kbps}$ (`+5 dB`) extends range cleanly.
-* **Procedure:** Tap Tile 1 `LORA` button to cycle `19.2k / 9.6k / 4.8k` (or tap again before Second 0 TX to cancel).
+* **Procedure:** Tap Tile 5 `LORA` button to cycle `19.2k / 9.6k / 4.8k` (or tap again before Second 0 TX to cancel).
 * **Zero-Credential 4-ACK Negotiation:** Rover transmits `CMD_REQ_RADIO_SWITCH` (`0x02`) in `Second 0`, Base replies with a 4-slot spaced `ACK_RADIO_SWITCH` train (`80 / 260 / 440 / 620 ms`) in `Second 1`, and both radios reconfigure in Mode 3 at `Second 2` before probing Mode 0 liveness.
 * **Dynamic Pre-Switch Failsafe Rollback:** If no valid traffic is verified within 60 seconds after a rate switch, both Rover and Base automatically revert to the pre-switch verified fallback air rate.
 
-### 13.4 Base Station Pacer (`e220_pacer.py v3.7.0`)
+### 14.4 Base Station Pacer (`e220_pacer.py v3.7.1`)
 * **Real-Time Terminal Output:** Displays live Rover telemetry lines with full ANT1 and ANT2 observables formatted with clean ASCII `deg` units and USB/Battery power state:
   ```text
   [ROVER TEL #042] FW:v0.8.12 | ANT1:RTK_FIX (28M) | ANT2:SLV_FIX (26S, BL:55.4cm, P:+0.2deg) | Hdg:142.6deg [DUAL_FIX] | PWR:USB (4.02V) | RSSI:-84dBm | Pos:43.7319105, -70.6237371, 12.45m
@@ -551,7 +501,7 @@ The RTK Rover implements a bi-directional telemetry and remote control protocol 
   * Logs extended columns (`timestamp_utc, seq, rover_fw, fix_type, fix_name, ant2_fix, baseline_mm, pitch_deg, hdg_source, latitude, longitude, height_m, h_acc_mm, sats_master, sats_slave, heading_deg, battery_pct, battery_mv, rover_rssi_dbm, rover_noise_dbm, air_rate_kbps, channel`).
   * Auto-prunes files older than 30 days (`--log-retention-days 30`), caps total log directory footprint at $50\text{ MB}$ (`--max-log-mb 50`), and compresses yesterday's logs with `gzip` (`rover_YYYY-MM-DD.csv.gz`).
 
-### 13.5 Asynchronous Ping-Pong Mailboxes & Smart `<= 200 B` Coalescing
+### 14.5 Asynchronous Ping-Pong Mailboxes & Smart `<= 200 B` Coalescing
 * **Zero Epoch Queue Latency:** A dedicated background ingress thread continuously drains incoming RTCM3 bytes from RTKBase, verifies `CRC24Q`, drops empty MSMs (`<= 28 B`), and overwrites latest-value ping-pong mailboxes keyed by message type (`2.5 s` dynamic MSM / `15.0 s` static TTL). Saturated links never accumulate stale queued seconds.
 * **Starvation-Fair Round Robin & Coalescing:** Prioritizes static base metadata (`1005/1006/1033/1230`), rotates multi-constellation MSM frames (`1074/1084/1094/1124`) cleanly by starvation age (`now - last_tx` with GPS `1074` tie-breaker), and packs compatible small frames into a single `<= 200 B` Regime A burst (e.g., `1006+1230+1084`).
 * **Heartbeat & CLI Controls:** Heartbeat displays `Mbox:[Sup:<n> Coal:<n> Stale:<n> MaxAge:<ms>]`. Supports `--macro-cycle-s {5,10}` (default `5`) and `--no-interleave` CLI flags.

@@ -18,6 +18,8 @@
 #include "src/imu_bsp/imu_bsp.h"
 #include "src/mag_bsp/mmc5983ma_driver.h"
 #include "src/beam_imu_bsp/sen0696_driver.h"
+#include "src/matrix_math/matrix_math.h"
+#include "src/sensor_fusion/ahrs_9dof.h"
 #include "src/settings_manager/settings_manager.h"
 #include "src/nav_engine/nav_engine.h"
 #include "src/waypoint_manager/waypoint_manager.h"
@@ -45,10 +47,30 @@ typedef struct {
     uint16_t dur2_ms;
 } RoverBeep_t;
 
+// Declared ahead of functions so Arduino .ino prototype generation sees the type
+#define MAG_CAL_MAX_SAMPLES 300
+
+typedef struct {
+    float          *pts_buf;
+    float           min_xy[2];
+    float           max_xy[2];
+    float           last_pt[3];
+    float           rms_pct;
+    uint32_t        start_ms;
+    uint32_t        result_ms;
+    uint16_t        samples;
+    uint16_t        sector_mask;
+    uint8_t         progress_pct;
+    MagCalStatus_t  status;
+} MagCalWizard_t;
+
 static QueueHandle_t roverStateQueue = NULL;
 static QueueHandle_t beepQueue       = NULL;
 static esp_codec_dev_handle_t playback_handle = NULL;
 static volatile bool     pending_tare_level   = false;
+static volatile bool     pending_mag_cal_toggle = false;
+static volatile bool     pending_mag_cal_cancel = false;
+static Ahrs9DofState_t  *s_beam_ahrs          = NULL;
 static portMUX_TYPE      s_pwr_snapshot_mux   = portMUX_INITIALIZER_UNLOCKED;
 static Axp2101Status_t   s_pwr_snapshot       = {};
 static portMUX_TYPE      s_imu_snapshot_mux   = portMUX_INITIALIZER_UNLOCKED;
@@ -140,6 +162,16 @@ extern "C" void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16
 extern "C" void trigger_tare_pole_level(void)
 {
     pending_tare_level = true;
+}
+
+extern "C" void trigger_mag_cal_start_or_finish(void)
+{
+    pending_mag_cal_toggle = true;
+}
+
+extern "C" void trigger_mag_cal_cancel(void)
+{
+    pending_mag_cal_cancel = true;
 }
 
 static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint16_t dur_ms)
@@ -364,6 +396,199 @@ void task_rover_core0(void *pvParameters)
 }
 
 // =========================================================================
+// Core 1 Helper: 360-Deg Magnetometer Ellipsoid Calibration Collector/Solver
+// =========================================================================
+static void mag_cal_run_fit(MagCalWizard_t *w, uint32_t now_ms)
+{
+    if (!w || !w->pts_buf || w->samples < 40U) {
+        w->status    = MAG_CAL_FAILED;
+        w->result_ms = now_ms;
+        play_rover_beep(400, 180);
+        Serial.printf("[CAL MAG] Failed: only %u samples collected (need >= 40)\n", w ? (unsigned)w->samples : 0U);
+        return;
+    }
+
+    const float *xs = w->pts_buf;
+    const float *ys = w->pts_buf + MAG_CAL_MAX_SAMPLES;
+    const float *zs = w->pts_buf + (MAG_CAL_MAX_SAMPLES * 2U);
+
+    float center[3] = {0.0f, 0.0f, 0.0f};
+    float soft[3][3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    float rms_pct = 0.0f;
+
+    if (!fit_ellipsoid_3d_f32(xs, ys, zs, (int)w->samples, center, soft, &rms_pct)) {
+        w->status    = MAG_CAL_FAILED;
+        w->result_ms = now_ms;
+        w->rms_pct   = 100.0f;
+        play_rover_beep(400, 180);
+        Serial.printf("[CAL MAG] Ellipsoid fit failed (%u pts)\n", (unsigned)w->samples);
+        return;
+    }
+
+    double sum_r = 0.0;
+    for (uint16_t i = 0; i < w->samples; i++) {
+        float dx = xs[i] - center[0];
+        float dy = ys[i] - center[1];
+        float dz = zs[i] - center[2];
+        float cx = soft[0][0] * dx + soft[0][1] * dy + soft[0][2] * dz;
+        float cy = soft[1][0] * dx + soft[1][1] * dy + soft[1][2] * dz;
+        float cz = soft[2][0] * dx + soft[2][1] * dy + soft[2][2] * dz;
+        sum_r += sqrtf(cx * cx + cy * cy + cz * cz);
+    }
+    float mean_r = (float)(sum_r / (double)w->samples);
+
+    memcpy(current_settings.mag_hard_iron_uT, center, sizeof(center));
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            current_settings.mag_soft_iron[i * 3 + j] = soft[i][j];
+        }
+    }
+    current_settings.mag_ellipsoid_cal_valid = true;
+    if (mean_r >= 20.0f && mean_r <= 80.0f) {
+        current_settings.mag_field_ref_uT = mean_r;
+    }
+    if (s_beam_ahrs) {
+        ahrs_9dof_set_mag_cal(s_beam_ahrs,
+                              current_settings.mag_hard_iron_uT,
+                              current_settings.mag_soft_iron,
+                              true);
+    }
+    mark_settings_dirty();
+
+    w->rms_pct      = rms_pct;
+    w->progress_pct = 100U;
+    w->status       = MAG_CAL_SUCCESS;
+    w->result_ms    = now_ms;
+    play_rover_dual_beep(1400, 60, 30, 2200, 100);
+    Serial.printf("[CAL MAG] OK (%u pts): Center=(%+.1f,%+.1f,%+.1f)uT | |B|=%.1fuT | RMS=%.2f%%\n",
+                  (unsigned)w->samples, center[0], center[1], center[2], mean_r, rms_pct);
+}
+
+static uint8_t popcount_u16(uint16_t v)
+{
+    uint8_t c = 0;
+    while (v) {
+        c += (uint8_t)(v & 1U);
+        v >>= 1U;
+    }
+    return c;
+}
+
+static void mag_cal_update_wizard(MagCalWizard_t *w, const float raw_mag[3], bool mag_sample_ok, uint32_t now_ms)
+{
+    if (!w) return;
+
+    if (w->pts_buf == NULL) {
+        w->pts_buf = (float *)heap_caps_malloc(MAG_CAL_MAX_SAMPLES * 3U * sizeof(float),
+                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (w->pts_buf == NULL) {
+            w->pts_buf = (float *)malloc(MAG_CAL_MAX_SAMPLES * 3U * sizeof(float));
+        }
+    }
+
+    if (pending_mag_cal_cancel) {
+        pending_mag_cal_cancel = false;
+        w->status       = MAG_CAL_IDLE;
+        w->samples      = 0;
+        w->sector_mask  = 0;
+        w->progress_pct = 0;
+        play_rover_beep(700, 80);
+        return;
+    }
+
+    if (pending_mag_cal_toggle) {
+        pending_mag_cal_toggle = false;
+        if (w->status == MAG_CAL_COLLECTING) {
+            mag_cal_run_fit(w, now_ms);
+            return;
+        }
+        if (w->pts_buf == NULL) {
+            w->status    = MAG_CAL_FAILED;
+            w->result_ms = now_ms;
+            play_rover_beep(400, 180);
+            return;
+        }
+        w->status       = MAG_CAL_COLLECTING;
+        w->samples      = 0;
+        w->sector_mask  = 0;
+        w->progress_pct = 0;
+        w->rms_pct      = 0.0f;
+        w->start_ms     = now_ms;
+        play_rover_beep(1600, 60);
+        Serial.println("[CAL MAG] Started 360-deg ellipsoid capture (rotate + gently tilt pole)...");
+    }
+
+    if (w->status == MAG_CAL_SUCCESS || w->status == MAG_CAL_FAILED) {
+        if ((now_ms - w->result_ms) >= 5000U) {
+            w->status = MAG_CAL_IDLE;
+        }
+        return;
+    }
+
+    if (w->status != MAG_CAL_COLLECTING) {
+        return;
+    }
+
+    if (mag_sample_ok && raw_mag && w->pts_buf && w->samples < MAG_CAL_MAX_SAMPLES) {
+        float *xs = w->pts_buf;
+        float *ys = w->pts_buf + MAG_CAL_MAX_SAMPLES;
+        float *zs = w->pts_buf + (MAG_CAL_MAX_SAMPLES * 2U);
+
+        bool accept = (w->samples == 0U);
+        if (!accept) {
+            float dx = raw_mag[0] - w->last_pt[0];
+            float dy = raw_mag[1] - w->last_pt[1];
+            float dz = raw_mag[2] - w->last_pt[2];
+            accept = ((dx * dx + dy * dy + dz * dz) >= 4.0f);
+        }
+
+        if (accept) {
+            uint16_t idx = w->samples;
+            xs[idx] = raw_mag[0];
+            ys[idx] = raw_mag[1];
+            zs[idx] = raw_mag[2];
+            w->last_pt[0] = raw_mag[0];
+            w->last_pt[1] = raw_mag[1];
+            w->last_pt[2] = raw_mag[2];
+            w->samples++;
+
+            if (idx == 0U) {
+                w->min_xy[0] = w->max_xy[0] = raw_mag[0];
+                w->min_xy[1] = w->max_xy[1] = raw_mag[1];
+            } else {
+                if (raw_mag[0] < w->min_xy[0]) w->min_xy[0] = raw_mag[0];
+                if (raw_mag[0] > w->max_xy[0]) w->max_xy[0] = raw_mag[0];
+                if (raw_mag[1] < w->min_xy[1]) w->min_xy[1] = raw_mag[1];
+                if (raw_mag[1] > w->max_xy[1]) w->max_xy[1] = raw_mag[1];
+            }
+
+            if ((w->max_xy[0] - w->min_xy[0]) > 10.0f && (w->max_xy[1] - w->min_xy[1]) > 10.0f) {
+                float cx = 0.5f * (w->min_xy[0] + w->max_xy[0]);
+                float cy = 0.5f * (w->min_xy[1] + w->max_xy[1]);
+                float ang = atan2f(raw_mag[1] - cy, raw_mag[0] - cx);
+                int sec = (int)floorf(((ang + (float)M_PI) / (2.0f * (float)M_PI)) * 12.0f);
+                if (sec < 0) sec = 0;
+                if (sec >= 12) sec = 11;
+                w->sector_mask |= (uint16_t)(1U << sec);
+            }
+        }
+    }
+
+    uint8_t sec_cnt = popcount_u16(w->sector_mask);
+    uint32_t pt_pct  = (w->samples >= 120U) ? 30U : (((uint32_t)w->samples * 30U) / 120U);
+    uint32_t sec_pct = ((uint32_t)sec_cnt * 70U) / 12U;
+    uint32_t pct = pt_pct + sec_pct;
+    if (pct > 99U) pct = 99U;
+    w->progress_pct = (uint8_t)pct;
+
+    if ((w->samples >= 120U && sec_cnt >= 10U) ||
+        (w->samples >= (MAG_CAL_MAX_SAMPLES - 20U)) ||
+        ((now_ms - w->start_ms) >= 30000U)) {
+        mag_cal_run_fit(w, now_ms);
+    }
+}
+
+// =========================================================================
 // Core 1 Task: UI Display Update, Onboard I2C Peripherals & Audio Alerts
 // =========================================================================
 void task_display_and_audio(void *pvParameters)
@@ -372,10 +597,16 @@ void task_display_and_audio(void *pvParameters)
     RoverUIData_t    ui_state          = {};
     Axp2101Status_t  pwr               = {};
     Mmc5983maState_t cached_mag         = {};
+    sen0696_state_t  beam_state        = {};
+    Ahrs9DofOutput_t beam_ahrs_out     = {};
+    bool             beam_ahrs_has_sample = false;
     uint32_t         last_imu_poll_ms   = 0;
     uint32_t         last_imu_log_ms    = 0;
     uint32_t         last_pwr_poll_ms   = 0;
-    uint32_t         last_10dof_poll_ms = millis();
+    uint32_t         last_10dof_poll_ms = 0;
+    uint32_t         last_10dof_ahrs_ms = 0;
+    uint32_t         last_10dof_log_ms  = 0;
+    uint32_t         beam_poll_ticks    = 0;
     float            cached_imu_pitch  = 0.0f;
     float            cached_imu_roll   = 0.0f;
     float            cached_bubble_x   = 0.0f;
@@ -388,6 +619,9 @@ void task_display_and_audio(void *pvParameters)
     uint32_t         last_imu_motion_ms = 0;
     float            prev_10dof_acc[3] = {0.0f, 0.0f, 0.0f};
     bool             prev_10dof_valid  = false;
+    float            s_baro_elev_bias_m = 0.0f;
+    bool             s_baro_bias_valid  = false;
+    MagCalWizard_t   mag_cal_wiz        = {};
     double           motion_anchor_lat = 0.0;
     double           motion_anchor_lon = 0.0;
     bool             motion_anchor_valid = false;
@@ -421,13 +655,20 @@ void task_display_and_audio(void *pvParameters)
                                         &cached_bubble_y,
                                         &cached_pose);
 
-            float imu_pole_tilt = sqrtf(cached_bubble_x * cached_bubble_x +
-                                        cached_bubble_y * cached_bubble_y);
-            portENTER_CRITICAL(&s_imu_snapshot_mux);
-            s_snapshot_bubble_x  = cached_bubble_x;
-            s_snapshot_bubble_y  = cached_bubble_y;
-            s_snapshot_pole_tilt = imu_pole_tilt;
-            portEXIT_CRITICAL(&s_imu_snapshot_mux);
+            const bool beam_online_now = sen0696_is_present() && beam_state.valid &&
+                                         beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+            if (!beam_online_now) {
+                float imu_pole_tilt = sqrtf(cached_bubble_x * cached_bubble_x +
+                                            cached_bubble_y * cached_bubble_y);
+                portENTER_CRITICAL(&s_imu_snapshot_mux);
+                s_snapshot_bubble_x  = cached_bubble_x;
+                s_snapshot_bubble_y  = cached_bubble_y;
+                s_snapshot_pole_tilt = imu_pole_tilt;
+                portEXIT_CRITICAL(&s_imu_snapshot_mux);
+
+                // Poll outboard MMC5983MA 3-Axis 18-bit AMR Compass as Tier-B fallback when SEN0696 is absent
+                mmc5983ma_poll(cached_bubble_y, cached_bubble_x, &cached_mag);
+            }
 
             float gyr_mag = sqrtf(cached_gyr[0] * cached_gyr[0] +
                                   cached_gyr[1] * cached_gyr[1] +
@@ -445,9 +686,6 @@ void task_display_and_audio(void *pvParameters)
             prev_imu_acc[2] = cached_acc[2];
             prev_imu_valid  = true;
 
-            // Poll outboard MMC5983MA 3-Axis 18-bit AMR Compass (if auto-detected at boot)
-            mmc5983ma_poll(cached_bubble_y, cached_bubble_x, &cached_mag);
-
             if (current_settings.enable_imu_logging && (now - last_imu_log_ms >= 1000)) {
                 last_imu_log_ms = now;
                 Serial.printf("[IMU POSE] Pitch: %+.1f deg | Roll: %+.1f deg | Acc(g): %+.2f %+.2f %+.2f | Gyr(dps): %+.1f %+.1f %+.1f | Pose: %d\n",
@@ -455,14 +693,6 @@ void task_display_and_audio(void *pvParameters)
                               cached_acc[0], cached_acc[1], cached_acc[2],
                               cached_gyr[0], cached_gyr[1], cached_gyr[2],
                               (int)cached_pose);
-            }
-
-            if (pending_tare_level) {
-                pending_tare_level = false;
-                current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
-                current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
-                mark_settings_dirty();
-                play_rover_beep(1800, 80);
             }
         }
 
@@ -489,55 +719,134 @@ void task_display_and_audio(void *pvParameters)
             s_pwr_init       = true;
         }
 
-        // Staggered 1 Hz always-on DFRobot SEN0696 (10DOF IMU) polling across 3 RoverUI ticks (~10.3 ms/tick, 400 kHz)
+        // High-rate SEN0696 10DOF polling: 25-30 Hz on isolated I2C1 (IO47/48), or staggered ~5 Hz fallback on I2C0
         static uint8_t s_10dof_step     = 0;
         static bool    s_10dof_in_cycle = false;
         if (sen0696_is_present()) {
-            const uint32_t period_ms = (sen0696_get_consec_fails() >= 15U) ? 5000U : 1000U;
-            if (!s_10dof_in_cycle && (now - last_10dof_poll_ms >= period_ms)) {
-                last_10dof_poll_ms = now;
-                s_10dof_in_cycle   = true;
-                s_10dof_step       = 0;
-            }
-            if (s_10dof_in_cycle) {
-                sen0696_state_t beam_state;
-                bool ok = sen0696_poll_step(s_10dof_step, &beam_state);
-                s_10dof_step++;
-                if (s_10dof_step >= 3U) {
-                    s_10dof_in_cycle = false;
-                    s_10dof_step     = 0;
-                    if (ok) {
-                        float beam_gyr_mag = sqrtf(beam_state.gyro_dps[0] * beam_state.gyro_dps[0] +
-                                                   beam_state.gyro_dps[1] * beam_state.gyro_dps[1] +
-                                                   beam_state.gyro_dps[2] * beam_state.gyro_dps[2]);
-                        float beam_acc_delta = prev_10dof_valid
-                            ? (fabsf(beam_state.accel_g[0] - prev_10dof_acc[0]) +
-                               fabsf(beam_state.accel_g[1] - prev_10dof_acc[1]) +
-                               fabsf(beam_state.accel_g[2] - prev_10dof_acc[2]))
-                            : 0.0f;
-                        if (beam_gyr_mag >= 8.0f || beam_acc_delta >= 0.08f) {
-                            last_imu_motion_ms = (now == 0) ? 1 : now;
-                        }
-                        prev_10dof_acc[0] = beam_state.accel_g[0];
-                        prev_10dof_acc[1] = beam_state.accel_g[1];
-                        prev_10dof_acc[2] = beam_state.accel_g[2];
-                        prev_10dof_valid  = true;
-
-                        Serial.printf("[10DOF] Acc(g):%+.3f,%+.3f,%+.3f | Gyr(dps):%+.2f,%+.2f,%+.2f | Mag(uT):%+.2f,%+.2f,%+.2f (|B|=%.1f) | P:%.2fhPa\n",
-                                      beam_state.accel_g[0], beam_state.accel_g[1], beam_state.accel_g[2],
-                                      beam_state.gyro_dps[0], beam_state.gyro_dps[1], beam_state.gyro_dps[2],
-                                      beam_state.mag_ut[0], beam_state.mag_ut[1], beam_state.mag_ut[2],
-                                      beam_state.mag_norm_ut,
-                                      beam_state.pressure_hpa);
-                    } else {
-                        Serial.printf("[10DOF] READ ERR (acc:%s mag:%s press:%s fails:%u)\n",
-                                      beam_state.accel_gyro_valid ? "OK" : "ERR",
-                                      beam_state.mag_valid        ? "OK" : "ERR",
-                                      beam_state.press_valid      ? "OK" : "ERR",
-                                      (unsigned)beam_state.consec_fails);
+            bool cycle_done = false;
+            bool ok = false;
+            if (sen0696_get_i2c_bus() == 1U) {
+                if (sen0696_get_consec_fails() < 15U || (now - last_10dof_poll_ms >= 5000U)) {
+                    last_10dof_poll_ms = (now == 0) ? 1U : now;
+                    beam_poll_ticks++;
+                    const bool read_baro = ((beam_poll_ticks % 10U) == 0U);
+                    ok = sen0696_poll_fast(read_baro, &beam_state);
+                    cycle_done = true;
+                }
+            } else {
+                const uint32_t period_ms = (sen0696_get_consec_fails() >= 15U) ? 5000U : 200U;
+                if (!s_10dof_in_cycle && (now - last_10dof_poll_ms >= period_ms)) {
+                    last_10dof_poll_ms = (now == 0) ? 1U : now;
+                    s_10dof_in_cycle   = true;
+                    s_10dof_step       = 0;
+                }
+                if (s_10dof_in_cycle) {
+                    ok = sen0696_poll_step(s_10dof_step, &beam_state);
+                    s_10dof_step++;
+                    if (s_10dof_step >= 3U) {
+                        s_10dof_in_cycle = false;
+                        s_10dof_step     = 0;
+                        cycle_done       = true;
                     }
                 }
             }
+
+            if (cycle_done) {
+                if (ok && beam_state.accel_gyro_valid) {
+                    float dt_ahrs = (last_10dof_ahrs_ms > 0U && now >= last_10dof_ahrs_ms)
+                                    ? ((float)(now - last_10dof_ahrs_ms) / 1000.0f)
+                                    : 0.035f;
+                    if (dt_ahrs < 0.002f) dt_ahrs = 0.002f;
+                    if (dt_ahrs > 0.25f)  dt_ahrs = 0.25f;
+                    last_10dof_ahrs_ms = (now == 0) ? 1U : now;
+
+                    if (s_beam_ahrs) {
+                        ahrs_9dof_update(s_beam_ahrs,
+                                         beam_state.accel_g,
+                                         beam_state.gyro_dps,
+                                         beam_state.mag_ut,
+                                         beam_state.mag_valid,
+                                         false,
+                                         dt_ahrs,
+                                         &beam_ahrs_out);
+                        beam_ahrs_has_sample = true;
+
+                        float bx = beam_ahrs_out.roll_deg  - current_settings.pole_tilt_tare_roll_deg;
+                        float by = beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
+                        float tilt = sqrtf(bx * bx + by * by);
+                        portENTER_CRITICAL(&s_imu_snapshot_mux);
+                        s_snapshot_bubble_x  = bx;
+                        s_snapshot_bubble_y  = by;
+                        s_snapshot_pole_tilt = tilt;
+                        portEXIT_CRITICAL(&s_imu_snapshot_mux);
+                    }
+
+                    float beam_gyr_mag = sqrtf(beam_state.gyro_dps[0] * beam_state.gyro_dps[0] +
+                                               beam_state.gyro_dps[1] * beam_state.gyro_dps[1] +
+                                               beam_state.gyro_dps[2] * beam_state.gyro_dps[2]);
+                    float beam_acc_delta = prev_10dof_valid
+                        ? (fabsf(beam_state.accel_g[0] - prev_10dof_acc[0]) +
+                           fabsf(beam_state.accel_g[1] - prev_10dof_acc[1]) +
+                           fabsf(beam_state.accel_g[2] - prev_10dof_acc[2]))
+                        : 0.0f;
+                    if (beam_gyr_mag >= 8.0f || beam_acc_delta >= 0.08f) {
+                        last_imu_motion_ms = (now == 0) ? 1U : now;
+                    }
+                    prev_10dof_acc[0] = beam_state.accel_g[0];
+                    prev_10dof_acc[1] = beam_state.accel_g[1];
+                    prev_10dof_acc[2] = beam_state.accel_g[2];
+                    prev_10dof_valid  = true;
+
+                    if ((now - last_10dof_log_ms) >= 1000U) {
+                        last_10dof_log_ms = now;
+                        Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | FOC:%s | P:%.2fhPa\n",
+                                      (unsigned)sen0696_get_i2c_bus(),
+                                      beam_ahrs_out.pitch_deg,
+                                      beam_ahrs_out.roll_deg,
+                                      beam_ahrs_out.mag_cal_valid ? beam_ahrs_out.mag_norm_uT : beam_state.mag_norm_ut,
+                                      beam_ahrs_out.gyro_foc_locked ? "OK" : "WAIT",
+                                      beam_state.pressure_hpa);
+                    }
+                } else if (!ok && ((now - last_10dof_log_ms) >= 2000U)) {
+                    last_10dof_log_ms = now;
+                    Serial.printf("[10DOF I2C%u] READ ERR (acc:%s mag:%s press:%s fails:%u)\n",
+                                  (unsigned)sen0696_get_i2c_bus(),
+                                  beam_state.accel_gyro_valid ? "OK" : "ERR",
+                                  beam_state.mag_valid        ? "OK" : "ERR",
+                                  beam_state.press_valid      ? "OK" : "ERR",
+                                  (unsigned)beam_state.consec_fails);
+                }
+            }
+        }
+
+        bool beam_10dof_active = sen0696_is_present() && beam_state.present && beam_state.valid &&
+                                 beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+
+        if (pending_tare_level) {
+            pending_tare_level = false;
+            if (beam_10dof_active) {
+                current_settings.pole_tilt_tare_pitch_deg = beam_ahrs_out.pitch_deg;
+                current_settings.pole_tilt_tare_roll_deg  = beam_ahrs_out.roll_deg;
+            } else {
+                current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
+                current_settings.pole_tilt_tare_roll_deg  = cached_imu_roll;
+            }
+            mark_settings_dirty();
+            play_rover_beep(1800, 80);
+        }
+
+        // Update 360-deg CAL MAG ellipsoid wizard on active magnetometer stream
+        {
+            float cal_mag_raw[3] = {0.0f, 0.0f, 0.0f};
+            bool  cal_mag_ok = false;
+            if (beam_10dof_active && beam_state.mag_valid && s_beam_ahrs) {
+                ahrs_9dof_transform_vec(s_beam_ahrs->cfg.orient_matrix, beam_state.mag_ut, cal_mag_raw);
+                cal_mag_ok = true;
+            } else if (cached_mag.present && cached_mag.valid) {
+                memcpy(cal_mag_raw, cached_mag.mag_uT, sizeof(cal_mag_raw));
+                cal_mag_ok = true;
+            }
+            mag_cal_update_wizard(&mag_cal_wiz, cal_mag_raw, cal_mag_ok, now);
         }
 
         // Auto-shutdown on battery inactivity timeout (motion/logger-safe + 30s warning modal)
@@ -565,6 +874,8 @@ void task_display_and_audio(void *pvParameters)
             inhibit_reason = "Wi-Fi ON";
         } else if (ui_state.survey_in_progress) {
             inhibit_reason = "Survey";
+        } else if (mag_cal_wiz.status == MAG_CAL_COLLECTING) {
+            inhibit_reason = "Mag Cal";
         } else if (route_logger_is_active()) {
             inhibit_reason = "REC ON";
         } else if (nmea_logger_is_active()) {
@@ -656,8 +967,6 @@ void task_display_and_audio(void *pvParameters)
 
             ui_state.imu_pitch_deg     = cached_imu_pitch;
             ui_state.imu_roll_deg      = cached_imu_roll;
-            ui_state.pole_bubble_x_deg = cached_bubble_x;
-            ui_state.pole_bubble_y_deg = cached_bubble_y;
             ui_state.display_pose      = cached_pose;
             ui_state.imu_acc[0]        = cached_acc[0];
             ui_state.imu_acc[1]        = cached_acc[1];
@@ -676,41 +985,111 @@ void task_display_and_audio(void *pvParameters)
             strncpy(ui_state.auto_off_reason, s_auto_off_reason, sizeof(ui_state.auto_off_reason) - 1);
             ui_state.auto_off_reason[sizeof(ui_state.auto_off_reason) - 1] = '\0';
 
-            // Attach MMC5983MA Magnetometer Telemetry
-            ui_state.mag_present         = cached_mag.present;
-            ui_state.mag_cal_valid       = current_settings.mag_cal_valid;
-            ui_state.mag_uT[0]           = cached_mag.mag_uT[0];
-            ui_state.mag_uT[1]           = cached_mag.mag_uT[1];
-            ui_state.mag_uT[2]           = cached_mag.mag_uT[2];
-            ui_state.mag_total_uT        = cached_mag.total_uT;
-            ui_state.mag_tare_offset_deg = current_settings.mag_true_north_offset_deg;
-            ui_state.mag_die_temp_c      = cached_mag.die_temp_c;
-            ui_state.mag_set_reset_count = cached_mag.set_reset_count;
+            // Sensor Priority Hierarchy:
+            // Tier A: Rigid-beam SEN0696 10DOF (I2C1 IO47/48, or I2C0 fallback) + 9-DOF AHRS
+            // Tier B: Legacy MMC5983MA (0x30) + QMI8658 (0x6B)
+            // Tier C: Onboard QMI8658 6-DOF
+            NavHeadingSensorInput_t hdg_in = {};
+            hdg_in.tip_lat                  = ui_state.tip_lat;
+            hdg_in.tip_lon                  = ui_state.tip_lon;
+            hdg_in.now_ms                   = now;
+            hdg_in.dual_antenna_valid       = (ui_state.heading_valid &&
+                                               (ui_state.heading_source == HDG_SRC_DUAL_FIX ||
+                                                ui_state.heading_source == HDG_SRC_DUAL_FLT));
+            hdg_in.dual_antenna_fixed       = ui_state.heading_is_fixed;
+            hdg_in.dual_heading_deg         = ui_state.true_heading_deg;
+            hdg_in.um982_baseline_pitch_deg = ui_state.baseline_pitch_deg;
 
-            float pole_tilt_deg = sqrtf(cached_bubble_x * cached_bubble_x + cached_bubble_y * cached_bubble_y);
+            if (beam_10dof_active) {
+                ui_state.pole_bubble_x_deg   = beam_ahrs_out.roll_deg  - current_settings.pole_tilt_tare_roll_deg;
+                ui_state.pole_bubble_y_deg   = beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
+                ui_state.mag_present         = true;
+                ui_state.mag_uT[0]           = beam_ahrs_out.mag_cal_uT[0];
+                ui_state.mag_uT[1]           = beam_ahrs_out.mag_cal_uT[1];
+                ui_state.mag_uT[2]           = beam_ahrs_out.mag_cal_uT[2];
+                ui_state.mag_total_uT        = beam_ahrs_out.mag_norm_uT;
+                ui_state.mag_die_temp_c      = 0.0f;
+                ui_state.mag_set_reset_count = 0U;
+
+                hdg_in.yaw_rate_cw_dps       = beam_ahrs_out.world_yaw_rate_cw_dps;
+                hdg_in.mag_present           = true;
+                hdg_in.mag_valid             = beam_ahrs_out.mag_cal_valid;
+                hdg_in.raw_mag_heading_deg   = beam_ahrs_out.tilt_comp_mag_heading_deg;
+                hdg_in.mag_total_uT          = beam_ahrs_out.mag_norm_uT;
+                hdg_in.mag_bz_world_uT       = beam_ahrs_out.mag_bz_world_uT;
+                hdg_in.has_bz_world          = true;
+                hdg_in.is_beam_10dof         = true;
+                hdg_in.beam_pitch_deg        = beam_ahrs_out.pitch_deg;
+            } else {
+                ui_state.pole_bubble_x_deg   = cached_bubble_x;
+                ui_state.pole_bubble_y_deg   = cached_bubble_y;
+                ui_state.mag_present         = cached_mag.present;
+                ui_state.mag_uT[0]           = cached_mag.mag_uT[0];
+                ui_state.mag_uT[1]           = cached_mag.mag_uT[1];
+                ui_state.mag_uT[2]           = cached_mag.mag_uT[2];
+                ui_state.mag_total_uT        = cached_mag.total_uT;
+                ui_state.mag_die_temp_c      = cached_mag.die_temp_c;
+                ui_state.mag_set_reset_count = cached_mag.set_reset_count;
+
+                hdg_in.yaw_rate_cw_dps       = cached_gyr[2];
+                hdg_in.mag_present           = cached_mag.present;
+                hdg_in.mag_valid             = cached_mag.valid;
+                hdg_in.raw_mag_heading_deg   = cached_mag.raw_mag_heading_deg;
+                hdg_in.mag_total_uT          = cached_mag.total_uT;
+            }
+
+            float pole_tilt_deg = sqrtf(ui_state.pole_bubble_x_deg * ui_state.pole_bubble_x_deg +
+                                        ui_state.pole_bubble_y_deg * ui_state.pole_bubble_y_deg);
             ui_state.pole_tilt_deg = pole_tilt_deg;
+            hdg_in.pole_tilt_deg   = pole_tilt_deg;
 
-            // Phase 5 & Phase 8: Deep-Woods Heading Fallback (Kinematic Displacement + 9-DOF Compass + Gyro Yaw)
-            nav_heading_9dof_update(ui_state.tip_lat,
-                                    ui_state.tip_lon,
-                                    cached_gyr[2],
-                                    pole_tilt_deg,
-                                    cached_mag.present,
-                                    cached_mag.valid,
-                                    cached_mag.raw_mag_heading_deg,
-                                    cached_mag.total_uT,
-                                    now,
-                                    (ui_state.heading_valid && (ui_state.heading_source == HDG_SRC_DUAL_FIX || ui_state.heading_source == HDG_SRC_DUAL_FLT)),
-                                    ui_state.heading_is_fixed,
-                                    ui_state.true_heading_deg,
+            // Phase 5, Phase 8 & v0.9.0: Deep-Woods Heading Fallback Engine
+            nav_heading_beam_update(&hdg_in,
                                     &ui_state.heading_valid,
                                     &ui_state.true_heading_deg,
                                     &ui_state.heading_source,
                                     &ui_state.displacement_dist_m,
                                     &ui_state.mag_heading_deg,
                                     &ui_state.mag_anomaly);
-            ui_state.mag_cal_valid       = current_settings.mag_cal_valid;
-            ui_state.mag_tare_offset_deg = current_settings.mag_true_north_offset_deg;
+            ui_state.mag_cal_valid           = current_settings.mag_cal_valid;
+            ui_state.mag_tare_offset_deg     = current_settings.mag_true_north_offset_deg;
+            ui_state.mag_ellipsoid_cal_valid = current_settings.mag_ellipsoid_cal_valid;
+
+            // Populate SEN0696 / BMP581 / CAL MAG / I2C Diagnostics
+            ui_state.beam_10dof_present   = sen0696_is_present();
+            ui_state.beam_10dof_valid     = beam_10dof_active;
+            ui_state.beam_10dof_bus       = sen0696_get_i2c_bus();
+            ui_state.beam_10dof_addr      = beam_state.i2c_addr;
+            ui_state.beam_gyro_foc_locked = beam_ahrs_has_sample && beam_ahrs_out.gyro_foc_locked;
+            ui_state.beam_pitch_deg       = beam_ahrs_out.pitch_deg;
+            ui_state.beam_roll_deg        = beam_ahrs_out.roll_deg;
+            ui_state.mag_cal_status       = (uint8_t)mag_cal_wiz.status;
+            ui_state.mag_cal_progress_pct = mag_cal_wiz.progress_pct;
+            ui_state.mag_cal_samples      = mag_cal_wiz.samples;
+            ui_state.mag_cal_rms_pct      = mag_cal_wiz.rms_pct;
+            ui_state.i2c0_err_count       = i2c_bsp_get_bus_err_count(0U);
+            ui_state.i2c1_err_count       = i2c_bsp_get_bus_err_count(1U);
+
+            if (sen0696_is_present() && beam_state.press_valid) {
+                ui_state.beam_pressure_hpa = beam_state.pressure_hpa;
+                if (ui_state.fix_type == GNSS_FIX_RTK_FIXED && isfinite(ui_state.tip_height_m)) {
+                    float raw_diff = (float)ui_state.tip_height_m - beam_state.altitude_m;
+                    if (!s_baro_bias_valid) {
+                        s_baro_elev_bias_m = raw_diff;
+                        s_baro_bias_valid  = true;
+                    } else {
+                        s_baro_elev_bias_m = 0.98f * s_baro_elev_bias_m + 0.02f * raw_diff;
+                    }
+                }
+                ui_state.beam_baro_bias_valid = s_baro_bias_valid;
+                ui_state.beam_baro_rel_elev_m = s_baro_bias_valid
+                                                ? (beam_state.altitude_m + s_baro_elev_bias_m)
+                                                : beam_state.altitude_m;
+            } else {
+                ui_state.beam_pressure_hpa    = 0.0f;
+                ui_state.beam_baro_bias_valid = false;
+                ui_state.beam_baro_rel_elev_m = 0.0f;
+            }
 
             if (ui_state.has_active_target && ui_state.heading_valid) {
                 float rel = ui_state.bearing_to_target_deg - ui_state.true_heading_deg;
@@ -896,7 +1275,7 @@ void task_display_and_audio(void *pvParameters)
 }
 
 /**
- * @brief Initializes DFRobot SEN0696 (10DOF IMU) on I2C0 and logs boot presence + initial readout.
+ * @brief Initializes DFRobot SEN0696 (10DOF IMU) preferring I2C1 (IO47/48), falling back to I2C0.
  */
 static void run_beam_10dof_boot_check(void)
 {
@@ -904,23 +1283,25 @@ static void run_beam_10dof_boot_check(void)
     (void)sen0696_init(ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX, &report);
 
     if (report.i2c_addr == 0U) {
-        Serial.printf("[10DOF] DFRobot SEN0696 (0x%02X..0x%02X) not detected on I2C0 -- skipping.\n",
+        Serial.printf("[10DOF] DFRobot SEN0696 (0x%02X..0x%02X) not detected on I2C1 or I2C0 -- skipping.\n",
                       (unsigned)ROVER_I2C_ADDR_BEAM_IMU,
                       (unsigned)ROVER_I2C_ADDR_BEAM_IMU_MAX);
         return;
     }
 
     if (!report.id_valid) {
-        Serial.printf("[10DOF] Device at 0x%02X failed SEN0696 ID check (VID=0x%04X PID=0x%04X FW=0x%04X).\n",
+        Serial.printf("[10DOF] Device at 0x%02X (I2C%u) failed SEN0696 ID check (VID=0x%04X PID=0x%04X FW=0x%04X).\n",
                       (unsigned)report.i2c_addr,
+                      (unsigned)report.i2c_bus,
                       (unsigned)report.vid,
                       (unsigned)report.pid,
                       (unsigned)report.fw_version);
         return;
     }
 
-    Serial.printf("[10DOF] DFRobot SEN0696 found @ 0x%02X | VID=0x%04X%s PID=0x%04X FW=0x%04X | Cfg:%s (1 Hz log enabled)\n",
+    Serial.printf("[10DOF] DFRobot SEN0696 found @ 0x%02X on %s | VID=0x%04X%s PID=0x%04X FW=0x%04X | Cfg:%s\n",
                   (unsigned)report.i2c_addr,
+                  (report.i2c_bus == 1U) ? "I2C1 (IO47/48 Isolated)" : "I2C0 (IO7/8 Fallback)",
                   (unsigned)report.vid,
                   (report.vid == SEN0696_EXPECTED_VID) ? "" : "(unexpected)",
                   (unsigned)report.pid,
@@ -978,10 +1359,11 @@ void setup()
     Serial.printf("   Reset Reason: %d\n", (int)esp_reset_reason());
     Serial.printf("====================================================\n");
 
-    // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA) & TCA9554 IO Expander
+    // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA), Isolated I2C1 Bus (IO47=SDA, IO48=SCL) & TCA9554 IO Expander
     // Match Waveshare 01_factory: leave EXIO3 (ROVER_EXIO_SD_CS) as Input/High-Z initially.
     // Retry with full GPIO SCL bus-clear recovery so a slave holding SDA low across a warm/UPS reset never causes a panic loop.
     i2c_master_Init();
+    i2c_bsp_i2c1_init();
     esp_err_t exio_err = ESP_FAIL;
     for (int attempt = 1; attempt <= 5; attempt++) {
         exio_err = esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander);
@@ -1000,8 +1382,9 @@ void setup()
                       (unsigned int)exio_err);
     }
 
-    // 2. Scan Shared I2C0 Bus (IO7=SCL, IO8=SDA) & Initialize Onboard + Optional Peripherals
-    uint8_t beam_imu_addr = sen0696_detect_i2c_addr(ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX);
+    // 2. Scan Shared I2C0 (IO7/8) & Isolated I2C1 (IO47/48) Buses & Initialize Peripherals
+    uint8_t i2c0_beam_addr = sen0696_detect_i2c_addr_on_bus(0U, ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX);
+    uint8_t i2c1_beam_addr = sen0696_detect_i2c_addr_on_bus(1U, ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX);
     Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s | MAG(0x30):%s | 10DOF(0x%02X):%s\n",
                   i2c_bsp_probe_addr(ROVER_I2C_ADDR_TCA9554)         ? "OK" : "--",
                   i2c_bsp_probe_addr(ROVER_I2C_ADDR_AXP2101)         ? "OK" : "--",
@@ -1010,8 +1393,11 @@ void setup()
                   i2c_bsp_probe_addr(ROVER_I2C_ADDR_IMU)             ? "OK" : "--",
                   i2c_bsp_probe_addr(ROVER_I2C_ADDR_ES8311)          ? "OK" : "--",
                   i2c_bsp_probe_optional_addr(ROVER_I2C_ADDR_MAG)    ? "OK" : "--",
-                  (unsigned)(beam_imu_addr ? beam_imu_addr : ROVER_I2C_ADDR_BEAM_IMU),
-                  beam_imu_addr                                      ? "OK" : "--");
+                  (unsigned)(i2c0_beam_addr ? i2c0_beam_addr : ROVER_I2C_ADDR_BEAM_IMU),
+                  i2c0_beam_addr                                     ? "OK" : "--");
+    Serial.printf("[I2C1 SCAN] (IO47 SDA / IO48 SCL @ 400kHz) | 10DOF(0x%02X):%s\n",
+                  (unsigned)(i2c1_beam_addr ? i2c1_beam_addr : ROVER_I2C_ADDR_BEAM_IMU),
+                  i2c1_beam_addr                                     ? "OK" : "--");
 
     axp2101_bsp_init();
     rtc_bsp_init();
@@ -1087,8 +1473,24 @@ void setup()
                       sd_card_use_spi ? "SPI" : "SD_MMC", typeStr, cardSizeMB, usedSizeMB, totalSizeMB);
     }
 
-    // 4. Load Settings & CSV Waypoints
+    // 4. Load Settings, Allocate PSRAM Beam AHRS & CSV Waypoints
     init_settings_manager();
+    s_beam_ahrs = (Ahrs9DofState_t *)heap_caps_malloc(sizeof(Ahrs9DofState_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_beam_ahrs == NULL) {
+        s_beam_ahrs = (Ahrs9DofState_t *)malloc(sizeof(Ahrs9DofState_t));
+    }
+    if (s_beam_ahrs != NULL) {
+        Ahrs9DofConfig_t ahrs_cfg;
+        ahrs_9dof_default_config(&ahrs_cfg, current_settings.beam_imu_orient_mode);
+        ahrs_9dof_init(s_beam_ahrs, &ahrs_cfg);
+        ahrs_9dof_set_mag_cal(s_beam_ahrs,
+                              current_settings.mag_hard_iron_uT,
+                              current_settings.mag_soft_iron,
+                              current_settings.mag_ellipsoid_cal_valid);
+        Serial.printf("[AHRS] Beam 9-DOF filter ready in PSRAM | OrientMode:%u | EllipsoidCal:%s\n",
+                      (unsigned)current_settings.beam_imu_orient_mode,
+                      current_settings.mag_ellipsoid_cal_valid ? "YES" : "NO");
+    }
     if (current_settings.enable_serial_logging) {
         serial_logger_start();
     }
