@@ -17,10 +17,10 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
    * Moves the LiPo pouch out of the electronics cavity (trimming the main chassis depth by `11.3 mm`, down to `28.0 mm`).
    * Standardizes the pole mount on one `92 x 132 mm` pod (`Battery_Cradle` + `Pole_Lid`, **`4 x M3` (`80 x 100 mm`)**) with an integral **Bottom-Left Capture Corner** (`X = -30.25..-12.0, Y = 31.0..38.75` behind the Speaker). Both the **`10000 mAh`** cell and **`5000 mAh`** cell (paired with the drop-in skeletonized **`Battery_Adapter_5000`** insert) exit their JST leads into the open **bottom-right bay pocket** directly aligned over the horizontal **`13.0 x 9.0 mm` stadium `BAT_SLOT`** (`(25.0, 35.5)`) beneath `Waveshare`.
 4. **Option H1 Slim Slot-In Sun Shield (`1.6 mm` Walls, Zero Magnets):**
-   * Tapered 3-sided PETG visor (`28.0 mm` top projection tapering to `12.0 mm` at bottom; open bottom for thumb gestures) plugs cleanly into a reinforced `1.90 x 1.80 mm` U-groove in `Top_Cover` — zero protruding magnet bosses and `> 65%` less filament than `v1.1.0`.
+   * Tapered 3-sided PETG visor (`28.0 mm` top projection tapering to `12.0 mm` at bottom; open bottom for thumb gestures) plugs cleanly into a reinforced `1.90 x 1.80 mm` U-groove in `Top_Cover` -- zero protruding magnet bosses and `> 65%` less filament than `v1.1.0`.
 5. **Support-Free Skeletonized `37.5 deg` Laser-Mount Tilt Wedge (`Pole_Tilt_Wedge_37_5`):**
    * Adapts `Pole_Lid`'s vertical `24 x 74 mm` twin-`1/4"-20` spine back **`37.5 deg` from vertical** (`52.5 deg` screen pitch toward the surveyor) in a **`90-deg` rotated sideways shelf orientation** on [`REF-laser_pole_mount.stp`](step/REF-laser_pole_mount.stp) (`60 x 135 x 10 mm min` shelf, `24.80..78.30 mm` slot / `53.5 mm` travel, bare `8.0 mm` `1/4"-20` stud after removing the laser-level adapter & knurled collar). Placing the survey pole/rack on the smooth `-X` left wall keeps all `3` right-side buttons and `MicroSD` slot completely unobstructed while remaining symmetric for `-X` or `+X` pole mounting.
-   * Features a skeletonized **`32.0 mm`** open Warren-truss frame (`4.5 mm` perimeter chords, `4.0-4.5 mm` internal struts, `6.0 mm` integral front/rear anti-rotation skirts over `60.50 mm` span), a `45-deg` lofted-funnel `2.5 mm` spine alignment pocket (`24.5 x 74.5 mm`) with **pure round** `Dia 6.80 / 11.40 mm` bores (`2 x 1/4"-20 x 3/4"` or `5/8"` Allen SHCS), a base `RX-1/4"x12.7` Ruthex column (`5.52 mm` min solid wall to the lower SHCS path), bottom `USB-C` overhang forward/below the `60 mm` shelf edge, and **`100%` support-free side-down PETG printing (`54.12 cm^3`, `37.3%` lighter than `v2.2.1`)**.
+   * Features a skeletonized **`32.0 mm`** open Warren-truss frame (`4.5 mm` perimeter chords, `4.0-4.5 mm` internal struts, `6.0 mm` integral front/rear anti-rotation skirts over `60.50 mm` span), a `45-deg` lofted-funnel `2.5 mm` spine alignment pocket (`24.5 x 74.5 mm`) with **pure round** `Dia 6.80 / 11.40 mm` bores (`2 x 1/4"-20 x 3/4"` or `5/8"` Allen SHCS), a base `RX-1/4"x12.7` Ruthex column (`2.30-2.80 mm` closed boss roof, `>= 4.00 mm` U-wall / `12.00 mm` X-wall, `>= 2.82 mm` clear to the lower SHCS wrench path), bottom `USB-C` overhang forward/below the `60 mm` shelf edge, and **`100%` support-free side-down PETG printing (`54.12 cm^3`, `37.3%` lighter than `v2.2.1`)**.
 
 ---
 
@@ -92,7 +92,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 ## 6. Fastener & Hardware BOM
 
 * **Ruthex Heat-Set Inserts (`21` pcs, `250-265 deg C` soldering iron tip):**
-  * `10 x M3` (`Dia 4.0 x 6.7 mm`): `6` in `Back_Chassis_Frame` cover bosses + `4` in `Back_Chassis_Frame` rear Option B2 pod bosses.
+  * `10 x M3` (`Dia 4.0 x 8.0 mm` cover / `6.9 mm` rear pod): `6` in `Back_Chassis_Frame` cover bosses + `4` in `Back_Chassis_Frame` rear Option B2 pod bosses.
   * `8 x M2` (`Dia 3.2 x 5.0 mm`): `4` in `Power Board` standoffs + `4` in `E220` standoffs.
   * `3 x 1/4"-20` (`Dia 8.0 x 13.7 mm`): `2` in `Pole_Lid` spine (`38.1 mm` pitch) + `1` in `Pole_Tilt_Wedge_37_5` base saddle.
 * **Fasteners (`26` metric + `2` imperial screws, `8` flat washers):**
@@ -101,7 +101,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
   * `4 x M2 x 20 mm CSK` (`Waveshare` via rear of `Back_Chassis_Frame` pillars, `16.50 mm` span + `3.50 mm` thread engagement)
   * `4 x M2 x 12 mm CSK` (`UM982` `4-M2` via `1.60 mm` recessed counterbores on `Back_Chassis_Frame`, `9.20 mm` effective span + `2.80 mm` / `7.0`-thread engagement)
   * `8 x M2 x 6 mm` button head **+ `8 x M2` flat washers (`~0.3-0.5 mm`)** (`Power Board` + `E220`, `>= 0.8 mm` pocket bottom clearance)
-  * `2 x 1/4"-20 x 3/4"` (or `5/8"`) stainless **Allen SHCS** (`Pole_Tilt_Wedge_37_5` -> `Pole_Lid` spine via `Dia 11.40 mm` rear access tunnels, `11.05 mm` engagement w/ `3/4"` / `7.88 mm` w/ `5/8"`)
+  * `2 x 1/4"-20 x 3/4"` (or `5/8"`) stainless **Allen SHCS** (`Pole_Tilt_Wedge_37_5` -> `Pole_Lid` spine via pure round `Dia 11.40 mm` rear-chord wrench holes across the open Warren truss (no washer), `11.05 mm` engagement w/ `3/4"` / `7.88 mm` w/ `5/8"`)
 * **Light Pipes & Sealing:**
   * `4 x Dia 1.75 mm` clear PETG filament stubs pressed into `Top_Cover` `UM982` LED holes and trimmed flush.
-  * Optional `1 mm` closed-cell neoprene/EVA foam pad behind the LiPo cell in `Battery_Cradle_*` and around the speaker rim.
+  * Optional `1 mm` closed-cell neoprene/EVA foam pad behind the LiPo cell in `Battery_Cradle` and around the speaker rim.
