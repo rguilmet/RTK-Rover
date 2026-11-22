@@ -436,6 +436,15 @@ static void mag_cal_run_fit(MagCalWizard_t *w, uint32_t now_ms)
         sum_r += sqrtf(cx * cx + cy * cy + cz * cz);
     }
     float mean_r = (float)(sum_r / (double)w->samples);
+    if (!isfinite(mean_r) || mean_r < 20.0f || mean_r > 85.0f) {
+        w->status    = MAG_CAL_FAILED;
+        w->result_ms = now_ms;
+        w->rms_pct   = 100.0f;
+        play_rover_beep(400, 180);
+        Serial.printf("[CAL MAG] Rejected implausible solved |B|=%.1fuT (%u pts)\n",
+                      mean_r, (unsigned)w->samples);
+        return;
+    }
 
     memcpy(current_settings.mag_hard_iron_uT, center, sizeof(center));
     for (int i = 0; i < 3; i++) {
@@ -444,9 +453,7 @@ static void mag_cal_run_fit(MagCalWizard_t *w, uint32_t now_ms)
         }
     }
     current_settings.mag_ellipsoid_cal_valid = true;
-    if (mean_r >= 20.0f && mean_r <= 80.0f) {
-        current_settings.mag_field_ref_uT = mean_r;
-    }
+    current_settings.mag_field_ref_uT        = mean_r;
     if (s_beam_ahrs) {
         ahrs_9dof_set_mag_cal(s_beam_ahrs,
                               current_settings.mag_hard_iron_uT,
@@ -460,7 +467,8 @@ static void mag_cal_run_fit(MagCalWizard_t *w, uint32_t now_ms)
     w->status       = MAG_CAL_SUCCESS;
     w->result_ms    = now_ms;
     play_rover_dual_beep(1400, 60, 30, 2200, 100);
-    Serial.printf("[CAL MAG] OK (%u pts): Center=(%+.1f,%+.1f,%+.1f)uT | |B|=%.1fuT | RMS=%.2f%%\n",
+    Serial.printf("[CAL MAG] OK [%s] (%u pts): Center=(%+.1f,%+.1f,%+.1f)uT | |B|=%.1fuT | RMS=%.2f%%\n",
+                  (fabsf(center[2]) > 0.001f) ? "3D" : "2D-XY",
                   (unsigned)w->samples, center[0], center[1], center[2], mean_r, rms_pct);
 }
 
@@ -644,7 +652,10 @@ void task_display_and_audio(void *pvParameters)
             Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
         }
 
-        if (now - last_imu_poll_ms >= 100 || last_imu_poll_ms == 0) {
+        const bool beam_online_fast = sen0696_is_present() && beam_state.valid &&
+                                      beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+        const uint32_t imu_poll_period_ms = beam_online_fast ? 500U : 100U;
+        if (now - last_imu_poll_ms >= imu_poll_period_ms || last_imu_poll_ms == 0) {
             last_imu_poll_ms = (now == 0) ? 1 : now;
             int16_t imu_temp = 0;
             imu_read(cached_acc, cached_gyr, &imu_temp);
@@ -771,8 +782,9 @@ void task_display_and_audio(void *pvParameters)
                                          &beam_ahrs_out);
                         beam_ahrs_has_sample = true;
 
-                        float bx = beam_ahrs_out.roll_deg  - current_settings.pole_tilt_tare_roll_deg;
-                        float by = beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
+                        // Negate positive-up beam pitch for screen bubble Y so tipping up moves bubble UP (matching QMI8658)
+                        float bx = beam_ahrs_out.roll_deg   - current_settings.pole_tilt_tare_roll_deg;
+                        float by = -beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
                         float tilt = sqrtf(bx * bx + by * by);
                         portENTER_CRITICAL(&s_imu_snapshot_mux);
                         s_snapshot_bubble_x  = bx;
@@ -796,17 +808,6 @@ void task_display_and_audio(void *pvParameters)
                     prev_10dof_acc[1] = beam_state.accel_g[1];
                     prev_10dof_acc[2] = beam_state.accel_g[2];
                     prev_10dof_valid  = true;
-
-                    if ((now - last_10dof_log_ms) >= 1000U) {
-                        last_10dof_log_ms = now;
-                        Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | FOC:%s | P:%.2fhPa\n",
-                                      (unsigned)sen0696_get_i2c_bus(),
-                                      beam_ahrs_out.pitch_deg,
-                                      beam_ahrs_out.roll_deg,
-                                      beam_ahrs_out.mag_cal_valid ? beam_ahrs_out.mag_norm_uT : beam_state.mag_norm_ut,
-                                      beam_ahrs_out.gyro_foc_locked ? "OK" : "WAIT",
-                                      beam_state.pressure_hpa);
-                    }
                 } else if (!ok && ((now - last_10dof_log_ms) >= 2000U)) {
                     last_10dof_log_ms = now;
                     Serial.printf("[10DOF I2C%u] READ ERR (acc:%s mag:%s press:%s fails:%u)\n",
@@ -825,7 +826,7 @@ void task_display_and_audio(void *pvParameters)
         if (pending_tare_level) {
             pending_tare_level = false;
             if (beam_10dof_active) {
-                current_settings.pole_tilt_tare_pitch_deg = beam_ahrs_out.pitch_deg;
+                current_settings.pole_tilt_tare_pitch_deg = -beam_ahrs_out.pitch_deg;
                 current_settings.pole_tilt_tare_roll_deg  = beam_ahrs_out.roll_deg;
             } else {
                 current_settings.pole_tilt_tare_pitch_deg = cached_imu_pitch;
@@ -1001,8 +1002,8 @@ void task_display_and_audio(void *pvParameters)
             hdg_in.um982_baseline_pitch_deg = ui_state.baseline_pitch_deg;
 
             if (beam_10dof_active) {
-                ui_state.pole_bubble_x_deg   = beam_ahrs_out.roll_deg  - current_settings.pole_tilt_tare_roll_deg;
-                ui_state.pole_bubble_y_deg   = beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
+                ui_state.pole_bubble_x_deg   = beam_ahrs_out.roll_deg   - current_settings.pole_tilt_tare_roll_deg;
+                ui_state.pole_bubble_y_deg   = -beam_ahrs_out.pitch_deg - current_settings.pole_tilt_tare_pitch_deg;
                 ui_state.mag_present         = true;
                 ui_state.mag_uT[0]           = beam_ahrs_out.mag_cal_uT[0];
                 ui_state.mag_uT[1]           = beam_ahrs_out.mag_cal_uT[1];
@@ -1069,6 +1070,29 @@ void task_display_and_audio(void *pvParameters)
             ui_state.mag_cal_rms_pct      = mag_cal_wiz.rms_pct;
             ui_state.i2c0_err_count       = i2c_bsp_get_bus_err_count(0U);
             ui_state.i2c1_err_count       = i2c_bsp_get_bus_err_count(1U);
+
+            if (beam_10dof_active && ((now - last_10dof_log_ms) >= 1000U)) {
+                last_10dof_log_ms = now;
+                const char *src_tag =
+                    (ui_state.heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
+                    (ui_state.heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
+                    (ui_state.heading_source == HDG_SRC_DISP)     ? "WLK" :
+                    (ui_state.heading_source == HDG_SRC_COMP)     ? "CMP" :
+                    (ui_state.heading_source == HDG_SRC_GYRO)     ? "GYR" :
+                    (ui_state.heading_source == HDG_SRC_COG)      ? "COG" :
+                    (ui_state.heading_source == HDG_SRC_HOLD)     ? "HLD" : "---";
+                Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | Hdg:%.1f[%s] Mag:%.1f%s | FOC:%s | P:%.2fhPa\n",
+                              (unsigned)sen0696_get_i2c_bus(),
+                              beam_ahrs_out.pitch_deg,
+                              beam_ahrs_out.roll_deg,
+                              beam_ahrs_out.mag_cal_valid ? beam_ahrs_out.mag_norm_uT : beam_state.mag_norm_ut,
+                              ui_state.heading_valid ? ui_state.true_heading_deg : 0.0f,
+                              src_tag,
+                              ui_state.mag_heading_deg,
+                              ui_state.mag_anomaly ? " ANOM" : "",
+                              beam_ahrs_out.gyro_foc_locked ? "OK" : "WAIT",
+                              beam_state.pressure_hpa);
+            }
 
             if (sen0696_is_present() && beam_state.press_valid) {
                 ui_state.beam_pressure_hpa = beam_state.pressure_hpa;
@@ -1277,10 +1301,13 @@ void task_display_and_audio(void *pvParameters)
 /**
  * @brief Initializes DFRobot SEN0696 (10DOF IMU) preferring I2C1 (IO47/48), falling back to I2C0.
  */
-static void run_beam_10dof_boot_check(void)
+static void run_beam_10dof_boot_check(sen0696_state_t *out_report)
 {
     sen0696_state_t report;
     (void)sen0696_init(ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX, &report);
+    if (out_report) {
+        *out_report = report;
+    }
 
     if (report.i2c_addr == 0U) {
         Serial.printf("[10DOF] DFRobot SEN0696 (0x%02X..0x%02X) not detected on I2C1 or I2C0 -- skipping.\n",
@@ -1403,7 +1430,8 @@ void setup()
     rtc_bsp_init();
     imu_init();
     mmc5983ma_init();
-    run_beam_10dof_boot_check();
+    sen0696_state_t boot_10dof = {};
+    run_beam_10dof_boot_check(&boot_10dof);
 
     // 3. Mount Internal FFat & MicroSD Card (CLK=11, CMD=10, D0=9)
     if (!FFat.begin(true)) {
@@ -1483,6 +1511,40 @@ void setup()
         Ahrs9DofConfig_t ahrs_cfg;
         ahrs_9dof_default_config(&ahrs_cfg, current_settings.beam_imu_orient_mode);
         ahrs_9dof_init(s_beam_ahrs, &ahrs_cfg);
+        if (current_settings.mag_ellipsoid_cal_valid &&
+            boot_10dof.mag_valid &&
+            boot_10dof.mag_norm_ut >= 25.0f &&
+            boot_10dof.mag_norm_ut <= 75.0f) {
+            float mb[3];
+            ahrs_9dof_transform_vec(s_beam_ahrs->cfg.orient_matrix, boot_10dof.mag_ut, mb);
+            float dx = mb[0] - current_settings.mag_hard_iron_uT[0];
+            float dy = mb[1] - current_settings.mag_hard_iron_uT[1];
+            float dz = mb[2] - current_settings.mag_hard_iron_uT[2];
+            float cx = current_settings.mag_soft_iron[0] * dx +
+                       current_settings.mag_soft_iron[1] * dy +
+                       current_settings.mag_soft_iron[2] * dz;
+            float cy = current_settings.mag_soft_iron[3] * dx +
+                       current_settings.mag_soft_iron[4] * dy +
+                       current_settings.mag_soft_iron[5] * dz;
+            float cz = current_settings.mag_soft_iron[6] * dx +
+                       current_settings.mag_soft_iron[7] * dy +
+                       current_settings.mag_soft_iron[8] * dz;
+            float cal_norm = sqrtf(cx * cx + cy * cy + cz * cz);
+            if (!isfinite(cal_norm) || cal_norm < 22.0f || cal_norm > 80.0f) {
+                Serial.printf("[AHRS WARN] Stored mag cal collapsed |B| (%.1f -> %.1f uT) -- cleared stale cal; run CAL MAG\n",
+                              boot_10dof.mag_norm_ut, cal_norm);
+                memset(current_settings.mag_hard_iron_uT, 0, sizeof(current_settings.mag_hard_iron_uT));
+                memset(current_settings.mag_soft_iron, 0, sizeof(current_settings.mag_soft_iron));
+                current_settings.mag_soft_iron[0] = 1.0f;
+                current_settings.mag_soft_iron[4] = 1.0f;
+                current_settings.mag_soft_iron[8] = 1.0f;
+                current_settings.mag_ellipsoid_cal_valid = false;
+                if (current_settings.mag_field_ref_uT < 25.0f || current_settings.mag_field_ref_uT > 75.0f) {
+                    current_settings.mag_field_ref_uT = boot_10dof.mag_norm_ut;
+                }
+                mark_settings_dirty();
+            }
+        }
         ahrs_9dof_set_mag_cal(s_beam_ahrs,
                               current_settings.mag_hard_iron_uT,
                               current_settings.mag_soft_iron,

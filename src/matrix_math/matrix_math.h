@@ -193,14 +193,18 @@ static inline void jacobi_eigen_3x3(const double A[3][3], double V[3][3], double
     }
 }
 
-static inline float matrix_compute_cal_rms_pct(const float *x,
-                                               const float *y,
-                                               const float *z,
-                                               int count,
-                                               const float center[3],
-                                               const float soft_iron[3][3])
+static inline float matrix_compute_cal_stats(const float *x,
+                                             const float *y,
+                                             const float *z,
+                                             int count,
+                                             const float center[3],
+                                             const float soft_iron[3][3],
+                                             float *mean_r_out,
+                                             float *rms_pct_out)
 {
     if (!x || !y || !z || count <= 0) {
+        if (mean_r_out) *mean_r_out = 0.0f;
+        if (rms_pct_out) *rms_pct_out = 100.0f;
         return 100.0f;
     }
 
@@ -220,16 +224,31 @@ static inline float matrix_compute_cal_rms_pct(const float *x,
     }
     double mean_r = sum_r / (double)count;
     if (mean_r <= 1e-3 || !isfinite(mean_r)) {
+        if (mean_r_out) *mean_r_out = 0.0f;
+        if (rms_pct_out) *rms_pct_out = 100.0f;
         return 100.0f;
     }
     double var_r = (sum_r2 / (double)count) - (mean_r * mean_r);
     if (var_r < 0.0) {
         var_r = 0.0;
     }
-    return (float)(100.0 * sqrt(var_r) / mean_r);
+    float rms = (float)(100.0 * sqrt(var_r) / mean_r);
+    if (mean_r_out) *mean_r_out = (float)mean_r;
+    if (rms_pct_out) *rms_pct_out = rms;
+    return rms;
 }
 
-// 4-parameter hard-iron sphere fit (or 3-parameter horizontal circle fit when Z span is small).
+static inline float matrix_compute_cal_rms_pct(const float *x,
+                                               const float *y,
+                                               const float *z,
+                                               int count,
+                                               const float center[3],
+                                               const float soft_iron[3][3])
+{
+    return matrix_compute_cal_stats(x, y, z, count, center, soft_iron, NULL, NULL);
+}
+
+// 4-parameter hard-iron 3D sphere fit (when fit_z=true) or 2D XY circle fit preserving Earth Bz (when fit_z=false).
 static inline bool fit_sphere_hard_iron_f32(const float *x,
                                             const float *y,
                                             const float *z,
@@ -255,8 +274,8 @@ static inline bool fit_sphere_hard_iron_f32(const float *x,
     for (int i = 0; i < count; i++) {
         double u = ((double)x[i] - mx) / s_xy;
         double v = ((double)y[i] - my) / s_xy;
-        double w = ((double)z[i] - mz) / s_xy;
-        double yi = u * u + v * v + w * w;
+        double w = fit_z ? (((double)z[i] - mz) / s_xy) : 0.0;
+        double yi = fit_z ? (u * u + v * v + w * w) : (u * u + v * v);
         double row[4];
         if (fit_z) {
             row[0] = u;
@@ -297,7 +316,7 @@ static inline bool fit_sphere_hard_iron_f32(const float *x,
     float c_out[3] = {
         (float)(cu * s_xy + mx),
         (float)(cv * s_xy + my),
-        fit_z ? (float)(cw * s_xy + mz) : (float)mz
+        fit_z ? (float)(cw * s_xy + mz) : 0.0f
     };
     if (!isfinite(c_out[0]) || !isfinite(c_out[1]) || !isfinite(c_out[2]) ||
         fabsf(c_out[0]) >= 500.0f || fabsf(c_out[1]) >= 500.0f || fabsf(c_out[2]) >= 500.0f) {
@@ -309,9 +328,19 @@ static inline bool fit_sphere_hard_iron_f32(const float *x,
         {0.0f, 1.0f, 0.0f},
         {0.0f, 0.0f, 1.0f}
     };
-    float rms_pct = matrix_compute_cal_rms_pct(x, y, z, count, c_out, ident);
-    if (!isfinite(rms_pct) || rms_pct > 25.0f) {
-        return false;
+    float mean_r = 0.0f;
+    float rms_pct = 100.0f;
+    matrix_compute_cal_stats(x, y, z, count, c_out, ident, &mean_r, &rms_pct);
+    if (fit_z) {
+        if (!isfinite(mean_r) || mean_r < 25.0f || mean_r > 75.0f ||
+            !isfinite(rms_pct) || rms_pct > 12.0f) {
+            return false;
+        }
+    } else {
+        if (!isfinite(mean_r) || mean_r < 15.0f || mean_r > 90.0f ||
+            !isfinite(rms_pct) || rms_pct > 20.0f) {
+            return false;
+        }
     }
 
     center[0] = c_out[0];
@@ -373,7 +402,7 @@ static inline bool fit_ellipsoid_3d_f32(const float *x,
 
     double s_xy = (sx > sy) ? sx : sy;
 
-    if (sz >= 2.5) {
+    if (sz >= 10.0) {
         double DtD[9][10] = {0};
         double Dt1[9] = {0};
 
@@ -492,8 +521,11 @@ static inline bool fit_ellipsoid_3d_f32(const float *x,
 
                             double s_det = mat_det_3x3(S_dbl);
                             if (mat_ok && isfinite(s_det) && s_det >= 0.3 && s_det <= 3.0) {
-                                float rms_pct = matrix_compute_cal_rms_pct(x, y, z, count, c_cand, s_cand);
-                                if (isfinite(rms_pct) && rms_pct <= 25.0f) {
+                                float mean_r = 0.0f;
+                                float rms_pct = 100.0f;
+                                matrix_compute_cal_stats(x, y, z, count, c_cand, s_cand, &mean_r, &rms_pct);
+                                if (isfinite(mean_r) && mean_r >= 25.0f && mean_r <= 75.0f &&
+                                    isfinite(rms_pct) && rms_pct <= 12.0f) {
                                     for (int i = 0; i < 3; i++) {
                                         center[i] = c_cand[i];
                                         for (int j = 0; j < 3; j++) {
@@ -513,8 +545,11 @@ static inline bool fit_ellipsoid_3d_f32(const float *x,
         }
     }
 
-    // Fallback: flat-spin or ill-conditioned 9-param fit -> 4-param / 3-param hard-iron sphere fit
-    return fit_sphere_hard_iron_f32(x, y, z, count, mx, my, mz, s_xy, (sz >= 1.5), center, soft_iron, rms_pct_out);
+    // Fallback: try 4-param 3D sphere if Z spread is large; otherwise 2D XY circle fit preserving Earth Bz
+    if (sz >= 10.0 && fit_sphere_hard_iron_f32(x, y, z, count, mx, my, mz, s_xy, true, center, soft_iron, rms_pct_out)) {
+        return true;
+    }
+    return fit_sphere_hard_iron_f32(x, y, z, count, mx, my, mz, s_xy, false, center, soft_iron, rms_pct_out);
 }
 
 // Compatibility wrapper matching Magnetic_Field_Scanner int32 raw signature

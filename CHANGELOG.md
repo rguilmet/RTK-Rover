@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.1] - 2026-11-22
+### Fixed & Improved
+- **`CAL MAG` 2D/3D Pole-Spin Z-Bias Fix & Self-Heal ([`matrix_math.h`](src/matrix_math/matrix_math.h), [`RTK_Rover.ino`](RTK_Rover.ino)):**
+  - Fixed `fit_sphere_hard_iron_f32()` and `fit_ellipsoid_3d_f32()` in [`matrix_math.h`](src/matrix_math/matrix_math.h) (`780 L`) where spinning a survey pole with gentle tilt (`sz < 10 uT`) allowed `center[2] = mz` to subtract Earth's entire vertical magnetic component (`Bz ~ -32.8 uT`), collapsing calibrated `|B|` to `~18 uT` and permanently latching `[IRON ANOMALY]`. Raised 3D ellipsoid/sphere gate to `sz >= 10.0 uT` with `|B| in 25..75 uT` and `RMS <= 12%`, falling back cleanly to a pure 2D horizontal XY circle fit (`center[2] = 0.0f`, `soft_iron = I`, `RMS <= 20%`) that preserves Earth's vertical field during flat/tilted pole spins.
+  - Added `matrix_compute_cal_stats()`, plausibility validation (`20..85 uT`) in `mag_cal_run_fit()` logging `[2D-XY]` vs `[3D]`, and automatic boot self-heal in `setup()` clearing any previously stored collapsed calibration (`|B| < 22 uT` or `> 80 uT`).
+- **Tile 3 Bubble Pitch Alignment, `2 Hz` `QMI8658` Throttle & Fused Heading Diagnostics ([`RTK_Rover.ino`](RTK_Rover.ino), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Negated `beam_ahrs_out.pitch_deg` when driving `pole_bubble_y_deg` / `s_snapshot_bubble_y` / `pending_tare_level` so tipping the beam UP moves the Tile 3 bubble UP cleanly (matching `QMI8658`) while keeping `beam_pitch_deg` positive-up to match `UM982 #UNIHEADINGA`.
+  - Throttled onboard `QMI8658` (`0x6B`) polling from `10 Hz` to `2 Hz` (`500 ms`) when isolated `I2C1` `SEN0696` is active (`10 Hz` fallback preserved when absent) to reduce internal `I2C0` stalls, and enriched the `1 Hz` `[10DOF I2C%u]` serial line with fused heading (`Hdg`), source tag (`FIX/FLT/WLK/CMP/GYR/COG/HLD`), magnetic heading (`Mag`), and `ANOM` flag.
+  - Verified clean `arduino-cli --warnings default --upload -p COM3` build and flash (`0` warnings, `1,740,674` bytes / `55%` flash, `68,472` bytes / `20%` static `DRAM0`).
+
 ## [v0.9.0] - 2026-11-22
 ### Added & Changed
 - **Plan 0 Phase 0.6 -- `SEN0696` `I2C1` (`GPIO 47/48`) Isolation & Portable Beam 9-DOF Fusion ([`user_config.h`](user_config.h), [`i2c_bsp.h`](src/i2c_bsp/i2c_bsp.h), [`i2c_bsp.c`](src/i2c_bsp/i2c_bsp.c), [`sen0696_driver.h`](src/beam_imu_bsp/sen0696_driver.h), [`sen0696_driver.cpp`](src/beam_imu_bsp/sen0696_driver.cpp)):**
