@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.1.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.2.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -18,10 +18,10 @@ Architecture:
     One skeletonized Battery_Cradle (w/ integral Bottom-Left Capture Corner opposite
     the Bottom-Right cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
     plus removable skeletonized L-truss Battery_Adapter_5000 insert.
-  - Pole_Tilt_Wedge_37_5: 90-deg rotated support-free side-print 37.5-deg laser-mount
-    wedge straddling front/back edges of the 60 x 135 mm REF-laser_pole_mount.stp
-    shelf with 6.0 mm skirts, bottom 1/4"-20 Ruthex bore, 45-deg lofted spine pocket,
-    and teardrop-crowned twin 1/4"-20 SHCS tunnels mating onto Pole_Lid spine.
+  - Pole_Tilt_Wedge_37_5: 90-deg rotated skeletonized open Warren-truss 37.5-deg
+    laser-mount wedge straddling front/back edges of the 60 x 135 mm
+    REF-laser_pole_mount.stp shelf (6.0 mm skirts, bottom 1/4"-20 Ruthex bore,
+    45-deg lofted spine pocket, and pure round twin 1/4"-20 SHCS holes/tunnels).
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
@@ -36,7 +36,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.1"
+__version__ = "v2.2.2"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -1144,8 +1144,8 @@ def _local_wedge_to_asm(shape: cq.Workplane) -> cq.Workplane:
     )
 
 
-def build_pole_tilt_wedge() -> cq.Workplane:
-    """Build 90-deg rotated support-free side-print 37.5-deg laser-mount tilt wedge."""
+def _wedge_truss_geometry() -> tuple[list[tuple[float, float]], list[tuple[float, float]], list[tuple[tuple[float, float], tuple[float, float], float]]]:
+    """Compute outer profile, 5-vertex open inner cavity, and Warren-truss struts in (V_w, U_w)."""
     th = math.radians(S.WEDGE_TILT_DEG)
     s, c = math.sin(th), math.cos(th)
     du_sb, v_sb = S.WEDGE_DU_SB, S.WEDGE_V_SB
@@ -1159,7 +1159,6 @@ def build_pole_tilt_wedge() -> cq.Workplane:
     u_in = S.WEDGE_SHELF_W / 2.0 + S.WEDGE_SADDLE_CLR
     u_out = u_in + S.WEDGE_SKIRT_T
 
-    # 1. Unified 34.0 mm side-profile extrusion in (V_w, U_w) with integral front/rear anti-rotation skirts
     prof_vu = [
         (-S.WEDGE_SKIRT_DROP, u_out),
         (-S.WEDGE_SKIRT_DROP, u_in),
@@ -1172,25 +1171,66 @@ def build_pole_tilt_wedge() -> cq.Workplane:
         p_bot_lip,
         (S.WEDGE_FRONT_GUSSET_V, u_out),
     ]
-    wedge_local = (
-        cq.Workplane("YZ")
-        .workplane(offset=-S.WEDGE_CORE_W / 2.0)
-        .polyline(prof_vu)
-        .close()
-        .extrude(S.WEDGE_CORE_W)
-    )
 
-    # 2. Side lightening window (prints vertically along X_w with zero overhangs)
-    win_cut = (
-        cq.Workplane("YZ")
-        .workplane(offset=-S.WEDGE_CORE_W)
-        .polyline(S.WEDGE_WIN_POLY)
-        .close()
-        .extrude(2.0 * S.WEDGE_CORE_W)
-    )
-    wedge_local = wedge_local.cut(win_cut)
+    # Convex open interior cavity bounded by chord_t rear/floor/front chords & SPINE_WEB
+    u_rear_in = -u_out + S.WEDGE_CHORD_T
+    rhs_sp = v_sb * s + du_sb * c - S.WEDGE_SPINE_WEB
+    p_sp_bot_bk = sp_vu(-rim, -S.WEDGE_SPINE_WEB)
+    va, ua = p_bot_lip
+    vb, ub = S.WEDGE_FRONT_GUSSET_V, u_out
+    l_frt = math.hypot(vb - va, ub - ua)
+    nv, nu = -(ub - ua) / l_frt, (vb - va) / l_frt
+    rhs_frt = va * nv + ua * nu + S.WEDGE_CHORD_T
 
-    # 3. Vertical 1/4"-20 Ruthex bore (Dia 8.0 x 13.7 mm along +V_w) + 0.5 mm lead-in cone
+    cav_pts = [
+        (S.WEDGE_CHORD_T, u_rear_in),
+        ((rhs_sp - c * u_rear_in) / s, u_rear_in),
+        p_sp_bot_bk,
+        (p_sp_bot_bk[0], (rhs_frt - nv * p_sp_bot_bk[0]) / nu),
+        (S.WEDGE_CHORD_T, (rhs_frt - nv * S.WEDGE_CHORD_T) / nu),
+    ]
+    struts = [
+        (sp_vu(37.0, -6.5), (35.0, -31.5), S.WEDGE_MID_STRUT_T),
+        ((11.5, -7.0), (3.5, -21.0), S.WEDGE_TIE_STRUT_T),
+        ((14.5, 7.0), (3.5, 24.5), S.WEDGE_TIE_STRUT_T),
+    ]
+    return prof_vu, cav_pts, struts
+
+
+def build_pole_tilt_wedge() -> cq.Workplane:
+    """Build 90-deg rotated skeletonized open-truss 37.5-deg wedge with pure round holes."""
+    prof_vu, cav_pts, struts = _wedge_truss_geometry()
+
+    def extrude_vu(pts: list[tuple[float, float]], half_x: float) -> cq.Workplane:
+        return cq.Workplane("YZ").workplane(offset=-half_x).polyline(pts).close().extrude(2.0 * half_x)
+
+    def make_vu_strut(p0: tuple[float, float], p1: tuple[float, float], thk: float) -> cq.Workplane:
+        dv, du = p1[0] - p0[0], p1[1] - p0[1]
+        length = math.hypot(dv, du)
+        nv_s, nu_s = -du / length * (thk / 2.0), dv / length * (thk / 2.0)
+        pts = [
+            (p0[0] + nv_s, p0[1] + nu_s),
+            (p1[0] + nv_s, p1[1] + nu_s),
+            (p1[0] - nv_s, p1[1] - nu_s),
+            (p0[0] - nv_s, p0[1] - nu_s),
+        ]
+        return extrude_vu(pts, S.WEDGE_CORE_W / 2.0)
+
+    # 1. Skeletonized open Warren-truss frame extruded across WEDGE_CORE_W (32.0 mm)
+    outer_2d = extrude_vu(prof_vu, S.WEDGE_CORE_W / 2.0)
+    cav_cut = extrude_vu(cav_pts, S.WEDGE_CORE_W)
+    boss_pts = [
+        (0.0, -S.WEDGE_BOSS_HALF_U),
+        (S.WEDGE_BOSS_V_REAR, -S.WEDGE_BOSS_HALF_U),
+        (S.WEDGE_BOSS_V_FRONT, S.WEDGE_BOSS_HALF_U),
+        (0.0, S.WEDGE_BOSS_HALF_U),
+    ]
+    wedge_local = outer_2d.cut(cav_cut).union(extrude_vu(boss_pts, S.WEDGE_CORE_W / 2.0))
+    for p0, p1, thk in struts:
+        wedge_local = wedge_local.union(make_vu_strut(p0, p1, thk))
+    wedge_local = wedge_local.intersect(outer_2d)
+
+    # 2. Pure round base 1/4"-20 Ruthex bore (Dia 8.0 x 13.7 mm along +V_w) + 0.5 mm lead-in cone
     r_q = S.RUTHEX_Q20_OD / 2.0
     base_bore = (
         cq.Workplane("XZ")
@@ -1210,7 +1250,7 @@ def build_pole_tilt_wedge() -> cq.Workplane:
     )
     wedge_local = wedge_local.cut(base_bore).cut(lead_cone)
 
-    # 4. Transform to Assembly coords & cut lofted 45-deg upper (+X_w) funnel spine pocket
+    # 3. Transform to Assembly coords & cut lofted 45-deg upper (+X_w) funnel spine pocket
     wedge_asm = _local_wedge_to_asm(wedge_local)
     z_mate, _, x_cx = _wedge_spine_datums()
     pw = S.POD_SPINE_W + 2.0 * S.FIT_CLEAR
@@ -1233,23 +1273,23 @@ def build_pole_tilt_wedge() -> cq.Workplane:
     )
     wedge_asm = wedge_asm.cut(pocket_loft)
 
-    # 5. Twin 1/4"-20 SHCS bores & counterbore tunnels with 45-deg teardrop crowns pointing +X_w (up on print bed)
+    # 4. Pure round twin 1/4"-20 SHCS through-bores & rear wrench access holes (no teardrops)
     for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
-        for dia, z0, dz in (
-            (S.WEDGE_Q20_CLR, z_mate - S.WEDGE_SPINE_WEB - 1.0, S.WEDGE_SPINE_WEB + S.WEDGE_POCKET_D + 2.0),
-            (S.WEDGE_Q20_SHCS_CBORE, z_mate - S.WEDGE_SPINE_WEB, -80.0),
-        ):
-            rad = dia / 2.0
-            k = rad / math.sqrt(2.0)
-            circ = cq.Workplane("XY").workplane(offset=z0).center(x_cx, qy).circle(rad).extrude(dz)
-            peak = (
-                cq.Workplane("XY")
-                .workplane(offset=z0)
-                .polyline([(x_cx + k, qy - k), (x_cx + rad * math.sqrt(2.0), qy), (x_cx + k, qy + k)])
-                .close()
-                .extrude(dz)
-            )
-            wedge_asm = wedge_asm.cut(circ).cut(peak)
+        thru = (
+            cq.Workplane("XY")
+            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB - 1.0)
+            .center(x_cx, qy)
+            .circle(S.WEDGE_Q20_CLR / 2.0)
+            .extrude(S.WEDGE_SPINE_WEB + S.WEDGE_POCKET_D + 2.0)
+        )
+        cbore = (
+            cq.Workplane("XY")
+            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB)
+            .center(x_cx, qy)
+            .circle(S.WEDGE_Q20_SHCS_CBORE / 2.0)
+            .extrude(-80.0)
+        )
+        wedge_asm = wedge_asm.cut(thru).cut(cbore)
 
     return wedge_asm
 
@@ -1565,26 +1605,11 @@ def export_2d_dxf(path: Path) -> None:
     wx_off, wy_off = 120.0, 60.0
     th = math.radians(S.WEDGE_TILT_DEG)
     sw, cw = math.sin(th), math.cos(th)
-    rim = S.FIT_CLEAR + S.WEDGE_POCKET_WALL
-    u_in = S.WEDGE_SHELF_W / 2.0 + S.WEDGE_SADDLE_CLR
-    u_out = u_in + S.WEDGE_SKIRT_T
-    w_bot_lip = (S.WEDGE_V_SB - rim * cw + S.WEDGE_POCKET_D * sw, S.WEDGE_DU_SB + rim * sw + S.WEDGE_POCKET_D * cw)
-    w_top_lip = (S.WEDGE_V_SB + (74.0 + rim) * cw + S.WEDGE_POCKET_D * sw,
-                 S.WEDGE_DU_SB - (74.0 + rim) * sw + S.WEDGE_POCKET_D * cw)
-    wedge_prof = [
-        (-S.WEDGE_SKIRT_DROP, u_out),
-        (-S.WEDGE_SKIRT_DROP, u_in),
-        (0.0, u_in),
-        (0.0, -u_in),
-        (-S.WEDGE_SKIRT_DROP, -u_in),
-        (-S.WEDGE_SKIRT_DROP, -u_out),
-        (w_top_lip[0] - (u_out + w_top_lip[1]), -u_out),
-        w_top_lip,
-        w_bot_lip,
-        (S.WEDGE_FRONT_GUSSET_V, u_out),
-    ]
+    wedge_prof, cav_pts, struts = _wedge_truss_geometry()
     msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in wedge_prof], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
-    msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in S.WEDGE_WIN_POLY], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in cav_pts], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    for p0, p1, _ in struts:
+        msp.add_line((wx_off + p0[0], wy_off + p0[1]), (wx_off + p1[0], wy_off + p1[1]), dxfattribs={"layer": "TILT_WEDGE_37_5"})
     # Base 1/4"-20 Ruthex center + twin SHCS bolt axes
     msp.add_line((wx_off + 0.0, wy_off), (wx_off + S.RUTHEX_Q20_DEPTH, wy_off), dxfattribs={"layer": "TILT_WEDGE_37_5"})
     for dy_q in (37.0 - S.POLE_Q20_DY / 2.0, 37.0 + S.POLE_Q20_DY / 2.0):

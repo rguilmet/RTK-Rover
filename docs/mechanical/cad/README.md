@@ -1,12 +1,12 @@
-# RTK Rover Option A Mechanical Enclosure CAD (`v2.2.1`)
+# RTK Rover Option A Mechanical Enclosure CAD (`v2.2.2`)
 
-Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + standardized Option B2 **`10000 mAh`** Battery & `1/4"-20` Pole Mount Pod with removable **`5000 mAh`** adapter insert + **`90-deg` rotated `37.5 deg`** laser-mount pole tilt wedge), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
+Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`120.0 x 180.0 x 28.0 mm`** main body + standardized Option B2 **`10000 mAh`** Battery & `1/4"-20` Pole Mount Pod with removable **`5000 mAh`** adapter insert + **`90-deg` rotated `37.5 deg`** open-truss tilt wedge), built around real hardware reference models (`step/REF-*.stp`) and designed to print **100% support-free** on a Snapmaker 2.0.
 
-![Exploded CAD assembly of the RTK Rover v2.2.1 enclosure](previews/cad_preview_exploded.png)
+![Exploded CAD assembly of the RTK Rover v2.2.2 enclosure](previews/cad_preview_exploded.png)
 
 ---
 
-## 1. Key Architectural Improvements (`v2.0.0` - `v2.2.1`)
+## 1. Key Architectural Improvements (`v2.0.0` - `v2.2.2`)
 
 1. **Open-Frame Serviceability (`Back_Chassis_Frame` + Clean Lift-Off `Top_Cover`):**
    * **Every electronic module, connector, and tactile plunger** mounts directly to `Back_Chassis_Frame` (`3.0 mm` rear plate + full-width `R6.0` **Top L-Wall** bulkhead monolithically wrapping the upper `180 deg` (`Y = 173.2..180.0`) of both top-corner `M3` posts + open-inner Right **Button-Plunger Flange** & low rail at `Y = 20..52 mm` + continuous **Left/Bottom/Right `4.50 mm` inner cover-capture rim** (`1.60 mm` thick, `0.25 mm` slip) bracing `Top_Cover`'s open lower lip against inward flex + **`6` full-height open-top `M3` bosses** flush at `Z = -2.65 mm` for unobstructed `Dia 14.0 mm` soldering-iron insert installation), while `Top_Cover` wraps the lower `180 deg` (`Y <= 173.0`) of both top-corner posts behind a continuous `R6` front faceplate, carries gabled `USB-C` / `MicroSD` wall openings, and retains the `3` plungers via a **downward inverted-U capture comb** (`1.55 mm` travel).
@@ -18,9 +18,9 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
    * Standardizes the pole mount on one `92 x 132 mm` pod (`Battery_Cradle` + `Pole_Lid`, **`4 x M3` (`80 x 100 mm`)**) with an integral **Bottom-Left Capture Corner** (`X = -30.25..-12.0, Y = 31.0..38.75` behind the Speaker). Both the **`10000 mAh`** cell and **`5000 mAh`** cell (paired with the drop-in skeletonized **`Battery_Adapter_5000`** insert) exit their JST leads into the open **bottom-right bay pocket** directly aligned over the horizontal **`13.0 x 9.0 mm` stadium `BAT_SLOT`** (`(25.0, 35.5)`) beneath `Waveshare`.
 4. **Option H1 Slim Slot-In Sun Shield (`1.6 mm` Walls, Zero Magnets):**
    * Tapered 3-sided PETG visor (`28.0 mm` top projection tapering to `12.0 mm` at bottom; open bottom for thumb gestures) plugs cleanly into a reinforced `1.90 x 1.80 mm` U-groove in `Top_Cover` — zero protruding magnet bosses and `> 65%` less filament than `v1.1.0`.
-5. **Support-Free `37.5 deg` Laser-Mount Pole Tilt Wedge (`Pole_Tilt_Wedge_37_5`):**
+5. **Support-Free Skeletonized `37.5 deg` Laser-Mount Tilt Wedge (`Pole_Tilt_Wedge_37_5`):**
    * Adapts `Pole_Lid`'s vertical `24 x 74 mm` twin-`1/4"-20` spine back **`37.5 deg` from vertical** (`52.5 deg` screen pitch toward the surveyor) in a **`90-deg` rotated sideways shelf orientation** on [`REF-laser_pole_mount.stp`](step/REF-laser_pole_mount.stp) (`60 x 135 x 10 mm min` shelf, `24.80..78.30 mm` slot / `53.5 mm` travel, bare `8.0 mm` `1/4"-20` stud after removing the laser-level adapter & knurled collar). Placing the survey pole/rack on the smooth `-X` left wall keeps all `3` right-side buttons and `MicroSD` slot completely unobstructed while remaining symmetric for `-X` or `+X` pole mounting.
-   * Features a unified `34.0 mm` side-profile extrusion with integral `6.0 mm` front/rear anti-rotation skirts (`60.50 mm` span), a `45-deg` lofted-funnel `3.0 mm` spine alignment pocket (`24.5 x 74.5 mm`) with twin teardrop-crowned `Dia 11.40 mm` access tunnels for `2 x 1/4"-20 x 3/4"` (or `5/8"`) Allen SHCS bolts, a base `RX-1/4"x12.7` Ruthex bore (`5.52 mm` min solid wall to the lower SHCS tunnel), bottom `USB-C` overhang forward/below the `60 mm` shelf edge, and **`100%` support-free side-down PETG printing (`86.26 cm^3`)** with continuous horizontal perimeters around the bending path.
+   * Features a skeletonized **`32.0 mm`** open Warren-truss frame (`4.5 mm` perimeter chords, `4.0-4.5 mm` internal struts, `6.0 mm` integral front/rear anti-rotation skirts over `60.50 mm` span), a `45-deg` lofted-funnel `2.5 mm` spine alignment pocket (`24.5 x 74.5 mm`) with **pure round** `Dia 6.80 / 11.40 mm` bores (`2 x 1/4"-20 x 3/4"` or `5/8"` Allen SHCS), a base `RX-1/4"x12.7` Ruthex column (`5.52 mm` min solid wall to the lower SHCS path), bottom `USB-C` overhang forward/below the `60 mm` shelf edge, and **`100%` support-free side-down PETG printing (`54.12 cm^3`, `37.3%` lighter than `v2.2.1`)**.
 
 ---
 
@@ -42,9 +42,9 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 | Path | Purpose | Tooling |
 | :--- | :--- | :--- |
-| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, Ruthex bosses & tilt wedge geometry (`v2.2.1`) | Python / CadQuery |
-| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 59-pair real-STEP & laser-mount collision audit, and STEP/STL/DXF exporter (`v2.2.1`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
-| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.2.1`) | OpenSCAD `2026.11.18` (`Manifold`) |
+| [`rover_specs.py`](rover_specs.py) | Shared master datums, coordinates, Ruthex bosses & tilt wedge geometry (`v2.2.2`) | Python / CadQuery |
+| [`generate_rover_enclosure.py`](generate_rover_enclosure.py) | Parametric B-Rep builder, 59-pair real-STEP & laser-mount collision audit, and STEP/STL/DXF exporter (`v2.2.2`) | Python `3.14` + `cadquery 2.8.0` + `ezdxf 1.4.3` |
+| [`rtk_rover_enclosure.scad`](rtk_rover_enclosure.scad) | Standalone OpenSCAD parametric mirror with `PART`, `BATTERY_OPT`, `EXPLODE_MM`, and `SHOW_MODULES` (`v2.2.2`) | OpenSCAD `2026.11.18` (`Manifold`) |
 | `step/REF-*.stp` (`13` files) | Exact hardware, battery & [`REF-laser_pole_mount.stp`](step/REF-laser_pole_mount.stp) reference models (including fixed `R6.0` `REF-Waveshare...stp`) | SolidEdge / CadQuery |
 | `step/RTK_Rover_Assembly_5000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Battery_Adapter_5000` + `Pole_Lid` + `Pole_Tilt_Wedge_37_5` + hardware) | SolidEdge |
 | `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Pole_Lid` + `Pole_Tilt_Wedge_37_5` + `10000 mAh` hardware) | SolidEdge |

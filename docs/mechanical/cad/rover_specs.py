@@ -1,11 +1,14 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.1 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.2 enclosure.
 
-Architecture (v2.2.1 - 90-deg Rotated Side-Print 37.5 deg Tilt Wedge + REF-laser_pole_mount.stp):
+Architecture (v2.2.2 - Skeletonized Open-Truss Tilt Wedge + Pure Round Holes):
+- v2.2.2: Eliminated teardrop crowns on Pole_Tilt_Wedge_37_5 SHCS holes (pure
+  round Dia 6.80 / 11.40 mm) and skeletonized the side-profile extrusion into an
+  open Warren-truss frame (54.39 cm^3, ~37% mass reduction, 100% support-free).
 - v2.2.1: Rotated Pole_Tilt_Wedge_37_5 by 90 deg around the vertical 1/4"-20
   laser-mount stud so the 60 x 135 mm platform runs sideways (parallel to screen
   width) beside the pole clamp (REF-laser_pole_mount.stp), integrated the
   real mount into collision checks/assemblies/renders, and switched to unified
-  side-profile extrusion printed side-down (100% support-free, 80.7 cm^3).
+  side-profile extrusion printed side-down (100% support-free).
 - v2.1.6: Added UM_CSK_RECESS = 1.60 mm rear counterbore at the 4 Holybro UM982 M2
   bores (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2x12 CSK).
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
@@ -39,7 +42,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.1"
+__version__ = "v2.2.2"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -323,9 +326,9 @@ WEDGE_V_SB = 21.0           # Spine bottom elevation (+V_w) above shelf flat (un
 WEDGE_MATE_GAP = 0.10       # Non-coplanar gap behind z_spine_back (-60.10 -> -60.20)
 
 WEDGE_SPINE_WEB = 8.0       # Solid slanted wall under SHCS heads (5/8" -> 7.9 mm, 3/4" -> 11.1 mm eng)
-WEDGE_POCKET_D = 3.0        # Spine alignment pocket depth (clears Pod back face Z=-43.9 by 13.2 mm)
+WEDGE_POCKET_D = 2.5        # Spine alignment pocket depth (clears Pod back face Z=-43.9 by 13.7 mm)
 WEDGE_POCKET_WALL = 3.0     # Pocket rim wall around 24.5 x 74.5 mm Pole_Lid spine
-WEDGE_CORE_W = 34.0         # Unified side-extruded wedge width (X_w=[-17, +17], 45-deg pocket funnel)
+WEDGE_CORE_W = 32.0         # Side-extruded open-truss wedge width (X_w=[-16, +16], 45-deg pocket funnel)
 
 WEDGE_SHELF_W = 60.0        # Laser mount flat platform width (Y_ref=[-30, +30] in REF model)
 WEDGE_SHELF_L = 135.0       # Laser mount flat length (X_ref=[11.05, 146.05] in REF model)
@@ -341,6 +344,12 @@ WEDGE_SKIRT_T = 3.2         # Front/rear anti-rotation skirt thickness (8 perime
 WEDGE_SKIRT_DROP = 6.0      # Front/rear skirt drop below shelf flat (inside 10.0 mm min shelf)
 WEDGE_FRONT_GUSSET_V = 5.5  # Front toe elevation above shelf flat at U = +(30.25 + 3.2)
 
-WEDGE_Q20_CLR = 6.80        # 1/4"-20 SHCS shank pass-through bore
-WEDGE_Q20_SHCS_CBORE = 11.40  # 1/4"-20 SHCS head (9.53 mm) + 3/16" hex-key access tunnel
-WEDGE_WIN_POLY = [(25.0, -27.5), (45.0, -27.5), (42.5, -20.5), (35.0, -17.0)]  # Lightening window (V_w, U_w)
+WEDGE_CHORD_T = 4.5         # Open-truss outer perimeter chord thickness (floor, rear, front brace)
+WEDGE_BOSS_HALF_U = 8.0     # Base 1/4"-20 Ruthex boss half-width along U_w (Dia 16 mm equiv -> >= 4 mm wall)
+WEDGE_BOSS_V_REAR = 16.0    # Base boss rear top elevation (+V_w), >= 2.82 mm clear of Q20_Bot tunnel
+WEDGE_BOSS_V_FRONT = 16.5   # Base boss front top elevation (+V_w), fuses directly into slanted spine beam
+WEDGE_MID_STRUT_T = 4.5     # Central Warren-truss diagonal strut thickness (clear of both SHCS tunnels)
+WEDGE_TIE_STRUT_T = 4.0     # Lower-rear & front-nose bracing strut thickness
+
+WEDGE_Q20_CLR = 6.80        # 1/4"-20 SHCS shank pass-through bore (pure round)
+WEDGE_Q20_SHCS_CBORE = 11.40  # 1/4"-20 SHCS head (9.53 mm) + 3/16" hex-key access hole (pure round)

@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.2.1 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.22 mirror of rover_specs.py v2.2.1
+// RTK Rover Option A Enclosure v2.2.2 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.22 mirror of rover_specs.py v2.2.2
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -167,17 +167,22 @@ WEDGE_DU_SB = 14.0;
 WEDGE_V_SB = 21.0;
 WEDGE_MATE_GAP = 0.10;
 WEDGE_SPINE_WEB = 8.0;
-WEDGE_POCKET_D = 3.0;
+WEDGE_POCKET_D = 2.5;
 WEDGE_POCKET_WALL = 3.0;
-WEDGE_CORE_W = 34.0;
+WEDGE_CORE_W = 32.0;
 WEDGE_SHELF_W = 60.0;
 WEDGE_SADDLE_CLR = 0.25;
 WEDGE_SKIRT_T = 3.2;
 WEDGE_SKIRT_DROP = 6.0;
 WEDGE_FRONT_GUSSET_V = 5.5;
+WEDGE_CHORD_T = 4.5;
+WEDGE_BOSS_HALF_U = 8.0;
+WEDGE_BOSS_V_REAR = 16.0;
+WEDGE_BOSS_V_FRONT = 16.5;
+WEDGE_MID_STRUT_T = 4.5;
+WEDGE_TIE_STRUT_T = 4.0;
 WEDGE_Q20_CLR = 6.80;
 WEDGE_Q20_SHCS_CBORE = 11.40;
-WEDGE_WIN_POLY = [[25.0, -27.5], [45.0, -27.5], [42.5, -20.5], [35.0, -17.0]];
 
 // =============================================================================
 // Primitives
@@ -650,15 +655,6 @@ module button_plungers() {
     }
 }
 
-module teardrop_z_bore(cx, cy, z0, h, dia) {
-    r = dia / 2;
-    k = r / sqrt(2);
-    translate([cx, cy, z0]) linear_extrude(height=h) union() {
-        circle(d=dia);
-        polygon([[k, -k], [r * sqrt(2), 0], [k, k]]);
-    }
-}
-
 module pole_tilt_wedge() {
     z_mate = Z_PLATE_OUTER - POD_BAY_D - 0.10 - POD_FLOOR_THK - POD_SPINE_H - WEDGE_MATE_GAP;
     y_sp_bot = POD_CY - 37.0;
@@ -670,6 +666,33 @@ module pole_tilt_wedge() {
 
     u_in = WEDGE_SHELF_W / 2 + WEDGE_SADDLE_CLR;
     u_out = u_in + WEDGE_SKIRT_T;
+    u_rear_in = -u_out + WEDGE_CHORD_T;
+    rhs_sp = WEDGE_V_SB*s + WEDGE_DU_SB*c - WEDGE_SPINE_WEB;
+    p_sp_bot_bk = [WEDGE_V_SB - rim*c - WEDGE_SPINE_WEB*s, WEDGE_DU_SB + rim*s - WEDGE_SPINE_WEB*c];
+    va = p_bot_lip[0]; ua = p_bot_lip[1];
+    vb = WEDGE_FRONT_GUSSET_V; ub = u_out;
+    l_frt = sqrt((vb - va)*(vb - va) + (ub - ua)*(ub - ua));
+    nv = -(ub - ua) / l_frt; nu = (vb - va) / l_frt;
+    rhs_frt = va*nv + ua*nu + WEDGE_CHORD_T;
+    k0 = [WEDGE_CHORD_T, u_rear_in];
+    k1 = [(rhs_sp - c*u_rear_in) / s, u_rear_in];
+    k_frt_top = [p_sp_bot_bk[0], (rhs_frt - nv*p_sp_bot_bk[0]) / nu];
+    k_frt_bot = [WEDGE_CHORD_T, (rhs_frt - nv*WEDGE_CHORD_T) / nu];
+    mid_sp_p0 = [WEDGE_V_SB + 37.0*c - 6.5*s, WEDGE_DU_SB - 37.0*s - 6.5*c];
+
+    prof_vu = [
+        [-WEDGE_SKIRT_DROP, u_out],
+        [-WEDGE_SKIRT_DROP, u_in],
+        [0.0, u_in],
+        [0.0, -u_in],
+        [-WEDGE_SKIRT_DROP, -u_in],
+        [-WEDGE_SKIRT_DROP, -u_out],
+        [p_top_lip[0] - (u_out + p_top_lip[1]), -u_out],
+        p_top_lip,
+        p_bot_lip,
+        [WEDGE_FRONT_GUSSET_V, u_out]
+    ];
+
     pw = POD_SPINE_W + 2*FIT_CLEAR;
     ph = 74.0 + 2*FIT_CLEAR;
     pr = 5.0 + FIT_CLEAR;
@@ -679,28 +702,29 @@ module pole_tilt_wedge() {
             rotate([WEDGE_TILT_DEG, 0, 0])
                 translate([0, -WEDGE_V_SB, -WEDGE_DU_SB])
                     difference() {
-                        // Unified 34.0 mm side-profile extrusion with front/rear anti-rotation skirts
+                        // Skeletonized 32.0 mm open Warren-truss frame w/ integral skirts & base boss
                         rotate([90, 0, 90])
                             translate([0, 0, -WEDGE_CORE_W/2])
                                 linear_extrude(height=WEDGE_CORE_W)
-                                    polygon([
-                                        [-WEDGE_SKIRT_DROP, u_out],
-                                        [-WEDGE_SKIRT_DROP, u_in],
-                                        [0.0, u_in],
-                                        [0.0, -u_in],
-                                        [-WEDGE_SKIRT_DROP, -u_in],
-                                        [-WEDGE_SKIRT_DROP, -u_out],
-                                        [p_top_lip[0] - (u_out + p_top_lip[1]), -u_out],
-                                        p_top_lip,
-                                        p_bot_lip,
-                                        [WEDGE_FRONT_GUSSET_V, u_out]
-                                    ]);
-                        // Side lightening cutout
-                        rotate([90, 0, 90])
-                            translate([0, 0, -WEDGE_CORE_W])
-                                linear_extrude(height=2*WEDGE_CORE_W)
-                                    polygon(WEDGE_WIN_POLY);
-                        // Base 1/4"-20 Ruthex bore + 0.5 mm lead-in cone
+                                    intersection() {
+                                        polygon(prof_vu);
+                                        union() {
+                                            difference() {
+                                                polygon(prof_vu);
+                                                polygon([k0, k1, p_sp_bot_bk, k_frt_top, k_frt_bot]);
+                                            }
+                                            polygon([
+                                                [0.0, -WEDGE_BOSS_HALF_U],
+                                                [WEDGE_BOSS_V_REAR, -WEDGE_BOSS_HALF_U],
+                                                [WEDGE_BOSS_V_FRONT, WEDGE_BOSS_HALF_U],
+                                                [0.0, WEDGE_BOSS_HALF_U]
+                                            ]);
+                                            strut2d(mid_sp_p0[0], mid_sp_p0[1], 35.0, -31.5, WEDGE_MID_STRUT_T);
+                                            strut2d(11.5, -7.0, 3.5, -21.0, WEDGE_TIE_STRUT_T);
+                                            strut2d(14.5, 7.0, 3.5, 24.5, WEDGE_TIE_STRUT_T);
+                                        }
+                                    }
+                        // Pure round base 1/4"-20 Ruthex bore + 0.5 mm lead-in cone
                         translate([0, -0.5, 0]) rotate([-90, 0, 0])
                             cylinder(d=RUTHEX_Q20_OD, h=RUTHEX_Q20_DEPTH + 0.5);
                         translate([0, -0.2, 0]) rotate([-90, 0, 0])
@@ -712,12 +736,12 @@ module pole_tilt_wedge() {
             rrect(pw + WEDGE_POCKET_D + 1.0, ph, 0.02, pr,
                   POD_CX + 0.5*(WEDGE_POCKET_D + 1.0), POD_CY, z_mate + WEDGE_POCKET_D + 1.0);
         }
-        // Twin 1/4"-20 SHCS through-bores + rear hex-key tunnels w/ +X 45-deg teardrop crowns
+        // Pure round twin 1/4"-20 SHCS through-bores & rear wrench-access holes
         for (qy = [POD_CY - POLE_Q20_DY/2, POD_CY + POLE_Q20_DY/2]) {
-            teardrop_z_bore(POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 1.0,
-                            WEDGE_SPINE_WEB + WEDGE_POCKET_D + 2.0, WEDGE_Q20_CLR);
-            teardrop_z_bore(POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 80.0,
-                            80.0, WEDGE_Q20_SHCS_CBORE);
+            translate([POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 1.0])
+                cylinder(d=WEDGE_Q20_CLR, h=WEDGE_SPINE_WEB + WEDGE_POCKET_D + 2.0);
+            translate([POD_CX, qy, z_mate - WEDGE_SPINE_WEB - 80.0])
+                cylinder(d=WEDGE_Q20_SHCS_CBORE, h=80.0);
         }
     }
 }
