@@ -5,6 +5,17 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.2] - 2026-11-22
+### Fixed & Improved
+- **Stationary FOC Gyro Gate ([`ahrs_9dof.cpp`](src/sensor_fusion/ahrs_9dof.cpp)):**
+  - Updated `ahrs_update_stationary_foc()` to compute gyro window mean `(gmx, gmy, gmz)` and gyro variance `gvar` alongside accel variance, requiring `var < cfg.foc_var_thresh`, `gvar < 0.50f`, and `|gm| < 2.5 dps` on all axes (tightened from `8.0 dps`) so smooth flat spins cannot be captured as fake gyro bias (`~4.5 dps` stationary `GYR ANOM` drift observed in `_055`). File stays zero-app-dependency at `523` lines.
+- **`HDG_FLT` Baseline-Length Gate & Adaptive `[CMP]` Recovery ([`nav_engine.h`](src/nav_engine/nav_engine.h), [`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`RTK_Rover.ino`](RTK_Rover.ino)):**
+  - Added `dual_baseline_length_m` to `NavHeadingSensorInput_t` (`ui_state.baseline_length_m`) and updated `nav_heading_beam_update()` so unfixed `HDG_SRC_DUAL_FLT` only overrides a healthy calibrated `[CMP]` on the 10-DOF beam when measured `dual_baseline_length_m > 0.01 m` and within `+/- 0.10 m` of `antenna_spacing_m` (`HDG_SRC_DUAL_FIX` always wins).
+  - Replaced the fixed `0.05f` Tier-3 `[CMP]` blend factor with an adaptive alpha (`0.20f` when `|mag_err| > 15 deg`, `0.12f` when stationary, `0.05f` during normal rotation) so transient indoor jumps settle cleanly without a `~10 s` slew tail.
+- **`dt`-Aware Display-Pose EMA ([`imu_bsp.c`](src/imu_bsp/imu_bsp.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Updated `imu_compute_pose_and_bubble()` with timestamped `alpha = 1 - exp(-dt_s / 0.60)` clamped to `[0.10f, 0.65f]` (`~0.56` at `2 Hz` vs `0.15` at `10 Hz`) to preserve a `~0.60 s` response while keeping the `2 Hz` `QMI8658` `I2C0` throttle intact.
+  - Verified clean `arduino-cli --warnings default --upload -p COM3` build and flash (`0` warnings, `1,741,678` bytes / `55%` flash, `68,480` bytes / `20%` static `DRAM0`).
+
 ## [v0.9.1] - 2026-11-22
 ### Fixed & Improved
 - **`CAL MAG` 2D/3D Pole-Spin Z-Bias Fix & Self-Heal ([`matrix_math.h`](src/matrix_math/matrix_math.h), [`RTK_Rover.ino`](RTK_Rover.ino)):**

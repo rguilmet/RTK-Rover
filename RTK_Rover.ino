@@ -999,6 +999,7 @@ void task_display_and_audio(void *pvParameters)
                                                 ui_state.heading_source == HDG_SRC_DUAL_FLT));
             hdg_in.dual_antenna_fixed       = ui_state.heading_is_fixed;
             hdg_in.dual_heading_deg         = ui_state.true_heading_deg;
+            hdg_in.dual_baseline_length_m   = ui_state.baseline_length_m;
             hdg_in.um982_baseline_pitch_deg = ui_state.baseline_pitch_deg;
 
             if (beam_10dof_active) {

@@ -166,9 +166,10 @@ void imu_compute_pose_and_bubble(const float *acc,
                                  float *bubble_y_deg_out,
                                  DisplayPose_t *pose_out)
 {
-    static float ema_pitch = 0.0f;
-    static float ema_roll  = 0.0f;
-    static bool  first_run = true;
+    static float    ema_pitch = 0.0f;
+    static float    ema_roll  = 0.0f;
+    static bool     first_run = true;
+    static uint32_t last_ms   = 0;
 
     float ax = acc[0];
     float ay = acc[1];
@@ -191,13 +192,23 @@ void imu_compute_pose_and_bubble(const float *acc,
     float raw_roll  = atan2f(ay, -az) * (180.0f / (float)M_PI);
     float raw_pitch = atan2f(ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
 
+    uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     if (first_run) {
         ema_pitch = raw_pitch;
         ema_roll  = raw_roll;
         first_run = false;
+        last_ms   = now_ms;
     } else {
-        ema_pitch = 0.85f * ema_pitch + 0.15f * raw_pitch;
-        ema_roll  = 0.85f * ema_roll  + 0.15f * raw_roll;
+        float dt_s = (now_ms >= last_ms) ? ((float)(now_ms - last_ms) / 1000.0f) : 0.10f;
+        if (dt_s < 0.02f) dt_s = 0.02f;
+        if (dt_s > 1.0f)  dt_s = 1.0f;
+        last_ms = now_ms;
+
+        float alpha = 1.0f - expf(-dt_s / 0.60f);
+        if (alpha < 0.10f) alpha = 0.10f;
+        if (alpha > 0.65f) alpha = 0.65f;
+        ema_pitch = (1.0f - alpha) * ema_pitch + alpha * raw_pitch;
+        ema_roll  = (1.0f - alpha) * ema_roll  + alpha * raw_roll;
     }
 
     if (pitch_deg_out) *pitch_deg_out = ema_pitch;

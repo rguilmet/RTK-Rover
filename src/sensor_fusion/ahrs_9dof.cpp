@@ -345,26 +345,36 @@ static void ahrs_update_stationary_foc(Ahrs9DofState_t *st, const float acc[3], 
     }
     var /= (float)AHRS_9DOF_FOC_WINDOW;
 
-    if (var < st->cfg.foc_var_thresh) {
+    float gmx = 0.0f, gmy = 0.0f, gmz = 0.0f;
+    for (int i = 0; i < AHRS_9DOF_FOC_WINDOW; i++) {
+        gmx += st->gyr_hist[i][0];
+        gmy += st->gyr_hist[i][1];
+        gmz += st->gyr_hist[i][2];
+    }
+    gmx /= (float)AHRS_9DOF_FOC_WINDOW;
+    gmy /= (float)AHRS_9DOF_FOC_WINDOW;
+    gmz /= (float)AHRS_9DOF_FOC_WINDOW;
+
+    float gvar = 0.0f;
+    for (int i = 0; i < AHRS_9DOF_FOC_WINDOW; i++) {
+        float dgx = st->gyr_hist[i][0] - gmx;
+        float dgy = st->gyr_hist[i][1] - gmy;
+        float dgz = st->gyr_hist[i][2] - gmz;
+        gvar += dgx * dgx + dgy * dgy + dgz * dgz;
+    }
+    gvar /= (float)AHRS_9DOF_FOC_WINDOW;
+
+    // Require BOTH quiet accel AND quiet, near-zero gyro so smooth slow flat spins cannot corrupt bias
+    if (var < st->cfg.foc_var_thresh &&
+        gvar < 0.50f &&
+        fabsf(gmx) < 2.5f && fabsf(gmy) < 2.5f && fabsf(gmz) < 2.5f) {
         st->stable_ticks++;
         if (st->stable_ticks >= AHRS_9DOF_FOC_WINDOW) {
-            float gmx = 0.0f, gmy = 0.0f, gmz = 0.0f;
-            for (int i = 0; i < AHRS_9DOF_FOC_WINDOW; i++) {
-                gmx += st->gyr_hist[i][0];
-                gmy += st->gyr_hist[i][1];
-                gmz += st->gyr_hist[i][2];
-            }
-            float bx = gmx / (float)AHRS_9DOF_FOC_WINDOW;
-            float by = gmy / (float)AHRS_9DOF_FOC_WINDOW;
-            float bz = gmz / (float)AHRS_9DOF_FOC_WINDOW;
-            // Reject implausible FOC captures during sustained constant turn rates
-            if (fabsf(bx) < 8.0f && fabsf(by) < 8.0f && fabsf(bz) < 8.0f) {
-                st->gyro_bias_dps[0] = bx;
-                st->gyro_bias_dps[1] = by;
-                st->gyro_bias_dps[2] = bz;
-                st->gyro_foc_locked  = true;
-                st->foc_update_count++;
-            }
+            st->gyro_bias_dps[0] = gmx;
+            st->gyro_bias_dps[1] = gmy;
+            st->gyro_bias_dps[2] = gmz;
+            st->gyro_foc_locked  = true;
+            st->foc_update_count++;
             st->stable_ticks = 40; // Re-evaluate every 10 stationary ticks without spike resets
         }
     } else {

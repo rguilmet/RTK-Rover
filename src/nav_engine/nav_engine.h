@@ -88,6 +88,7 @@ typedef struct {
     bool     dual_antenna_valid;
     bool     dual_antenna_fixed;
     float    dual_heading_deg;
+    float    dual_baseline_length_m;
 } NavHeadingSensorInput_t;
 
 void nav_heading_beam_update(const NavHeadingSensorInput_t *in,

@@ -604,7 +604,16 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
 
     // 2. Tier 1: Dual-Antenna Primary Source Available (HDG_SRC_DUAL_FIX / HDG_SRC_DUAL_FLT)
     // Clear s_last_disp_ms = 0 so SLV dropouts switch instantaneously (0.0 s) to [CMP] instead of stale WALK hold.
-    if (in->dual_antenna_valid) {
+    bool compass_healthy = (in->mag_present && in->mag_valid && !mag_anomaly);
+    bool dual_flt_bl_ok = true;
+    if (!in->dual_antenna_fixed && compass_healthy && in->is_beam_10dof &&
+        current_settings.antenna_spacing_m > 0.05f) {
+        if (in->dual_baseline_length_m <= 0.01f ||
+            fabsf(in->dual_baseline_length_m - current_settings.antenna_spacing_m) > 0.10f) {
+            dual_flt_bl_ok = false;
+        }
+    }
+    if (in->dual_antenna_valid && dual_flt_bl_ok) {
         s_anchor_lat         = in->tip_lat;
         s_anchor_lon         = in->tip_lon;
         s_has_anchor         = true;
@@ -674,7 +683,8 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
                     pred = wrap_angle_360(pred + in->yaw_rate_cw_dps * dt_s);
                 }
                 float mag_err = wrap_angle_180(mag_true_hdg - pred);
-                s_fused_heading = wrap_angle_360(pred + 0.05f * mag_err);
+                float mag_alpha = (fabsf(mag_err) > 15.0f) ? 0.20f : (!is_rotating ? 0.12f : 0.05f);
+                s_fused_heading = wrap_angle_360(pred + mag_alpha * mag_err);
             }
             s_fused_src = HDG_SRC_COMP;
         } else if (s_fused_valid) {
