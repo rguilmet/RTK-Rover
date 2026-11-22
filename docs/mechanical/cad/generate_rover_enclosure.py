@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.0.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.1.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -18,9 +18,10 @@ Architecture:
     One skeletonized Battery_Cradle (w/ integral Bottom-Left Capture Corner opposite
     the Bottom-Right cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
     plus removable skeletonized L-truss Battery_Adapter_5000 insert.
-  - Pole_Tilt_Wedge_37_5: Support-free 37.5-deg laser-mount wedge with 6.0 mm
-    anti-rotation saddle skirts, bottom 1/4"-20 Ruthex insert, and twin upper
-    1/4"-20 SHCS pockets mating onto Pole_Lid spine.
+  - Pole_Tilt_Wedge_37_5: 90-deg rotated support-free side-print 37.5-deg laser-mount
+    wedge straddling front/back edges of the 60 x 135 mm REF-laser_pole_mount.stp
+    shelf with 6.0 mm skirts, bottom 1/4"-20 Ruthex bore, 45-deg lofted spine pocket,
+    and teardrop-crowned twin 1/4"-20 SHCS tunnels mating onto Pole_Lid spine.
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
@@ -35,7 +36,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.0"
+__version__ = "v2.2.1"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -55,6 +56,7 @@ REF_FILES = {
     "sma": STEP_DIR / "REF-sma-female-lora-connector.stp",
     "bat5000": STEP_DIR / "REF-lipo-battery-3.7V-5000mAh.stp",
     "bat10000": STEP_DIR / "REF-lipo-battery-3.7V-10000mAh.stp",
+    "laser_mount": STEP_DIR / "REF-laser_pole_mount.stp",
 }
 
 
@@ -1143,7 +1145,7 @@ def _local_wedge_to_asm(shape: cq.Workplane) -> cq.Workplane:
 
 
 def build_pole_tilt_wedge() -> cq.Workplane:
-    """Build support-free 37.5-deg laser-mount tilt wedge in assembly coordinates."""
+    """Build 90-deg rotated support-free side-print 37.5-deg laser-mount tilt wedge."""
     th = math.radians(S.WEDGE_TILT_DEG)
     s, c = math.sin(th), math.cos(th)
     du_sb, v_sb = S.WEDGE_DU_SB, S.WEDGE_V_SB
@@ -1154,52 +1156,31 @@ def build_pole_tilt_wedge() -> cq.Workplane:
     rim = S.FIT_CLEAR + S.WEDGE_POCKET_WALL
     p_bot_lip = sp_vu(-rim, S.WEDGE_POCKET_D)
     p_top_lip = sp_vu(74.0 + rim, S.WEDGE_POCKET_D)
-    v_back_top = p_top_lip[0] - S.WEDGE_TOP_BEVEL_DV
+    u_in = S.WEDGE_SHELF_W / 2.0 + S.WEDGE_SADDLE_CLR
+    u_out = u_in + S.WEDGE_SKIRT_T
 
-    # 1. Central spine column (YZ plane: local X=V_w, local Y=U_w, extruded in X_w)
-    core_poly = [
-        (0.0, S.WEDGE_U_BACK),
-        (0.0, S.WEDGE_U_FRONT),
-        (p_bot_lip[0], S.WEDGE_U_FRONT),
-        (p_bot_lip[0], p_bot_lip[1]),
+    # 1. Unified 34.0 mm side-profile extrusion in (V_w, U_w) with integral front/rear anti-rotation skirts
+    prof_vu = [
+        (-S.WEDGE_SKIRT_DROP, u_out),
+        (-S.WEDGE_SKIRT_DROP, u_in),
+        (0.0, u_in),
+        (0.0, -u_in),
+        (-S.WEDGE_SKIRT_DROP, -u_in),
+        (-S.WEDGE_SKIRT_DROP, -u_out),
+        (p_top_lip[0] - (u_out + p_top_lip[1]), -u_out),
         p_top_lip,
-        (v_back_top, S.WEDGE_U_BACK),
+        p_bot_lip,
+        (S.WEDGE_FRONT_GUSSET_V, u_out),
     ]
-    core = (
+    wedge_local = (
         cq.Workplane("YZ")
         .workplane(offset=-S.WEDGE_CORE_W / 2.0)
-        .polyline(core_poly)
+        .polyline(prof_vu)
         .close()
         .extrude(S.WEDGE_CORE_W)
     )
 
-    # 2. Full-width anti-rotation U-saddle with 45-deg side gussets
-    w_in = S.WEDGE_SHELF_W + 2.0 * S.WEDGE_SADDLE_CLR
-    w_out = w_in + 2.0 * S.WEDGE_SKIRT_T
-    gusset_top_v = S.WEDGE_BASE_THK + S.WEDGE_GUSSET_H
-    saddle_poly = [
-        (-w_out / 2.0, -S.WEDGE_SKIRT_DROP),
-        (-w_in / 2.0, -S.WEDGE_SKIRT_DROP),
-        (-w_in / 2.0, 0.0),
-        (w_in / 2.0, 0.0),
-        (w_in / 2.0, -S.WEDGE_SKIRT_DROP),
-        (w_out / 2.0, -S.WEDGE_SKIRT_DROP),
-        (w_out / 2.0, S.WEDGE_BASE_THK),
-        (S.WEDGE_CORE_W / 2.0 + S.WEDGE_GUSSET_H, S.WEDGE_BASE_THK),
-        (S.WEDGE_CORE_W / 2.0, gusset_top_v),
-        (-S.WEDGE_CORE_W / 2.0, gusset_top_v),
-        (-S.WEDGE_CORE_W / 2.0 - S.WEDGE_GUSSET_H, S.WEDGE_BASE_THK),
-        (-w_out / 2.0, S.WEDGE_BASE_THK),
-    ]
-    saddle = (
-        cq.Workplane("XY")
-        .workplane(offset=S.WEDGE_U_BACK)
-        .polyline(saddle_poly)
-        .close()
-        .extrude(S.WEDGE_U_SKIRT_FRONT - S.WEDGE_U_BACK)
-    )
-
-    # 3. Support-free kite lightening cutout (<= 45 deg roof edges in +U_w print orientation)
+    # 2. Side lightening window (prints vertically along X_w with zero overhangs)
     win_cut = (
         cq.Workplane("YZ")
         .workplane(offset=-S.WEDGE_CORE_W)
@@ -1207,9 +1188,9 @@ def build_pole_tilt_wedge() -> cq.Workplane:
         .close()
         .extrude(2.0 * S.WEDGE_CORE_W)
     )
-    wedge_local = core.union(saddle).cut(win_cut)
+    wedge_local = wedge_local.cut(win_cut)
 
-    # 4. Vertical 1/4"-20 Ruthex bore (Dia 8.0 x 13.7 mm along +V_w) + 0.5 mm lead-in cone
+    # 3. Vertical 1/4"-20 Ruthex bore (Dia 8.0 x 13.7 mm along +V_w) + 0.5 mm lead-in cone
     r_q = S.RUTHEX_Q20_OD / 2.0
     base_bore = (
         cq.Workplane("XZ")
@@ -1229,57 +1210,59 @@ def build_pole_tilt_wedge() -> cq.Workplane:
     )
     wedge_local = wedge_local.cut(base_bore).cut(lead_cone)
 
-    # 5. Transform to Assembly coords and cut Pole_Lid spine alignment pocket + twin SHCS tunnels
+    # 4. Transform to Assembly coords & cut lofted 45-deg upper (+X_w) funnel spine pocket
     wedge_asm = _local_wedge_to_asm(wedge_local)
     z_mate, _, x_cx = _wedge_spine_datums()
-    sp_pocket = make_rounded_box(
-        S.POD_SPINE_W + 2.0 * S.FIT_CLEAR,
-        74.0 + 2.0 * S.FIT_CLEAR,
-        S.WEDGE_POCKET_D + 2.0,
-        5.0 + S.FIT_CLEAR,
-        cx=x_cx,
-        cy=S.POD_CY,
-        z_min=z_mate,
+    pw = S.POD_SPINE_W + 2.0 * S.FIT_CLEAR
+    ph = 74.0 + 2.0 * S.FIT_CLEAR
+    pr = 5.0 + S.FIT_CLEAR
+    s_bot = cq.Sketch().rect(pw, ph).vertices().fillet(pr)
+    s_top = (
+        cq.Sketch()
+        .rect(pw + S.WEDGE_POCKET_D + 1.0, ph)
+        .vertices()
+        .fillet(pr)
+        .moved(cq.Location((0.5 * (S.WEDGE_POCKET_D + 1.0), 0.0, S.WEDGE_POCKET_D + 1.0)))
     )
-    wedge_asm = wedge_asm.cut(sp_pocket)
+    pocket_loft = (
+        cq.Workplane("XY")
+        .workplane(offset=z_mate)
+        .center(x_cx, S.POD_CY)
+        .placeSketch(s_bot, s_top)
+        .loft()
+    )
+    wedge_asm = wedge_asm.cut(pocket_loft)
 
+    # 5. Twin 1/4"-20 SHCS bores & counterbore tunnels with 45-deg teardrop crowns pointing +X_w (up on print bed)
     for qy in (S.POD_CY - S.POLE_Q20_DY / 2.0, S.POD_CY + S.POLE_Q20_DY / 2.0):
-        thru = (
-            cq.Workplane("XY")
-            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB - 1.0)
-            .center(x_cx, qy)
-            .circle(S.WEDGE_Q20_CLR / 2.0)
-            .extrude(S.WEDGE_SPINE_WEB + S.WEDGE_POCKET_D + 2.0)
-        )
-        cbore = (
-            cq.Workplane("XY")
-            .workplane(offset=z_mate - S.WEDGE_SPINE_WEB)
-            .center(x_cx, qy)
-            .circle(S.WEDGE_Q20_SHCS_CBORE / 2.0)
-            .extrude(-80.0)
-        )
-        wedge_asm = wedge_asm.cut(thru).cut(cbore)
+        for dia, z0, dz in (
+            (S.WEDGE_Q20_CLR, z_mate - S.WEDGE_SPINE_WEB - 1.0, S.WEDGE_SPINE_WEB + S.WEDGE_POCKET_D + 2.0),
+            (S.WEDGE_Q20_SHCS_CBORE, z_mate - S.WEDGE_SPINE_WEB, -80.0),
+        ):
+            rad = dia / 2.0
+            k = rad / math.sqrt(2.0)
+            circ = cq.Workplane("XY").workplane(offset=z0).center(x_cx, qy).circle(rad).extrude(dz)
+            peak = (
+                cq.Workplane("XY")
+                .workplane(offset=z0)
+                .polyline([(x_cx + k, qy - k), (x_cx + rad * math.sqrt(2.0), qy), (x_cx + k, qy + k)])
+                .close()
+                .extrude(dz)
+            )
+            wedge_asm = wedge_asm.cut(circ).cut(peak)
 
     return wedge_asm
 
 
-def build_laser_mount_ref(u_screw: float) -> cq.Workplane:
-    """Build virtual laser-mount platform + 92 mm rack tower in assembly coordinates for collision audit."""
-    shelf_local = (
-        cq.Workplane("XZ")
-        .workplane(offset=0.0)
-        .center(0.0, 0.5 * (-u_screw + (S.WEDGE_SHELF_L - u_screw)))
-        .rect(S.WEDGE_SHELF_W, S.WEDGE_SHELF_L)
-        .extrude(S.WEDGE_SHELF_THK)
-    )
-    rack_local = (
-        cq.Workplane("XY")
-        .workplane(offset=-u_screw - 35.0)
-        .center(0.0, 0.5 * (-25.0 + S.WEDGE_RACK_H))
-        .rect(S.WEDGE_SHELF_W, 25.0 + S.WEDGE_RACK_H)
-        .extrude(35.0)
-    )
-    return _local_wedge_to_asm(shelf_local.union(rack_local))
+def load_laser_mount_ref(x_screw: float, mode: str = "pole_left", lm_raw: cq.Workplane | None = None) -> cq.Workplane:
+    """Import REF-laser_pole_mount.stp and transform it to the 90-deg rotated Rover assembly frame."""
+    shp = cq.importers.importStep(str(REF_FILES["laser_mount"])) if lm_raw is None else lm_raw
+    shp = shp.translate((-x_screw, 0.0, -S.WEDGE_REF_Z_SHELF))
+    if mode == "pole_left":
+        shp = shp.rotate((0, 0, 0), (0, 0, 1), 180.0).rotate((0, 0, 0), (1, 0, 0), -90.0)
+    else:
+        shp = shp.rotate((0, 0, 0), (1, 0, 0), -90.0)
+    return _local_wedge_to_asm(shp)
 
 
 # ==============================================================================
@@ -1364,6 +1347,11 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     b10b = b10.val().BoundingBox()
     refs["bat10000"] = b10.translate((-b10b.xmin - 29.50, -b10b.ymin + 39.25, -b10b.zmax + S.Z_PLATE_OUTER - 1.5))
 
+    # 11. Laser Pole Mount Clamp (REF-laser_pole_mount.stp, raw copy + default inner pole_left placement)
+    lm_raw = cq.importers.importStep(str(REF_FILES["laser_mount"]))
+    refs["laser_mount_raw"] = lm_raw
+    refs["laser_mount"] = load_laser_mount_ref(S.WEDGE_REF_SLOT_INNER, "pole_left", lm_raw=lm_raw)
+
     return refs
 
 
@@ -1376,13 +1364,14 @@ def to_print_bed(shape: cq.Workplane, mode: str) -> cq.Workplane:
         s = shape.rotate((0, 0, 0), (1, 0, 0), 180)
     elif mode == "plunger_flat":
         s = shape.rotate((0, 0, 0), (0, 1, 0), 90)
-    elif mode == "wedge_back_down":
+    elif mode == "wedge_side_down":
         z_mate, y_sp_bot, x_cx = _wedge_spine_datums()
         s = (
             shape
             .translate((-x_cx, -y_sp_bot, -z_mate))
             .rotate((0, 0, 0), (1, 0, 0), -S.WEDGE_TILT_DEG)
-            .translate((0.0, S.WEDGE_V_SB, S.WEDGE_DU_SB - S.WEDGE_U_BACK))
+            .translate((0.0, S.WEDGE_V_SB, S.WEDGE_DU_SB))
+            .rotate((0, 0, 0), (0, 1, 0), -90.0)
         )
     else:
         s = shape
@@ -1463,15 +1452,28 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         print(f"  {p_name:22s} vs REF_{r_name:12s}: overlap = {vol:8.4f} mm^3")
         assert vol <= 0.05, f"Hardware collision: {p_name} vs REF_{r_name} = {vol:.4f} mm^3"
 
-    print("\n--- [4/4] Tilted Rover vs Laser Mount Reference Audit (65..115 mm Slide) ---")
-    lm_parts = ("Pole_Tilt_Wedge_37_5", "Pole_Lid", "Battery_Cradle", "Back_Chassis_Frame", "Top_Cover")
-    for u_screw in (S.WEDGE_SLIDE_MIN, S.WEDGE_SLIDE_MAX):
-        lm_ref = build_laser_mount_ref(u_screw)
+    print("\n--- [4/4] Tilted Rover vs Real REF-laser_pole_mount.stp Audit ---")
+    lm_parts = (
+        "Pole_Tilt_Wedge_37_5",
+        "Pole_Lid",
+        "Battery_Cradle",
+        "Back_Chassis_Frame",
+        "Top_Cover",
+        "Slim_Sun_Shield",
+        "Button_Plungers",
+    )
+    lm_cases = (
+        ("pole_left", S.WEDGE_REF_SLOT_INNER),
+        ("pole_left", S.WEDGE_REF_SLOT_OUTER),
+        ("pole_right", S.WEDGE_REF_SLOT_INNER),
+    )
+    for mode, x_screw in lm_cases:
+        lm_ref = load_laser_mount_ref(x_screw, mode, lm_raw=refs["laser_mount_raw"])
         for p_name in lm_parts:
             inter = parts[p_name].intersect(lm_ref)
             vol = sum(s.Volume() for s in inter.solids().vals())
-            print(f"  LaserMount({u_screw:5.1f} mm) vs {p_name:22s}: overlap = {vol:8.4f} mm^3")
-            assert vol <= 0.05, f"Laser mount collision @ {u_screw:.1f} mm vs {p_name}: {vol:.4f} mm^3"
+            print(f"  REF_laser({mode:10s}, X={x_screw:5.2f}) vs {p_name:22s}: overlap = {vol:8.4f} mm^3")
+            assert vol <= 0.05, f"REF_laser({mode}, X={x_screw}) vs {p_name}: {vol:.4f} mm^3"
 
 
 def export_2d_dxf(path: Path) -> None:
@@ -1564,18 +1566,24 @@ def export_2d_dxf(path: Path) -> None:
     th = math.radians(S.WEDGE_TILT_DEG)
     sw, cw = math.sin(th), math.cos(th)
     rim = S.FIT_CLEAR + S.WEDGE_POCKET_WALL
+    u_in = S.WEDGE_SHELF_W / 2.0 + S.WEDGE_SADDLE_CLR
+    u_out = u_in + S.WEDGE_SKIRT_T
     w_bot_lip = (S.WEDGE_V_SB - rim * cw + S.WEDGE_POCKET_D * sw, S.WEDGE_DU_SB + rim * sw + S.WEDGE_POCKET_D * cw)
     w_top_lip = (S.WEDGE_V_SB + (74.0 + rim) * cw + S.WEDGE_POCKET_D * sw,
                  S.WEDGE_DU_SB - (74.0 + rim) * sw + S.WEDGE_POCKET_D * cw)
     wedge_prof = [
-        (wx_off + 0.0, wy_off + S.WEDGE_U_BACK),
-        (wx_off + 0.0, wy_off + S.WEDGE_U_FRONT),
-        (wx_off + w_bot_lip[0], wy_off + S.WEDGE_U_FRONT),
-        (wx_off + w_bot_lip[0], wy_off + w_bot_lip[1]),
-        (wx_off + w_top_lip[0], wy_off + w_top_lip[1]),
-        (wx_off + w_top_lip[0] - S.WEDGE_TOP_BEVEL_DV, wy_off + S.WEDGE_U_BACK),
+        (-S.WEDGE_SKIRT_DROP, u_out),
+        (-S.WEDGE_SKIRT_DROP, u_in),
+        (0.0, u_in),
+        (0.0, -u_in),
+        (-S.WEDGE_SKIRT_DROP, -u_in),
+        (-S.WEDGE_SKIRT_DROP, -u_out),
+        (w_top_lip[0] - (u_out + w_top_lip[1]), -u_out),
+        w_top_lip,
+        w_bot_lip,
+        (S.WEDGE_FRONT_GUSSET_V, u_out),
     ]
-    msp.add_lwpolyline(wedge_prof, close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
+    msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in wedge_prof], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
     msp.add_lwpolyline([(wx_off + vx, wy_off + ux) for vx, ux in S.WEDGE_WIN_POLY], close=True, dxfattribs={"layer": "TILT_WEDGE_37_5"})
     # Base 1/4"-20 Ruthex center + twin SHCS bolt axes
     msp.add_line((wx_off + 0.0, wy_off), (wx_off + S.RUTHEX_Q20_DEPTH, wy_off), dxfattribs={"layer": "TILT_WEDGE_37_5"})
@@ -1610,7 +1618,7 @@ def main() -> None:
         "Button_Plungers": build_button_plungers(),
     }
 
-    print("Importing all 11 REF-*.stp hardware reference models...")
+    print("Importing all 13 REF-*.stp hardware reference models...")
     refs = load_normalized_refs()
 
     verify_assembly_and_refs(parts, refs)
@@ -1627,7 +1635,7 @@ def main() -> None:
         ("Battery_Cradle",       "bat_cradle_print.stl",      "face_down"),
         ("Pole_Lid",             "pole_lid_print.stl",        "face_down"),
         ("Battery_Adapter_5000", "bat_adapter_5000_print.stl","face_down"),
-        ("Pole_Tilt_Wedge_37_5", "pole_tilt_wedge_print.stl", "wedge_back_down"),
+        ("Pole_Tilt_Wedge_37_5", "pole_tilt_wedge_print.stl", "wedge_side_down"),
         ("Slim_Sun_Shield",      "slim_sun_shield_print.stl", "back_down"),
         ("Button_Plungers",      "button_plungers_print.stl", "plunger_flat"),
     ]
@@ -1657,15 +1665,16 @@ def main() -> None:
         for pname, color in assy_parts:
             assy.add(parts[pname], name=pname, color=color)
         for rname, rcolor in [
-            ("waveshare", cq.Color(0.08, 0.35, 0.25, 1.0)),
-            ("um982",     cq.Color(0.10, 0.10, 0.12, 1.0)),
-            ("e220",      cq.Color(0.12, 0.42, 0.22, 1.0)),
-            ("power",     cq.Color(0.12, 0.28, 0.55, 1.0)),
-            ("speaker",   cq.Color(0.18, 0.18, 0.18, 1.0)),
-            ("coin_cell", cq.Color(0.85, 0.72, 0.15, 1.0)),
-            ("gx12",      cq.Color(0.75, 0.76, 0.78, 1.0)),
-            ("sma",       cq.Color(0.82, 0.65, 0.18, 1.0)),
-            (bat_key,     cq.Color(0.85, 0.70, 0.10, 1.0)),
+            ("waveshare",   cq.Color(0.08, 0.35, 0.25, 1.0)),
+            ("um982",       cq.Color(0.10, 0.10, 0.12, 1.0)),
+            ("e220",        cq.Color(0.12, 0.42, 0.22, 1.0)),
+            ("power",       cq.Color(0.12, 0.28, 0.55, 1.0)),
+            ("speaker",     cq.Color(0.18, 0.18, 0.18, 1.0)),
+            ("coin_cell",   cq.Color(0.85, 0.72, 0.15, 1.0)),
+            ("gx12",        cq.Color(0.75, 0.76, 0.78, 1.0)),
+            ("sma",         cq.Color(0.82, 0.65, 0.18, 1.0)),
+            (bat_key,       cq.Color(0.85, 0.70, 0.10, 1.0)),
+            ("laser_mount", cq.Color(0.18, 0.19, 0.21, 1.0)),
         ]:
             assy.add(refs[rname], name=f"REF_{rname}", color=rcolor)
         assy_path = STEP_DIR / f"RTK_Rover_Assembly_{variant}.step"

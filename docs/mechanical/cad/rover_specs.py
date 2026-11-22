@@ -1,11 +1,11 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.0 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.1 enclosure.
 
-Architecture (v2.2.0 - 37.5 deg Laser-Mount Tilt Wedge + Recessed UM982 CSK):
-- v2.2.0: Added support-free Pole_Tilt_Wedge_37_5 adapting the twin 1/4"-20
-  Pole_Lid spine back 37.5 deg from vertical onto a 60 x 130 x 10 mm min
-  sliding laser-mount pole clamp (65..115 mm slide, 92 mm rack tower, 8 mm
-  exposed 1/4"-20 stud) with 6.0 mm anti-rotation side skirts and bottom
-  USB-C overhang access.
+Architecture (v2.2.1 - 90-deg Rotated Side-Print 37.5 deg Tilt Wedge + REF-laser_pole_mount.stp):
+- v2.2.1: Rotated Pole_Tilt_Wedge_37_5 by 90 deg around the vertical 1/4"-20
+  laser-mount stud so the 60 x 135 mm platform runs sideways (parallel to screen
+  width) beside the pole clamp (REF-laser_pole_mount.stp), integrated the
+  real mount into collision checks/assemblies/renders, and switched to unified
+  side-profile extrusion printed side-down (100% support-free, 80.7 cm^3).
 - v2.1.6: Added UM_CSK_RECESS = 1.60 mm rear counterbore at the 4 Holybro UM982 M2
   bores (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2x12 CSK).
   1. Back_Chassis_Frame: Flat back plate carrying ALL electronics standoffs/cradles
@@ -39,7 +39,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.0"
+__version__ = "v2.2.1"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -315,36 +315,32 @@ SHIELD_DEPTH_BOT = 12.0     # Tapered side-cheek forward projection at bottom (o
 # 10. 37.5-deg Laser-Mount Pole Tilt Wedge (Pole_Tilt_Wedge_37_5)
 # ==============================================================================
 # Local frame (X_w, V_w, U_w) has origin on top flat of laser shelf at the
-# 1/4"-20 stud center: +U_w = away from pole, +V_w = up, +X_w = right.
+# 1/4"-20 stud center: +U_w = front-to-back across 60 mm shelf (toward user),
+# +V_w = vertically UP, +X_w = along 135 mm shelf length (right on Rover screen).
 WEDGE_TILT_DEG = 37.5       # Display tipped 37.5 deg back from vertical (52.5 deg screen elevation)
 WEDGE_DU_SB = 14.0          # Spine bottom (Y=55.0, Z=-60.20) offset forward (+U_w) of base 1/4"-20 bore
-WEDGE_V_SB = 19.0           # Spine bottom elevation (+V_w) above shelf flat (clears Pod & USB-C)
+WEDGE_V_SB = 21.0           # Spine bottom elevation (+V_w) above shelf flat (unbroken rear skirt + USB-C)
 WEDGE_MATE_GAP = 0.10       # Non-coplanar gap behind z_spine_back (-60.10 -> -60.20)
 
 WEDGE_SPINE_WEB = 8.0       # Solid slanted wall under SHCS heads (5/8" -> 7.9 mm, 3/4" -> 11.1 mm eng)
 WEDGE_POCKET_D = 3.0        # Spine alignment pocket depth (clears Pod back face Z=-43.9 by 13.2 mm)
 WEDGE_POCKET_WALL = 3.0     # Pocket rim wall around 24.5 x 74.5 mm Pole_Lid spine
-WEDGE_CORE_W = 32.0         # Central spine column width (X_w=[-16, +16])
+WEDGE_CORE_W = 34.0         # Unified side-extruded wedge width (X_w=[-17, +17], 45-deg pocket funnel)
 
-WEDGE_SHELF_W = 60.0        # Laser mount flat platform width
-WEDGE_SHELF_L = 130.0       # Laser mount flat length from start of rack up-angle
-WEDGE_SHELF_THK = 10.0      # Minimum outer shelf thickness (furthest from pole)
-WEDGE_RACK_H = 92.0         # Vertical clamp/rack tower height above flat shelf
-WEDGE_SLIDE_MIN = 65.0      # Min screw center from start of rack up-angle
-WEDGE_SLIDE_MAX = 115.0     # Max screw center from start of rack up-angle (50 mm travel)
-WEDGE_RACK_POLE_OFFSET = 55.0  # Rack front face to pole centerline (u_s=65 -> U_pole=120 mm)
+WEDGE_SHELF_W = 60.0        # Laser mount flat platform width (Y_ref=[-30, +30] in REF model)
+WEDGE_SHELF_L = 135.0       # Laser mount flat length (X_ref=[11.05, 146.05] in REF model)
+WEDGE_SHELF_THK = 10.0      # Minimum outer shelf thickness (Z_ref=[64.22, 74.22])
+WEDGE_RACK_H = 89.0         # Vertical clamp/rack tower height above shelf flat (Z_ref=74.22..163.22)
+WEDGE_REF_Z_SHELF = 74.22   # Top flat Z in REF-laser_pole_mount.stp
+WEDGE_REF_SLOT_OUTER = 24.80  # Outer 1/4"-20 slot end X_ref in REF-laser_pole_mount.stp (179.25 from pole)
+WEDGE_REF_SLOT_INNER = 78.30  # Inner 1/4"-20 slot end X_ref in REF-laser_pole_mount.stp (125.75 from pole)
+WEDGE_REF_POLE_X = 204.05   # Survey pole centerline X_ref in REF-laser_pole_mount.stp
 
-WEDGE_SADDLE_CLR = 0.25     # Per-side slip fit over 60.0 mm shelf (60.50 mm inner saddle span)
-WEDGE_SKIRT_T = 3.2         # Downward anti-rotation skirt wall thickness (8 perimeters @ 0.4 mm)
-WEDGE_SKIRT_DROP = 6.0      # Anti-rotation skirt drop below shelf flat (inside 10.0 mm min shelf)
-WEDGE_BASE_THK = 5.5        # Full-width saddle bridge thickness
-WEDGE_GUSSET_H = 8.0        # 45-deg side gusset rise into central spine column
-
-WEDGE_U_BACK = -40.0        # Flat rear bed plane for support-free vertical (+U_w) print
-WEDGE_U_FRONT = 14.0        # Front toe on top of shelf (u_s <= 129 inside 130 tip)
-WEDGE_U_SKIRT_FRONT = 7.0   # Side skirts stop inside rounded outer shelf tip (u_s <= 122)
-WEDGE_TOP_BEVEL_DV = 8.5    # Rear top bevel drop in V_w (~42.3 deg self-supporting from U_BACK)
+WEDGE_SADDLE_CLR = 0.25     # Per-side slip fit over 60.0 mm shelf (60.50 mm front-to-back saddle span)
+WEDGE_SKIRT_T = 3.2         # Front/rear anti-rotation skirt thickness (8 perimeters @ 0.4 mm)
+WEDGE_SKIRT_DROP = 6.0      # Front/rear skirt drop below shelf flat (inside 10.0 mm min shelf)
+WEDGE_FRONT_GUSSET_V = 5.5  # Front toe elevation above shelf flat at U = +(30.25 + 3.2)
 
 WEDGE_Q20_CLR = 6.80        # 1/4"-20 SHCS shank pass-through bore
 WEDGE_Q20_SHCS_CBORE = 11.40  # 1/4"-20 SHCS head (9.53 mm) + 3/16" hex-key access tunnel
-WEDGE_WIN_POLY = [(17.5, -34.5), (35.0, -34.5), (42.5, -27.0), (32.5, -16.5)]  # Support-free kite cutout (V_w, U_w)
+WEDGE_WIN_POLY = [(25.0, -27.5), (45.0, -27.5), (42.5, -20.5), (35.0, -17.0)]  # Lightening window (V_w, U_w)
