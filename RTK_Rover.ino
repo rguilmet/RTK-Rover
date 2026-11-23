@@ -1474,7 +1474,7 @@ void setup()
     }
     vTaskDelay(pdMS_TO_TICKS(20));
     SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
-    if (SD_MMC.begin("/sdcard", true, false, 20000) && SD_MMC.cardType() != CARD_NONE) {
+    if (SD_MMC.begin("/sdcard", true, false, 20000, 10) && SD_MMC.cardType() != CARD_NONE) {
         sd_card_mounted = true;
         sd_card_use_spi = false;
         Serial.println("[STORAGE] Stage 1 OK: SD_MMC 1-bit mounted (EXIO3=Input/High-Z)");
@@ -1490,7 +1490,7 @@ void setup()
         gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MOSI);
         gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_MISO);
         SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
-        if (SD_MMC.begin("/sdcard", true, false, 20000) && SD_MMC.cardType() != CARD_NONE) {
+        if (SD_MMC.begin("/sdcard", true, false, 20000, 10) && SD_MMC.cardType() != CARD_NONE) {
             sd_card_mounted = true;
             sd_card_use_spi = false;
             Serial.println("[STORAGE] Stage 2 OK: SD_MMC 1-bit mounted (EXIO3=LOW)");
@@ -1498,7 +1498,7 @@ void setup()
             SD_MMC.end();
             // Stage 3: SPI SD mode with EXIO3 driven LOW (CS asserted via TCA9554 EXIO3)
             SPI.begin(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MISO, ROVER_PIN_SD_MOSI, -1);
-            if (SD.begin(-1, SPI, 4000000, "/sdcard") && SD.cardType() != CARD_NONE) {
+            if (SD.begin(-1, SPI, 4000000, "/sdcard", 10) && SD.cardType() != CARD_NONE) {
                 sd_card_mounted = true;
                 sd_card_use_spi = true;
                 Serial.println("[STORAGE] Stage 3 OK: SD SPI mounted (EXIO3=LOW)");
@@ -1659,9 +1659,13 @@ void loop()
         } else if (!long_press_fired && (millis() - btn_press_start >= 1500)) {
             long_press_fired = true;
             Serial.println("BOOT Long-Press: Taking Screenshot...");
-            play_rover_beep(2000, 60);
-            play_rover_beep(2500, 100);
-            take_screenshot_to_sd();
+            play_rover_beep(2000, 40);
+            if (take_screenshot_to_sd()) {
+                play_rover_beep(2600, 100);
+            } else {
+                play_rover_beep(400, 120);
+                play_rover_beep(300, 180);
+            }
         }
     } else {
         btn_is_pressed = false;

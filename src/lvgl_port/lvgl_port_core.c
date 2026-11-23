@@ -20,6 +20,7 @@
 static const char *TAG = "lvgl_port";
 static SemaphoreHandle_t lvgl_mux = NULL;
 static uint16_t *trans_buf_1 = NULL;
+static uint16_t *s_last_flushed_fb = NULL;
 static SemaphoreHandle_t flush_done_semaphore = NULL;
 esp_io_expander_handle_t io_expander = NULL;
 
@@ -70,6 +71,11 @@ static void rover_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8
         map += dmalen;
     }
     xSemaphoreTake(flush_done_semaphore, portMAX_DELAY);
+    if (area->x1 == 0 && area->y1 == 0 &&
+        lv_area_get_width(area) == ROVER_LCD_H_RES &&
+        lv_area_get_height(area) == ROVER_LCD_V_RES) {
+        s_last_flushed_fb = (uint16_t *)color_p;
+    }
     lv_disp_flush_ready(disp);
 }
 
@@ -179,6 +185,29 @@ void rover_lvgl_unlock(void)
     if (lvgl_mux) {
         xSemaphoreGive(lvgl_mux);
     }
+}
+
+bool rover_lvgl_capture_framebuffer(uint8_t *dst_rgb565_be, size_t dst_bytes)
+{
+    if (!dst_rgb565_be || dst_bytes < (size_t)BUFF_SIZE) {
+        return false;
+    }
+    if (!rover_lvgl_lock(2000)) {
+        return false;
+    }
+
+    if (s_last_flushed_fb == NULL) {
+        lv_refr_now(NULL);
+    }
+
+    bool ok = false;
+    if (s_last_flushed_fb != NULL) {
+        memcpy(dst_rgb565_be, s_last_flushed_fb, BUFF_SIZE);
+        ok = true;
+    }
+
+    rover_lvgl_unlock();
+    return ok;
 }
 
 static void rover_lvgl_port_task(void *arg)

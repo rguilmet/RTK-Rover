@@ -2,6 +2,7 @@
 #define LVGL_PORT_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <lvgl.h>
 #include "../rover_api.h"
@@ -16,6 +17,7 @@ extern esp_io_expander_handle_t io_expander;
 void lvgl_port_init(void);
 bool rover_lvgl_lock(int timeout_ms);
 void rover_lvgl_unlock(void);
+bool rover_lvgl_capture_framebuffer(uint8_t *dst_rgb565_be, size_t dst_bytes);
 
 // Returns active tile column index (0 = Pin Seeker, 1 = Field Survey, 2 = CSV Browser, 3 = Compass/Level, 4 = Diagnostics, 5 = Quick Settings)
 uint8_t rover_get_active_tile_index(void);

@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.3] - 2026-11-23
+### Fixed
+- **BOOT-Button Screenshot Framebuffer Capture & Safe SD Persistence ([`lvgl_port.h`](src/lvgl_port/lvgl_port.h), [`lvgl_port_core.c`](src/lvgl_port/lvgl_port_core.c), [`screenshot.h`](src/screenshot/screenshot.h), [`screenshot.cpp`](src/screenshot/screenshot.cpp), [`RTK_Rover.ino`](RTK_Rover.ino), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Replaced `lv_snapshot_take()` in [`take_screenshot_to_sd()`](src/screenshot/screenshot.cpp) (which re-rendered the entire active LVGL object tree on `loopTask`'s 8 KB stack while holding `lvgl_mux` across slow SD I/O with no `fs_mux` protection and silent `open()` failures) with direct tear-free capture via [`rover_lvgl_capture_framebuffer()`](src/lvgl_port/lvgl_port_core.c) of the already-rendered full PSRAM framebuffer (`s_last_flushed_fb`, `307,200` B).
+  - Updated 24-bit top-down BMP conversion to decode the big-endian RGB565 pixels byte-swapped in place by `rover_lvgl_flush_cb()` into `16`-row batched PSRAM chunks (`15,360` B) under `fs_mux` (never nested with `lvgl_mux`), with automatic `FFat` fallback if MicroSD open fails and explicit `[SCREENSHOT]` / `[SCREENSHOT ERR]` logs.
+  - Raised MicroSD `maxOpenFiles` from `5` to `10` (`SD_MMC.begin` / `SD.begin`) in [`RTK_Rover.ino`](RTK_Rover.ino) to match `FFat`, updated `BOOT` long-press audio to chime `2600 Hz` on success or `400/300 Hz` error tones on failure, and verified clean `arduino-cli --warnings default --upload -p COM3` compile & flash (`0` warnings, `1,747,418` bytes / `55%` flash, `68,608` bytes / `20%` static `DRAM0`).
+
 ## [v0.10.2] - 2026-11-22
 ### Fixed
 - **Tile 0 Bottom Readout Auto-Scroll & Tile Overflow Fix ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
