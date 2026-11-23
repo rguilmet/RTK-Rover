@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.6] - 2026-11-23
+### Added & Improved
+- **Map View Dynamic `A`/`B`/`R` Labels, Barbed Heading Arrow & Base Station Symbol ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Exported shared [`ui_tile0_draw_barbed_arrow()`](src/lvgl_port/ui_tile0_views.c) and generalized [`ui_tile0_place_point_label()`](src/lvgl_port/ui_tile0_views.c) from `ui_tile0_views.c` so Map View renders a crisp barbed Rover heading arrowhead and non-overlapping `A`, `B`, and `R` labels with ray/edge avoidance (segment lines, boundary polygon edges, tie-lines, heading arrow, breadcrumb trail) and per-marker direction hysteresis.
+  - Added a survey-control Base Station symbol (`t0_map_base_tri` hollow `0xFF44AA` triangle + `t0_map_base_dot` white center dot + dynamically placed `BS` label `t0_map_base_lbl`) projected from live UM982 `BASEINFOA` coordinates (`d->base_coords_valid`) while excluding Base Station coordinates from `s_map_auto_fit` parcel zoom bounds.
+
 ## [v0.10.5] - 2026-11-23
 ### Fixed & Improved
 - **Tile 0 Guidance Spacing, Reference Grid Contrast & Dynamic `A`/`B`/`R` Labels ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c)):**

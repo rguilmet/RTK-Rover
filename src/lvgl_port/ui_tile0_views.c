@@ -41,6 +41,9 @@ static void hide_all_map_layers(void)
     if (t0_map_btn_zout) lv_obj_set_hidden(t0_map_btn_zout, true);
     if (t0_map_btn_fit)  lv_obj_set_hidden(t0_map_btn_fit, true);
     if (t0_map_btn_ctr)  lv_obj_set_hidden(t0_map_btn_ctr, true);
+    if (t0_map_base_tri) lv_obj_set_hidden(t0_map_base_tri, true);
+    if (t0_map_base_dot) lv_obj_set_hidden(t0_map_base_dot, true);
+    if (t0_map_base_lbl) lv_obj_set_hidden(t0_map_base_lbl, true);
 }
 
 static void hide_bullseye_layers(void)
@@ -122,7 +125,7 @@ static void update_steer_graphics(bool on_line, bool pin_acquired,
     }
 }
 
-static void draw_barbed_arrow(int16_t ox, int16_t oy, float rel_deg, float len_px, uint32_t hex_color)
+void ui_tile0_draw_barbed_arrow(int16_t ox, int16_t oy, float rel_deg, float len_px, uint32_t hex_color)
 {
     if (!t0_beam_arrow) return;
     float rad = rel_deg * (float)(M_PI / 180.0);
@@ -152,47 +155,51 @@ static void set_line_2pt(lv_obj_t *line, lv_point_precise_t *pts, int16_t x0, in
     lv_obj_set_hidden(line, false);
 }
 
-static void place_rover_label_clear(int16_t rx, int16_t ry,
-                                    const float *rays_x, const float *rays_y, int ray_cnt,
-                                    int16_t avoid_ax_min, int16_t avoid_ax_max, int16_t avoid_ay,
-                                    int16_t avoid_bx_min, int16_t avoid_bx_max, int16_t avoid_by,
-                                    bool chev_active, uint32_t hex_color)
+void ui_tile0_place_point_label(lv_obj_t *lbl, int16_t px, int16_t py, float rad,
+                                const float *rays_x, const float *rays_y, int ray_cnt,
+                                const int16_t *avoid_x, const int16_t *avoid_y, int avoid_cnt,
+                                bool chev_active, int8_t *last_dir_io, uint32_t hex_color,
+                                int16_t *out_cx, int16_t *out_cy)
 {
-    if (!t0_lbl_pt_r) return;
+    if (!lbl) return;
     static const float kDx[8] = {-1.0f, 1.0f, 0.0f, 0.0f, -0.7071f, 0.7071f, -0.7071f, 0.7071f};
     static const float kDy[8] = {0.0f, 0.0f, -1.0f, 1.0f, -0.7071f, -0.7071f, 0.7071f, 0.7071f};
-    static int8_t s_last_r_dir = 1;
-    const float rad = 16.5f;
+    int16_t hw = lv_obj_get_style_width(lbl, 0) / 2;
+    if (hw < 6) hw = 7;
+    const int16_t hh = 7;
     int best_idx = 0;
     float best_cost = 1e9f;
 
     for (int i = 0; i < 8; i++) {
-        int16_t cx = rx + (int16_t)roundf(rad * kDx[i]);
-        int16_t cy = ry + (int16_t)roundf(rad * kDy[i]);
+        int16_t cx = px + (int16_t)roundf(rad * kDx[i]);
+        int16_t cy = py + (int16_t)roundf(rad * kDy[i]);
         float cost = -1.0f;
         for (int k = 0; k < ray_cnt; k++) {
             float d = kDx[i] * rays_x[k] + kDy[i] * rays_y[k];
             if (d > cost) cost = d;
         }
         if (i < 4) cost -= 0.06f;
-        if (i == s_last_r_dir) cost -= 0.14f;
-        if (cx < 10 || cx > 290 || cy < 32 || cy > 228) cost += 4.0f;
+        if (last_dir_io && i == *last_dir_io) cost -= 0.14f;
+        if (cx < (hw + 3) || cx > (297 - hw) || cy < 32 || cy > 228) cost += 4.0f;
         if (chev_active && cy >= 106 && cy <= 150 && (cx <= 44 || cx >= 256)) cost += 3.0f;
-        if (avoid_ay >= 0 && abs(cy - avoid_ay) < 16 && cx >= avoid_ax_min && cx <= avoid_ax_max) cost += 2.5f;
-        if (avoid_by >= 0 && abs(cy - avoid_by) < 16 && cx >= avoid_bx_min && cx <= avoid_bx_max) cost += 2.5f;
+        for (int j = 0; j < avoid_cnt; j++) {
+            if (abs(cx - avoid_x[j]) < (hw + 11) && abs(cy - avoid_y[j]) < 16) cost += 2.5f;
+        }
         if (cost < best_cost) {
             best_cost = cost;
             best_idx  = i;
         }
     }
-    s_last_r_dir = (int8_t)best_idx;
-    int16_t fx = rx + (int16_t)roundf(rad * kDx[best_idx]);
-    int16_t fy = ry + (int16_t)roundf(rad * kDy[best_idx]);
-    if (fx < 8) fx = 8; else if (fx > 292) fx = 292;
+    if (last_dir_io) *last_dir_io = (int8_t)best_idx;
+    int16_t fx = px + (int16_t)roundf(rad * kDx[best_idx]);
+    int16_t fy = py + (int16_t)roundf(rad * kDy[best_idx]);
+    if (fx < (hw + 2)) fx = hw + 2; else if (fx > (298 - hw)) fx = 298 - hw;
     if (fy < 28) fy = 28; else if (fy > 232) fy = 232;
-    lv_obj_align(t0_lbl_pt_r, LV_ALIGN_TOP_LEFT, fx - 7, fy - 7);
-    lv_obj_set_style_text_color(t0_lbl_pt_r, lv_color_hex(hex_color), 0);
-    lv_obj_set_hidden(t0_lbl_pt_r, false);
+    lv_obj_align(lbl, LV_ALIGN_TOP_LEFT, fx - hw, fy - hh);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(hex_color), 0);
+    lv_obj_set_hidden(lbl, false);
+    if (out_cx) *out_cx = fx;
+    if (out_cy) *out_cy = fy;
 }
 
 void ui_tile0_views_update_hud(const RoverUIData_t *d)
@@ -376,6 +383,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     nav_format_distance(fabs(stakeout.offset_m), off_val_str, sizeof(off_val_str));
     nav_format_distance(dist_b_m, dist_b_str, sizeof(dist_b_str));
 
+    static int8_t s_guide_r_dir = 1;
     if (d->mode1_bullseye_active) {
         // -----------------------------------------------------------------
         // Sub-view A (< 4.8 m / > 5.3 m Hysteresis): Bullseye + A -> B Chord
@@ -438,7 +446,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             uint32_t arrow_hex = 0xFFFFFF;
             if (err_b <= current_settings.line_arrow_green_deg)      arrow_hex = 0x00FF88;
             else if (err_b <= current_settings.line_arrow_amber_deg) arrow_hex = 0xFFB800;
-            draw_barbed_arrow(T0_CANVAS_CX + r_px, T0_CANVAS_CY + r_py, d->true_heading_deg, 22.0f, arrow_hex);
+            ui_tile0_draw_barbed_arrow(T0_CANVAS_CX + r_px, T0_CANVAS_CY + r_py, d->true_heading_deg, 22.0f, arrow_hex);
         } else {
             lv_obj_set_hidden(t0_beam_arrow, true);
         }
@@ -464,10 +472,11 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             b_ry[b_rcnt] = -(float)r_py / mag;
             b_rcnt++;
         }
-        place_rover_label_clear(T0_CANVAS_CX + r_px, T0_CANVAS_CY + r_py, b_rx, b_ry, b_rcnt,
-                                T0_CANVAS_CX + bx_off - 9, T0_CANVAS_CX + bx_off + 9, T0_CANVAS_CY + by_off,
-                                T0_CANVAS_CX - 10, T0_CANVAS_CX + 10, T0_CANVAS_CY,
-                                false, on_line ? 0x00FF88 : 0x38BDF8);
+        int16_t av_x[2] = {T0_CANVAS_CX, (int16_t)(T0_CANVAS_CX + bx_off)};
+        int16_t av_y[2] = {T0_CANVAS_CY, (int16_t)(T0_CANVAS_CY + by_off)};
+        ui_tile0_place_point_label(t0_lbl_pt_r, T0_CANVAS_CX + r_px, T0_CANVAS_CY + r_py, 16.5f,
+                                   b_rx, b_ry, b_rcnt, av_x, av_y, 2,
+                                   false, &s_guide_r_dir, on_line ? 0x00FF88 : 0x38BDF8, NULL, NULL);
 
         update_steer_graphics(on_line, (dist_b_m < 0.02), stakeout.offset_m, false);
 
@@ -684,7 +693,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         }
 
         float rel_hdg_deg = wrap180f(d->true_heading_deg - stakeout.line_bearing_deg);
-        draw_barbed_arrow(rx, ry, rel_hdg_deg, 24.0f, arrow_hex);
+        ui_tile0_draw_barbed_arrow(rx, ry, rel_hdg_deg, 24.0f, arrow_hex);
     } else {
         lv_obj_set_hidden(t0_beam_arrow, true);
     }
@@ -748,12 +757,11 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         g_rx[g_rcnt] = 0.0f; g_ry[g_rcnt] = -1.0f; g_rcnt++;
         g_rx[g_rcnt] = 0.0f; g_ry[g_rcnt] =  1.0f; g_rcnt++;
     }
-    place_rover_label_clear(rx, ry, g_rx, g_ry, g_rcnt,
-                            ((T0_CANVAS_CX < ax) ? T0_CANVAS_CX : ax) - 10,
-                            ((T0_CANVAS_CX > ax) ? T0_CANVAS_CX : ax) + 10, y_a,
-                            ((T0_CANVAS_CX < bx) ? T0_CANVAS_CX : bx) - 10,
-                            ((T0_CANVAS_CX > bx) ? T0_CANVAS_CX : bx) + 10, y_b,
-                            true, on_line ? 0x00FF88 : 0x38BDF8);
+    int16_t av_x[4] = {T0_CANVAS_CX, ax, T0_CANVAS_CX, bx};
+    int16_t av_y[4] = {y_a, y_a, y_b, y_b};
+    ui_tile0_place_point_label(t0_lbl_pt_r, rx, ry, 16.5f, g_rx, g_ry, g_rcnt,
+                               av_x, av_y, 4, true, &s_guide_r_dir,
+                               on_line ? 0x00FF88 : 0x38BDF8, NULL, NULL);
 
     // Row 1: Cross-Track Offset + Direct Distance to B (Montserrat 16)
     lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);

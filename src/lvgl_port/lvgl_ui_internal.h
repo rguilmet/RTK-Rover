@@ -143,6 +143,9 @@ extern lv_obj_t *t0_map_active_seg;
 extern lv_obj_t *t0_map_trail;
 extern lv_obj_t *t0_map_ties[T0_MAP_MAX_TIES];
 extern lv_obj_t *t0_map_pins[T0_MAP_MAX_PINS];
+extern lv_obj_t *t0_map_base_tri;
+extern lv_obj_t *t0_map_base_dot;
+extern lv_obj_t *t0_map_base_lbl;
 extern bool s_map_auto_fit;
 extern bool s_map_center_rover;
 
@@ -165,6 +168,12 @@ void refresh_t0_guidance_readout_immediately(void);
 // ui_tile0_views.c
 void ui_tile0_views_update_hud(const RoverUIData_t *d);
 void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t buf_sz);
+void ui_tile0_draw_barbed_arrow(int16_t ox, int16_t oy, float rel_deg, float len_px, uint32_t hex_color);
+void ui_tile0_place_point_label(lv_obj_t *lbl, int16_t px, int16_t py, float rad,
+                                const float *rays_x, const float *rays_y, int ray_cnt,
+                                const int16_t *avoid_x, const int16_t *avoid_y, int avoid_cnt,
+                                bool chev_active, int8_t *last_dir_io, uint32_t hex_color,
+                                int16_t *out_cx, int16_t *out_cy);
 
 // ui_tile0_map.c
 void t0_canvas_drag_cb(lv_event_t *e);
