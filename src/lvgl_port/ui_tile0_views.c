@@ -26,15 +26,6 @@ static int16_t calc_log_x_px(float dist_m, float d_max_m)
     return px;
 }
 
-static int16_t calc_apron_px(float overshoot_m)
-{
-    float norm = logf(1.0f + fabsf(overshoot_m) / 2.0f) / logf(26.0f);
-    int16_t px = (int16_t)roundf(18.0f * norm);
-    if (px < 1)  px = 1;
-    if (px > 18) px = 18;
-    return px;
-}
-
 static void hide_all_map_layers(void)
 {
     if (t0_map_boundary)   lv_obj_set_hidden(t0_map_boundary, true);
@@ -478,38 +469,109 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         }
     }
 
-    // Show baseline & dashed overshoot/undershoot aprons
-    lv_obj_set_hidden(t0_line_baseline, false);
-    lv_obj_set_hidden(t0_line_ext_top, false);
-    lv_obj_set_hidden(t0_line_ext_bot, false);
-    lv_obj_set_hidden(t0_line_arrow, false);
-
     // Log cross-track offset (signed left/right)
     int16_t off_mag_px = calc_log_x_px((float)stakeout.offset_m, d_max);
     int16_t off_px = (stakeout.offset_m < 0.0) ? -off_mag_px : off_mag_px;
 
-    // Along-line vertical position: A at (152, 174), B at (152, 46) + 18 px log aprons
-    int16_t sta_py;
-    if (stakeout.pct_complete < 0.0f) {
-        sta_py = 174 + calc_apron_px((float)stakeout.station_m);
-    } else if (stakeout.pct_complete > 100.0f) {
-        sta_py = 46 - calc_apron_px((float)stakeout.remaining_m);
+    // Dynamic Vertical Auto-Framing [42..180] across {0, L, station} so A, B, and R stay inside canvas
+    const int16_t y_top      = 42;
+    const int16_t y_bot      = 180;
+    const int16_t y_span     = y_bot - y_top; // 138 px
+    const int16_t min_seg_px = 28;
+    double seg_len = (stakeout.total_length_m > 0.01) ? stakeout.total_length_m : 0.01;
+    double s_m     = stakeout.station_m;
+
+    int16_t y_a = y_bot;
+    int16_t y_b = y_top;
+    int16_t y_r = y_bot;
+
+    static lv_point_precise_t ext_top_pts[2];
+    static lv_point_precise_t ext_bot_pts[2];
+
+    if (s_m < 0.0) {
+        // Case 2: Rover behind Start A -> pin B at top, R at bottom, slide A upward + dashed A->Foot
+        y_b = y_top;
+        y_r = y_bot;
+        int16_t seg_px = (int16_t)round((seg_len / (seg_len - s_m)) * (double)y_span);
+        if (seg_px < min_seg_px) seg_px = min_seg_px;
+        if (seg_px > y_span)     seg_px = y_span;
+        y_a = y_b + seg_px;
+
+        lv_obj_set_hidden(t0_line_ext_top, true);
+        if (y_r > y_a + 1) {
+            ext_bot_pts[0].x = 152;
+            ext_bot_pts[0].y = y_a;
+            ext_bot_pts[1].x = 152;
+            ext_bot_pts[1].y = y_r;
+            lv_line_set_points(t0_line_ext_bot, ext_bot_pts, 2);
+            lv_obj_set_hidden(t0_line_ext_bot, false);
+        } else {
+            lv_obj_set_hidden(t0_line_ext_bot, true);
+        }
+    } else if (s_m > seg_len) {
+        // Case 3: Rover past Target B -> pin A at bottom, R at top, slide B downward + dashed B->Foot
+        y_a = y_bot;
+        y_r = y_top;
+        int16_t seg_px = (int16_t)round((seg_len / s_m) * (double)y_span);
+        if (seg_px < min_seg_px) seg_px = min_seg_px;
+        if (seg_px > y_span)     seg_px = y_span;
+        y_b = y_a - seg_px;
+
+        lv_obj_set_hidden(t0_line_ext_bot, true);
+        if (y_b > y_r + 1) {
+            ext_top_pts[0].x = 152;
+            ext_top_pts[0].y = y_b;
+            ext_top_pts[1].x = 152;
+            ext_top_pts[1].y = y_r;
+            lv_line_set_points(t0_line_ext_top, ext_top_pts, 2);
+            lv_obj_set_hidden(t0_line_ext_top, false);
+        } else {
+            lv_obj_set_hidden(t0_line_ext_top, true);
+        }
     } else {
-        sta_py = 174 - (int16_t)roundf((stakeout.pct_complete / 100.0f) * 128.0f);
+        // Case 1: Between A and B -> A at bottom, B at top, R climbs linearly, extensions hidden
+        y_a = y_bot;
+        y_b = y_top;
+        y_r = y_bot - (int16_t)round((s_m / seg_len) * (double)y_span);
+        if (y_r < y_top) y_r = y_top;
+        if (y_r > y_bot) y_r = y_bot;
+        lv_obj_set_hidden(t0_line_ext_top, true);
+        lv_obj_set_hidden(t0_line_ext_bot, true);
     }
-    if (sta_py < 28)  sta_py = 28;
-    if (sta_py > 192) sta_py = 192;
+
+    // Update dynamic solid baseline A -> B and direction chevron
+    static lv_point_precise_t base_pts[2];
+    base_pts[0].x = 152;
+    base_pts[0].y = y_a;
+    base_pts[1].x = 152;
+    base_pts[1].y = y_b;
+    lv_line_set_points(t0_line_baseline, base_pts, 2);
+    lv_obj_set_hidden(t0_line_baseline, false);
+
+    if ((y_a - y_b) >= 22) {
+        static lv_point_precise_t arrow_chev_pts[3];
+        arrow_chev_pts[0].x = 146;
+        arrow_chev_pts[0].y = y_b + 14;
+        arrow_chev_pts[1].x = 152;
+        arrow_chev_pts[1].y = y_b + 6;
+        arrow_chev_pts[2].x = 158;
+        arrow_chev_pts[2].y = y_b + 14;
+        lv_line_set_points(t0_line_arrow, arrow_chev_pts, 3);
+        lv_obj_set_hidden(t0_line_arrow, false);
+    } else {
+        lv_obj_set_hidden(t0_line_arrow, true);
+    }
 
     int16_t rx = 152 + off_px;
-    int16_t ry = sta_py;
+    int16_t ry = y_r;
 
     // Distinct Circles: Start A (12px Amber/Violet), Target B (16px Green), Rover R (14px Sky Blue)
-    lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, 152 - 6, 174 - 6);
+    lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, 152 - 6, y_a - 6);
     lv_obj_set_style_bg_color(t0_line_pt_a,
                               seg.is_direct_here ? lv_color_hex(0xA855F7) : lv_color_hex(0xF59E0B), 0);
     lv_obj_set_hidden(t0_line_pt_a, false);
 
-    lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 46 - 8);
+    lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, y_b - 8);
     lv_obj_set_hidden(t0_target_icon, false);
 
     lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, rx - 7, ry - 7);
@@ -569,13 +631,13 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         lv_obj_set_hidden(t0_beam_arrow, true);
     }
 
-    // Draw Hypotenuse R -> B
-    if (dist_b_m > 0.05 && (rx != 152 || ry != 46)) {
+    // Draw Hypotenuse R -> B (using dynamic y_b)
+    if (dist_b_m > 0.05 && (rx != 152 || ry != y_b)) {
         static lv_point_precise_t hyp_pts[2];
         hyp_pts[0].x = rx;
         hyp_pts[0].y = ry;
         hyp_pts[1].x = 152;
-        hyp_pts[1].y = 46;
+        hyp_pts[1].y = y_b;
         lv_line_set_points(t0_line_hyp, hyp_pts, 2);
         lv_obj_set_style_line_color(t0_line_hyp, lv_color_hex(hyp_hex), 0);
         lv_obj_set_style_line_width(t0_line_hyp, hyp_width, 0);

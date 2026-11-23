@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.1] - 2026-11-22
+### Changed & Improved
+- **Dynamic Vertical Auto-Framing & Dashed Extensions on Tile 0 Guidance Triangle ([`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Replaced fixed `18 px` overshoot/undershoot aprons in `ui_tile0_views_update_guidance()` with dynamic proportional vertical auto-framing across `[y_top = 42, y_bot = 180]` (`min_seg_px = 28 px`) spanning `{0, L, station_m}` so Start `A`, Target `B`, and Rover `R` remain to scale and inside the canvas regardless of approach/overshoot distance.
+  - Behind Start `A` (`station_m < 0`), `B` stays pinned at `y = 42`, `R` at `y = 180`, `A` slides upward proportionally, and `t0_line_ext_bot` draws a dashed `0x3898B8` extension from `A` down to meet the perpendicular tie at a 90-deg corner. Past Target `B` (`station_m > L`), `A` stays pinned at `y = 180`, `R` at `y = 42`, `B` slides downward proportionally, `t0_line_ext_top` draws the dashed extension up to meet the tie, and hypotenuse `R -> B` slopes dynamically back to `B`.
+  - Synced `t0_line_baseline` (`y_a -> y_b`) and `t0_line_arrow` chevron dynamically (`726` lines in `ui_tile0_views.c`), removed `calc_apron_px()`, and verified clean `arduino-cli --warnings default --upload -p COM3` compile & flash (`0` warnings, `1,746,494` bytes / `55%` flash, `68,608` bytes / `20%` static `DRAM0`).
+
 ## [v0.10.0] - 2026-11-22
 ### Added & Changed
 - **Unified Tile 0 Log-Scale Guidance Triangle & Direct `HERE -> B` Mode ([`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`waypoint_manager.h`](src/waypoint_manager/waypoint_manager.h), [`waypoint_manager.cpp`](src/waypoint_manager/waypoint_manager.cpp), [`lvgl_port.h`](src/lvgl_port/lvgl_port.h), [`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h)):**

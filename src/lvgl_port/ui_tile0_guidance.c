@@ -535,22 +535,20 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_line_width(t0_line_chord, 2, 0);
     lv_obj_set_hidden(t0_line_chord, true);
 
-    // 3. Guidance Baseline A -> B, Dashed Overshoot/Undershoot Aprons & Direction Chevron
+    // 3. Guidance Baseline A -> B, Dynamic Dashed Extensions & Direction Chevron
     t0_line_ext_top = lv_line_create(t0_nav_canvas);
-    lv_obj_set_style_line_color(t0_line_ext_top, lv_color_hex(0x1E607A), 0);
+    lv_obj_set_style_line_color(t0_line_ext_top, lv_color_hex(0x3898B8), 0);
     lv_obj_set_style_line_width(t0_line_ext_top, 2, 0);
-    lv_obj_set_style_line_dash_width(t0_line_ext_top, 4, 0);
+    lv_obj_set_style_line_dash_width(t0_line_ext_top, 5, 0);
     lv_obj_set_style_line_dash_gap(t0_line_ext_top, 4, 0);
-    static const lv_point_precise_t pts_ext_top[2] = {{152, 46}, {152, 26}};
-    lv_line_set_points(t0_line_ext_top, pts_ext_top, 2);
+    lv_obj_set_hidden(t0_line_ext_top, true);
 
     t0_line_ext_bot = lv_line_create(t0_nav_canvas);
-    lv_obj_set_style_line_color(t0_line_ext_bot, lv_color_hex(0x1E607A), 0);
+    lv_obj_set_style_line_color(t0_line_ext_bot, lv_color_hex(0x3898B8), 0);
     lv_obj_set_style_line_width(t0_line_ext_bot, 2, 0);
-    lv_obj_set_style_line_dash_width(t0_line_ext_bot, 4, 0);
+    lv_obj_set_style_line_dash_width(t0_line_ext_bot, 5, 0);
     lv_obj_set_style_line_dash_gap(t0_line_ext_bot, 4, 0);
-    static const lv_point_precise_t pts_ext_bot[2] = {{152, 174}, {152, 194}};
-    lv_line_set_points(t0_line_ext_bot, pts_ext_bot, 2);
+    lv_obj_set_hidden(t0_line_ext_bot, true);
 
     t0_line_baseline = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_line_baseline, lv_color_hex(0x00D8FF), 0);
