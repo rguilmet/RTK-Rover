@@ -22,6 +22,9 @@ lv_obj_t *t0_bullseye_center = NULL;
 lv_obj_t *t0_beam_arrow      = NULL;
 lv_obj_t *t0_target_icon     = NULL;
 lv_obj_t *t0_rover_icon      = NULL;
+lv_obj_t *t0_lbl_pt_a        = NULL;
+lv_obj_t *t0_lbl_pt_b        = NULL;
+lv_obj_t *t0_lbl_pt_r        = NULL;
 lv_obj_t *t0_grid_v[T0_GRID_V_LINES] = {0};
 lv_obj_t *t0_log_lbl_inner   = NULL;
 lv_obj_t *t0_log_lbl_outer   = NULL;
@@ -411,7 +414,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_label_set_text(t0_hdg_hud_lbl, "H:---.- P:--.-");
     lv_obj_set_style_text_font(t0_hdg_hud_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_hdg_hud_lbl, lv_color_hex(0x38BDF8), 0);
-    lv_obj_align(t0_hdg_hud_lbl, LV_ALIGN_TOP_MID, 8, 8);
+    lv_obj_align(t0_hdg_hud_lbl, LV_ALIGN_TOP_MID, 12, 8);
 
     t0_tgt_hdg_lbl = lv_label_create(t0_nav_canvas);
     lv_label_set_text(t0_tgt_hdg_lbl, "B: ---.-");
@@ -423,10 +426,10 @@ void ui_tile0_create(lv_obj_t *parent)
     int16_t v_positions[T0_GRID_V_LINES] = {79, 120, 184, 225};
     for (int i = 0; i < T0_GRID_V_LINES; i++) {
         t0_grid_v[i] = lv_obj_create(t0_nav_canvas);
-        lv_obj_set_size(t0_grid_v[i], 1, 206);
-        lv_obj_set_style_bg_color(t0_grid_v[i], lv_color_hex(0x1E2D38), 0);
+        lv_obj_set_size(t0_grid_v[i], 1, 184);
+        lv_obj_set_style_bg_color(t0_grid_v[i], lv_color_hex(0x385266), 0);
         lv_obj_set_style_border_width(t0_grid_v[i], 0, 0);
-        lv_obj_align(t0_grid_v[i], LV_ALIGN_TOP_LEFT, v_positions[i], 30);
+        lv_obj_align(t0_grid_v[i], LV_ALIGN_TOP_LEFT, v_positions[i], 36);
     }
 
     t0_log_lbl_inner = lv_label_create(t0_nav_canvas);
@@ -434,27 +437,27 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_width(t0_log_lbl_inner, 28);
     lv_obj_set_style_text_align(t0_log_lbl_inner, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t0_log_lbl_inner, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(t0_log_lbl_inner, lv_color_hex(0x64748B), 0);
-    lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, 184 - 14, 220);
+    lv_obj_set_style_text_color(t0_log_lbl_inner, lv_color_hex(0x94A3B8), 0);
+    lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, 184 - 14, 222);
 
     t0_log_lbl_outer = lv_label_create(t0_nav_canvas);
     lv_label_set_text(t0_log_lbl_outer, "10m");
     lv_obj_set_width(t0_log_lbl_outer, 32);
     lv_obj_set_style_text_align(t0_log_lbl_outer, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t0_log_lbl_outer, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(t0_log_lbl_outer, lv_color_hex(0x64748B), 0);
-    lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, 225 - 16, 220);
+    lv_obj_set_style_text_color(t0_log_lbl_outer, lv_color_hex(0x94A3B8), 0);
+    lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, 225 - 16, 222);
 
     // 2. Bullseye Crosshairs, Concentric Rings & Property Chord (Sub-view A < 5m)
     t0_cross_h = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_cross_h, 210, 1);
-    lv_obj_set_style_bg_color(t0_cross_h, lv_color_hex(0x283E4C), 0);
+    lv_obj_set_style_bg_color(t0_cross_h, lv_color_hex(0x324B5E), 0);
     lv_obj_set_style_border_width(t0_cross_h, 0, 0);
     lv_obj_center(t0_cross_h);
 
     t0_cross_v = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_cross_v, 1, 180);
-    lv_obj_set_style_bg_color(t0_cross_v, lv_color_hex(0x283E4C), 0);
+    lv_obj_set_style_bg_color(t0_cross_v, lv_color_hex(0x324B5E), 0);
     lv_obj_set_style_border_width(t0_cross_v, 0, 0);
     lv_obj_center(t0_cross_v);
 
@@ -463,7 +466,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_center(t0_bullseye_ring1);
     lv_obj_set_style_radius(t0_bullseye_ring1, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(t0_bullseye_ring1, 0, 0);
-    lv_obj_set_style_border_color(t0_bullseye_ring1, lv_color_hex(0x2D4350), 0);
+    lv_obj_set_style_border_color(t0_bullseye_ring1, lv_color_hex(0x385266), 0);
     lv_obj_set_style_border_width(t0_bullseye_ring1, 1, 0);
 
     t0_bullseye_ring2 = lv_obj_create(t0_nav_canvas);
@@ -471,7 +474,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_center(t0_bullseye_ring2);
     lv_obj_set_style_radius(t0_bullseye_ring2, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(t0_bullseye_ring2, 0, 0);
-    lv_obj_set_style_border_color(t0_bullseye_ring2, lv_color_hex(0x3B5768), 0);
+    lv_obj_set_style_border_color(t0_bullseye_ring2, lv_color_hex(0x486980), 0);
     lv_obj_set_style_border_width(t0_bullseye_ring2, 1, 0);
 
     t0_bullseye_center = lv_obj_create(t0_nav_canvas);
@@ -527,14 +530,14 @@ void ui_tile0_create(lv_obj_t *parent)
 
     // 4b. Vector Graphic Steering Chevrons (>>> center-left / <<< center-right) & On-Track Bars
     static const lv_point_precise_t kChevLeftPts[3][3] = {
-        {{10, 127}, {17, 138}, {10, 149}},
-        {{18, 127}, {25, 138}, {18, 149}},
-        {{26, 127}, {33, 138}, {26, 149}}
+        {{10, 117}, {17, 128}, {10, 139}},
+        {{18, 117}, {25, 128}, {18, 139}},
+        {{26, 117}, {33, 128}, {26, 139}}
     };
     static const lv_point_precise_t kChevRightPts[3][3] = {
-        {{294, 127}, {287, 138}, {294, 149}},
-        {{286, 127}, {279, 138}, {286, 149}},
-        {{278, 127}, {271, 138}, {278, 149}}
+        {{294, 117}, {287, 128}, {294, 139}},
+        {{286, 117}, {279, 128}, {286, 139}},
+        {{278, 117}, {271, 128}, {278, 139}}
     };
     for (int i = 0; i < 3; i++) {
         t0_chev_left[i] = lv_line_create(t0_nav_canvas);
@@ -554,7 +557,7 @@ void ui_tile0_create(lv_obj_t *parent)
 
     t0_ontrack_bar_l = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_ontrack_bar_l, 4, 34);
-    lv_obj_align(t0_ontrack_bar_l, LV_ALIGN_TOP_LEFT, 18, 121);
+    lv_obj_align(t0_ontrack_bar_l, LV_ALIGN_TOP_LEFT, 18, 111);
     lv_obj_set_style_radius(t0_ontrack_bar_l, 2, 0);
     lv_obj_set_style_border_width(t0_ontrack_bar_l, 0, 0);
     lv_obj_set_style_bg_color(t0_ontrack_bar_l, lv_color_hex(0x00FF88), 0);
@@ -565,7 +568,7 @@ void ui_tile0_create(lv_obj_t *parent)
 
     t0_ontrack_bar_r = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_ontrack_bar_r, 4, 34);
-    lv_obj_align(t0_ontrack_bar_r, LV_ALIGN_TOP_LEFT, 282, 121);
+    lv_obj_align(t0_ontrack_bar_r, LV_ALIGN_TOP_LEFT, 282, 111);
     lv_obj_set_style_radius(t0_ontrack_bar_r, 2, 0);
     lv_obj_set_style_border_width(t0_ontrack_bar_r, 0, 0);
     lv_obj_set_style_bg_color(t0_ontrack_bar_r, lv_color_hex(0x00FF88), 0);
@@ -606,6 +609,34 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_line_width(t0_beam_arrow, 3, 0);
     lv_obj_set_hidden(t0_beam_arrow, true);
 
+    // 7b. Dynamic Point Labels (A, B, R) placed above arrow/dots and behind bottom toolbar buttons
+    t0_lbl_pt_a = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_lbl_pt_a, "A");
+    lv_obj_set_size(t0_lbl_pt_a, 14, 14);
+    lv_obj_set_style_text_align(t0_lbl_pt_a, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(t0_lbl_pt_a, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_lbl_pt_a, lv_color_hex(0xF59E0B), 0);
+    lv_obj_set_clickable(t0_lbl_pt_a, false);
+    lv_obj_set_hidden(t0_lbl_pt_a, true);
+
+    t0_lbl_pt_b = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_lbl_pt_b, "B");
+    lv_obj_set_size(t0_lbl_pt_b, 14, 14);
+    lv_obj_set_style_text_align(t0_lbl_pt_b, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(t0_lbl_pt_b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_lbl_pt_b, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_clickable(t0_lbl_pt_b, false);
+    lv_obj_set_hidden(t0_lbl_pt_b, true);
+
+    t0_lbl_pt_r = lv_label_create(t0_nav_canvas);
+    lv_label_set_text(t0_lbl_pt_r, "R");
+    lv_obj_set_size(t0_lbl_pt_r, 14, 14);
+    lv_obj_set_style_text_align(t0_lbl_pt_r, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(t0_lbl_pt_r, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(t0_lbl_pt_r, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_clickable(t0_lbl_pt_r, false);
+    lv_obj_set_hidden(t0_lbl_pt_r, true);
+
     // 8. Corner Buttons (Bottom-Left Start Anchor toggle + Bottom-Right Route REC + Forefront Map HUD)
     t0_anchor_btn = lv_button_create(t0_nav_canvas);
     lv_obj_set_size(t0_anchor_btn, 80, 26);
@@ -624,7 +655,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_align(t0_rec_btn, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
     lv_obj_set_style_bg_color(t0_rec_btn, COLOR_BTN_INACTIVE_BLUE, 0);
     lv_obj_set_style_radius(t0_rec_btn, 4, 0);
-    lv_obj_set_ext_click_area(t0_rec_btn, 6);
+    lv_obj_set_ext_click_area(t0_rec_btn, 2);
     lv_obj_add_event_cb(t0_rec_btn, route_toggle_btn_cb, LV_EVENT_PRESSED, NULL);
     t0_rec_btn_lbl = lv_label_create(t0_rec_btn);
     lv_label_set_text(t0_rec_btn_lbl, "REC OFF");

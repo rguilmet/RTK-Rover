@@ -113,20 +113,22 @@ void t0_canvas_drag_cb(lv_event_t *e) {
     }
 }
 
-static lv_obj_t* create_map_hud_btn(lv_obj_t *parent, const char *txt, int16_t y_pos, lv_event_cb_t cb)
+static lv_obj_t* create_map_hud_btn(lv_obj_t *parent, const char *txt,
+                                    int16_t w, int16_t x_pos,
+                                    const lv_font_t *font, lv_event_cb_t cb)
 {
     lv_obj_t *btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 36, 26);
-    lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -6, y_pos);
+    lv_obj_set_size(btn, w, 26);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_LEFT, x_pos, -6);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x1E293B), 0);
     lv_obj_set_style_border_color(btn, lv_color_hex(0x334155), 0);
     lv_obj_set_style_border_width(btn, 1, 0);
     lv_obj_set_style_radius(btn, 4, 0);
-    lv_obj_set_ext_click_area(btn, 4);
+    lv_obj_set_ext_click_area(btn, 2);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_PRESSED, NULL);
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, txt);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(lbl, font, 0);
     lv_obj_center(lbl);
     lv_obj_set_hidden(btn, true);
     return btn;
@@ -171,10 +173,10 @@ void ui_tile0_map_create(lv_obj_t *canvas)
         lv_obj_set_hidden(t0_map_pins[i], true);
     }
 
-    t0_map_btn_zin  = create_map_hud_btn(canvas, "+",   36, t0_map_zoom_in_cb);
-    t0_map_btn_zout = create_map_hud_btn(canvas, "-",   68, t0_map_zoom_out_cb);
-    t0_map_btn_fit  = create_map_hud_btn(canvas, "FIT", 100, t0_map_fit_cb);
-    t0_map_btn_ctr  = create_map_hud_btn(canvas, "CTR", 132, t0_map_center_rover_cb);
+    t0_map_btn_zin  = create_map_hud_btn(canvas, "+",   46,   6, &lv_font_montserrat_16, t0_map_zoom_in_cb);
+    t0_map_btn_zout = create_map_hud_btn(canvas, "-",   46,  57, &lv_font_montserrat_16, t0_map_zoom_out_cb);
+    t0_map_btn_fit  = create_map_hud_btn(canvas, "FIT", 48, 108, &lv_font_montserrat_12, t0_map_fit_cb);
+    t0_map_btn_ctr  = create_map_hud_btn(canvas, "CTR", 48, 161, &lv_font_montserrat_12, t0_map_center_rover_cb);
 }
 
 void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
@@ -195,6 +197,9 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     if (t0_log_lbl_inner) lv_obj_set_hidden(t0_log_lbl_inner, true);
     if (t0_log_lbl_outer) lv_obj_set_hidden(t0_log_lbl_outer, true);
     if (t0_anchor_btn)    lv_obj_set_hidden(t0_anchor_btn, true);
+    if (t0_lbl_pt_a)      lv_obj_set_hidden(t0_lbl_pt_a, true);
+    if (t0_lbl_pt_b)      lv_obj_set_hidden(t0_lbl_pt_b, true);
+    if (t0_lbl_pt_r)      lv_obj_set_hidden(t0_lbl_pt_r, true);
 
     lv_obj_set_hidden(t0_line_baseline, true);
     lv_obj_set_hidden(t0_line_ext_top, true);
@@ -262,8 +267,8 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         s_map_center_lon = (min_lon + max_lon) * 0.5;
         double dlat_m = (max_lat - min_lat) * 111132.95;
         double dlon_m = (max_lon - min_lon) * 111132.95 * cos(s_map_center_lat * (M_PI / 180.0));
-        float sx = (float)dlon_m / 240.0f;
-        float sy = (float)dlat_m / 220.0f;
+        float sx = (float)dlon_m / 250.0f;
+        float sy = (float)dlat_m / 184.0f;
         float fit_scale = (sx > sy) ? sx : sy;
         if (fit_scale < 0.15f) fit_scale = 0.15f;
         if (fit_scale > 25.0f) fit_scale = 25.0f;

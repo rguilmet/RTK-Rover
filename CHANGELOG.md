@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.5] - 2026-11-23
+### Fixed & Improved
+- **Tile 0 Guidance Spacing, Reference Grid Contrast & Dynamic `A`/`B`/`R` Labels ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c)):**
+  - Adjusted the Guidance corridor vertical framing (`T0_GUIDE_Y_TOP = 50`, `T0_GUIDE_Y_BOT = 206`, `T0_GUIDE_CY = 128`), recentered the top HUD `H:` / `P:` readout (`offset x = +12`) and side chevrons (`y = 117..139`), and added clean breathing room between markers and bottom corner buttons (`A: DEED` / `REC OFF`).
+  - Increased visual contrast and vertical alignment of the symmetric log-X reference grid (`0x385266` across `y = 36..220`, matching Bullseye rings/crosshairs) and `3ft`/`30ft` (`1m`/`10m`) tick labels (`0x94A3B8` at `y = 222`).
+  - Added color-coded `A`, `B`, and `R` marker labels (`t0_lbl_pt_a`, `t0_lbl_pt_b`, `t0_lbl_pt_r`) layered cleanly behind the bottom buttons; `A`/`B` sit opposite the Rover side of the baseline and [`place_rover_label_clear()`](src/lvgl_port/ui_tile0_views.c) dynamically picks the clearest 8-way sector around `R` away from the tie line, hypotenuse, heading arrow, side chevrons, and neighbor labels.
+- **Dual-Source Beam Pitch HUD & Unified Map View Bottom Toolbar ([`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Fixed [`ui_tile0_views_update_hud()`](src/lvgl_port/ui_tile0_views.c) so `P:` displays live `baseline_pitch_deg` when UM982 `SLV FIX`/`SLV FLT` is active and automatically falls back to tare-compensated 10-DOF beam IMU pitch (`beam_pitch_deg - beam_pitch_tare_deg`) on both Guidance and Map View when dual-antenna carrier-phase pitch is unavailable.
+  - Relocated Map View's `+`, `-`, `FIT`, and `CTR` buttons from the top-right stack into a full-width bottom toolbar (`26 px` height, `46..48 px` wide, `ext_click_area = 2`) aligned beside `REC OFF`, and tuned auto-fit projection extents (`250 x 184 px`) to clear the bottom bar.
+
 ## [v0.10.4] - 2026-11-23
 ### Fixed & Improved
 - **Lock-Free Screenshot Capture Handshake & Post-Close Verification ([`lvgl_port_core.c`](src/lvgl_port/lvgl_port_core.c), [`screenshot.cpp`](src/screenshot/screenshot.cpp)):**

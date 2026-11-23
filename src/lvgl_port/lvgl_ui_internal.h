@@ -28,8 +28,9 @@ extern "C" {
 #define T0_CANVAS_H       276
 #define T0_CANVAS_CX      152
 #define T0_CANVAS_CY      138
-#define T0_GUIDE_Y_TOP    36
-#define T0_GUIDE_Y_BOT    232
+#define T0_GUIDE_Y_TOP    50
+#define T0_GUIDE_Y_BOT    206
+#define T0_GUIDE_CY       128
 
 #define COLOR_BTN_ACTIVE_GREEN  lv_color_hex(0x107C41)
 #define COLOR_BTN_INACTIVE_BLUE lv_color_hex(0x1B6CA8)
@@ -106,6 +107,9 @@ extern lv_obj_t *t0_bullseye_center;
 extern lv_obj_t *t0_beam_arrow;
 extern lv_obj_t *t0_target_icon;
 extern lv_obj_t *t0_rover_icon;
+extern lv_obj_t *t0_lbl_pt_a;
+extern lv_obj_t *t0_lbl_pt_b;
+extern lv_obj_t *t0_lbl_pt_r;
 extern lv_obj_t *t0_grid_v[T0_GRID_V_LINES];
 extern lv_obj_t *t0_log_lbl_inner;
 extern lv_obj_t *t0_log_lbl_outer;
