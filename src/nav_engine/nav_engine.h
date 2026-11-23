@@ -63,6 +63,9 @@ void nav_format_quadrant_bearing(float bearing_deg, char *buf, size_t buf_len);
 // Format station in surveying stationing format (e.g. "Sta 4+20.5 ft" or "Sta 1+28.2 m")
 void nav_format_station(double station_m, char *buf, size_t buf_len);
 
+// Format signed along-line distances relative to Start A and Target B
+void nav_format_along_line(double station_m, float pct_complete, double remaining_m, char *buf, size_t buf_len);
+
 // Unit Formatting Helpers (SI vs Imperial based on current_settings.use_imperial_units)
 void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len);
 void nav_format_distance(double meters, char *buf, int buf_len);

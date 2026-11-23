@@ -269,10 +269,7 @@ void refresh_t0_guidance_readout_immediately(void)
             rover_label_set_text_if_changed(t0_dist_lbl, buf);
         }
         if (t0_offsets_lbl) {
-            char sta_str[32], rem_str[24];
-            nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
-            nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
-            snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
+            nav_format_along_line(stakeout.station_m, stakeout.pct_complete, stakeout.remaining_m, buf, sizeof(buf));
             rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         }
     }
@@ -678,7 +675,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 330);
 
     t0_offsets_lbl = lv_label_create(parent);
-    lv_label_set_text(t0_offsets_lbl, "Sta: --- | Rem: ---");
+    lv_label_set_text(t0_offsets_lbl, "A: --- | Line->B: ---");
     lv_obj_set_width(t0_offsets_lbl, 308);
     lv_label_set_long_mode(t0_offsets_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(t0_offsets_lbl, LV_TEXT_ALIGN_CENTER, 0);

@@ -5,6 +5,11 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.7] - 2026-11-23
+### Changed
+- **Signed Along-Line `A:` / `Line->B:` Progress Readout ([`nav_engine.h`](src/nav_engine/nav_engine.h), [`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Replaced civil `+` stationing (`Sta ... | Rem: ...`) on Tile 0 Row 2 with [`nav_format_along_line()`](src/nav_engine/nav_engine.cpp), displaying signed along-line distance from Start `A` (`+`/`-`, with `pct_complete`) and signed along-line distance remaining to Target `B` (`A: +|-x.x ft (x.x%) | Line->B: +|-x.x ft`), clearly indicating when the Rover perpendicular foot is behind `A`, between `A` and `B`, or past `B`.
+
 ## [v0.10.6] - 2026-11-23
 ### Added & Improved
 - **Map View Dynamic `A`/`B`/`R` Labels, Barbed Heading Arrow & Base Station Symbol ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**

@@ -780,11 +780,8 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     // 3-Tier Vector Graphic Steering Chevrons (>>> / <<<) & On-Track Vertical Bars (|)
     update_steer_graphics(on_line, false, stakeout.offset_m, (lock_state == LOCK_PERP_GREEN));
 
-    // Row 2: Along-Line Station & Remaining (Montserrat 12)
-    char sta_str[32], rem_str[24];
-    nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
-    nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
-    snprintf(buf, buf_sz, "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
+    // Row 2: Signed Along-Line Progress from A & Remaining Along Line to B (Montserrat 12)
+    nav_format_along_line(stakeout.station_m, stakeout.pct_complete, stakeout.remaining_m, buf, buf_sz);
     if (t0_offsets_lbl) {
         rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);

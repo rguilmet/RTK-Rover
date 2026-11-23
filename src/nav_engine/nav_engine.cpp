@@ -240,6 +240,47 @@ extern "C" void nav_format_station(double station_m, char *buf, size_t buf_len)
     snprintf(buf, buf_len, "Sta %s%d+%04.1f %s", neg ? "-" : "", hundred, remainder, unit);
 }
 
+static void format_signed_along_1dp(double meters, char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return;
+    if (current_settings.use_imperial_units) {
+        double feet = meters * METERS_TO_FEET;
+        if (fabs(feet) < 1.0) {
+            double inches = feet * 12.0;
+            if (fabs(inches) < 0.05) inches = 0.0;
+            snprintf(buf, buf_len, "%+.1f in", inches);
+        } else if (fabs(feet) < 1000.0) {
+            snprintf(buf, buf_len, "%+.1f ft", feet);
+        } else {
+            char tmp[32];
+            nav_format_commas(feet, 1, "ft", tmp, sizeof(tmp));
+            snprintf(buf, buf_len, "%s%s", (feet >= 0.0) ? "+" : "", tmp);
+        }
+    } else {
+        if (fabs(meters) < 1.0) {
+            double cm = meters * 100.0;
+            if (fabs(cm) < 0.05) cm = 0.0;
+            snprintf(buf, buf_len, "%+.1f cm", cm);
+        } else if (fabs(meters) < 1000.0) {
+            snprintf(buf, buf_len, "%+.1f m", meters);
+        } else {
+            char tmp[32];
+            nav_format_commas(meters, 1, "m", tmp, sizeof(tmp));
+            snprintf(buf, buf_len, "%s%s", (meters >= 0.0) ? "+" : "", tmp);
+        }
+    }
+}
+
+extern "C" void nav_format_along_line(double station_m, float pct_complete, double remaining_m, char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return;
+    char a_str[32], b_str[32];
+    format_signed_along_1dp(station_m, a_str, sizeof(a_str));
+    format_signed_along_1dp(remaining_m, b_str, sizeof(b_str));
+    float pct = (fabsf(pct_complete) < 0.05f) ? 0.0f : pct_complete;
+    snprintf(buf, buf_len, "A: %s (%.1f%%) | Line->B: %s", a_str, pct, b_str);
+}
+
 extern "C" void nav_format_commas(double val, int decimals, const char *unit, char *buf, size_t buf_len)
 {
     if (!buf || buf_len == 0) return;
