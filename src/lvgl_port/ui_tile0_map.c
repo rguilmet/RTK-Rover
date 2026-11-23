@@ -171,10 +171,10 @@ void ui_tile0_map_create(lv_obj_t *canvas)
         lv_obj_set_hidden(t0_map_pins[i], true);
     }
 
-    t0_map_btn_zin  = create_map_hud_btn(canvas, "+",   48, t0_map_zoom_in_cb);
-    t0_map_btn_zout = create_map_hud_btn(canvas, "-",   78, t0_map_zoom_out_cb);
-    t0_map_btn_fit  = create_map_hud_btn(canvas, "FIT", 108, t0_map_fit_cb);
-    t0_map_btn_ctr  = create_map_hud_btn(canvas, "CTR", 138, t0_map_center_rover_cb);
+    t0_map_btn_zin  = create_map_hud_btn(canvas, "+",   36, t0_map_zoom_in_cb);
+    t0_map_btn_zout = create_map_hud_btn(canvas, "-",   68, t0_map_zoom_out_cb);
+    t0_map_btn_fit  = create_map_hud_btn(canvas, "FIT", 100, t0_map_fit_cb);
+    t0_map_btn_ctr  = create_map_hud_btn(canvas, "CTR", 132, t0_map_center_rover_cb);
 }
 
 void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
@@ -202,6 +202,12 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     lv_obj_set_hidden(t0_line_arrow, true);
     lv_obj_set_hidden(t0_line_tie, true);
     lv_obj_set_hidden(t0_line_hyp, true);
+    for (int i = 0; i < 3; i++) {
+        if (t0_chev_left[i])  lv_obj_set_hidden(t0_chev_left[i], true);
+        if (t0_chev_right[i]) lv_obj_set_hidden(t0_chev_right[i], true);
+    }
+    if (t0_ontrack_bar_l) lv_obj_set_hidden(t0_ontrack_bar_l, true);
+    if (t0_ontrack_bar_r) lv_obj_set_hidden(t0_ontrack_bar_r, true);
 
     // Show Map HUD zoom/pan controls
     lv_obj_set_hidden(t0_map_btn_zin, false);
@@ -222,11 +228,6 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     lv_label_set_text(t0_mode_badge, "MAP VIEW");
     lv_obj_set_style_bg_color(t0_mode_badge, lv_color_hex(0x10B981), 0);
 
-    // Scale label shows visible window width & meters/px
-    float win_w_m = 304.0f * s_map_m_per_px;
-    snprintf(buf, buf_sz, "Win: %.0fm (%.2fm/px)", win_w_m, s_map_m_per_px);
-    lv_label_set_text(t0_scale_lbl, buf);
-
     ActiveGuidanceSegment_t seg;
     bool has_seg = waypoint_guidance_get_segment(d->tip_lat, d->tip_lon, &seg);
 
@@ -234,26 +235,13 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     if (has_seg) {
         snprintf(buf, buf_sz, "%s -> %s [%s]",
                  seg.label_a, seg.label_b, seg.is_direct_here ? "SET A" : "SWAP");
-        if (t0_target_lbl) {
-            const char *cur_t = lv_label_get_text(t0_target_lbl);
-            if (!cur_t || strcmp(cur_t, buf) != 0) lv_label_set_text(t0_target_lbl, buf);
-        }
-        if (t0_notes_lbl) {
-            const char *new_notes = seg.notes_b[0] ? seg.notes_b : "Touch Map to Pan | Zoom with Buttons";
-            const char *cur_n = lv_label_get_text(t0_notes_lbl);
-            if (!cur_n || strcmp(cur_n, new_notes) != 0) lv_label_set_text(t0_notes_lbl, new_notes);
-        }
+        if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, buf);
     } else if (d->has_active_target) {
         snprintf(buf, buf_sz, "%s (%d/%d)",
                  d->target_label, d->active_target_idx + 1, d->total_targets);
-        if (t0_target_lbl) lv_label_set_text(t0_target_lbl, buf);
-        if (t0_notes_lbl) {
-            const char *new_notes = d->target_notes[0] ? d->target_notes : "Touch Map to Pan | Zoom with Buttons";
-            lv_label_set_text(t0_notes_lbl, new_notes);
-        }
+        if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, buf);
     } else {
-        if (t0_target_lbl) lv_label_set_text(t0_target_lbl, "No Target (0/0)");
-        if (t0_notes_lbl) lv_label_set_text(t0_notes_lbl, "Touch Map to Pan | Zoom with Buttons");
+        if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, "No Target (0/0)");
     }
 
     // Center & Auto-Fit Bounding Box calculation
@@ -275,7 +263,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         double dlat_m = (max_lat - min_lat) * 111132.95;
         double dlon_m = (max_lon - min_lon) * 111132.95 * cos(s_map_center_lat * (M_PI / 180.0));
         float sx = (float)dlon_m / 240.0f;
-        float sy = (float)dlat_m / 160.0f;
+        float sy = (float)dlat_m / 220.0f;
         float fit_scale = (sx > sy) ? sx : sy;
         if (fit_scale < 0.15f) fit_scale = 0.15f;
         if (fit_scale > 25.0f) fit_scale = 25.0f;
@@ -308,6 +296,20 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         }
     }
 
+    // Consolidated Row 6 Marquee with up-to-date Map scale & waypoint count
+    float win_w_m = (float)T0_CANVAS_W * s_map_m_per_px;
+    if (has_seg) {
+        snprintf(buf, buf_sz, "SEG: %s -> %s | Win: %.0fm (%.2fm/px) | Pts: %d",
+                 seg.label_a, seg.label_b, win_w_m, s_map_m_per_px, g_waypoint_count);
+    } else if (d->has_active_target) {
+        snprintf(buf, buf_sz, "TGT: %s | Win: %.0fm (%.2fm/px) | Pts: %d",
+                 d->target_label, win_w_m, s_map_m_per_px, g_waypoint_count);
+    } else {
+        snprintf(buf, buf_sz, "Touch Map to Pan | Win: %.0fm (%.2fm/px) | Pts: %d",
+                 win_w_m, s_map_m_per_px, g_waypoint_count);
+    }
+    if (t0_notes_lbl) rover_label_set_text_if_changed(t0_notes_lbl, buf);
+
     // Equirectangular local projection parameters
     double lat_rad = s_map_center_lat * (M_PI / 180.0);
     double cos_lat = cos(lat_rad);
@@ -323,8 +325,8 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         int16_t idx = bnd_indices[k];
         double dN = (g_waypoints[idx].latitude - s_map_center_lat) * 111132.95;
         double dE = (g_waypoints[idx].longitude - s_map_center_lon) * 111132.95 * cos_lat;
-        s_bnd_pts[bnd_cnt].x = 152 + (int16_t)roundf((float)dE / s_map_m_per_px);
-        s_bnd_pts[bnd_cnt].y = 105 - (int16_t)roundf((float)dN / s_map_m_per_px);
+        s_bnd_pts[bnd_cnt].x = T0_CANVAS_CX + (int16_t)roundf((float)dE / s_map_m_per_px);
+        s_bnd_pts[bnd_cnt].y = T0_CANVAS_CY - (int16_t)roundf((float)dN / s_map_m_per_px);
         bnd_cnt++;
     }
     if (bnd_cnt >= 2) {
@@ -344,13 +346,13 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     if (has_seg) {
         double a_dN = (seg.lat_a - s_map_center_lat) * 111132.95;
         double a_dE = (seg.lon_a - s_map_center_lon) * 111132.95 * cos_lat;
-        a_sx = 152 + (int16_t)roundf((float)a_dE / s_map_m_per_px);
-        a_sy = 105 - (int16_t)roundf((float)a_dN / s_map_m_per_px);
+        a_sx = T0_CANVAS_CX + (int16_t)roundf((float)a_dE / s_map_m_per_px);
+        a_sy = T0_CANVAS_CY - (int16_t)roundf((float)a_dN / s_map_m_per_px);
 
         double b_dN = (seg.lat_b - s_map_center_lat) * 111132.95;
         double b_dE = (seg.lon_b - s_map_center_lon) * 111132.95 * cos_lat;
-        int16_t b_sx = 152 + (int16_t)roundf((float)b_dE / s_map_m_per_px);
-        int16_t b_sy = 105 - (int16_t)roundf((float)b_dN / s_map_m_per_px);
+        int16_t b_sx = T0_CANVAS_CX + (int16_t)roundf((float)b_dE / s_map_m_per_px);
+        int16_t b_sy = T0_CANVAS_CY - (int16_t)roundf((float)b_dN / s_map_m_per_px);
 
         static lv_point_precise_t s_act_seg_pts[2];
         s_act_seg_pts[0].x = a_sx;
@@ -365,7 +367,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         lv_obj_set_style_line_dash_gap(t0_map_active_seg, seg.is_direct_here ? 4 : 0, 0);
         lv_obj_set_hidden(t0_map_active_seg, false);
 
-        if (a_sx >= -6 && a_sx <= 310 && a_sy >= -6 && a_sy <= 216) {
+        if (a_sx >= -6 && a_sx <= (T0_CANVAS_W + 6) && a_sy >= -6 && a_sy <= (T0_CANVAS_H + 6)) {
             lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, a_sx - 6, a_sy - 6);
             lv_obj_set_style_bg_color(t0_line_pt_a,
                                       seg.is_direct_here ? lv_color_hex(0xA855F7) : lv_color_hex(0xF59E0B), 0);
@@ -384,12 +386,12 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     for (int i = 0; i < g_waypoint_count && i < T0_MAP_MAX_PINS; i++) {
         double dN = (g_waypoints[i].latitude - s_map_center_lat) * 111132.95;
         double dE = (g_waypoints[i].longitude - s_map_center_lon) * 111132.95 * cos_lat;
-        int16_t sx = 152 + (int16_t)roundf((float)dE / s_map_m_per_px);
-        int16_t sy = 105 - (int16_t)roundf((float)dN / s_map_m_per_px);
+        int16_t sx = T0_CANVAS_CX + (int16_t)roundf((float)dE / s_map_m_per_px);
+        int16_t sy = T0_CANVAS_CY - (int16_t)roundf((float)dN / s_map_m_per_px);
 
         if (i == g_active_waypoint_idx) {
             lv_obj_set_hidden(t0_map_pins[i], true);
-            if (sx >= -8 && sx <= 312 && sy >= -8 && sy <= 218) {
+            if (sx >= -8 && sx <= (T0_CANVAS_W + 8) && sy >= -8 && sy <= (T0_CANVAS_H + 8)) {
                 lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, sx - 8, sy - 8);
                 lv_obj_set_hidden(t0_target_icon, false);
                 target_pin_shown = true;
@@ -397,7 +399,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         } else if (has_seg && !seg.is_direct_here && i == seg.idx_a && show_pt_a) {
             lv_obj_set_hidden(t0_map_pins[i], true);
         } else {
-            if (sx >= -5 && sx <= 309 && sy >= -5 && sy <= 215) {
+            if (sx >= -5 && sx <= (T0_CANVAS_W + 5) && sy >= -5 && sy <= (T0_CANVAS_H + 5)) {
                 lv_obj_align(t0_map_pins[i], LV_ALIGN_TOP_LEFT, sx - 4, sy - 4);
                 if (g_waypoints[i].is_boundary) {
                     lv_obj_set_style_bg_color(t0_map_pins[i], lv_color_hex(0xFBBF24), 0); // Gold
@@ -426,13 +428,13 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
             if (tgt_idx >= 0 && tgt_idx < g_waypoint_count) {
                 double dN1 = (g_waypoints[i].latitude - s_map_center_lat) * 111132.95;
                 double dE1 = (g_waypoints[i].longitude - s_map_center_lon) * 111132.95 * cos_lat;
-                int16_t sx1 = 152 + (int16_t)roundf((float)dE1 / s_map_m_per_px);
-                int16_t sy1 = 105 - (int16_t)roundf((float)dN1 / s_map_m_per_px);
+                int16_t sx1 = T0_CANVAS_CX + (int16_t)roundf((float)dE1 / s_map_m_per_px);
+                int16_t sy1 = T0_CANVAS_CY - (int16_t)roundf((float)dN1 / s_map_m_per_px);
 
                 double dN2 = (g_waypoints[tgt_idx].latitude - s_map_center_lat) * 111132.95;
                 double dE2 = (g_waypoints[tgt_idx].longitude - s_map_center_lon) * 111132.95 * cos_lat;
-                int16_t sx2 = 152 + (int16_t)roundf((float)dE2 / s_map_m_per_px);
-                int16_t sy2 = 105 - (int16_t)roundf((float)dN2 / s_map_m_per_px);
+                int16_t sx2 = T0_CANVAS_CX + (int16_t)roundf((float)dE2 / s_map_m_per_px);
+                int16_t sy2 = T0_CANVAS_CY - (int16_t)roundf((float)dN2 / s_map_m_per_px);
 
                 s_tie_pts[active_ties][0].x = sx1;
                 s_tie_pts[active_ties][0].y = sy1;
@@ -458,8 +460,8 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
             if (nav_breadcrumb_get_point(i, &bc_pt)) {
                 double dN = (bc_pt.lat - s_map_center_lat) * 111132.95;
                 double dE = (bc_pt.lon - s_map_center_lon) * 111132.95 * cos_lat;
-                s_trail_pts[trail_cnt].x = 152 + (int16_t)roundf((float)dE / s_map_m_per_px);
-                s_trail_pts[trail_cnt].y = 105 - (int16_t)roundf((float)dN / s_map_m_per_px);
+                s_trail_pts[trail_cnt].x = T0_CANVAS_CX + (int16_t)roundf((float)dE / s_map_m_per_px);
+                s_trail_pts[trail_cnt].y = T0_CANVAS_CY - (int16_t)roundf((float)dN / s_map_m_per_px);
                 trail_cnt++;
             }
         }
@@ -477,8 +479,8 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     if (fabs(d->tip_lat) > 0.0001 || fabs(d->tip_lon) > 0.0001) {
         double r_dN = (d->tip_lat - s_map_center_lat) * 111132.95;
         double r_dE = (d->tip_lon - s_map_center_lon) * 111132.95 * cos_lat;
-        int16_t r_sx = 152 + (int16_t)roundf((float)r_dE / s_map_m_per_px);
-        int16_t r_sy = 105 - (int16_t)roundf((float)r_dN / s_map_m_per_px);
+        int16_t r_sx = T0_CANVAS_CX + (int16_t)roundf((float)r_dE / s_map_m_per_px);
+        int16_t r_sy = T0_CANVAS_CY - (int16_t)roundf((float)r_dN / s_map_m_per_px);
         lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, r_sx - 7, r_sy - 7);
         lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
         lv_obj_set_hidden(t0_rover_icon, false);
@@ -518,32 +520,10 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
     }
 
-    // Row 2: Active Segment / Target Name (t0_steer_lbl in Montserrat 14)
-    if (has_seg) {
-        snprintf(buf, buf_sz, "SEG: %s -> %s", seg.label_a, seg.label_b);
-    } else if (d->has_active_target) {
-        snprintf(buf, buf_sz, "TGT: %s (%d/%d)",
-                 d->target_label, d->active_target_idx + 1, d->total_targets);
-    } else {
-        snprintf(buf, buf_sz, "No Target Active");
-    }
-    if (t0_steer_lbl) {
-        rover_label_set_text_if_changed(t0_steer_lbl, buf);
-        lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
-    }
-
-    // Row 3: Map Center Coordinates (t0_offsets_lbl in Montserrat 12)
+    // Row 2: Map Center Coordinates (t0_offsets_lbl in Montserrat 12)
     snprintf(buf, buf_sz, "Map Ctr: %.5f, %.5f", s_map_center_lat, s_map_center_lon);
     if (t0_offsets_lbl) {
         rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
-    }
-
-    // Row 4: Scale & Waypoint Count (t0_extra_lbl in Montserrat 12)
-    snprintf(buf, buf_sz, "Scale: %.2f m/px | Pts: %d", s_map_m_per_px, g_waypoint_count);
-    if (t0_extra_lbl) {
-        rover_label_set_text_if_changed(t0_extra_lbl, buf);
-        lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
-        lv_obj_set_hidden(t0_extra_lbl, false);
     }
 }

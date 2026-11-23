@@ -24,6 +24,13 @@ extern "C" {
 #define T0_MAP_MAX_TIES 8
 #define T0_MAP_MAX_PINS 32
 
+#define T0_CANVAS_W       304
+#define T0_CANVAS_H       276
+#define T0_CANVAS_CX      152
+#define T0_CANVAS_CY      138
+#define T0_GUIDE_Y_TOP    36
+#define T0_GUIDE_Y_BOT    232
+
 #define COLOR_BTN_ACTIVE_GREEN  lv_color_hex(0x107C41)
 #define COLOR_BTN_INACTIVE_BLUE lv_color_hex(0x1B6CA8)
 #define COLOR_UNIT_SI_TEAL      lv_color_hex(0x0284C7)
@@ -90,8 +97,6 @@ extern lv_obj_t *t0_rec_btn_lbl;
 extern lv_obj_t *t0_nav_canvas;
 extern lv_obj_t *t0_mode_badge;
 extern lv_obj_t *t0_hdg_hud_lbl;
-extern lv_obj_t *t0_pitch_hud_lbl;
-extern lv_obj_t *t0_scale_lbl;
 extern lv_obj_t *t0_tgt_hdg_lbl;
 extern lv_obj_t *t0_cross_h;
 extern lv_obj_t *t0_cross_v;
@@ -107,10 +112,13 @@ extern lv_obj_t *t0_log_lbl_outer;
 extern lv_obj_t *t0_anchor_btn;
 extern lv_obj_t *t0_anchor_btn_lbl;
 
+extern lv_obj_t *t0_chev_left[3];
+extern lv_obj_t *t0_chev_right[3];
+extern lv_obj_t *t0_ontrack_bar_l;
+extern lv_obj_t *t0_ontrack_bar_r;
+
 extern lv_obj_t *t0_dist_lbl;
-extern lv_obj_t *t0_steer_lbl;
 extern lv_obj_t *t0_offsets_lbl;
-extern lv_obj_t *t0_extra_lbl;
 
 extern lv_obj_t *t0_line_baseline;
 extern lv_obj_t *t0_line_ext_top;

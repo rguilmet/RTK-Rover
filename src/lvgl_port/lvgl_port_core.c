@@ -21,6 +21,8 @@ static const char *TAG = "lvgl_port";
 static SemaphoreHandle_t lvgl_mux = NULL;
 static uint16_t *trans_buf_1 = NULL;
 static uint16_t *s_last_flushed_fb = NULL;
+static uint8_t * volatile s_fb_capture_dst = NULL;
+static SemaphoreHandle_t s_fb_capture_done_sem = NULL;
 static SemaphoreHandle_t flush_done_semaphore = NULL;
 esp_io_expander_handle_t io_expander = NULL;
 
@@ -45,6 +47,18 @@ static void rover_increase_lvgl_tick(void *arg)
 {
     (void)arg;
     lv_tick_inc(LVGL_TICK_PERIOD_MS);
+}
+
+static void rover_lvgl_service_fb_capture(const uint16_t *src_fb)
+{
+    uint8_t *dst = s_fb_capture_dst;
+    if (dst != NULL && src_fb != NULL) {
+        memcpy(dst, src_fb, BUFF_SIZE);
+        s_fb_capture_dst = NULL;
+        if (s_fb_capture_done_sem != NULL) {
+            xSemaphoreGive(s_fb_capture_done_sem);
+        }
+    }
 }
 
 static void rover_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
@@ -75,6 +89,7 @@ static void rover_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8
         lv_area_get_width(area) == ROVER_LCD_H_RES &&
         lv_area_get_height(area) == ROVER_LCD_V_RES) {
         s_last_flushed_fb = (uint16_t *)color_p;
+        rover_lvgl_service_fb_capture(s_last_flushed_fb);
     }
     lv_disp_flush_ready(disp);
 }
@@ -189,25 +204,21 @@ void rover_lvgl_unlock(void)
 
 bool rover_lvgl_capture_framebuffer(uint8_t *dst_rgb565_be, size_t dst_bytes)
 {
-    if (!dst_rgb565_be || dst_bytes < (size_t)BUFF_SIZE) {
+    if (!dst_rgb565_be || dst_bytes < (size_t)BUFF_SIZE || s_fb_capture_done_sem == NULL) {
         return false;
     }
-    if (!rover_lvgl_lock(2000)) {
-        return false;
+    // Clear any stale completion token before arming the one-shot copy
+    (void)xSemaphoreTake(s_fb_capture_done_sem, 0);
+    s_fb_capture_dst = dst_rgb565_be;
+    if (xSemaphoreTake(s_fb_capture_done_sem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        return true;
     }
-
-    if (s_last_flushed_fb == NULL) {
-        lv_refr_now(NULL);
+    // Timeout fallback: disarm request cleanly before caller frees dst_rgb565_be
+    s_fb_capture_dst = NULL;
+    if (xSemaphoreTake(s_fb_capture_done_sem, pdMS_TO_TICKS(100)) == pdTRUE) {
+        return true;
     }
-
-    bool ok = false;
-    if (s_last_flushed_fb != NULL) {
-        memcpy(dst_rgb565_be, s_last_flushed_fb, BUFF_SIZE);
-        ok = true;
-    }
-
-    rover_lvgl_unlock();
-    return ok;
+    return false;
 }
 
 static void rover_lvgl_port_task(void *arg)
@@ -217,6 +228,7 @@ static void rover_lvgl_port_task(void *arg)
     for (;;) {
         if (rover_lvgl_lock(-1)) {
             task_delay_ms = lv_timer_handler();
+            rover_lvgl_service_fb_capture(s_last_flushed_fb);
             rover_lvgl_unlock();
         }
         if (task_delay_ms > LVGL_TASK_MAX_DELAY_MS) {
@@ -273,6 +285,8 @@ void lvgl_port_init(void)
 {
     flush_done_semaphore = xSemaphoreCreateBinary();
     assert(flush_done_semaphore);
+    s_fb_capture_done_sem = xSemaphoreCreateBinary();
+    assert(s_fb_capture_done_sem);
 
     ESP_LOGI(TAG, "Initialize LCD reset and backlight");
     rover_lcd_pwm_off_early();

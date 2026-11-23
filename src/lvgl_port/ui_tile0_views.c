@@ -69,6 +69,70 @@ static void hide_triangle_layers(void)
     if (t0_line_pt_a)     lv_obj_set_hidden(t0_line_pt_a, true);
 }
 
+static void hide_steer_graphics(void)
+{
+    for (int i = 0; i < 3; i++) {
+        if (t0_chev_left[i])  lv_obj_set_hidden(t0_chev_left[i], true);
+        if (t0_chev_right[i]) lv_obj_set_hidden(t0_chev_right[i], true);
+    }
+    if (t0_ontrack_bar_l) lv_obj_set_hidden(t0_ontrack_bar_l, true);
+    if (t0_ontrack_bar_r) lv_obj_set_hidden(t0_ontrack_bar_r, true);
+}
+
+static void update_steer_graphics(bool on_line, bool pin_acquired,
+                                  double offset_m, bool perp_locked_green)
+{
+    if (pin_acquired || on_line) {
+        for (int i = 0; i < 3; i++) {
+            if (t0_chev_left[i])  lv_obj_set_hidden(t0_chev_left[i], true);
+            if (t0_chev_right[i]) lv_obj_set_hidden(t0_chev_right[i], true);
+        }
+        lv_color_t bar_col = lv_color_hex(pin_acquired ? 0x00FF00 : 0x00FF88);
+        if (t0_ontrack_bar_l) {
+            lv_obj_set_style_bg_color(t0_ontrack_bar_l, bar_col, 0);
+            lv_obj_set_hidden(t0_ontrack_bar_l, false);
+        }
+        if (t0_ontrack_bar_r) {
+            lv_obj_set_style_bg_color(t0_ontrack_bar_r, bar_col, 0);
+            lv_obj_set_hidden(t0_ontrack_bar_r, false);
+        }
+        return;
+    }
+
+    if (t0_ontrack_bar_l) lv_obj_set_hidden(t0_ontrack_bar_l, true);
+    if (t0_ontrack_bar_r) lv_obj_set_hidden(t0_ontrack_bar_r, true);
+
+    float fade_m = current_settings.line_audio_fade_m;
+    if (fade_m < 1.0f) fade_m = 20.0f;
+    uint32_t chev_hex = perp_locked_green ? 0x00FF88 :
+                        ((fabs(offset_m) > (double)fade_m) ? 0xFF5522 : 0xF59E0B);
+    lv_color_t chev_col = lv_color_hex(chev_hex);
+
+    if (offset_m < 0.0) {
+        // Rover LEFT of line -> show >>> chevrons on center-left (Move Right)
+        for (int i = 0; i < 3; i++) {
+            if (t0_chev_left[i]) {
+                lv_obj_set_style_line_color(t0_chev_left[i], chev_col, 0);
+                lv_obj_set_hidden(t0_chev_left[i], false);
+            }
+            if (t0_chev_right[i]) {
+                lv_obj_set_hidden(t0_chev_right[i], true);
+            }
+        }
+    } else {
+        // Rover RIGHT of line -> show <<< chevrons on center-right (Move Left)
+        for (int i = 0; i < 3; i++) {
+            if (t0_chev_right[i]) {
+                lv_obj_set_style_line_color(t0_chev_right[i], chev_col, 0);
+                lv_obj_set_hidden(t0_chev_right[i], false);
+            }
+            if (t0_chev_left[i]) {
+                lv_obj_set_hidden(t0_chev_left[i], true);
+            }
+        }
+    }
+}
+
 static void draw_barbed_arrow(int16_t ox, int16_t oy, float rel_deg, float len_px, uint32_t hex_color)
 {
     if (!t0_beam_arrow) return;
@@ -104,29 +168,19 @@ void ui_tile0_views_update_hud(const RoverUIData_t *d)
 {
     char hud_buf[32];
     if (t0_hdg_hud_lbl) {
+        char h_str[16], p_str[16];
         if (d->heading_valid) {
-            const char *src_tag = (d->heading_source == HDG_SRC_DUAL_FIX) ? "FIX" :
-                                  (d->heading_source == HDG_SRC_DUAL_FLT) ? "FLT" :
-                                  (d->heading_source == HDG_SRC_DISP)     ? "WLK" :
-                                  (d->heading_source == HDG_SRC_COMP)     ? "CMP" :
-                                  (d->heading_source == HDG_SRC_GYRO)     ? "GYR" :
-                                  (d->heading_source == HDG_SRC_COG)      ? "COG" :
-                                  (d->heading_source == HDG_SRC_HOLD)     ? "HLD" :
-                                  (d->heading_is_fixed ? "FIX" : "FLT");
-            snprintf(hud_buf, sizeof(hud_buf), "Hdg: %05.1f %s", d->true_heading_deg, src_tag);
+            snprintf(h_str, sizeof(h_str), "%05.1f", d->true_heading_deg);
         } else {
-            snprintf(hud_buf, sizeof(hud_buf), "Hdg: ---.-");
+            snprintf(h_str, sizeof(h_str), "---.-");
         }
-        lv_label_set_text(t0_hdg_hud_lbl, hud_buf);
-    }
-
-    if (t0_pitch_hud_lbl) {
         if (d->heading_valid || d->baseline_length_m > 0.01f) {
-            snprintf(hud_buf, sizeof(hud_buf), "Pitch: %+.1f deg", d->baseline_pitch_deg);
+            snprintf(p_str, sizeof(p_str), "%+.1f", d->baseline_pitch_deg);
         } else {
-            snprintf(hud_buf, sizeof(hud_buf), "Pitch: --.- deg");
+            snprintf(p_str, sizeof(p_str), "--.-");
         }
-        lv_label_set_text(t0_pitch_hud_lbl, hud_buf);
+        snprintf(hud_buf, sizeof(hud_buf), "H:%s P:%s", h_str, p_str);
+        rover_label_set_text_if_changed(t0_hdg_hud_lbl, hud_buf);
     }
 
     if (t0_tgt_hdg_lbl) {
@@ -139,8 +193,8 @@ void ui_tile0_views_update_hud(const RoverUIData_t *d)
                                         d->heading_valid ? d->true_heading_deg : 0.0f,
                                         seg.lat_b, seg.lon_b,
                                         &dist_b_m, &brg_b_deg, &rel_b_deg, NULL, NULL);
-            snprintf(hud_buf, sizeof(hud_buf), "Tgt: %05.1f deg", brg_b_deg);
-            lv_label_set_text(t0_tgt_hdg_lbl, hud_buf);
+            snprintf(hud_buf, sizeof(hud_buf), "B: %05.1f", brg_b_deg);
+            rover_label_set_text_if_changed(t0_tgt_hdg_lbl, hud_buf);
             if ((d->heading_valid && fabsf(rel_b_deg) <= current_settings.line_arrow_green_deg) ||
                 (dist_b_m <= 0.05)) {
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0);
@@ -150,8 +204,8 @@ void ui_tile0_views_update_hud(const RoverUIData_t *d)
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
             }
         } else if (d->has_active_target) {
-            snprintf(hud_buf, sizeof(hud_buf), "Tgt: %05.1f deg", d->bearing_to_target_deg);
-            lv_label_set_text(t0_tgt_hdg_lbl, hud_buf);
+            snprintf(hud_buf, sizeof(hud_buf), "B: %05.1f", d->bearing_to_target_deg);
+            rover_label_set_text_if_changed(t0_tgt_hdg_lbl, hud_buf);
             if ((d->heading_valid && fabsf(d->rel_bearing_deg) <= current_settings.line_arrow_green_deg) ||
                 (d->distance_to_target_m <= 0.05)) {
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0);
@@ -161,7 +215,7 @@ void ui_tile0_views_update_hud(const RoverUIData_t *d)
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
             }
         } else {
-            lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+            rover_label_set_text_if_changed(t0_tgt_hdg_lbl, "B: ---.-");
             lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
         }
     }
@@ -189,70 +243,55 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     if (!has_seg) {
         hide_bullseye_layers();
         hide_triangle_layers();
+        hide_steer_graphics();
         if (t0_beam_arrow) lv_obj_set_hidden(t0_beam_arrow, true);
 
         if (seg.label_b[0] != '\0') {
             // Single-point / Direct HERE mode waiting for first GNSS coordinate to anchor A
             snprintf(buf, buf_sz, "HERE -> %s [SET A]", seg.label_b);
-            if (t0_target_lbl) {
-                const char *cur = lv_label_get_text(t0_target_lbl);
-                if (!cur || strcmp(cur, buf) != 0) lv_label_set_text(t0_target_lbl, buf);
-            }
+            if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, buf);
             if (t0_notes_lbl) {
                 const char *n = seg.notes_b[0] ? seg.notes_b : "Waiting for GNSS Fix to Anchor A...";
-                const char *cn = lv_label_get_text(t0_notes_lbl);
-                if (!cn || strcmp(cn, n) != 0) lv_label_set_text(t0_notes_lbl, n);
+                rover_label_set_text_if_changed(t0_notes_lbl, n);
             }
             lv_label_set_text(t0_mode_badge, "GUIDANCE");
             lv_obj_set_style_bg_color(t0_mode_badge, COLOR_BTN_WIFI_AP, 0);
-            lv_label_set_text(t0_scale_lbl, "To B: ---");
             if (t0_dist_lbl) {
                 lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
                 rover_label_set_text_if_changed(t0_dist_lbl, "Acquiring Fix...");
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
             }
-            if (t0_steer_lbl) {
-                rover_label_set_text_if_changed(t0_steer_lbl, "Start A anchors automatically on GNSS fix");
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x94A3B8), 0);
+            if (t0_offsets_lbl) {
+                rover_label_set_text_if_changed(t0_offsets_lbl, "Start A anchors automatically on GNSS fix");
+                lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x94A3B8), 0);
             }
-            if (t0_offsets_lbl) rover_label_set_text_if_changed(t0_offsets_lbl, "Sta: --- | Rem: ---");
-            if (t0_extra_lbl)   lv_obj_set_hidden(t0_extra_lbl, true);
             if (t0_target_icon) {
-                lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 46 - 8);
+                lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - 8, T0_GUIDE_Y_TOP - 8);
                 lv_obj_set_hidden(t0_target_icon, false);
             }
             if (t0_rover_icon) {
-                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 - 7, 174 - 7);
+                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - 7, T0_GUIDE_Y_BOT - 7);
                 lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
                 lv_obj_set_hidden(t0_rover_icon, false);
             }
         } else {
             // No CSV waypoints loaded
-            if (t0_target_lbl) {
-                const char *cur = lv_label_get_text(t0_target_lbl);
-                if (!cur || strcmp(cur, "No Target (0/0)") != 0) lv_label_set_text(t0_target_lbl, "No Target (0/0)");
-            }
-            if (t0_notes_lbl) {
-                const char *cn = lv_label_get_text(t0_notes_lbl);
-                if (!cn || strcmp(cn, "---") != 0) lv_label_set_text(t0_notes_lbl, "---");
-            }
+            if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, "No Target (0/0)");
+            if (t0_notes_lbl)  rover_label_set_text_if_changed(t0_notes_lbl, "---");
             lv_label_set_text(t0_mode_badge, "NO TARGET");
             lv_obj_set_style_bg_color(t0_mode_badge, lv_palette_main(LV_PALETTE_GREY), 0);
-            lv_label_set_text(t0_scale_lbl, "To B: ---");
             if (t0_dist_lbl) {
-                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-                rover_label_set_text_if_changed(t0_dist_lbl, "---");
+                lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
+                rover_label_set_text_if_changed(t0_dist_lbl, "No Target Active");
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
             }
-            if (t0_steer_lbl) {
-                rover_label_set_text_if_changed(t0_steer_lbl, "Select target in Tile 3 Waypoints");
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x888888), 0);
+            if (t0_offsets_lbl) {
+                rover_label_set_text_if_changed(t0_offsets_lbl, "Select target in Tile 3 Waypoints");
+                lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x888888), 0);
             }
-            if (t0_offsets_lbl) rover_label_set_text_if_changed(t0_offsets_lbl, "Sta: --- | Rem: ---");
-            if (t0_extra_lbl)   lv_obj_set_hidden(t0_extra_lbl, true);
             if (t0_target_icon) lv_obj_set_hidden(t0_target_icon, true);
             if (t0_rover_icon) {
-                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, 152 - 7, 174 - 7);
+                lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - 7, T0_GUIDE_Y_BOT - 7);
                 lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
                 lv_obj_set_hidden(t0_rover_icon, false);
             }
@@ -274,23 +313,17 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
                                 seg.lat_b, seg.lon_b,
                                 &dist_b_m, &brg_b_deg, &rel_b_deg, &dn_b_m, &de_b_m);
 
-    // Top Title & Notes Row
+    // Top Title & Consolidated Marquee Row
     snprintf(buf, buf_sz, "%s -> %s [%s]",
              seg.label_a, seg.label_b, seg.is_direct_here ? "SET A" : "SWAP");
-    if (t0_target_lbl) {
-        const char *cur_tgt = lv_label_get_text(t0_target_lbl);
-        if (!cur_tgt || strcmp(cur_tgt, buf) != 0) lv_label_set_text(t0_target_lbl, buf);
-    }
+    if (t0_target_lbl) rover_label_set_text_if_changed(t0_target_lbl, buf);
 
-    char qbrg[32], len_str[24];
+    char qbrg[32], len_str[24], log_span_str[24];
     nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
     nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
-    snprintf(buf, buf_sz, "%s: %s | %s",
-             seg.is_direct_here ? "Direct" : "Deed", qbrg, len_str);
-    if (t0_notes_lbl) {
-        const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-        if (!cur_notes || strcmp(cur_notes, buf) != 0) lv_label_set_text(t0_notes_lbl, buf);
-    }
+    float d_max = current_settings.line_log_max_m;
+    if (d_max < 2.0f) d_max = 50.0f;
+    nav_format_distance((double)d_max, log_span_str, sizeof(log_span_str));
 
     bool on_line = (fabs(stakeout.offset_m) <= 0.02);
     char off_val_str[24], dist_b_str[24];
@@ -303,6 +336,10 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         // -----------------------------------------------------------------
         hide_triangle_layers();
 
+        snprintf(buf, buf_sz, "%s: %s (%.1f deg) | %s",
+                 seg.is_direct_here ? "Direct" : "Deed", qbrg, stakeout.line_bearing_deg, len_str);
+        if (t0_notes_lbl) rover_label_set_text_if_changed(t0_notes_lbl, buf);
+
         lv_obj_set_hidden(t0_bullseye_ring1, false);
         lv_obj_set_hidden(t0_bullseye_ring2, false);
         lv_obj_set_hidden(t0_bullseye_center, false);
@@ -314,13 +351,11 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
 
         float px_per_m;
         if (dist_b_m <= 1.5) {
-            px_per_m = 73.0f / 1.5f;
-            lv_obj_set_size(t0_bullseye_ring2, 48, 48);
-            lv_label_set_text(t0_scale_lbl, "Ring: 1.5m / 0.5m");
+            px_per_m = 90.0f / 1.5f;
+            lv_obj_set_size(t0_bullseye_ring2, 60, 60);
         } else {
-            px_per_m = 73.0f / 5.0f;
-            lv_obj_set_size(t0_bullseye_ring2, 44, 44);
-            lv_label_set_text(t0_scale_lbl, "Ring: 5.0m / 1.5m");
+            px_per_m = 90.0f / 5.0f;
+            lv_obj_set_size(t0_bullseye_ring2, 54, 54);
         }
 
         // Overlaid A -> B chord across the Bullseye centered on Target B
@@ -328,10 +363,10 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         float ux = sinf(line_rad);
         float uy = -cosf(line_rad);
         static lv_point_precise_t chord_pts[2];
-        chord_pts[0].x = 152 - (int16_t)roundf(73.0f * ux);
-        chord_pts[0].y = 105 - (int16_t)roundf(73.0f * uy);
-        chord_pts[1].x = 152 + (int16_t)roundf(73.0f * ux);
-        chord_pts[1].y = 105 + (int16_t)roundf(73.0f * uy);
+        chord_pts[0].x = T0_CANVAS_CX - (int16_t)roundf(90.0f * ux);
+        chord_pts[0].y = T0_CANVAS_CY - (int16_t)roundf(90.0f * uy);
+        chord_pts[1].x = T0_CANVAS_CX + (int16_t)roundf(90.0f * ux);
+        chord_pts[1].y = T0_CANVAS_CY + (int16_t)roundf(90.0f * uy);
         lv_line_set_points(t0_line_chord, chord_pts, 2);
         lv_obj_set_style_line_color(t0_line_chord, on_line ? lv_color_hex(0x00FF88) : lv_color_hex(0x00D8FF), 0);
         lv_obj_set_hidden(t0_line_chord, false);
@@ -349,8 +384,8 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
 
         int16_t r_px = (int16_t)roundf(-de_b_m * px_per_m);
         int16_t r_py = (int16_t)roundf( dn_b_m * px_per_m);
-        if (r_px > 78) r_px = 78; else if (r_px < -78) r_px = -78;
-        if (r_py > 78) r_py = 78; else if (r_py < -78) r_py = -78;
+        if (r_px > 94) r_px = 94; else if (r_px < -94) r_px = -94;
+        if (r_py > 94) r_py = 94; else if (r_py < -94) r_py = -94;
         lv_obj_align(t0_rover_icon, LV_ALIGN_CENTER, r_px, r_py);
         lv_obj_set_style_bg_color(t0_rover_icon, on_line ? lv_color_hex(0x00FF88) : lv_color_hex(0x38BDF8), 0);
         lv_obj_set_hidden(t0_rover_icon, false);
@@ -360,32 +395,27 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             uint32_t arrow_hex = 0xFFFFFF;
             if (err_b <= current_settings.line_arrow_green_deg)      arrow_hex = 0x00FF88;
             else if (err_b <= current_settings.line_arrow_amber_deg) arrow_hex = 0xFFB800;
-            draw_barbed_arrow(152 + r_px, 105 + r_py, d->true_heading_deg, 22.0f, arrow_hex);
+            draw_barbed_arrow(T0_CANVAS_CX + r_px, T0_CANVAS_CY + r_py, d->true_heading_deg, 22.0f, arrow_hex);
         } else {
             lv_obj_set_hidden(t0_beam_arrow, true);
         }
 
-        if (t0_dist_lbl) {
-            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-            rover_label_set_text_if_changed(t0_dist_lbl, dist_b_str);
-            lv_obj_set_style_text_color(t0_dist_lbl, (dist_b_m < 0.02) ? lv_color_hex(0x00FF00) : lv_color_hex(0xFFFFFF), 0);
-        }
+        update_steer_graphics(on_line, (dist_b_m < 0.02), stakeout.offset_m, false);
 
-        if (t0_steer_lbl) {
+        if (t0_dist_lbl) {
+            lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
             if (dist_b_m < 0.02) {
-                snprintf(buf, buf_sz, "[OK] PIN ACQUIRED! (Acc: %.1f cm)", d->h_acc_m * 100.0f);
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF00), 0);
+                snprintf(buf, buf_sz, "[OK] PIN ACQUIRED! (%.1f cm)", d->h_acc_m * 100.0f);
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF00), 0);
             } else if (on_line) {
-                snprintf(buf, buf_sz, "Line: [OK] ON LINE (%s)", off_val_str);
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-            } else if (stakeout.offset_m < 0.0) {
-                snprintf(buf, buf_sz, "Line: %s LEFT (Move R >>>)", off_val_str);
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+                snprintf(buf, buf_sz, "B: %s | [OK] ON LINE", dist_b_str);
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x00FF88), 0);
             } else {
-                snprintf(buf, buf_sz, "Line: %s RIGHT (<<< Move L)", off_val_str);
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
+                snprintf(buf, buf_sz, "B: %s | %s %s",
+                         dist_b_str, off_val_str, (stakeout.offset_m < 0.0) ? "L" : "R");
+                lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
             }
-            rover_label_set_text_if_changed(t0_steer_lbl, buf);
+            rover_label_set_text_if_changed(t0_dist_lbl, buf);
         }
 
         char dn_b_str[24], de_b_str[24];
@@ -395,13 +425,6 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             snprintf(buf, buf_sz, "dN: %s   dE: %s", dn_b_str, de_b_str);
             rover_label_set_text_if_changed(t0_offsets_lbl, buf);
             lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
-        }
-
-        if (t0_extra_lbl) {
-            snprintf(buf, buf_sz, "Line: %s (%.1f deg)", qbrg, stakeout.line_bearing_deg);
-            rover_label_set_text_if_changed(t0_extra_lbl, buf);
-            lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
-            lv_obj_set_hidden(t0_extra_lbl, false);
         }
         return;
     }
@@ -414,12 +437,12 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     lv_label_set_text(t0_mode_badge, "GUIDANCE");
     lv_obj_set_style_bg_color(t0_mode_badge, seg.is_direct_here ? COLOR_BTN_WIFI_AP : COLOR_UNIT_SI_TEAL, 0);
 
-    snprintf(buf, buf_sz, "To B: %s", dist_b_str);
-    lv_label_set_text(t0_scale_lbl, buf);
+    snprintf(buf, buf_sz, "%s: %s (%.1f deg) | %s | Log: %s",
+             seg.is_direct_here ? "Direct" : "Deed",
+             qbrg, stakeout.line_bearing_deg, len_str, log_span_str);
+    if (t0_notes_lbl) rover_label_set_text_if_changed(t0_notes_lbl, buf);
 
     // Symmetric Log-X Reference Grid Ticks
-    float d_max = current_settings.line_log_max_m;
-    if (d_max < 2.0f) d_max = 50.0f;
     float tick_in_m  = current_settings.use_imperial_units ? 0.9144f : 1.0f;   // 3 ft or 1 m
     float tick_out_m = current_settings.use_imperial_units ? 9.144f  : 10.0f;  // 30 ft or 10 m
     int16_t px_in    = calc_log_x_px(tick_in_m, d_max);
@@ -430,8 +453,8 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
 
     if (t0_grid_v[1] && t0_grid_v[2]) {
         if (show_in) {
-            lv_obj_align(t0_grid_v[1], LV_ALIGN_TOP_LEFT, 152 - px_in, 26);
-            lv_obj_align(t0_grid_v[2], LV_ALIGN_TOP_LEFT, 152 + px_in, 26);
+            lv_obj_align(t0_grid_v[1], LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - px_in, 30);
+            lv_obj_align(t0_grid_v[2], LV_ALIGN_TOP_LEFT, T0_CANVAS_CX + px_in, 30);
             lv_obj_set_hidden(t0_grid_v[1], false);
             lv_obj_set_hidden(t0_grid_v[2], false);
         } else {
@@ -441,8 +464,8 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     }
     if (t0_grid_v[0] && t0_grid_v[3]) {
         if (show_out) {
-            lv_obj_align(t0_grid_v[0], LV_ALIGN_TOP_LEFT, 152 - px_out, 26);
-            lv_obj_align(t0_grid_v[3], LV_ALIGN_TOP_LEFT, 152 + px_out, 26);
+            lv_obj_align(t0_grid_v[0], LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - px_out, 30);
+            lv_obj_align(t0_grid_v[3], LV_ALIGN_TOP_LEFT, T0_CANVAS_CX + px_out, 30);
             lv_obj_set_hidden(t0_grid_v[0], false);
             lv_obj_set_hidden(t0_grid_v[3], false);
         } else {
@@ -453,7 +476,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     if (t0_log_lbl_inner) {
         if (show_in) {
             lv_label_set_text(t0_log_lbl_inner, current_settings.use_imperial_units ? "3ft" : "1m");
-            lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, 152 + px_in - 14, 156);
+            lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX + px_in - 14, 220);
             lv_obj_set_hidden(t0_log_lbl_inner, false);
         } else {
             lv_obj_set_hidden(t0_log_lbl_inner, true);
@@ -462,7 +485,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     if (t0_log_lbl_outer) {
         if (show_out) {
             lv_label_set_text(t0_log_lbl_outer, current_settings.use_imperial_units ? "30ft" : "10m");
-            lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, 152 + px_out - 16, 156);
+            lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX + px_out - 16, 220);
             lv_obj_set_hidden(t0_log_lbl_outer, false);
         } else {
             lv_obj_set_hidden(t0_log_lbl_outer, true);
@@ -473,11 +496,11 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     int16_t off_mag_px = calc_log_x_px((float)stakeout.offset_m, d_max);
     int16_t off_px = (stakeout.offset_m < 0.0) ? -off_mag_px : off_mag_px;
 
-    // Dynamic Vertical Auto-Framing [42..180] across {0, L, station} so A, B, and R stay inside canvas
-    const int16_t y_top      = 42;
-    const int16_t y_bot      = 180;
-    const int16_t y_span     = y_bot - y_top; // 138 px
-    const int16_t min_seg_px = 28;
+    // Dynamic Vertical Auto-Framing [36..232] across {0, L, station} so A, B, and R stay inside canvas
+    const int16_t y_top      = T0_GUIDE_Y_TOP;
+    const int16_t y_bot      = T0_GUIDE_Y_BOT;
+    const int16_t y_span     = y_bot - y_top; // 196 px
+    const int16_t min_seg_px = 36;
     double seg_len = (stakeout.total_length_m > 0.01) ? stakeout.total_length_m : 0.01;
     double s_m     = stakeout.station_m;
 
@@ -675,36 +698,10 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     }
     if (t0_dist_lbl) rover_label_set_text_if_changed(t0_dist_lbl, buf);
 
-    // Row 2: Tactical Steer / Alignment Prompt (Montserrat 14)
-    if (t0_steer_lbl) {
-        if (lock_state == LOCK_HYP_GREEN) {
-            snprintf(buf, buf_sz, "[OK] AIMED AT TARGET B");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-        } else if (lock_state == LOCK_HYP_AMBER) {
-            float abs_turn = fabsf(wrap180f(brg_b_deg - d->true_heading_deg));
-            float signed_turn = wrap180f(brg_b_deg - d->true_heading_deg);
-            snprintf(buf, buf_sz, (signed_turn >= 0.0f) ? "NEAR TARGET B (R %.0f deg)" : "NEAR TARGET B (L %.0f deg)", abs_turn);
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFB800), 0);
-        } else if (lock_state == LOCK_PERP_GREEN) {
-            snprintf(buf, buf_sz, "[OK] AIMED TO LINE");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-        } else if (lock_state == LOCK_PERP_AMBER) {
-            snprintf(buf, buf_sz, "NEAR PERPENDICULAR TO LINE");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFB800), 0);
-        } else if (on_line) {
-            snprintf(buf, buf_sz, "[OK] ON LINE - PROCEED TO B");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-        } else if (stakeout.offset_m < 0.0) {
-            snprintf(buf, buf_sz, "MOVE RIGHT TO LINE >>>");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
-        } else {
-            snprintf(buf, buf_sz, "<<< MOVE LEFT TO LINE");
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
-        }
-        rover_label_set_text_if_changed(t0_steer_lbl, buf);
-    }
+    // 3-Tier Vector Graphic Steering Chevrons (>>> / <<<) & On-Track Vertical Bars (|)
+    update_steer_graphics(on_line, false, stakeout.offset_m, (lock_state == LOCK_PERP_GREEN));
 
-    // Row 3: Along-Line Station & Remaining (Montserrat 12)
+    // Row 2: Along-Line Station & Remaining (Montserrat 12)
     char sta_str[32], rem_str[24];
     nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
     nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
@@ -712,15 +709,5 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     if (t0_offsets_lbl) {
         rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
-    }
-
-    // Row 4: Line Bearing & Log Scale Outer Span (Montserrat 12)
-    char log_span_str[24];
-    nav_format_distance((double)d_max, log_span_str, sizeof(log_span_str));
-    snprintf(buf, buf_sz, "Line: %s (%.1f deg) | Log: %s", qbrg, stakeout.line_bearing_deg, log_span_str);
-    if (t0_extra_lbl) {
-        rover_label_set_text_if_changed(t0_extra_lbl, buf);
-        lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
-        lv_obj_set_hidden(t0_extra_lbl, false);
     }
 }

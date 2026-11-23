@@ -9,12 +9,10 @@ lv_obj_t *t0_notes_lbl       = NULL;
 lv_obj_t *t0_rec_btn         = NULL;
 lv_obj_t *t0_rec_btn_lbl     = NULL;
 
-// Navigation Canvas (304x210)
+// Navigation Canvas (304x276)
 lv_obj_t *t0_nav_canvas      = NULL;
 lv_obj_t *t0_mode_badge      = NULL;
 lv_obj_t *t0_hdg_hud_lbl     = NULL;
-lv_obj_t *t0_pitch_hud_lbl   = NULL;
-lv_obj_t *t0_scale_lbl       = NULL;
 lv_obj_t *t0_tgt_hdg_lbl     = NULL;
 lv_obj_t *t0_cross_h         = NULL;
 lv_obj_t *t0_cross_v         = NULL;
@@ -30,10 +28,13 @@ lv_obj_t *t0_log_lbl_outer   = NULL;
 lv_obj_t *t0_anchor_btn      = NULL;
 lv_obj_t *t0_anchor_btn_lbl  = NULL;
 
+lv_obj_t *t0_chev_left[3]    = {0};
+lv_obj_t *t0_chev_right[3]   = {0};
+lv_obj_t *t0_ontrack_bar_l   = NULL;
+lv_obj_t *t0_ontrack_bar_r   = NULL;
+
 lv_obj_t *t0_dist_lbl        = NULL;
-lv_obj_t *t0_steer_lbl       = NULL;
 lv_obj_t *t0_offsets_lbl     = NULL;
-lv_obj_t *t0_extra_lbl       = NULL;
 
 // Unified Guidance Triangle & Line Overlays
 lv_obj_t *t0_line_baseline   = NULL;
@@ -136,53 +137,41 @@ void update_t0_target_label(void)
             }
         }
         if (t0_notes_lbl) {
-            char nbuf[128];
+            char nbuf[160];
             if (s_tile0_nav_mode == 1) {
-                snprintf(nbuf, sizeof(nbuf), "%s",
-                         seg.notes_b[0] ? seg.notes_b : "Touch Map to Pan | Zoom with Buttons");
+                snprintf(nbuf, sizeof(nbuf), "SEG: %s -> %s | Pts: %d",
+                         seg.label_a, seg.label_b, g_waypoint_count);
             } else {
                 NavLineStakeout_t stakeout;
                 nav_compute_line_stakeout(0, 0, seg.lat_a, seg.lon_a, seg.lat_b, seg.lon_b, &stakeout);
-                char qbrg[32];
+                char qbrg[32], len_str[24], log_span_str[24];
                 nav_format_quadrant_bearing(stakeout.line_bearing_deg, qbrg, sizeof(qbrg));
-                char len_str[24];
                 nav_format_distance(stakeout.total_length_m, len_str, sizeof(len_str));
-                snprintf(nbuf, sizeof(nbuf), "%s: %s | %s",
-                         seg.is_direct_here ? "Direct" : "Deed", qbrg, len_str);
+                float d_max = current_settings.line_log_max_m;
+                if (d_max < 2.0f) d_max = 50.0f;
+                nav_format_distance((double)d_max, log_span_str, sizeof(log_span_str));
+                snprintf(nbuf, sizeof(nbuf), "%s: %s (%.1f deg) | %s | Log: %s",
+                         seg.is_direct_here ? "Direct" : "Deed",
+                         qbrg, stakeout.line_bearing_deg, len_str, log_span_str);
             }
-            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-            if (!cur_notes || strcmp(cur_notes, nbuf) != 0) {
-                lv_label_set_text(t0_notes_lbl, nbuf);
-            }
+            rover_label_set_text_if_changed(t0_notes_lbl, nbuf);
         }
     } else if (seg.label_b[0] != '\0') {
         if (t0_target_lbl) {
             char buf[96];
             snprintf(buf, sizeof(buf), "HERE -> %s [SET A]", seg.label_b);
-            const char *cur = lv_label_get_text(t0_target_lbl);
-            if (!cur || strcmp(cur, buf) != 0) {
-                lv_label_set_text(t0_target_lbl, buf);
-            }
+            rover_label_set_text_if_changed(t0_target_lbl, buf);
         }
         if (t0_notes_lbl) {
             const char *new_notes = seg.notes_b[0] ? seg.notes_b : "Waiting for GNSS Fix to Anchor A...";
-            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-            if (!cur_notes || strcmp(cur_notes, new_notes) != 0) {
-                lv_label_set_text(t0_notes_lbl, new_notes);
-            }
+            rover_label_set_text_if_changed(t0_notes_lbl, new_notes);
         }
     } else {
         if (t0_target_lbl) {
-            const char *cur = lv_label_get_text(t0_target_lbl);
-            if (!cur || strcmp(cur, "No Target (0/0)") != 0) {
-                lv_label_set_text(t0_target_lbl, "No Target (0/0)");
-            }
+            rover_label_set_text_if_changed(t0_target_lbl, "No Target (0/0)");
         }
         if (t0_notes_lbl) {
-            const char *cur_notes = lv_label_get_text(t0_notes_lbl);
-            if (!cur_notes || strcmp(cur_notes, "---") != 0) {
-                lv_label_set_text(t0_notes_lbl, "---");
-            }
+            rover_label_set_text_if_changed(t0_notes_lbl, "---");
         }
     }
 
@@ -222,8 +211,8 @@ void refresh_t0_guidance_readout_immediately(void)
 
     if (t0_tgt_hdg_lbl) {
         if (has_seg || has_wp) {
-            snprintf(buf, sizeof(buf), "Tgt: %05.1f deg", brg_b_deg);
-            lv_label_set_text(t0_tgt_hdg_lbl, buf);
+            snprintf(buf, sizeof(buf), "B: %05.1f", brg_b_deg);
+            rover_label_set_text_if_changed(t0_tgt_hdg_lbl, buf);
             if ((s_last_ui_data.heading_valid && fabsf(rel_b_deg) <= current_settings.line_arrow_green_deg) ||
                 (dist_b_m <= 0.05)) {
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0x00FF88), 0);
@@ -233,7 +222,7 @@ void refresh_t0_guidance_readout_immediately(void)
                 lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
             }
         } else {
-            lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+            rover_label_set_text_if_changed(t0_tgt_hdg_lbl, "B: ---.-");
             lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
         }
     }
@@ -250,18 +239,6 @@ void refresh_t0_guidance_readout_immediately(void)
             }
             rover_label_set_text_if_changed(t0_dist_lbl, buf);
             lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
-        }
-        if (t0_steer_lbl) {
-            if (has_seg) {
-                snprintf(buf, sizeof(buf), "%s -> %s", seg.label_a, seg.label_b);
-            } else if (has_wp) {
-                snprintf(buf, sizeof(buf), "TGT: %s (%d/%d)",
-                         active_wp.label, g_active_waypoint_idx + 1, g_waypoint_count);
-            } else {
-                snprintf(buf, sizeof(buf), "No Target Active");
-            }
-            rover_label_set_text_if_changed(t0_steer_lbl, buf);
-            lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
         }
     } else if (has_seg) {
         NavLineStakeout_t stakeout;
@@ -287,22 +264,6 @@ void refresh_t0_guidance_readout_immediately(void)
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
             }
             rover_label_set_text_if_changed(t0_dist_lbl, buf);
-        }
-        if (t0_steer_lbl) {
-            if (dist_b_m < 0.02) {
-                snprintf(buf, sizeof(buf), "[OK] PIN ACQUIRED! (Acc: %.1f cm)", s_last_ui_data.h_acc_m * 100.0f);
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-            } else if (on_line) {
-                snprintf(buf, sizeof(buf), "[OK] ON LINE - PROCEED TO B");
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x00FF88), 0);
-            } else if (stakeout.offset_m < 0.0) {
-                snprintf(buf, sizeof(buf), "MOVE RIGHT TO LINE >>>");
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
-            } else {
-                snprintf(buf, sizeof(buf), "<<< MOVE LEFT TO LINE");
-                lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
-            }
-            rover_label_set_text_if_changed(t0_steer_lbl, buf);
         }
         if (t0_offsets_lbl) {
             char sta_str[32], rem_str[24];
@@ -357,6 +318,9 @@ static void route_toggle_btn_cb(lv_event_t *e)
 
 void ui_tile0_create(lv_obj_t *parent)
 {
+    lv_obj_set_style_pad_all(parent, 0, 0);
+    lv_obj_set_scrollable(parent, false);
+
     // =====================================================================
     // TILE 0: Pin Seeker & Guidance (Hybrid Navigation Canvas)
     // =====================================================================
@@ -400,23 +364,24 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_label_set_text(lbl_next, LV_SYMBOL_RIGHT);
     lv_obj_center(lbl_next);
 
-    // Target notes row (circular marquee autoscroll when text exceeds width)
+    // Consolidated Deed / Line marquee row (circular marquee autoscroll when text exceeds width)
     t0_notes_lbl = lv_label_create(parent);
     lv_label_set_long_mode(t0_notes_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
-    lv_obj_set_width(t0_notes_lbl, 304);
+    lv_obj_set_width(t0_notes_lbl, 308);
+    lv_obj_set_style_text_align(t0_notes_lbl, LV_TEXT_ALIGN_CENTER, 0);
     if (waypoint_get_active(&init_wp)) {
         lv_label_set_text(t0_notes_lbl, init_wp.notes[0] ? init_wp.notes : "---");
     } else {
         lv_label_set_text(t0_notes_lbl, "---");
     }
-    lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x99A3B0), 0);
+    lv_obj_set_style_text_color(t0_notes_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_set_style_text_font(t0_notes_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_LEFT, 8, 34);
+    lv_obj_align(t0_notes_lbl, LV_ALIGN_TOP_MID, 0, 33);
 
-    // Navigation Canvas (304x210)
+    // Expanded Navigation Canvas (304x276)
     t0_nav_canvas = lv_obj_create(parent);
-    lv_obj_set_size(t0_nav_canvas, 304, 210);
-    lv_obj_align(t0_nav_canvas, LV_ALIGN_TOP_MID, 0, 52);
+    lv_obj_set_size(t0_nav_canvas, T0_CANVAS_W, T0_CANVAS_H);
+    lv_obj_align(t0_nav_canvas, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_set_style_radius(t0_nav_canvas, 8, 0);
     lv_obj_set_style_bg_color(t0_nav_canvas, lv_color_hex(0x13191E), 0);
     lv_obj_set_style_border_color(t0_nav_canvas, lv_color_hex(0x283B47), 0);
@@ -427,14 +392,14 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_clickable(t0_nav_canvas, true);
     lv_obj_add_event_cb(t0_nav_canvas, t0_canvas_drag_cb, LV_EVENT_ALL, NULL);
 
-    // Mode badge & scale
+    // Single-Row Top HUD: [GUIDANCE] flush-left | H: P: centered | B: flush-right
     t0_mode_badge = lv_label_create(t0_nav_canvas);
     lv_label_set_text(t0_mode_badge, "GUIDANCE");
     lv_obj_set_style_text_font(t0_mode_badge, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_mode_badge, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_bg_color(t0_mode_badge, COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_bg_opa(t0_mode_badge, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_hor(t0_mode_badge, 6, 0);
+    lv_obj_set_style_pad_hor(t0_mode_badge, 5, 0);
     lv_obj_set_style_pad_ver(t0_mode_badge, 2, 0);
     lv_obj_set_style_radius(t0_mode_badge, 4, 0);
     lv_obj_align(t0_mode_badge, LV_ALIGN_TOP_LEFT, 6, 6);
@@ -442,39 +407,26 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_ext_click_area(t0_mode_badge, 8);
     lv_obj_add_event_cb(t0_mode_badge, t0_mode_toggle_cb, LV_EVENT_PRESSED, NULL);
 
-    // Telemetry HUD Readout (Heading & Pitch on top-left under mode badge)
     t0_hdg_hud_lbl = lv_label_create(t0_nav_canvas);
-    lv_label_set_text(t0_hdg_hud_lbl, "Hdg: ---.--");
+    lv_label_set_text(t0_hdg_hud_lbl, "H:---.- P:--.-");
     lv_obj_set_style_text_font(t0_hdg_hud_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_hdg_hud_lbl, lv_color_hex(0x38BDF8), 0);
-    lv_obj_align(t0_hdg_hud_lbl, LV_ALIGN_TOP_LEFT, 6, 28);
-
-    t0_pitch_hud_lbl = lv_label_create(t0_nav_canvas);
-    lv_label_set_text(t0_pitch_hud_lbl, "Pitch: --.-");
-    lv_obj_set_style_text_font(t0_pitch_hud_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(t0_pitch_hud_lbl, lv_color_hex(0x38BDF8), 0);
-    lv_obj_align(t0_pitch_hud_lbl, LV_ALIGN_TOP_LEFT, 6, 44);
-
-    t0_scale_lbl = lv_label_create(t0_nav_canvas);
-    lv_label_set_text(t0_scale_lbl, "To B: ---");
-    lv_obj_set_style_text_font(t0_scale_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(t0_scale_lbl, lv_color_hex(0x94A3B8), 0);
-    lv_obj_align(t0_scale_lbl, LV_ALIGN_TOP_RIGHT, -6, 8);
+    lv_obj_align(t0_hdg_hud_lbl, LV_ALIGN_TOP_MID, 8, 8);
 
     t0_tgt_hdg_lbl = lv_label_create(t0_nav_canvas);
-    lv_label_set_text(t0_tgt_hdg_lbl, "Tgt: ---.- deg");
+    lv_label_set_text(t0_tgt_hdg_lbl, "B: ---.-");
     lv_obj_set_style_text_font(t0_tgt_hdg_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_tgt_hdg_lbl, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(t0_tgt_hdg_lbl, LV_ALIGN_TOP_RIGHT, -6, 28);
+    lv_obj_align(t0_tgt_hdg_lbl, LV_ALIGN_TOP_RIGHT, -6, 8);
 
     // 1. Symmetric Log-X Reference Grid Ticks & Labels
     int16_t v_positions[T0_GRID_V_LINES] = {79, 120, 184, 225};
     for (int i = 0; i < T0_GRID_V_LINES; i++) {
         t0_grid_v[i] = lv_obj_create(t0_nav_canvas);
-        lv_obj_set_size(t0_grid_v[i], 1, 168);
+        lv_obj_set_size(t0_grid_v[i], 1, 206);
         lv_obj_set_style_bg_color(t0_grid_v[i], lv_color_hex(0x1E2D38), 0);
         lv_obj_set_style_border_width(t0_grid_v[i], 0, 0);
-        lv_obj_align(t0_grid_v[i], LV_ALIGN_TOP_LEFT, v_positions[i], 26);
+        lv_obj_align(t0_grid_v[i], LV_ALIGN_TOP_LEFT, v_positions[i], 30);
     }
 
     t0_log_lbl_inner = lv_label_create(t0_nav_canvas);
@@ -483,7 +435,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_text_align(t0_log_lbl_inner, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t0_log_lbl_inner, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_log_lbl_inner, lv_color_hex(0x64748B), 0);
-    lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, 184 - 14, 156);
+    lv_obj_align(t0_log_lbl_inner, LV_ALIGN_TOP_LEFT, 184 - 14, 220);
 
     t0_log_lbl_outer = lv_label_create(t0_nav_canvas);
     lv_label_set_text(t0_log_lbl_outer, "10m");
@@ -491,23 +443,23 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_text_align(t0_log_lbl_outer, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(t0_log_lbl_outer, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(t0_log_lbl_outer, lv_color_hex(0x64748B), 0);
-    lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, 225 - 16, 156);
+    lv_obj_align(t0_log_lbl_outer, LV_ALIGN_TOP_LEFT, 225 - 16, 220);
 
     // 2. Bullseye Crosshairs, Concentric Rings & Property Chord (Sub-view A < 5m)
     t0_cross_h = lv_obj_create(t0_nav_canvas);
-    lv_obj_set_size(t0_cross_h, 220, 1);
+    lv_obj_set_size(t0_cross_h, 210, 1);
     lv_obj_set_style_bg_color(t0_cross_h, lv_color_hex(0x283E4C), 0);
     lv_obj_set_style_border_width(t0_cross_h, 0, 0);
     lv_obj_center(t0_cross_h);
 
     t0_cross_v = lv_obj_create(t0_nav_canvas);
-    lv_obj_set_size(t0_cross_v, 1, 146);
+    lv_obj_set_size(t0_cross_v, 1, 180);
     lv_obj_set_style_bg_color(t0_cross_v, lv_color_hex(0x283E4C), 0);
     lv_obj_set_style_border_width(t0_cross_v, 0, 0);
     lv_obj_center(t0_cross_v);
 
     t0_bullseye_ring1 = lv_obj_create(t0_nav_canvas);
-    lv_obj_set_size(t0_bullseye_ring1, 146, 146);
+    lv_obj_set_size(t0_bullseye_ring1, 180, 180);
     lv_obj_center(t0_bullseye_ring1);
     lv_obj_set_style_radius(t0_bullseye_ring1, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(t0_bullseye_ring1, 0, 0);
@@ -515,7 +467,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_border_width(t0_bullseye_ring1, 1, 0);
 
     t0_bullseye_ring2 = lv_obj_create(t0_nav_canvas);
-    lv_obj_set_size(t0_bullseye_ring2, 44, 44);
+    lv_obj_set_size(t0_bullseye_ring2, 54, 54);
     lv_obj_center(t0_bullseye_ring2);
     lv_obj_set_style_radius(t0_bullseye_ring2, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(t0_bullseye_ring2, 0, 0);
@@ -553,13 +505,13 @@ void ui_tile0_create(lv_obj_t *parent)
     t0_line_baseline = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_line_baseline, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_line_width(t0_line_baseline, 2, 0);
-    static const lv_point_precise_t pts_baseline[2] = {{152, 174}, {152, 46}};
+    static const lv_point_precise_t pts_baseline[2] = {{T0_CANVAS_CX, T0_GUIDE_Y_BOT}, {T0_CANVAS_CX, T0_GUIDE_Y_TOP}};
     lv_line_set_points(t0_line_baseline, pts_baseline, 2);
 
     t0_line_arrow = lv_line_create(t0_nav_canvas);
     lv_obj_set_style_line_color(t0_line_arrow, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_line_width(t0_line_arrow, 3, 0);
-    static const lv_point_precise_t pts_line_arrow[3] = {{146, 62}, {152, 52}, {158, 62}};
+    static const lv_point_precise_t pts_line_arrow[3] = {{146, T0_GUIDE_Y_TOP + 14}, {152, T0_GUIDE_Y_TOP + 6}, {158, T0_GUIDE_Y_TOP + 14}};
     lv_line_set_points(t0_line_arrow, pts_line_arrow, 3);
 
     // 4. Triangle Legs: Hypotenuse (Rover -> B) and Perpendicular Tie (Rover -> Baseline)
@@ -573,6 +525,55 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_line_width(t0_line_tie, 2, 0);
     lv_obj_set_hidden(t0_line_tie, true);
 
+    // 4b. Vector Graphic Steering Chevrons (>>> center-left / <<< center-right) & On-Track Bars
+    static const lv_point_precise_t kChevLeftPts[3][3] = {
+        {{10, 127}, {17, 138}, {10, 149}},
+        {{18, 127}, {25, 138}, {18, 149}},
+        {{26, 127}, {33, 138}, {26, 149}}
+    };
+    static const lv_point_precise_t kChevRightPts[3][3] = {
+        {{294, 127}, {287, 138}, {294, 149}},
+        {{286, 127}, {279, 138}, {286, 149}},
+        {{278, 127}, {271, 138}, {278, 149}}
+    };
+    for (int i = 0; i < 3; i++) {
+        t0_chev_left[i] = lv_line_create(t0_nav_canvas);
+        lv_line_set_points(t0_chev_left[i], kChevLeftPts[i], 3);
+        lv_obj_set_style_line_width(t0_chev_left[i], 3, 0);
+        lv_obj_set_style_line_rounded(t0_chev_left[i], true, 0);
+        lv_obj_set_style_line_color(t0_chev_left[i], lv_color_hex(0xF59E0B), 0);
+        lv_obj_set_hidden(t0_chev_left[i], true);
+
+        t0_chev_right[i] = lv_line_create(t0_nav_canvas);
+        lv_line_set_points(t0_chev_right[i], kChevRightPts[i], 3);
+        lv_obj_set_style_line_width(t0_chev_right[i], 3, 0);
+        lv_obj_set_style_line_rounded(t0_chev_right[i], true, 0);
+        lv_obj_set_style_line_color(t0_chev_right[i], lv_color_hex(0xF59E0B), 0);
+        lv_obj_set_hidden(t0_chev_right[i], true);
+    }
+
+    t0_ontrack_bar_l = lv_obj_create(t0_nav_canvas);
+    lv_obj_set_size(t0_ontrack_bar_l, 4, 34);
+    lv_obj_align(t0_ontrack_bar_l, LV_ALIGN_TOP_LEFT, 18, 121);
+    lv_obj_set_style_radius(t0_ontrack_bar_l, 2, 0);
+    lv_obj_set_style_border_width(t0_ontrack_bar_l, 0, 0);
+    lv_obj_set_style_bg_color(t0_ontrack_bar_l, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_style_bg_opa(t0_ontrack_bar_l, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(t0_ontrack_bar_l, false);
+    lv_obj_set_clickable(t0_ontrack_bar_l, false);
+    lv_obj_set_hidden(t0_ontrack_bar_l, true);
+
+    t0_ontrack_bar_r = lv_obj_create(t0_nav_canvas);
+    lv_obj_set_size(t0_ontrack_bar_r, 4, 34);
+    lv_obj_align(t0_ontrack_bar_r, LV_ALIGN_TOP_LEFT, 282, 121);
+    lv_obj_set_style_radius(t0_ontrack_bar_r, 2, 0);
+    lv_obj_set_style_border_width(t0_ontrack_bar_r, 0, 0);
+    lv_obj_set_style_bg_color(t0_ontrack_bar_r, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_style_bg_opa(t0_ontrack_bar_r, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(t0_ontrack_bar_r, false);
+    lv_obj_set_clickable(t0_ontrack_bar_r, false);
+    lv_obj_set_hidden(t0_ontrack_bar_r, true);
+
     // 5. Map View Layers & HUD Controls (behind primary markers A / B / R)
     ui_tile0_map_create(t0_nav_canvas);
 
@@ -583,7 +584,7 @@ void ui_tile0_create(lv_obj_t *parent)
     lv_obj_set_style_bg_color(t0_line_pt_a, lv_color_hex(0xF59E0B), 0);
     lv_obj_set_style_border_color(t0_line_pt_a, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_width(t0_line_pt_a, 2, 0);
-    lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, 152 - 6, 174 - 6);
+    lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, T0_CANVAS_CX - 6, T0_GUIDE_Y_BOT - 6);
 
     t0_target_icon = lv_obj_create(t0_nav_canvas);
     lv_obj_set_size(t0_target_icon, 16, 16);
@@ -635,43 +636,24 @@ void ui_tile0_create(lv_obj_t *parent)
     if (t0_map_btn_fit)  lv_obj_move_foreground(t0_map_btn_fit);
     if (t0_map_btn_ctr)  lv_obj_move_foreground(t0_map_btn_ctr);
 
-    // Readout section below canvas (clamped width + auto-scroll circular marquee)
+    // Compact 2-Row Readout section below canvas (clamped width + auto-scroll circular marquee)
     t0_dist_lbl = lv_label_create(parent);
     lv_label_set_text(t0_dist_lbl, "0.00 m");
     lv_obj_set_width(t0_dist_lbl, 308);
     lv_label_set_long_mode(t0_dist_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(t0_dist_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 266);
-
-    t0_steer_lbl = lv_label_create(parent);
-    lv_label_set_text(t0_steer_lbl, "Acquiring Position...");
-    lv_obj_set_width(t0_steer_lbl, 308);
-    lv_label_set_long_mode(t0_steer_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
-    lv_obj_set_style_text_align(t0_steer_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
-    lv_obj_set_style_text_font(t0_steer_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 292);
+    lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 330);
 
     t0_offsets_lbl = lv_label_create(parent);
-    lv_label_set_text(t0_offsets_lbl, "dN: +0.0 cm   dE: +0.0 cm");
+    lv_label_set_text(t0_offsets_lbl, "Sta: --- | Rem: ---");
     lv_obj_set_width(t0_offsets_lbl, 308);
     lv_label_set_long_mode(t0_offsets_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(t0_offsets_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
+    lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
     lv_obj_set_style_text_font(t0_offsets_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 314);
-
-    t0_extra_lbl = lv_label_create(parent);
-    lv_label_set_text(t0_extra_lbl, "");
-    lv_obj_set_width(t0_extra_lbl, 308);
-    lv_label_set_long_mode(t0_extra_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
-    lv_obj_set_style_text_align(t0_extra_lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
-    lv_obj_set_style_text_font(t0_extra_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(t0_extra_lbl, LV_ALIGN_TOP_MID, 0, 334);
-    lv_obj_set_hidden(t0_extra_lbl, true);
+    lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 355);
 }
 
 void ui_tile0_update(const RoverUIData_t *d, char *buf, size_t buf_sz)

@@ -6,6 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <esp_heap_caps.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../settings_manager/settings_manager.h"
@@ -14,6 +15,23 @@
 
 extern bool sd_card_use_spi;
 extern SemaphoreHandle_t fs_mux;
+
+static uint64_t get_fs_free_kb(const fs::FS *fs_ptr)
+{
+    uint64_t tot = 0;
+    uint64_t use = 0;
+    if (fs_ptr == &FFat) {
+        tot = FFat.totalBytes();
+        use = FFat.usedBytes();
+    } else if (sd_card_use_spi) {
+        tot = SD.totalBytes();
+        use = SD.usedBytes();
+    } else {
+        tot = SD_MMC.totalBytes();
+        use = SD_MMC.usedBytes();
+    }
+    return (tot > use) ? ((tot - use) / 1024ULL) : 0;
+}
 
 static File open_screenshot_file(fs::FS &fs, const char *fs_name, const char *ts,
                                  char *out_path, size_t out_path_sz,
@@ -58,26 +76,25 @@ extern "C" bool take_screenshot_to_sd(void)
     }
 
     if (!rover_lvgl_capture_framebuffer(fb_copy, (size_t)fb_bytes)) {
-        Serial.println("[SCREENSHOT ERR] Framebuffer capture failed (LVGL lock timeout or no frame)");
+        Serial.println("[SCREENSHOT ERR] Framebuffer capture timed out waiting for LVGL render cycle");
         heap_caps_free(fb_copy);
         return false;
     }
 
-    const uint32_t kChunkRows = 16U;
-    uint32_t chunk_rows = kChunkRows;
+    // Use small internal DMA-capable bounce buffer (0 B static DRAM0) so SDMMC/FFat VFS
+    // writes never DMA directly from Octal PSRAM.
+    uint32_t chunk_rows = 2U;
     uint8_t *chunk_buf = (uint8_t *)heap_caps_malloc((size_t)row_size * chunk_rows,
-                                                     MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                                                     MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     if (!chunk_buf) {
         chunk_rows = 1U;
         chunk_buf = (uint8_t *)heap_caps_malloc((size_t)row_size,
-                                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!chunk_buf) {
-            chunk_buf = (uint8_t *)malloc((size_t)row_size);
-        }
+                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
     if (!chunk_buf) {
-        Serial.printf("[SCREENSHOT ERR] Chunk alloc failed (%lu B)\n",
-                      (unsigned long)row_size);
+        Serial.printf("[SCREENSHOT ERR] Internal DMA chunk alloc failed (%lu B, DMA free=%u B)\n",
+                      (unsigned long)row_size,
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA));
         heap_caps_free(fb_copy);
         return false;
     }
@@ -105,18 +122,30 @@ extern "C" bool take_screenshot_to_sd(void)
     bool primary_mkdir_failed = false;
     bool fallback_mkdir_failed = false;
     bool used_ffat_fallback = false;
+    int saved_errno = 0;
 
+    errno = 0;
     File file = open_screenshot_file(*primary_fs, primary_name, ts,
                                      filename, sizeof(filename), &primary_mkdir_failed);
-    if (!file && sd_card_mounted) {
-        used_ffat_fallback = true;
-        target_fs = &FFat;
-        target_name = "FFat";
-        file = open_screenshot_file(FFat, target_name, ts,
-                                    filename, sizeof(filename), &fallback_mkdir_failed);
+    if (!file) {
+        saved_errno = errno;
+        if (sd_card_mounted) {
+            used_ffat_fallback = true;
+            target_fs = &FFat;
+            target_name = "FFat";
+            errno = 0;
+            file = open_screenshot_file(FFat, target_name, ts,
+                                        filename, sizeof(filename), &fallback_mkdir_failed);
+            if (!file) {
+                saved_errno = errno;
+            }
+        }
     }
 
     if (!file) {
+        uint64_t sd_free_kb = sd_card_mounted ? get_fs_free_kb(primary_fs) : 0;
+        uint64_t ff_free_kb = get_fs_free_kb(&FFat);
+
         if (fs_mux) xSemaphoreGive(fs_mux);
         if (primary_mkdir_failed) {
             Serial.printf("[SCREENSHOT WARN] mkdir /screenshots failed on %s\n", primary_name);
@@ -127,8 +156,9 @@ extern "C" bool take_screenshot_to_sd(void)
                 Serial.println("[SCREENSHOT WARN] mkdir /screenshots failed on FFat");
             }
         }
-        Serial.printf("[SCREENSHOT ERR] Failed to open screenshot file on %s (sd_mounted=%d)\n",
-                      target_name, sd_card_mounted ? 1 : 0);
+        Serial.printf("[SCREENSHOT ERR] Open failed on %s (errno=%d, sd_mounted=%d, sd_free=%lluKB, ffat_free=%lluKB)\n",
+                      target_name, saved_errno, sd_card_mounted ? 1 : 0,
+                      (unsigned long long)sd_free_kb, (unsigned long long)ff_free_kb);
         heap_caps_free(chunk_buf);
         heap_caps_free(fb_copy);
         return false;
@@ -156,9 +186,12 @@ extern "C" bool take_screenshot_to_sd(void)
     };
 
     uint32_t bytes_written = 0;
+    errno = 0;
     bool write_ok = (file.write(header, 54) == 54);
     if (write_ok) {
         bytes_written += 54;
+    } else {
+        saved_errno = errno;
     }
 
     const uint8_t *p565 = fb_copy;
@@ -189,9 +222,11 @@ extern "C" bool take_screenshot_to_sd(void)
             }
         }
 
+        errno = 0;
         size_t written = file.write(chunk_buf, pos);
         bytes_written += (uint32_t)written;
         if (written != pos) {
+            saved_errno = errno;
             write_ok = false;
         }
     }
@@ -200,9 +235,25 @@ extern "C" bool take_screenshot_to_sd(void)
         file.flush();
     }
     file.close();
-    if (!write_ok) {
+
+    size_t verified_size = 0;
+    if (write_ok) {
+        errno = 0;
+        File verify = target_fs->open(filename, FILE_READ);
+        verified_size = verify ? verify.size() : 0;
+        if (verify) {
+            verify.close();
+        }
+        if (verified_size != (size_t)file_size) {
+            saved_errno = errno;
+            write_ok = false;
+            target_fs->remove(filename);
+        }
+    } else {
         target_fs->remove(filename);
     }
+
+    uint64_t free_kb = (!write_ok) ? get_fs_free_kb(target_fs) : 0;
 
     if (fs_mux) xSemaphoreGive(fs_mux);
 
@@ -221,16 +272,19 @@ extern "C" bool take_screenshot_to_sd(void)
 
     uint32_t elapsed_ms = millis() - t0_ms;
     if (!write_ok) {
-        Serial.printf("[SCREENSHOT ERR] Write failed on %s (%s) after %lu/%lu bytes\n",
+        Serial.printf("[SCREENSHOT ERR] Write/verify failed on %s (%s) wrote=%lu/%lu verified=%lu errno=%d free=%lluKB\n",
                       target_name, filename,
                       (unsigned long)bytes_written,
-                      (unsigned long)file_size);
+                      (unsigned long)file_size,
+                      (unsigned long)verified_size,
+                      saved_errno,
+                      (unsigned long long)free_kb);
         return false;
     }
 
-    Serial.printf("[SCREENSHOT] Saved %s on %s (%lu bytes, %lu ms)\n",
+    Serial.printf("[SCREENSHOT] Saved %s on %s (%lu bytes verified, %lu ms)\n",
                   filename, target_name,
-                  (unsigned long)bytes_written,
+                  (unsigned long)verified_size,
                   (unsigned long)elapsed_ms);
     return true;
 }
