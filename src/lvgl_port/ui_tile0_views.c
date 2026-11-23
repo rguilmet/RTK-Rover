@@ -208,14 +208,14 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             lv_label_set_text(t0_scale_lbl, "To B: ---");
             if (t0_dist_lbl) {
                 lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
-                lv_label_set_text(t0_dist_lbl, "Acquiring Fix...");
+                rover_label_set_text_if_changed(t0_dist_lbl, "Acquiring Fix...");
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
             }
             if (t0_steer_lbl) {
-                lv_label_set_text(t0_steer_lbl, "Start A anchors automatically on GNSS fix");
+                rover_label_set_text_if_changed(t0_steer_lbl, "Start A anchors automatically on GNSS fix");
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x94A3B8), 0);
             }
-            if (t0_offsets_lbl) lv_label_set_text(t0_offsets_lbl, "Sta: --- | Rem: ---");
+            if (t0_offsets_lbl) rover_label_set_text_if_changed(t0_offsets_lbl, "Sta: --- | Rem: ---");
             if (t0_extra_lbl)   lv_obj_set_hidden(t0_extra_lbl, true);
             if (t0_target_icon) {
                 lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, 152 - 8, 46 - 8);
@@ -241,14 +241,14 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             lv_label_set_text(t0_scale_lbl, "To B: ---");
             if (t0_dist_lbl) {
                 lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-                lv_label_set_text(t0_dist_lbl, "---");
+                rover_label_set_text_if_changed(t0_dist_lbl, "---");
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
             }
             if (t0_steer_lbl) {
-                lv_label_set_text(t0_steer_lbl, "Select target in Tile 3 Waypoints");
+                rover_label_set_text_if_changed(t0_steer_lbl, "Select target in Tile 3 Waypoints");
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0x888888), 0);
             }
-            if (t0_offsets_lbl) lv_label_set_text(t0_offsets_lbl, "Sta: --- | Rem: ---");
+            if (t0_offsets_lbl) rover_label_set_text_if_changed(t0_offsets_lbl, "Sta: --- | Rem: ---");
             if (t0_extra_lbl)   lv_obj_set_hidden(t0_extra_lbl, true);
             if (t0_target_icon) lv_obj_set_hidden(t0_target_icon, true);
             if (t0_rover_icon) {
@@ -367,7 +367,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
 
         if (t0_dist_lbl) {
             lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
-            lv_label_set_text(t0_dist_lbl, dist_b_str);
+            rover_label_set_text_if_changed(t0_dist_lbl, dist_b_str);
             lv_obj_set_style_text_color(t0_dist_lbl, (dist_b_m < 0.02) ? lv_color_hex(0x00FF00) : lv_color_hex(0xFFFFFF), 0);
         }
 
@@ -385,7 +385,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
                 snprintf(buf, buf_sz, "Line: %s RIGHT (<<< Move L)", off_val_str);
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
             }
-            lv_label_set_text(t0_steer_lbl, buf);
+            rover_label_set_text_if_changed(t0_steer_lbl, buf);
         }
 
         char dn_b_str[24], de_b_str[24];
@@ -393,13 +393,13 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         nav_format_offset(de_b_m, de_b_str, sizeof(de_b_str));
         if (t0_offsets_lbl) {
             snprintf(buf, buf_sz, "dN: %s   dE: %s", dn_b_str, de_b_str);
-            lv_label_set_text(t0_offsets_lbl, buf);
+            rover_label_set_text_if_changed(t0_offsets_lbl, buf);
             lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
         }
 
         if (t0_extra_lbl) {
             snprintf(buf, buf_sz, "Line: %s (%.1f deg)", qbrg, stakeout.line_bearing_deg);
-            lv_label_set_text(t0_extra_lbl, buf);
+            rover_label_set_text_if_changed(t0_extra_lbl, buf);
             lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
             lv_obj_set_hidden(t0_extra_lbl, false);
         }
@@ -673,7 +673,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
         snprintf(buf, buf_sz, "%s RIGHT | B: %s", off_val_str, dist_b_str);
         lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
     }
-    if (t0_dist_lbl) lv_label_set_text(t0_dist_lbl, buf);
+    if (t0_dist_lbl) rover_label_set_text_if_changed(t0_dist_lbl, buf);
 
     // Row 2: Tactical Steer / Alignment Prompt (Montserrat 14)
     if (t0_steer_lbl) {
@@ -701,7 +701,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
             snprintf(buf, buf_sz, "<<< MOVE LEFT TO LINE");
             lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
         }
-        lv_label_set_text(t0_steer_lbl, buf);
+        rover_label_set_text_if_changed(t0_steer_lbl, buf);
     }
 
     // Row 3: Along-Line Station & Remaining (Montserrat 12)
@@ -710,7 +710,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
     snprintf(buf, buf_sz, "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
     if (t0_offsets_lbl) {
-        lv_label_set_text(t0_offsets_lbl, buf);
+        rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
     }
 
@@ -719,7 +719,7 @@ void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t bu
     nav_format_distance((double)d_max, log_span_str, sizeof(log_span_str));
     snprintf(buf, buf_sz, "Line: %s (%.1f deg) | Log: %s", qbrg, stakeout.line_bearing_deg, log_span_str);
     if (t0_extra_lbl) {
-        lv_label_set_text(t0_extra_lbl, buf);
+        rover_label_set_text_if_changed(t0_extra_lbl, buf);
         lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
         lv_obj_set_hidden(t0_extra_lbl, false);
     }

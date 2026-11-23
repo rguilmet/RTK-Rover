@@ -514,7 +514,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         snprintf(buf, buf_sz, "--- m @ --- deg");
     }
     if (t0_dist_lbl) {
-        lv_label_set_text(t0_dist_lbl, buf);
+        rover_label_set_text_if_changed(t0_dist_lbl, buf);
         lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
     }
 
@@ -528,21 +528,21 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         snprintf(buf, buf_sz, "No Target Active");
     }
     if (t0_steer_lbl) {
-        lv_label_set_text(t0_steer_lbl, buf);
+        rover_label_set_text_if_changed(t0_steer_lbl, buf);
         lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
     }
 
     // Row 3: Map Center Coordinates (t0_offsets_lbl in Montserrat 12)
     snprintf(buf, buf_sz, "Map Ctr: %.5f, %.5f", s_map_center_lat, s_map_center_lon);
     if (t0_offsets_lbl) {
-        lv_label_set_text(t0_offsets_lbl, buf);
+        rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x38BDF8), 0);
     }
 
     // Row 4: Scale & Waypoint Count (t0_extra_lbl in Montserrat 12)
     snprintf(buf, buf_sz, "Scale: %.2f m/px | Pts: %d", s_map_m_per_px, g_waypoint_count);
     if (t0_extra_lbl) {
-        lv_label_set_text(t0_extra_lbl, buf);
+        rover_label_set_text_if_changed(t0_extra_lbl, buf);
         lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
         lv_obj_set_hidden(t0_extra_lbl, false);
     }

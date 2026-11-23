@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.2] - 2026-11-22
+### Fixed
+- **Tile 0 Bottom Readout Auto-Scroll & Tile Overflow Fix ([`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
+  - Constrained all four Tile 0 lower readout labels (`t0_dist_lbl`, `t0_steer_lbl`, `t0_offsets_lbl`, `t0_extra_lbl`) to `308 px` width with centered `LV_LABEL_LONG_MODE_SCROLL_CIRCULAR` so long segment names (such as `SEG: <A> -> <B>` in Map View) scroll cleanly without widening `tile_guidance` past `320 px` or triggering horizontal tile scrolling.
+  - Added shared `rover_label_set_text_if_changed()` helper so 30 Hz UI refreshes never reset ongoing circular marquee scroll animations, and verified clean `arduino-cli --warnings default --upload -p COM3` compile & flash (`0` warnings, `1,746,706` bytes / `55%` flash, `68,608` bytes / `20%` static `DRAM0`).
+
 ## [v0.10.1] - 2026-11-22
 ### Changed & Improved
 - **Dynamic Vertical Auto-Framing & Dashed Extensions on Tile 0 Guidance Triangle ([`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**

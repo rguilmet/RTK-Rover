@@ -248,7 +248,7 @@ void refresh_t0_guidance_readout_immediately(void)
             } else {
                 snprintf(buf, sizeof(buf), "--- m @ --- deg");
             }
-            lv_label_set_text(t0_dist_lbl, buf);
+            rover_label_set_text_if_changed(t0_dist_lbl, buf);
             lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
         }
         if (t0_steer_lbl) {
@@ -260,7 +260,7 @@ void refresh_t0_guidance_readout_immediately(void)
             } else {
                 snprintf(buf, sizeof(buf), "No Target Active");
             }
-            lv_label_set_text(t0_steer_lbl, buf);
+            rover_label_set_text_if_changed(t0_steer_lbl, buf);
             lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFFFFF), 0);
         }
     } else if (has_seg) {
@@ -286,7 +286,7 @@ void refresh_t0_guidance_readout_immediately(void)
                 snprintf(buf, sizeof(buf), "%s RIGHT | B: %s", off_val_str, dist_b_str);
                 lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xF59E0B), 0);
             }
-            lv_label_set_text(t0_dist_lbl, buf);
+            rover_label_set_text_if_changed(t0_dist_lbl, buf);
         }
         if (t0_steer_lbl) {
             if (dist_b_m < 0.02) {
@@ -302,14 +302,14 @@ void refresh_t0_guidance_readout_immediately(void)
                 snprintf(buf, sizeof(buf), "<<< MOVE LEFT TO LINE");
                 lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xF59E0B), 0);
             }
-            lv_label_set_text(t0_steer_lbl, buf);
+            rover_label_set_text_if_changed(t0_steer_lbl, buf);
         }
         if (t0_offsets_lbl) {
             char sta_str[32], rem_str[24];
             nav_format_station(stakeout.station_m, sta_str, sizeof(sta_str));
             nav_format_distance(fabs(stakeout.remaining_m), rem_str, sizeof(rem_str));
             snprintf(buf, sizeof(buf), "%s (%.1f%%) | Rem: %s", sta_str, stakeout.pct_complete, rem_str);
-            lv_label_set_text(t0_offsets_lbl, buf);
+            rover_label_set_text_if_changed(t0_offsets_lbl, buf);
         }
     }
 }
@@ -635,27 +635,39 @@ void ui_tile0_create(lv_obj_t *parent)
     if (t0_map_btn_fit)  lv_obj_move_foreground(t0_map_btn_fit);
     if (t0_map_btn_ctr)  lv_obj_move_foreground(t0_map_btn_ctr);
 
-    // Readout section below canvas (compacted to fit inside 374px tileview)
+    // Readout section below canvas (clamped width + auto-scroll circular marquee)
     t0_dist_lbl = lv_label_create(parent);
     lv_label_set_text(t0_dist_lbl, "0.00 m");
+    lv_obj_set_width(t0_dist_lbl, 308);
+    lv_label_set_long_mode(t0_dist_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t0_dist_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_24, 0);
     lv_obj_align(t0_dist_lbl, LV_ALIGN_TOP_MID, 0, 266);
 
     t0_steer_lbl = lv_label_create(parent);
     lv_label_set_text(t0_steer_lbl, "Acquiring Position...");
+    lv_obj_set_width(t0_steer_lbl, 308);
+    lv_label_set_long_mode(t0_steer_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t0_steer_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(t0_steer_lbl, lv_color_hex(0xFFCC00), 0);
     lv_obj_set_style_text_font(t0_steer_lbl, &lv_font_montserrat_14, 0);
     lv_obj_align(t0_steer_lbl, LV_ALIGN_TOP_MID, 0, 292);
 
     t0_offsets_lbl = lv_label_create(parent);
     lv_label_set_text(t0_offsets_lbl, "dN: +0.0 cm   dE: +0.0 cm");
+    lv_obj_set_width(t0_offsets_lbl, 308);
+    lv_label_set_long_mode(t0_offsets_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t0_offsets_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(t0_offsets_lbl, lv_color_hex(0x00D8FF), 0);
     lv_obj_set_style_text_font(t0_offsets_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t0_offsets_lbl, LV_ALIGN_TOP_MID, 0, 314);
 
     t0_extra_lbl = lv_label_create(parent);
     lv_label_set_text(t0_extra_lbl, "");
+    lv_obj_set_width(t0_extra_lbl, 308);
+    lv_label_set_long_mode(t0_extra_lbl, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(t0_extra_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(t0_extra_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_set_style_text_font(t0_extra_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(t0_extra_lbl, LV_ALIGN_TOP_MID, 0, 334);

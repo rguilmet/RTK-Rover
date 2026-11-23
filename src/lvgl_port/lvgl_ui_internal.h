@@ -62,6 +62,15 @@ static inline lv_color_t get_lora_rssi_color(int16_t rssi_dbm, bool is_stale)
     }
 }
 
+static inline void rover_label_set_text_if_changed(lv_obj_t *lbl, const char *txt)
+{
+    if (!lbl || !txt) return;
+    const char *cur = lv_label_get_text(lbl);
+    if (!cur || strcmp(cur, txt) != 0) {
+        lv_label_set_text(lbl, txt);
+    }
+}
+
 // =========================================================================
 // Shared Cross-Module Widget Pointers & UI State
 // =========================================================================
