@@ -530,10 +530,22 @@ extern "C" bool waypoint_get_active(WaypointRecord_t *wp_out)
     return true;
 }
 
-// Phase 4: Line Stakeout State & Helpers
+// Phase 4 & v0.10.0: Line Stakeout & Direct-Here Guidance Anchor State
 int16_t g_stakeout_pt_a_idx  = -1;
 int16_t g_stakeout_pt_b_idx  = -1;
 bool    g_stakeout_custom_pair = false;
+
+static portMUX_TYPE s_guidance_mux = portMUX_INITIALIZER_UNLOCKED;
+static bool         s_guidance_direct_mode = false;
+static bool         s_direct_a_valid       = false;
+static double       s_direct_a_lat         = 0.0;
+static double       s_direct_a_lon         = 0.0;
+static int16_t      s_direct_target_idx    = -1;
+
+static bool is_valid_coord_pair(double lat, double lon)
+{
+    return isfinite(lat) && isfinite(lon) && (fabs(lat) > 0.0001 || fabs(lon) > 0.0001);
+}
 
 extern "C" bool waypoint_get_at(int16_t idx, WaypointRecord_t *wp_out)
 {
@@ -588,6 +600,130 @@ extern "C" void waypoint_line_stakeout_reset_auto(void)
     g_stakeout_custom_pair = false;
     g_stakeout_pt_a_idx = -1;
     g_stakeout_pt_b_idx = -1;
+    portENTER_CRITICAL(&s_guidance_mux);
+    s_direct_a_valid    = false;
+    s_direct_target_idx = -1;
+    portEXIT_CRITICAL(&s_guidance_mux);
+}
+
+extern "C" void waypoint_guidance_set_direct_mode(bool direct_here, double cur_lat, double cur_lon)
+{
+    int16_t b_idx = g_active_waypoint_idx;
+    if (b_idx < 0 || b_idx >= g_waypoint_count) b_idx = 0;
+
+    portENTER_CRITICAL(&s_guidance_mux);
+    s_guidance_direct_mode = direct_here;
+    if (direct_here) {
+        if (is_valid_coord_pair(cur_lat, cur_lon)) {
+            s_direct_a_lat      = cur_lat;
+            s_direct_a_lon      = cur_lon;
+            s_direct_a_valid    = true;
+            s_direct_target_idx = (g_waypoint_count > 0) ? b_idx : -1;
+        } else {
+            s_direct_a_valid    = false;
+            s_direct_target_idx = -1;
+        }
+    }
+    portEXIT_CRITICAL(&s_guidance_mux);
+    g_waypoint_change_seq = g_waypoint_change_seq + 1;
+}
+
+extern "C" void waypoint_guidance_reanchor_here(double cur_lat, double cur_lon)
+{
+    int16_t b_idx = g_active_waypoint_idx;
+    if (b_idx < 0 || b_idx >= g_waypoint_count) b_idx = 0;
+
+    portENTER_CRITICAL(&s_guidance_mux);
+    s_guidance_direct_mode = true;
+    if (is_valid_coord_pair(cur_lat, cur_lon)) {
+        s_direct_a_lat      = cur_lat;
+        s_direct_a_lon      = cur_lon;
+        s_direct_a_valid    = true;
+        s_direct_target_idx = (g_waypoint_count > 0) ? b_idx : -1;
+    } else {
+        s_direct_a_valid    = false;
+        s_direct_target_idx = -1;
+    }
+    portEXIT_CRITICAL(&s_guidance_mux);
+    g_waypoint_change_seq = g_waypoint_change_seq + 1;
+}
+
+extern "C" bool waypoint_guidance_is_direct_mode(void)
+{
+    portENTER_CRITICAL(&s_guidance_mux);
+    bool direct = s_guidance_direct_mode;
+    portEXIT_CRITICAL(&s_guidance_mux);
+    return direct || (g_waypoint_count == 1);
+}
+
+extern "C" bool waypoint_guidance_get_segment(double cur_lat, double cur_lon, ActiveGuidanceSegment_t *seg_out)
+{
+    if (!seg_out) return false;
+    memset(seg_out, 0, sizeof(*seg_out));
+    seg_out->idx_a = -1;
+    seg_out->idx_b = -1;
+
+    if (g_waypoint_count <= 0) {
+        return false;
+    }
+
+    if (waypoint_guidance_is_direct_mode()) {
+        int16_t b_idx = g_active_waypoint_idx;
+        if (b_idx < 0 || b_idx >= g_waypoint_count) b_idx = 0;
+
+        bool   a_valid = false;
+        double a_lat   = 0.0;
+        double a_lon   = 0.0;
+
+        portENTER_CRITICAL(&s_guidance_mux);
+        if ((!s_direct_a_valid || s_direct_target_idx != b_idx) && is_valid_coord_pair(cur_lat, cur_lon)) {
+            s_direct_a_lat      = cur_lat;
+            s_direct_a_lon      = cur_lon;
+            s_direct_a_valid    = true;
+            s_direct_target_idx = b_idx;
+        }
+        a_valid = s_direct_a_valid;
+        a_lat   = s_direct_a_lat;
+        a_lon   = s_direct_a_lon;
+        portEXIT_CRITICAL(&s_guidance_mux);
+
+        seg_out->is_direct_here = true;
+        seg_out->idx_a          = -1;
+        seg_out->idx_b          = b_idx;
+        snprintf(seg_out->label_a, sizeof(seg_out->label_a), "HERE");
+        seg_out->lat_b = g_waypoints[b_idx].latitude;
+        seg_out->lon_b = g_waypoints[b_idx].longitude;
+        strncpy(seg_out->label_b, g_waypoints[b_idx].label, WAYPOINT_LABEL_LEN - 1);
+        strncpy(seg_out->notes_b, g_waypoints[b_idx].notes, WAYPOINT_NOTES_LEN - 1);
+
+        if (a_valid) {
+            seg_out->lat_a = a_lat;
+            seg_out->lon_a = a_lon;
+            seg_out->valid = true;
+            return true;
+        }
+        return false;
+    }
+
+    WaypointRecord_t wp_a, wp_b;
+    int16_t idx_a = -1, idx_b = -1;
+    waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
+    if (idx_a < 0 || idx_b < 0) {
+        return false;
+    }
+
+    seg_out->valid          = true;
+    seg_out->is_direct_here = false;
+    seg_out->idx_a          = idx_a;
+    seg_out->idx_b          = idx_b;
+    seg_out->lat_a          = wp_a.latitude;
+    seg_out->lon_a          = wp_a.longitude;
+    strncpy(seg_out->label_a, wp_a.label, WAYPOINT_LABEL_LEN - 1);
+    seg_out->lat_b          = wp_b.latitude;
+    seg_out->lon_b          = wp_b.longitude;
+    strncpy(seg_out->label_b, wp_b.label, WAYPOINT_LABEL_LEN - 1);
+    strncpy(seg_out->notes_b, wp_b.notes, WAYPOINT_NOTES_LEN - 1);
+    return true;
 }
 
 extern "C" void waypoint_line_stakeout_get_points(WaypointRecord_t *wp_a_out,

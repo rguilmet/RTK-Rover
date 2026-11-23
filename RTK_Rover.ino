@@ -45,6 +45,7 @@ typedef struct {
     uint16_t gap_ms;
     uint16_t freq2_hz;
     uint16_t dur2_ms;
+    uint8_t  gain_pct;
 } RoverBeep_t;
 
 // Declared ahead of functions so Arduino .ino prototype generation sees the type
@@ -146,7 +147,7 @@ static void audio_bsp_init(void)
 extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 {
     if (beepQueue) {
-        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0 };
+        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0, 100U };
         xQueueSend(beepQueue, &b, 0);
     }
 }
@@ -154,7 +155,24 @@ extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 extern "C" void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms, uint16_t freq2_hz, uint16_t dur2_ms)
 {
     if (beepQueue) {
-        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms };
+        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms, 100U };
+        xQueueSend(beepQueue, &b, 0);
+    }
+}
+
+static void play_rover_beep_gain(uint16_t freq_hz, uint16_t duration_ms, uint8_t gain_pct)
+{
+    if (beepQueue) {
+        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0, gain_pct };
+        xQueueSend(beepQueue, &b, 0);
+    }
+}
+
+static void play_rover_dual_beep_gain(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms,
+                                      uint16_t freq2_hz, uint16_t dur2_ms, uint8_t gain_pct)
+{
+    if (beepQueue) {
+        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms, gain_pct };
         xQueueSend(beepQueue, &b, 0);
     }
 }
@@ -174,11 +192,15 @@ extern "C" void trigger_mag_cal_cancel(void)
     pending_mag_cal_cancel = true;
 }
 
-static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint16_t dur_ms)
+static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint16_t dur_ms, uint8_t gain_pct)
 {
     if (!playback_handle || !pcm_buf || dur_ms == 0) return;
     uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)dur_ms) / 1000U;
     if (total_samples == 0) return;
+
+    if (gain_pct < 10U)  gain_pct = 10U;
+    if (gain_pct > 100U) gain_pct = 100U;
+    int16_t amp = (int16_t)((6000L * (long)gain_pct) / 100L);
 
     float phase = 0.0f;
     float phase_inc = (freq_hz > 0) ? (2.0f * (float)M_PI * (float)freq_hz / (float)AUDIO_SAMPLE_RATE) : 0.0f;
@@ -191,7 +213,7 @@ static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint
             memset(pcm_buf, 0, chunk * 2U * sizeof(int16_t));
         } else {
             for (uint32_t i = 0; i < chunk; i++) {
-                int16_t s = (phase < (float)M_PI) ? 6000 : -6000;
+                int16_t s = (phase < (float)M_PI) ? amp : -amp;
                 pcm_buf[i * 2U]      = s;
                 pcm_buf[i * 2U + 1U] = s;
                 phase += phase_inc;
@@ -218,17 +240,17 @@ void task_audio_beep(void *pvParameters)
         if (beepQueue && xQueueReceive(beepQueue, &beep_req, portMAX_DELAY) == pdPASS) {
             if (playback_handle && !current_settings.is_muted) {
                 if (beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq1_hz, beep_req.dur1_ms);
+                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq1_hz, beep_req.dur1_ms, beep_req.gain_pct);
                 }
                 if (beep_req.gap_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, 0, beep_req.gap_ms);
+                    audio_write_tone_or_silence(s_beep_pcm, 0, beep_req.gap_ms, 100U);
                 }
                 if (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq2_hz, beep_req.dur2_ms);
+                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq2_hz, beep_req.dur2_ms, beep_req.gain_pct);
                 }
                 if ((beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) ||
                     (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0)) {
-                    audio_write_tone_or_silence(s_beep_pcm, 0, 4);
+                    audio_write_tone_or_silence(s_beep_pcm, 0, 4, 100U);
                 }
             }
         }
@@ -1123,7 +1145,7 @@ void task_display_and_audio(void *pvParameters)
                 ui_state.rel_bearing_deg = rel;
             }
 
-            // Unified Mode 1 Hysteresis (< 4.8 m Bullseye entry, > 5.3 m Line-Up exit)
+            // Unified Guidance Bullseye Hysteresis (< 4.8 m Bullseye entry, > 5.3 m Triangle exit)
             static bool    s_mode1_bullseye   = false;
             static int16_t s_mode1_last_b_idx = -1;
             bool           mode1_entered_bullseye = false;
@@ -1131,31 +1153,24 @@ void task_display_and_audio(void *pvParameters)
             NavLineStakeout_t mode1_stakeout      = {};
             double            mode1_dist_b_m      = 0.0;
 
-            if (rover_get_tile0_nav_mode() == 1) {
-                WaypointRecord_t wp_a, wp_b;
-                int16_t idx_a = -1, idx_b = -1;
-                waypoint_line_stakeout_get_points(&wp_a, &wp_b, &idx_a, &idx_b);
-                if (idx_a >= 0 && idx_b >= 0) {
-                    has_mode1_line = true;
-                    nav_compute_line_stakeout(ui_state.tip_lat, ui_state.tip_lon,
-                                              wp_a.latitude, wp_a.longitude,
-                                              wp_b.latitude, wp_b.longitude,
-                                              &mode1_stakeout);
-                    nav_compute_target_guidance(ui_state.tip_lat, ui_state.tip_lon, 0.0f,
-                                                wp_b.latitude, wp_b.longitude,
-                                                &mode1_dist_b_m, NULL, NULL, NULL, NULL);
-                    if (idx_b != s_mode1_last_b_idx) {
-                        s_mode1_last_b_idx = idx_b;
-                        s_mode1_bullseye   = (mode1_dist_b_m < 4.8);
-                    } else if (!s_mode1_bullseye && mode1_dist_b_m < 4.8) {
-                        s_mode1_bullseye       = true;
-                        mode1_entered_bullseye = true;
-                    } else if (s_mode1_bullseye && mode1_dist_b_m > 5.3) {
-                        s_mode1_bullseye = false;
-                    }
-                } else {
-                    s_mode1_bullseye   = false;
-                    s_mode1_last_b_idx = -1;
+            ActiveGuidanceSegment_t active_seg;
+            if (waypoint_guidance_get_segment(ui_state.tip_lat, ui_state.tip_lon, &active_seg)) {
+                has_mode1_line = true;
+                nav_compute_line_stakeout(ui_state.tip_lat, ui_state.tip_lon,
+                                          active_seg.lat_a, active_seg.lon_a,
+                                          active_seg.lat_b, active_seg.lon_b,
+                                          &mode1_stakeout);
+                nav_compute_target_guidance(ui_state.tip_lat, ui_state.tip_lon, 0.0f,
+                                            active_seg.lat_b, active_seg.lon_b,
+                                            &mode1_dist_b_m, NULL, NULL, NULL, NULL);
+                if (active_seg.idx_b != s_mode1_last_b_idx) {
+                    s_mode1_last_b_idx = active_seg.idx_b;
+                    s_mode1_bullseye   = (mode1_dist_b_m < 4.8);
+                } else if (!s_mode1_bullseye && mode1_dist_b_m < 4.8) {
+                    s_mode1_bullseye       = true;
+                    mode1_entered_bullseye = true;
+                } else if (s_mode1_bullseye && mode1_dist_b_m > 5.3) {
+                    s_mode1_bullseye = false;
                 }
             } else {
                 s_mode1_bullseye   = false;
@@ -1169,7 +1184,7 @@ void task_display_and_audio(void *pvParameters)
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
 
-            // 7. Proximity & Directional Line-Follow Audio Synthesis (Geiger Counter or Standard Beeps)
+            // 7. Proximity & Acoustic Fade Directional Line-Follow Audio Synthesis
             if (current_settings.audio_nav_mode != AUDIO_NAV_MUTE &&
                 !current_settings.is_muted && current_settings.volume > 0 &&
                 ui_state.has_active_target &&
@@ -1184,16 +1199,20 @@ void task_display_and_audio(void *pvParameters)
                 }
 
                 if (has_mode1_line && !s_mode1_bullseye) {
-                    // Signed Directional Left/Right Line-Follow Audio (faster closer to line)
+                    // Acoustic Fade-Out Directional Line Audio (faster & louder closer to line, silent beyond fade_m)
+                    double fade_m  = (double)current_settings.line_audio_fade_m;
                     double abs_off = fabs(mode1_stakeout.offset_m);
-                    if (abs_off <= 5.0) {
-                        uint32_t interval_ms = 1500;
-                        if (abs_off <= 0.05)      interval_ms = 400;
-                        else if (abs_off <= 0.25) interval_ms = 250;
-                        else if (abs_off <= 0.75) interval_ms = 450;
-                        else if (abs_off <= 1.50) interval_ms = 750;
-                        else if (abs_off <= 3.00) interval_ms = 1100;
-                        else                      interval_ms = 1500;
+                    if (fade_m > 0.0 && abs_off <= fade_m) {
+                        uint32_t interval_ms = 650U;
+                        uint8_t  gain_pct    = 90U;
+                        if (abs_off > 0.05) {
+                            double denom_log = log(1.0 + fade_m / 0.25);
+                            double frac = (denom_log > 1e-4) ? (log(1.0 + abs_off / 0.25) / denom_log) : 1.0;
+                            if (frac < 0.0) frac = 0.0;
+                            if (frac > 1.0) frac = 1.0;
+                            interval_ms = (uint32_t)(220.0 + frac * 2280.0);
+                            gain_pct    = (uint8_t)(100.0 - frac * 75.0);
+                        }
 
                         if (current_settings.audio_nav_mode == AUDIO_NAV_GEIGER) {
                             interval_ms = (interval_ms * 7U) / 10U;
@@ -1203,14 +1222,14 @@ void task_display_and_audio(void *pvParameters)
                         if (now_ms - s_last_audio_ms >= interval_ms) {
                             s_last_audio_ms = now_ms;
                             if (abs_off <= 0.05) {
-                                // On-Line: crisp steady high pip
-                                play_rover_beep(1800, 30);
+                                // On-Line: crisp single high pip
+                                play_rover_beep_gain(1800, 30, gain_pct);
                             } else if (mode1_stakeout.offset_m < -0.05) {
                                 // Left of A->B: rising 2-tone chirp -> steer RIGHT
-                                play_rover_dual_beep(660, 30, 25, 1100, 40);
+                                play_rover_dual_beep_gain(660, 30, 25, 1100, 40, gain_pct);
                             } else {
                                 // Right of A->B: falling 2-tone chirp -> steer LEFT
-                                play_rover_dual_beep(1100, 30, 25, 660, 40);
+                                play_rover_dual_beep_gain(1100, 30, 25, 660, 40, gain_pct);
                             }
                         }
                     }

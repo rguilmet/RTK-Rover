@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.9.0`  
-**Firmware Version:** `v0.9.0`  
+**Document Version:** `v1.10.0`  
+**Firmware Version:** `v0.10.0`  
 **Last Updated:** November 22, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S, DFRobot SEN0696 10-DOF Beam IMU  
 
@@ -11,7 +11,7 @@
 1. [Introduction & System Overview](#1-introduction--system-overview)
 2. [Hardware Setup & Power-On Procedure](#2-hardware-setup--power-on-procedure)
 3. [Persistent 4-Row Top Status Header Bar](#3-persistent-4-row-top-status-header-bar)
-4. [Tile 0: Pin Seeker & 3-Mode Tactical Guidance (Point / Line+Bullseye / Map)](#4-tile-0-pin-seeker--3-mode-tactical-guidance-point--linebullseye--map)
+4. [Tile 0: Unified Guidance Triangle, Auto-Bullseye & Map View](#4-tile-0-unified-guidance-triangle-auto-bullseye--map-view)
 5. [Tile 1: Dedicated Field Survey Logger](#5-tile-1-dedicated-field-survey-logger)
 6. [Tile 2: Multi-File Waypoint Browser & Selector](#6-tile-2-multi-file-waypoint-browser--selector)
 7. [Tile 3: Dual-Antenna & Beam 9-DOF Compass, Plumb Bubble Level & CAL MAG](#7-tile-3-dual-antenna--beam-9-dof-compass-plumb-bubble-level--cal-mag)
@@ -145,107 +145,50 @@ The top 74 pixels of the display remain permanently visible across all 6 operati
 
 ---
 
-## 4. Tile 0: Pin Seeker & Tactical Guidance
+## 4. Tile 0: Unified Guidance Triangle, Auto-Bullseye & Map View
 
-Tile 0 is the primary navigational workspace for locating buried boundary pins, recovering property monuments, and navigating to design coordinates.
+Tile 0 (`ui_tile0_guidance.c`, `ui_tile0_views.c`, `ui_tile0_map.c`) is the primary navigational workspace (`v0.10.0`). Tapping the top-left mode badge cycles directly between **`[GUIDANCE]`** and **`[MAP VIEW]`**:
 
-| Tactical Course-Up Navigation ($> 1.5\text{ m}$) | Bullseye Centimeter Stakeout ($\le 1.5\text{ m}$) |
-| :---: | :---: |
-| ![Tile 0: Tactical Course-Up](docs/images/screenshot_tile0_guidance.png) | ![Tile 0: Bullseye Centimeter Stakeout](docs/images/screenshot_tile0_bullseye.png) |
-| *Figure 2A: Tactical Course-Up canvas with rotating antenna crossbar, LOS vector, and breadcrumb trail.* | *Figure 2B: Bullseye centimeter canvas with 1m, 20cm, and 2cm rings and audio lock cues.* |
-
-### Tactical Course-Up Canvas ($> 1.5\text{ m}$)
-* **Target Selector Bar:** Tap `< Prev` and `Next >` to cycle through targets loaded from the active waypoint CSV file. The target label and notes marquee automatically if text exceeds the container width.
-* **Dynamic Course-Up Canvas:** The display rotates in real time so the rover's physical walking direction is always facing **UP** (12 o'clock).
-* **Rotating Antenna Crossbar:** A graphical T-bar reflects the true physical orientation of your antenna crossbar:
-  * **Left Tip (ANT1):** Green circle (`#00FF88`).
-  * **Right Tip (ANT2):** Amber circle (`#FFCC00`).
-  * **Green FOV Wedge:** A green triangular wedge projects forward from the crossbar showing your line-of-sight cone.
-* **Line-of-Sight (LOS) Tracking Vector:** A line connects the rover's center directly to the target icon, indicating exact steer angle and heading error.
-* **Turn Prompt & Distance:** Prominent live readout of distance (`Dist: 24.32 m`) and steering direction (`Steer: 14 deg L`).
-* **Cardinal Offsets:** Displays distance decomposed into cardinal axes (`dN: +18.20 m | dE: -16.10 m`).
-* **Breadcrumb Trail:** A 64-point circular trail records your approach path in light blue.
-* **Route Recording:** Tap `REC ON` / `REC OFF` to toggle continuous track recording to `/routes/route_YYYYMMDD_HHMMSS.csv`.
-
-### Bullseye Centimeter Stakeout Canvas ($\le 1.5\text{ m}$)
-When you close within $1.5\text{ m}$ of the target, the navigation engine automatically switches to the high-precision **Bullseye Mode**:
-* **Concentric Rings:**
-  * **Outer White Ring:** $1.0\text{ m}$ radius ($100\text{ cm}$).
-  * **Middle Orange Ring:** $20\text{ cm}$ radius ($0.20\text{ m}$).
-  * **Inner Green Bullseye Ring:** $2.0\text{ cm}$ radius ($0.02\text{ m}$) — true property pin lock threshold.
-* **Forward / Right Precision Offsets:** Replaces coarse steer prompts with precise surveyor offsets:
-  ```
-  Fwd: +0.03 m | Right: -0.01 m
-  ```
-* **ES8311 Proximity Audio Engine:** When approaching a buried property pin or stone bound, the onboard ES8311 codec and physical speaker provide eyes-free acoustic guidance (toggled via `AUD` button on Tile 1):
-  * **Geiger Mode (`AUD: GEIGER`):** Synthesizes distance-proportional clicks that accelerate progressively as you close in on the target:
-    * $D > 2.0\text{ m}$: Mute / silent.
-    * $1.0\text{ m} < D \le 2.0\text{ m}$: Sparse clicks at $1\text{ Hz}$ ($800\text{ Hz}$ tone).
-    * $0.3\text{ m} < D \le 1.0\text{ m}$: Medium cadence chirps at $3 - 5\text{ Hz}$ ($1200\text{ Hz}$).
-    * $0.05\text{ m} < D \le 0.3\text{ m}$ ($2 - 12\text{ in}$): Rapid Geiger ticks at $8 - 15\text{ Hz}$ ($1800\text{ Hz}$).
-    * $D \le 0.02\text{ m}$ ($\le 2\text{ cm}$ / Bullseye Lock): Solid confirmation chime at $2400\text{ Hz}$.
-  * **Beeps Mode (`AUD: BEEPS`):** Stepped pitch chimes closing from $5.0\text{ m}$ inward.
-  * **Mute Mode (`AUD: MUTE`):** Silences navigation proximity audio while preserving button taps, survey logged tones, and screenshot double-beeps.
-
-### Navigation Modes on Tile 0
-
-Tile 0 features an interactive tri-state navigation badge in the top-left corner of the canvas. Tapping the badge cycles through three specialized navigation modes:
 ```
-[POINT] (Cyan) -> [LINE STAKEOUT / LINE BULLSEYE] (Amber) -> [MAP VIEW] (Emerald Green) -> [POINT]
+[GUIDANCE] (Log-Scale Triangle + Auto < 5 m Bullseye)  <--->  [MAP VIEW] (Sticky Zoom + Active Segment)
 ```
+
+### Navigation Bar, Anchor Modes & Bottom Controls
+* **Target Title Bar:** Displays `Start -> Target [SWAP]` (in Deed mode) or `HERE -> Target [SET A]` (in Direct-Here mode).
+  * **Deed Mode (`A: DEED`, Teal):** By default, Point `B` is the active CSV waypoint (`Index`) and Start `A` is `Index - 1` (wrapping around closed boundary loops). Tap the title bar (`[SWAP]`) to reverse `A <-> B` cleanly in place; stepping `<` or `>` resets `[SWAP]` and advances to the next boundary leg.
+  * **Direct Mode (`A: HERE`, Violet):** Tap the bottom-left **`[A: DEED / A: HERE]`** button (auto-enabled on 1-waypoint CSVs) to anchor Start `A` at your current live GNSS position (`HERE -> B`). Tap **`[SET A]`** (or **`[A: HERE]`**) anytime after walking around an obstacle to drop a fresh Start `A` from your new position.
+* **Route Recording Button (`[REC OFF]` / `[REC ON]`):** Bottom-right canvas button toggles continuous route track CSV logging to `/routes/route_YYYYMMDD_HHMMSS.csv`.
 
 ---
 
-### Mode 1: Unified Line + Bullseye Stakeout (Primary Boundary Mode)
+### Mode 0: Unified Guidance (Log-Scale Triangle -> `< 5 m` Auto-Bullseye)
 
-![Tile 0: Line Stakeout Mode](docs/images/screenshot_tile0_line_stakeout.png)
-*Figure 2C: Mode 1 Line Stakeout showing Point A to Point B deed baseline, perpendicular offset tie-line, stationing, and ASCII quadrant bearing.*
+#### Phase A — Line-Up Log-Scale Triangle (`> 5.0 m` from Target `B`, exit hysteresis `> 5.3 m`)
+* **Fixed Line-Up Frame:** Start `A` (Amber/Violet `12 px`) stays anchored near bottom-center (`y = 174`), Target `B` (Green `16 px`) near top-center (`y = 46`), connected by the `A -> B` baseline with `18 px` dashed undershoot/overshoot aprons below `A` and above `B`.
+* **Symmetric Logarithmic Cross-Track Scale (`line_log_max_m = 50.0 m`):** Rover `R` (`14 px` Sky Blue, turning Green within `2 cm` of line) moves horizontally on a logarithmic scale from `0.02 m` out to `line_log_max_m`, keeping centimeter sensitivity near the line (`1m / 10m` SI or `3ft / 30ft` Imperial ticks) without clamping flat when walking around obstacles `5–50 m` off-line.
+* **Triangle Geometry & Priority Heading Arrow:** Draws both the perpendicular tie-line (`R -> Baseline`) and direct hypotenuse (`R -> B`). A barbed heading arrow points from `R` at your true relative heading (`true_heading_deg - line_bearing_deg`) with dual-lock color coding prioritizing Target `B`:
+  1. **Hypotenuse `R -> B` Priority:** `<= 4 deg` (`line_arrow_green_deg`) -> **Arrow + Hypotenuse Green**; `<= 15 deg` (`line_arrow_amber_deg`) -> **Arrow + Hypotenuse Orange**.
+  2. **Perpendicular Tie Return** (only outside `0.15 m` of line when not aimed near `B`): `<= 4 deg` -> **Arrow + Tie Green**; `<= 15 deg` -> **Arrow + Tie Orange**.
+  3. **Outside Windows:** **Arrow White**.
+* **Acoustic Fade-Out `L/R` Audio (`ES8311`):** Outside Bullseye, left-of-line (`offset < -0.05 m`) plays rising chirps (`660 -> 1100 Hz`, steer RIGHT), right-of-line plays falling chirps (`1100 -> 660 Hz`, steer LEFT), and on-line (`<= 0.05 m`) plays a steady `1800 Hz` pip. Chirp cadence accelerates (`2500 -> 220 ms`) and PCM amplitude ramps smoothly (`25% -> 100%`) as cross-track distance shrinks toward `0`, fading to **complete silence** beyond `line_audio_fade_m` (`20.0 m` default).
 
-When the mode badge is set to Mode 1 (`LINE STAKEOUT` -> `LINE BULLSEYE`, Amber `#D97706`):
-* **Baseline Definition (`A -> B`):** Directs the surveyor along the boundary line between Point A (Station `0+00`) and Point B (Target).
-  * **Auto-Pairing & Clean Step Advance:** By default, Point B is the active target (`Index`), and Point A is `Index - 1` (wrapping around to close parcels). Stepping `< Prev` or `Next >` automatically clears `[SWAP]` pairing so `A -> B` advances to the new leg.
-  * **One-Tap Swap (`[<-> SWAP]`):** Tap the target row label (`A -> B [SWAP]`) to reverse line direction cleanly in place.
-* **Hysteresis Transition Around Target `B` (`5.0 m` / `16.4 ft`):**
-  * **Line-Up Phase (`> 5.0 m`, exit hysteresis `> 5.3 m`):** Shows the vertical baseline pulled inward (`y = 46..178 px`, horizontal clamp `[-104, +104] px` leaving `48 px` margins on both sides), perpendicular tie-line, compact distance/bearing cue to `B`, and **Line-Up heading arrow** rotated cleanly to `true_heading_deg - line_bearing_deg`. `t0_tgt_hdg_lbl` displays `Line: XXX.X deg`.
-  * **Bullseye Finish Phase (`< 4.8 m` acquisition chime -> `LINE BULLSEYE`):** Automatically transitions to centered concentric target rings (`5.0 m` outer / `1.5 m` inner, auto-zooming to `1.5 m / 0.5 m` inside `1.5 m`) **with the `A -> B` property chord overlay drawn straight through the target**, giving simultaneous pin range and line offset!
-* **Signed Directional `L/R` Audio (`ES8311`):**
-  * During Line-Up (`> 4.8 m`), left-of-line (`offset_m < -0.05 m`) plays a **rising chirp (`660 -> 1100 Hz`, steer RIGHT `>>>`)**, right-of-line plays a **falling chirp (`1100 -> 660 Hz`, steer LEFT `<<<`)**, and on-line (`<= 0.05 m`) plays a **steady `1800 Hz` pip**, speeding up from `1500 ms` to `250 ms` as you approach the line. Crossing inside `4.8 m` emits a `1400 -> 2000 Hz` acquisition chime and hands off to Bullseye proximity audio.
-* **Scaled 4-Row Readout Deck Below Canvas:**
-  * **Row 1:** `[OK] ON LINE (0.01 ft)` green or `X.XX ft RIGHT` / `LEFT` amber (unsigned magnitude).
-  * **Row 2:** `<<< MOVE LEFT TO LINE` / `MOVE RIGHT TO LINE >>>` / `[OK] ON LINE - PROCEED ON BEARING`.
-  * **Row 3:** `Sta: 0+78.6 ft (26.8%) | Rem: 215.1 ft`.
-  * **Row 4:** Pure ASCII cadastral bearing (`Deed: N 56d00'12" W (304.0 deg)`).
+#### Phase B — Auto-Bullseye Centimeter Finish (`< 4.8 m` entry chime -> `BULLSEYE`)
+* **Hysteresis Handoff:** Crossing inside `4.8 m` of Target `B` emits a `1400 -> 2000 Hz` acquisition chime and transitions into centered concentric rings (`5.0 m / 1.5 m`, auto-zooming to `1.5 m / 0.5 m` inside `1.5 m`) **with the `A -> B` property chord drawn through `B`** and a North-Up barbed heading arrow colored Green/Orange/White relative to `B`.
+* **ES8311 Pin Proximity Audio (`Geiger` / `Beeps` / `Mute`):** Accelerating clicks/tones from `2.0 m` (`Geiger`) or `5.0 m` (`Beeps`) down to a `2400 Hz` pin-lock tone at `<= 2 cm`.
 
 ---
 
-### Mode 2: Map View (Cadastral 2D Canvas with Zoom, Pan & Tie-Lines)
-
-![Tile 0: 2D Cadastral Map View](docs/images/screenshot_tile0_map_view.png)
-*Figure 2D: 2D Cadastral Map View rendering closed parcel boundary polygon, dashed reference tie-lines, HUD zoom controls, and rover heading beam.*
+### Mode 1: Map View (Sticky Zoom, Active Segment & Tie-Lines)
 
 When the mode badge is set to `MAP VIEW` (Emerald Green `#10B981`):
-* **Geodetic Tangent-Plane Canvas:** Projects real-world WGS84 coordinates onto a 2D local equirectangular plane centered on the map viewport.
-* **Interactive Zoom & Pan:**
-  * **Single-Touch Drag Pan:** Touch and drag anywhere on the map canvas to smoothly pan the view in real-time.
-  * **HUD Zoom Buttons (Canvas Right Edge):**
-    * `[+]`: Zoom in (magnifies view by 30%, down to 0.05 m/px).
-    * `[-]`: Zoom out (expands view by 40%, up to 30.0 m/px).
-    * `[FIT]`: Auto-fit bounding box encompassing all loaded survey waypoints and the current rover location.
-    * `[CTR]`: Center map viewport directly on the live rover ground-tip coordinates.
-* **Rendered Cadastral Map Layers:**
-  * **Closed Boundary Polygon:** Connects all parcel boundary vertices with positive sequence numbers ($1 \rightarrow 2 \dots \rightarrow N \rightarrow 1$) using a solid Sky Blue polyline.
-  * **Dashed Cadastral Tie-Lines:** For external reference / tie points with negative sequence numbers ($-k$), draws a distinct dashed line directly connecting the tie point to parcel boundary vertex $k$.
-  * **Differentiated Pin Symbology:**
-    * **Boundary Vertices:** High-visibility Gold pins (`#FBBF24`).
-    * **Reference / Tie Pins:** High-visibility Orange pins (`#F97316`).
-    * **Active Target:** Prominent green bullseye icon over the selected waypoint.
-    * **Live Rover:** Bright cyan position circle with a forward-projecting true heading beam.
-  * **128-Point Route Trail:** Renders the surveyor's historical movement trail across the parcel. Can be enabled or disabled via `"map_show_route_trail"` in `settings.json`.
-* **Readouts Below Canvas:**
-  * **Row 1:** Target distance and true bearing (`14.28 m @ 042.5 deg`).
-  * **Row 2:** Active target ID, index, and note (`TGT: P3 (3/8) - Corner Iron`).
-  * **Row 3:** Viewport center geodetic coordinates (`Map Ctr: 43.73248, -70.62408`).
-  * **Row 4:** Viewport scale and loaded waypoint count (`Scale: 0.50 m/px | Pts: 8`).
+* **Persistent Sticky Zoom (`map_zoom_m_per_px`):** Your manual `[+]`/`[-]` zoom scale is preserved across `GUIDANCE <-> MAP VIEW` switches, CSV parcel switches, and device reboots until you tap `[FIT]` (which restores Auto-Fit `0.0`).
+* **Highlighted Active Segment (`t0_map_active_seg`):** Draws the actively followed `A -> B` leg on top of the Sky Blue boundary polygon in **bright `4 px` solid Emerald (`A: DEED`)** or **`3 px` dashed Violet (`A: HERE`)**, with distinct Start `A` (`12 px` Amber/Violet) and Target `B` (`16 px` Green) pins.
+* **HUD Zoom & Pan Controls (Canvas Right Edge):**
+  * `[+]`: Zoom in (`-30%` m/px down to `0.05 m/px`, saved to `settings.json`).
+  * `[-]`: Zoom out (`+40%` m/px up to `30.0 m/px`, saved to `settings.json`).
+  * `[FIT]`: Auto-fit bounding box of all loaded waypoints + live rover position and reset sticky manual zoom to `0.0`.
+  * `[CTR]`: Center viewport on live rover ground-tip coordinates while keeping current zoom.
+* **Cadastral Layers & 4-Row Readout:** Connects positive `poly_order` vertices (`1..N`), dashed Orange tie-lines (`poly_order < 0`), Gold boundary / Orange reference pins, Cyan rover marker + heading beam, optional breadcrumb route trail (`map_show_route_trail`), and bottom target distance/bearing, active segment, viewport center, and scale readouts.
 
 ---
 
@@ -404,7 +347,8 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 
 | Parameter Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `minutesOffsetToUTC` | Integer | `-240` | Local timezone offset from UTC in minutes (`-240` = EDT / UTC-4, `-300` = EST / UTC-5). |
+| `settings_schema_version` | Integer | `2` | `settings.json` schema revision (v2 auto-migrates existing v1 configs cleanly on boot). |
+| `minutesOffsetToUTC` | Integer | `-300` | Local timezone offset from UTC in minutes (`-240` = EDT / UTC-4, `-300` = EST / UTC-5). |
 | `timezone_label` | String | `"EDT"` | 3-letter timezone abbreviation for header display. |
 | `use_imperial_units` | Boolean | `false` | `false` for Metric (m, cm); `true` for Imperial (ft, in). |
 | `antenna_height_m` | Float | `1.800` | Physical distance from crossbar centerline to ground tip in meters. |
@@ -435,6 +379,11 @@ All operational parameters are stored in `/settings.json` on the MicroSD card an
 | `ntrip_host` / `ntrip_host_ip` | String | `"rtk2go.com"` | NTRIP caster hostname and resolved IP address (Plan 2 BLE bridge). |
 | `ntrip_port` | Integer | `2101` | NTRIP caster TCP port. |
 | `ntrip_mountpoint` / `ntrip_user_email` / `ntrip_password` | String | `""` / `""` / `"none"` | NTRIP mountpoint and credentials (protected against default overwrite on save). |
+| `line_log_max_m` | Float | `50.0` | Outer logarithmic cross-track span on Tile 0 Guidance canvas (`2.0..500.0` m). |
+| `line_audio_fade_m` | Float | `20.0` | Off-line directional chirp silence cutoff in meters (`0.0` disables line-follow chirps). |
+| `line_arrow_green_deg` | Float | `4.0` | Heading arrow Green lock angular window (`1.0..15.0` deg; `R -> B` prioritized). |
+| `line_arrow_amber_deg` | Float | `15.0` | Heading arrow Orange near-lock angular window (`3.0..45.0` deg). |
+| `map_zoom_m_per_px` | Float | `0.0` | Persistent Map View zoom in m/px (`0.0` = Auto-Fit; saved automatically on `+`/`-` tap). |
 
 ---
 

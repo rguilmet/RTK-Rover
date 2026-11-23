@@ -20,7 +20,7 @@ void rover_lvgl_unlock(void);
 // Returns active tile column index (0 = Pin Seeker, 1 = Field Survey, 2 = CSV Browser, 3 = Compass/Level, 4 = Diagnostics, 5 = Quick Settings)
 uint8_t rover_get_active_tile_index(void);
 
-// Returns Tile 0 navigation mode (0 = Point Guidance, 1 = Unified Line+Bullseye, 2 = Map View)
+// Returns Tile 0 navigation mode (0 = Unified Guidance, 1 = Map View)
 uint8_t rover_get_tile0_nav_mode(void);
 
 void create_rover_ui(void);

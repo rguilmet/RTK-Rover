@@ -11,6 +11,7 @@ static void prev_file_btn_cb(lv_event_t *e)
     (void)e;
     play_rover_beep(1500, 20);
     waypoint_file_select_prev();
+    ui_tile0_map_on_file_changed();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '<' clicked -> %s\n", waypoint_file_get_active_name());
@@ -22,6 +23,7 @@ static void next_file_btn_cb(lv_event_t *e)
     (void)e;
     play_rover_beep(1500, 20);
     waypoint_file_select_next();
+    ui_tile0_map_on_file_changed();
     update_t0_target_label();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] File '>' clicked -> %s\n", waypoint_file_get_active_name());

@@ -20,7 +20,6 @@ extern "C" {
 // =========================================================================
 // Shared Capacities & Button Color Palette
 // =========================================================================
-#define T0_GRID_H_LINES 4
 #define T0_GRID_V_LINES 4
 #define T0_MAP_MAX_TIES 8
 #define T0_MAP_MAX_PINS 32
@@ -90,17 +89,14 @@ extern lv_obj_t *t0_cross_v;
 extern lv_obj_t *t0_bullseye_ring1;
 extern lv_obj_t *t0_bullseye_ring2;
 extern lv_obj_t *t0_bullseye_center;
-extern lv_obj_t *t0_track_line;
-extern lv_obj_t *t0_track_arrow;
 extern lv_obj_t *t0_beam_arrow;
-extern lv_obj_t *t0_wedge_amber_l;
-extern lv_obj_t *t0_wedge_amber_r;
-extern lv_obj_t *t0_wedge_green_l;
-extern lv_obj_t *t0_wedge_green_r;
 extern lv_obj_t *t0_target_icon;
 extern lv_obj_t *t0_rover_icon;
-extern lv_obj_t *t0_grid_h[T0_GRID_H_LINES];
 extern lv_obj_t *t0_grid_v[T0_GRID_V_LINES];
+extern lv_obj_t *t0_log_lbl_inner;
+extern lv_obj_t *t0_log_lbl_outer;
+extern lv_obj_t *t0_anchor_btn;
+extern lv_obj_t *t0_anchor_btn_lbl;
 
 extern lv_obj_t *t0_dist_lbl;
 extern lv_obj_t *t0_steer_lbl;
@@ -108,7 +104,10 @@ extern lv_obj_t *t0_offsets_lbl;
 extern lv_obj_t *t0_extra_lbl;
 
 extern lv_obj_t *t0_line_baseline;
+extern lv_obj_t *t0_line_ext_top;
+extern lv_obj_t *t0_line_ext_bot;
 extern lv_obj_t *t0_line_tie;
+extern lv_obj_t *t0_line_hyp;
 extern lv_obj_t *t0_line_arrow;
 extern lv_obj_t *t0_line_pt_a;
 extern lv_obj_t *t0_line_chord;
@@ -119,6 +118,7 @@ extern lv_obj_t *t0_map_btn_zout;
 extern lv_obj_t *t0_map_btn_fit;
 extern lv_obj_t *t0_map_btn_ctr;
 extern lv_obj_t *t0_map_boundary;
+extern lv_obj_t *t0_map_active_seg;
 extern lv_obj_t *t0_map_trail;
 extern lv_obj_t *t0_map_ties[T0_MAP_MAX_TIES];
 extern lv_obj_t *t0_map_pins[T0_MAP_MAX_PINS];
@@ -143,13 +143,13 @@ void refresh_t0_guidance_readout_immediately(void);
 
 // ui_tile0_views.c
 void ui_tile0_views_update_hud(const RoverUIData_t *d);
-void ui_tile0_views_update_mode1(const RoverUIData_t *d, char *buf, size_t buf_sz);
-void ui_tile0_views_update_mode0(const RoverUIData_t *d, char *buf, size_t buf_sz);
+void ui_tile0_views_update_guidance(const RoverUIData_t *d, char *buf, size_t buf_sz);
 
 // ui_tile0_map.c
 void t0_canvas_drag_cb(lv_event_t *e);
 void ui_tile0_map_create(lv_obj_t *canvas);
 void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz);
+void ui_tile0_map_on_file_changed(void);
 
 // ui_tile1_survey.c
 void ui_tile1_survey_create(lv_obj_t *parent);

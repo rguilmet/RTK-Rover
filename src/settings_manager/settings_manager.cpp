@@ -71,7 +71,13 @@ struct SystemSettings current_settings = {
     2101,             // ntrip_port
     "",               // ntrip_mountpoint (private user config)
     "",               // ntrip_user_email (private user config)
-    "none"            // ntrip_password
+    "none",           // ntrip_password
+    ROVER_SETTINGS_SCHEMA_VERSION, // settings_schema_version
+    50.0f,            // line_log_max_m (outer log cross-track span in m)
+    20.0f,            // line_audio_fade_m (off-line audio silence threshold in m)
+    4.0f,             // line_arrow_green_deg (heading lock green threshold in deg)
+    15.0f,            // line_arrow_amber_deg (heading lock orange threshold in deg)
+    0.0f              // map_zoom_m_per_px (0.0 = Auto-Fit until manually zoomed)
 };
 
 volatile bool settings_dirty = false;
@@ -130,7 +136,12 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.ntrip_port                == b.ntrip_port &&
            strcmp(a.ntrip_mountpoint, b.ntrip_mountpoint) == 0 &&
            strcmp(a.ntrip_user_email, b.ntrip_user_email) == 0 &&
-           strcmp(a.ntrip_password,   b.ntrip_password)   == 0;
+           strcmp(a.ntrip_password,   b.ntrip_password)   == 0 &&
+           a.settings_schema_version   == b.settings_schema_version &&
+           a.line_log_max_m            == b.line_log_max_m &&
+           a.line_audio_fade_m         == b.line_audio_fade_m &&
+           a.line_arrow_green_deg      == b.line_arrow_green_deg &&
+           a.line_arrow_amber_deg      == b.line_arrow_amber_deg;
 }
 
 extern "C" void mark_settings_dirty(void) {
@@ -520,6 +531,65 @@ extern "C" void load_settings(void) {
         current_settings.apply_lever_arm_on_calibrated_beam = doc["apply_lever_arm_on_calibrated_beam"];
     }
 
+    uint16_t loaded_schema_ver = 1U;
+    if (!doc["settings_schema_version"].isNull()) {
+        loaded_schema_ver = (uint16_t)doc["settings_schema_version"].as<uint16_t>();
+    }
+    if (!doc["line_log_max_m"].isNull()) {
+        float v = doc["line_log_max_m"];
+        if (isfinite(v)) {
+            if (v < 2.0f) v = 2.0f;
+            if (v > 500.0f) v = 500.0f;
+            current_settings.line_log_max_m = v;
+        }
+    }
+    if (!doc["line_audio_fade_m"].isNull()) {
+        float v = doc["line_audio_fade_m"];
+        if (isfinite(v)) {
+            if (v < 0.0f) v = 0.0f;
+            if (v > 200.0f) v = 200.0f;
+            current_settings.line_audio_fade_m = v;
+        }
+    }
+    if (!doc["line_arrow_green_deg"].isNull()) {
+        float v = doc["line_arrow_green_deg"];
+        if (isfinite(v)) {
+            if (v < 1.0f) v = 1.0f;
+            if (v > 15.0f) v = 15.0f;
+            current_settings.line_arrow_green_deg = v;
+        }
+    }
+    if (!doc["line_arrow_amber_deg"].isNull()) {
+        float v = doc["line_arrow_amber_deg"];
+        if (isfinite(v)) {
+            float min_amber = fmaxf(current_settings.line_arrow_green_deg + 1.0f, 3.0f);
+            if (v < min_amber) v = min_amber;
+            if (v > 45.0f) v = 45.0f;
+            current_settings.line_arrow_amber_deg = v;
+        }
+    }
+    if (!doc["map_zoom_m_per_px"].isNull()) {
+        float v = doc["map_zoom_m_per_px"];
+        if (isfinite(v)) {
+            if (v > 0.0f) {
+                if (v < 0.05f) v = 0.05f;
+                if (v > 30.0f) v = 30.0f;
+                current_settings.map_zoom_m_per_px = v;
+            } else {
+                current_settings.map_zoom_m_per_px = 0.0f;
+            }
+        }
+    }
+    bool migrate_schema = (loaded_schema_ver < ROVER_SETTINGS_SCHEMA_VERSION);
+    if (migrate_schema) {
+        Serial.printf("[SETTINGS] Migrating settings.json schema v%u -> v%u (writing new guidance/map keys while preserving user config)\n",
+                      (unsigned int)loaded_schema_ver,
+                      (unsigned int)ROVER_SETTINGS_SCHEMA_VERSION);
+        current_settings.settings_schema_version = ROVER_SETTINGS_SCHEMA_VERSION;
+    } else {
+        current_settings.settings_schema_version = loaded_schema_ver;
+    }
+
     apply_ntrip_fields_from_doc(doc, &current_settings);
     if (is_placeholder_ntrip_value(current_settings.ntrip_mountpoint) &&
         is_placeholder_ntrip_value(current_settings.ntrip_user_email)) {
@@ -532,7 +602,7 @@ extern "C" void load_settings(void) {
     }
 
     // If SD card is mounted, ensure FFat internal flash is an exact mirror of the SD Card settings
-    if (sd_card_mounted && !migrate_e220_profile) {
+    if (sd_card_mounted && !migrate_e220_profile && !migrate_schema) {
         backup_file(FFat, "/settings.json", "/settings.json.bak");
         File ffat_file = FFat.open("/settings.json", "w");
         if (ffat_file) {
@@ -550,7 +620,7 @@ extern "C" void load_settings(void) {
 
     if (fs_mux) xSemaphoreGive(fs_mux);
 
-    if (migrate_e220_profile) {
+    if (migrate_e220_profile || migrate_schema) {
         save_settings();
     }
 }
@@ -593,6 +663,7 @@ extern "C" void save_settings(void) {
     }
 
     JsonDocument doc;
+    doc["settings_schema_version"]   = current_settings.settings_schema_version;
     doc["minutesOffsetToUTC"]        = current_settings.minutesOffsetToUTC;
     doc["timezone_label"]            = current_settings.timezone_label;
     doc["use_imperial_units"]        = current_settings.use_imperial_units;
@@ -652,6 +723,11 @@ extern "C" void save_settings(void) {
     doc["ntrip_mountpoint"]          = current_settings.ntrip_mountpoint;
     doc["ntrip_user_email"]          = current_settings.ntrip_user_email;
     doc["ntrip_password"]            = current_settings.ntrip_password;
+    doc["line_log_max_m"]            = current_settings.line_log_max_m;
+    doc["line_audio_fade_m"]         = current_settings.line_audio_fade_m;
+    doc["line_arrow_green_deg"]      = current_settings.line_arrow_green_deg;
+    doc["line_arrow_amber_deg"]      = current_settings.line_arrow_amber_deg;
+    doc["map_zoom_m_per_px"]         = current_settings.map_zoom_m_per_px;
 
     String output;
     serializeJsonPretty(doc, output);

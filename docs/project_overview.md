@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.9.0`  
+**Document Version:** `v2.10.0`  
 **Last Updated:** November 22, 2026  
-**Firmware Target:** `v0.9.0`  
+**Firmware Target:** `v0.10.0`  
 **Python Ecosystem Target:** `e220_pacer.py v3.7.1`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
 
@@ -146,8 +146,8 @@ Because prebuilt Arduino-ESP32 (`v3.3.x`, `qio_opi`) compiles with `CONFIG_SPIRA
 ### UI 6-Tile Symmetric Structure (`320x480` Portrait)
 Symmetric ring navigation wraps seamlessly around **Tile 0 (Navigation)** (`< Prev` -> `Tile 5 Quick Settings`, `Next >` -> `Tile 1 Survey`): `[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> [Tile 2: Waypoints] <-> [Tile 3: Compass] <-> [Tile 4: Diag]`.
 
-* **Tile 0 (Navigation) -- 3-Mode Tactical Guidance, Unified Line+Bullseye & Map:**
-  * Cycles cleanly across `Mode 0 [POINT]`, `Mode 1 [LINE STAKEOUT / LINE BULLSEYE]`, and `Mode 2 [MAP VIEW]` (`48 px` horizontal & generous top/bottom canvas whitespace). Outside `5.0 m` (`4.8/5.3 m` hysteresis), Mode 1 draws the `A -> B` vertical baseline with rotated `true_heading_deg - line_bearing_deg` heading arrow and plays signed L/R chirps (`660->1100 Hz` steer RIGHT / `1100->660 Hz` steer LEFT / `1800 Hz` on-line); inside `4.8 m`, chimes and transitions to `LINE BULLSEYE` with overlaid `A -> B` property chord.
+* **Tile 0 (Navigation) -- 2-Mode Unified Log-Scale Guidance Triangle & Persistent Map (`v0.10.0`):**
+  * Consolidates Tile 0 into **`[GUIDANCE]`** <-> **`[MAP VIEW]`**. Guidance (`ui_tile0_views.c`) supports **`A: DEED`** (CSV `idx_a -> idx_b` w/ `[SWAP]`) and **`A: HERE`** direct-to GNSS anchor (`[SET A]`, auto on 1-point CSVs), plotting Start `A` (`12 px`), Target `B` (`16 px`), and Rover `R` (`14 px`) on a symmetric log cross-track scale (`line_log_max_m = 50.0 m`) with `18 px` overshoot aprons, perpendicular tie `R -> Foot`, hypotenuse `R -> B`, `R -> B`-prioritized barbed heading arrow (`<= 4 deg` Green / `<= 15 deg` Orange / White lighting up the locked leg), and acoustic fade-out `L/R` chirps (`25% -> 100%` gain, silent beyond `line_audio_fade_m = 20.0 m`). Enters `BULLSEYE` via `< 4.8 m / > 5.3 m` hysteresis with `A -> B` chord overlay. **Map View (`ui_tile0_map.c`)** persists manual zoom (`map_zoom_m_per_px` in `settings.json` Schema v2) and highlights the active followed segment (`4 px` Emerald `DEED` or `3 px` dashed Violet `HERE`).
 * **Tile 1 (Survey) -- Dedicated Field Survey Logger:**
   * `40 px` Prefix + Averaging (`1s/5s/10s/30s`) & all `12` field monument `kNoteTags` (`kNoteTagCount`), `52 px` `[LOG]` button echoing the active tag, live Pre-Log Survey Quality card (`Fix/SV/HDOP/H/V-Acc/Tilt/dN/dE`), Core 1 `pole_tilt_deg` snapshot capture, and circular `atan2` heading averaging.
 * **Tile 2 (Waypoints) -- Multi-File CSV Browser:** Instant `<25 ms` RAM stem-cached file/waypoint selector with `poly_order` boundary/tie rendering (`[SWAP]` auto-clear on target step).

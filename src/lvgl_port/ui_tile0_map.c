@@ -10,14 +10,22 @@ lv_obj_t *t0_map_btn_zout    = NULL;
 lv_obj_t *t0_map_btn_fit     = NULL;
 lv_obj_t *t0_map_btn_ctr     = NULL;
 lv_obj_t *t0_map_boundary    = NULL;
+lv_obj_t *t0_map_active_seg  = NULL;
 lv_obj_t *t0_map_trail       = NULL;
 lv_obj_t *t0_map_pins[T0_MAP_MAX_PINS] = {0};
 
-static double s_map_center_lat      = 0.0;
-static double s_map_center_lon      = 0.0;
-static float  s_map_m_per_px        = 0.5f;
-bool          s_map_auto_fit        = true;
-bool          s_map_center_rover    = false;
+static double s_map_center_lat          = 0.0;
+static double s_map_center_lon          = 0.0;
+static float  s_map_m_per_px            = 0.5f;
+static bool   s_map_zoom_loaded         = false;
+static bool   s_map_center_initialized  = false;
+bool          s_map_auto_fit            = true;
+bool          s_map_center_rover        = false;
+
+void ui_tile0_map_on_file_changed(void)
+{
+    s_map_center_initialized = false;
+}
 
 static void t0_map_zoom_in_cb(lv_event_t *e) {
     (void)e;
@@ -25,6 +33,8 @@ static void t0_map_zoom_in_cb(lv_event_t *e) {
     s_map_auto_fit = false;
     s_map_m_per_px *= 0.70f;
     if (s_map_m_per_px < 0.05f) s_map_m_per_px = 0.05f;
+    current_settings.map_zoom_m_per_px = s_map_m_per_px;
+    mark_settings_dirty();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Map Zoom In -> %.2f m/px\n", s_map_m_per_px);
     }
@@ -36,6 +46,8 @@ static void t0_map_zoom_out_cb(lv_event_t *e) {
     s_map_auto_fit = false;
     s_map_m_per_px *= 1.40f;
     if (s_map_m_per_px > 30.0f) s_map_m_per_px = 30.0f;
+    current_settings.map_zoom_m_per_px = s_map_m_per_px;
+    mark_settings_dirty();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Map Zoom Out -> %.2f m/px\n", s_map_m_per_px);
     }
@@ -46,6 +58,8 @@ static void t0_map_fit_cb(lv_event_t *e) {
     play_rover_beep(1600, 20);
     s_map_auto_fit = true;
     s_map_center_rover = false;
+    current_settings.map_zoom_m_per_px = 0.0f;
+    mark_settings_dirty();
     if (current_settings.enable_touch_logging) {
         rover_printf("[TOUCH BTN] Map Auto-Fit Bounding Box\n");
     }
@@ -62,7 +76,7 @@ static void t0_map_center_rover_cb(lv_event_t *e) {
 }
 
 void t0_canvas_drag_cb(lv_event_t *e) {
-    if (s_tile0_nav_mode != 2) return;
+    if (s_tile0_nav_mode != 1) return;
     lv_event_code_t code = lv_event_get_code(e);
     static lv_point_t last_pt = {0, 0};
     static bool dragging = false;
@@ -83,6 +97,7 @@ void t0_canvas_drag_cb(lv_event_t *e) {
             if (abs(dx) > 1 || abs(dy) > 1) {
                 s_map_auto_fit = false;
                 s_map_center_rover = false;
+                s_map_center_initialized = true;
                 float de_m = -(float)dx * s_map_m_per_px;
                 float dn_m =  (float)dy * s_map_m_per_px;
                 double lat_rad = s_map_center_lat * (M_PI / 180.0);
@@ -119,11 +134,16 @@ static lv_obj_t* create_map_hud_btn(lv_obj_t *parent, const char *txt, int16_t y
 
 void ui_tile0_map_create(lv_obj_t *canvas)
 {
-    // Mode 2 Map View Layers & HUD Controls
+    // Map View Layers & HUD Controls
     t0_map_boundary = lv_line_create(canvas);
     lv_obj_set_style_line_color(t0_map_boundary, lv_color_hex(0x0284C7), 0);
     lv_obj_set_style_line_width(t0_map_boundary, 2, 0);
     lv_obj_set_hidden(t0_map_boundary, true);
+
+    t0_map_active_seg = lv_line_create(canvas);
+    lv_obj_set_style_line_color(t0_map_active_seg, lv_color_hex(0x00FF88), 0);
+    lv_obj_set_style_line_width(t0_map_active_seg, 4, 0);
+    lv_obj_set_hidden(t0_map_active_seg, true);
 
     t0_map_trail = lv_line_create(canvas);
     lv_obj_set_style_line_color(t0_map_trail, lv_color_hex(0xF59E0B), 0);
@@ -160,39 +180,43 @@ void ui_tile0_map_create(lv_obj_t *canvas)
 void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
 {
     // =============================================================
-    // MODE 2: MAP VIEW (Geodetic Canvas with Zoom & Pan)
+    // MODE 1: MAP VIEW (Geodetic Canvas with Sticky Zoom & Active Segment)
     // =============================================================
-    // Hide Mode 0 overlays
+    // Hide Bullseye & Unified Triangle Guidance overlays
     lv_obj_set_hidden(t0_bullseye_ring1, true);
     lv_obj_set_hidden(t0_bullseye_ring2, true);
     lv_obj_set_hidden(t0_bullseye_center, true);
     lv_obj_set_hidden(t0_cross_h, true);
     lv_obj_set_hidden(t0_cross_v, true);
-    for (int i = 0; i < T0_GRID_H_LINES; i++) {
-        if (t0_grid_h[i]) lv_obj_set_hidden(t0_grid_h[i], true);
-    }
+    lv_obj_set_hidden(t0_line_chord, true);
     for (int i = 0; i < T0_GRID_V_LINES; i++) {
         if (t0_grid_v[i]) lv_obj_set_hidden(t0_grid_v[i], true);
     }
-    lv_obj_set_hidden(t0_track_line, true);
-    lv_obj_set_hidden(t0_track_arrow, true);
-    lv_obj_set_hidden(t0_wedge_amber_l, true);
-    lv_obj_set_hidden(t0_wedge_amber_r, true);
-    lv_obj_set_hidden(t0_wedge_green_l, true);
-    lv_obj_set_hidden(t0_wedge_green_r, true);
+    if (t0_log_lbl_inner) lv_obj_set_hidden(t0_log_lbl_inner, true);
+    if (t0_log_lbl_outer) lv_obj_set_hidden(t0_log_lbl_outer, true);
+    if (t0_anchor_btn)    lv_obj_set_hidden(t0_anchor_btn, true);
 
-    // Hide Mode 1 Line Stakeout overlays
     lv_obj_set_hidden(t0_line_baseline, true);
+    lv_obj_set_hidden(t0_line_ext_top, true);
+    lv_obj_set_hidden(t0_line_ext_bot, true);
     lv_obj_set_hidden(t0_line_arrow, true);
     lv_obj_set_hidden(t0_line_tie, true);
-    lv_obj_set_hidden(t0_line_pt_a, true);
-    lv_obj_set_hidden(t0_line_chord, true);
+    lv_obj_set_hidden(t0_line_hyp, true);
 
     // Show Map HUD zoom/pan controls
     lv_obj_set_hidden(t0_map_btn_zin, false);
     lv_obj_set_hidden(t0_map_btn_zout, false);
     lv_obj_set_hidden(t0_map_btn_fit, false);
     lv_obj_set_hidden(t0_map_btn_ctr, false);
+
+    // Restore persisted sticky zoom level once on first Map render
+    if (!s_map_zoom_loaded) {
+        s_map_zoom_loaded = true;
+        if (current_settings.map_zoom_m_per_px >= 0.05f && current_settings.map_zoom_m_per_px <= 30.0f) {
+            s_map_m_per_px = current_settings.map_zoom_m_per_px;
+            s_map_auto_fit = false;
+        }
+    }
 
     // Mode badge in Emerald Green
     lv_label_set_text(t0_mode_badge, "MAP VIEW");
@@ -203,8 +227,23 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     snprintf(buf, buf_sz, "Win: %.0fm (%.2fm/px)", win_w_m, s_map_m_per_px);
     lv_label_set_text(t0_scale_lbl, buf);
 
+    ActiveGuidanceSegment_t seg;
+    bool has_seg = waypoint_guidance_get_segment(d->tip_lat, d->tip_lon, &seg);
+
     // Top Target Row
-    if (d->has_active_target) {
+    if (has_seg) {
+        snprintf(buf, buf_sz, "%s -> %s [%s]",
+                 seg.label_a, seg.label_b, seg.is_direct_here ? "SET A" : "SWAP");
+        if (t0_target_lbl) {
+            const char *cur_t = lv_label_get_text(t0_target_lbl);
+            if (!cur_t || strcmp(cur_t, buf) != 0) lv_label_set_text(t0_target_lbl, buf);
+        }
+        if (t0_notes_lbl) {
+            const char *new_notes = seg.notes_b[0] ? seg.notes_b : "Touch Map to Pan | Zoom with Buttons";
+            const char *cur_n = lv_label_get_text(t0_notes_lbl);
+            if (!cur_n || strcmp(cur_n, new_notes) != 0) lv_label_set_text(t0_notes_lbl, new_notes);
+        }
+    } else if (d->has_active_target) {
         snprintf(buf, buf_sz, "%s (%d/%d)",
                  d->target_label, d->active_target_idx + 1, d->total_targets);
         if (t0_target_lbl) lv_label_set_text(t0_target_lbl, buf);
@@ -217,7 +256,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         if (t0_notes_lbl) lv_label_set_text(t0_notes_lbl, "Touch Map to Pan | Zoom with Buttons");
     }
 
-    // Auto-Fit Bounding Box calculation
+    // Center & Auto-Fit Bounding Box calculation
     if (s_map_auto_fit) {
         double min_lat = d->tip_lat, max_lat = d->tip_lat;
         double min_lon = d->tip_lon, max_lon = d->tip_lon;
@@ -241,9 +280,32 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         if (fit_scale < 0.15f) fit_scale = 0.15f;
         if (fit_scale > 25.0f) fit_scale = 25.0f;
         s_map_m_per_px = fit_scale;
+        if (fabs(s_map_center_lat) > 0.0001 || fabs(s_map_center_lon) > 0.0001) {
+            s_map_center_initialized = true;
+        }
     } else if (s_map_center_rover && fabs(d->tip_lat) > 0.0001) {
         s_map_center_lat = d->tip_lat;
         s_map_center_lon = d->tip_lon;
+        s_map_center_initialized = true;
+    } else if (!s_map_center_initialized) {
+        // Initialize map camera center onto parcel/target when sticky manual zoom starts at boot or file switch
+        if (g_waypoint_count > 0) {
+            double min_lat = g_waypoints[0].latitude, max_lat = g_waypoints[0].latitude;
+            double min_lon = g_waypoints[0].longitude, max_lon = g_waypoints[0].longitude;
+            for (int i = 1; i < g_waypoint_count; i++) {
+                if (g_waypoints[i].latitude < min_lat) min_lat = g_waypoints[i].latitude;
+                if (g_waypoints[i].latitude > max_lat) max_lat = g_waypoints[i].latitude;
+                if (g_waypoints[i].longitude < min_lon) min_lon = g_waypoints[i].longitude;
+                if (g_waypoints[i].longitude > max_lon) max_lon = g_waypoints[i].longitude;
+            }
+            s_map_center_lat = (min_lat + max_lat) * 0.5;
+            s_map_center_lon = (min_lon + max_lon) * 0.5;
+            s_map_center_initialized = true;
+        } else if (fabs(d->tip_lat) > 0.0001 || fabs(d->tip_lon) > 0.0001) {
+            s_map_center_lat = d->tip_lat;
+            s_map_center_lon = d->tip_lon;
+            s_map_center_initialized = true;
+        }
     }
 
     // Equirectangular local projection parameters
@@ -276,7 +338,49 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         lv_obj_set_hidden(t0_map_boundary, true);
     }
 
-    // Render Waypoint Pins (Gold = Boundary Polygon, Orange = Reference / Tie Pin)
+    // Highlight Active Followed Segment (A -> B) above base boundary polygon
+    int16_t a_sx = 0, a_sy = 0;
+    bool    show_pt_a = false;
+    if (has_seg) {
+        double a_dN = (seg.lat_a - s_map_center_lat) * 111132.95;
+        double a_dE = (seg.lon_a - s_map_center_lon) * 111132.95 * cos_lat;
+        a_sx = 152 + (int16_t)roundf((float)a_dE / s_map_m_per_px);
+        a_sy = 105 - (int16_t)roundf((float)a_dN / s_map_m_per_px);
+
+        double b_dN = (seg.lat_b - s_map_center_lat) * 111132.95;
+        double b_dE = (seg.lon_b - s_map_center_lon) * 111132.95 * cos_lat;
+        int16_t b_sx = 152 + (int16_t)roundf((float)b_dE / s_map_m_per_px);
+        int16_t b_sy = 105 - (int16_t)roundf((float)b_dN / s_map_m_per_px);
+
+        static lv_point_precise_t s_act_seg_pts[2];
+        s_act_seg_pts[0].x = a_sx;
+        s_act_seg_pts[0].y = a_sy;
+        s_act_seg_pts[1].x = b_sx;
+        s_act_seg_pts[1].y = b_sy;
+        lv_line_set_points(t0_map_active_seg, s_act_seg_pts, 2);
+        lv_obj_set_style_line_color(t0_map_active_seg,
+                                    seg.is_direct_here ? lv_color_hex(0xC084FC) : lv_color_hex(0x00FF88), 0);
+        lv_obj_set_style_line_width(t0_map_active_seg, seg.is_direct_here ? 3 : 4, 0);
+        lv_obj_set_style_line_dash_width(t0_map_active_seg, seg.is_direct_here ? 6 : 0, 0);
+        lv_obj_set_style_line_dash_gap(t0_map_active_seg, seg.is_direct_here ? 4 : 0, 0);
+        lv_obj_set_hidden(t0_map_active_seg, false);
+
+        if (a_sx >= -6 && a_sx <= 310 && a_sy >= -6 && a_sy <= 216) {
+            lv_obj_align(t0_line_pt_a, LV_ALIGN_TOP_LEFT, a_sx - 6, a_sy - 6);
+            lv_obj_set_style_bg_color(t0_line_pt_a,
+                                      seg.is_direct_here ? lv_color_hex(0xA855F7) : lv_color_hex(0xF59E0B), 0);
+            lv_obj_set_hidden(t0_line_pt_a, false);
+            show_pt_a = true;
+        }
+    } else {
+        lv_obj_set_hidden(t0_map_active_seg, true);
+    }
+    if (!show_pt_a) {
+        lv_obj_set_hidden(t0_line_pt_a, true);
+    }
+
+    // Render Waypoint Pins (Target B = Green 16px, Start A = Amber 12px, Others = Gold / Orange)
+    bool target_pin_shown = false;
     for (int i = 0; i < g_waypoint_count && i < T0_MAP_MAX_PINS; i++) {
         double dN = (g_waypoints[i].latitude - s_map_center_lat) * 111132.95;
         double dE = (g_waypoints[i].longitude - s_map_center_lon) * 111132.95 * cos_lat;
@@ -285,8 +389,13 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
 
         if (i == g_active_waypoint_idx) {
             lv_obj_set_hidden(t0_map_pins[i], true);
-            lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, sx - 8, sy - 8);
-            lv_obj_set_hidden(t0_target_icon, false);
+            if (sx >= -8 && sx <= 312 && sy >= -8 && sy <= 218) {
+                lv_obj_align(t0_target_icon, LV_ALIGN_TOP_LEFT, sx - 8, sy - 8);
+                lv_obj_set_hidden(t0_target_icon, false);
+                target_pin_shown = true;
+            }
+        } else if (has_seg && !seg.is_direct_here && i == seg.idx_a && show_pt_a) {
+            lv_obj_set_hidden(t0_map_pins[i], true);
         } else {
             if (sx >= -5 && sx <= 309 && sy >= -5 && sy <= 215) {
                 lv_obj_align(t0_map_pins[i], LV_ALIGN_TOP_LEFT, sx - 4, sy - 4);
@@ -304,7 +413,7 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     for (int i = g_waypoint_count; i < T0_MAP_MAX_PINS; i++) {
         if (t0_map_pins[i]) lv_obj_set_hidden(t0_map_pins[i], true);
     }
-    if (g_waypoint_count == 0) {
+    if (!target_pin_shown) {
         lv_obj_set_hidden(t0_target_icon, true);
     }
 
@@ -365,31 +474,37 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     }
 
     // Render Live Rover Position & Heading Arrow
-    double r_dN = (d->tip_lat - s_map_center_lat) * 111132.95;
-    double r_dE = (d->tip_lon - s_map_center_lon) * 111132.95 * cos_lat;
-    int16_t r_sx = 152 + (int16_t)roundf((float)r_dE / s_map_m_per_px);
-    int16_t r_sy = 105 - (int16_t)roundf((float)r_dN / s_map_m_per_px);
-    lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, r_sx - 8, r_sy - 8);
-    lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
-    lv_obj_set_hidden(t0_rover_icon, false);
+    if (fabs(d->tip_lat) > 0.0001 || fabs(d->tip_lon) > 0.0001) {
+        double r_dN = (d->tip_lat - s_map_center_lat) * 111132.95;
+        double r_dE = (d->tip_lon - s_map_center_lon) * 111132.95 * cos_lat;
+        int16_t r_sx = 152 + (int16_t)roundf((float)r_dE / s_map_m_per_px);
+        int16_t r_sy = 105 - (int16_t)roundf((float)r_dN / s_map_m_per_px);
+        lv_obj_align(t0_rover_icon, LV_ALIGN_TOP_LEFT, r_sx - 7, r_sy - 7);
+        lv_obj_set_style_bg_color(t0_rover_icon, lv_color_hex(0x38BDF8), 0);
+        lv_obj_set_hidden(t0_rover_icon, false);
 
-    if (d->heading_valid) {
-        float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
-        int16_t arrow_dx = (int16_t)(18.0f * sinf(hdg_rad));
-        int16_t arrow_dy = (int16_t)(-18.0f * cosf(hdg_rad));
-        static lv_point_precise_t r_beam_pts[2];
-        r_beam_pts[0].x = r_sx;
-        r_beam_pts[0].y = r_sy;
-        r_beam_pts[1].x = r_sx + arrow_dx;
-        r_beam_pts[1].y = r_sy + arrow_dy;
-        lv_line_set_points(t0_beam_arrow, r_beam_pts, 2);
-        lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
-        lv_obj_set_hidden(t0_beam_arrow, false);
+        if (d->heading_valid) {
+            float hdg_rad = d->true_heading_deg * (float)(M_PI / 180.0);
+            int16_t arrow_dx = (int16_t)roundf(18.0f * sinf(hdg_rad));
+            int16_t arrow_dy = (int16_t)roundf(-18.0f * cosf(hdg_rad));
+            static lv_point_precise_t r_beam_pts[2];
+            r_beam_pts[0].x = r_sx;
+            r_beam_pts[0].y = r_sy;
+            r_beam_pts[1].x = r_sx + arrow_dx;
+            r_beam_pts[1].y = r_sy + arrow_dy;
+            lv_line_set_points(t0_beam_arrow, r_beam_pts, 2);
+            lv_obj_set_style_line_color(t0_beam_arrow, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_style_line_width(t0_beam_arrow, 2, 0);
+            lv_obj_set_hidden(t0_beam_arrow, false);
+        } else {
+            lv_obj_set_hidden(t0_beam_arrow, true);
+        }
     } else {
+        lv_obj_set_hidden(t0_rover_icon, true);
         lv_obj_set_hidden(t0_beam_arrow, true);
     }
 
-    // Row 1: Distance & Bearing to Target (t0_dist_lbl in Montserrat 20)
+    // Row 1: Distance & Bearing to Target B (t0_dist_lbl in Montserrat 16)
     lv_obj_set_style_text_font(t0_dist_lbl, &lv_font_montserrat_16, 0);
     if (d->has_active_target) {
         char dist_str[24];
@@ -403,8 +518,10 @@ void ui_tile0_map_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         lv_obj_set_style_text_color(t0_dist_lbl, lv_color_hex(0x10B981), 0);
     }
 
-    // Row 2: Target Name / Status (t0_steer_lbl in Montserrat 14)
-    if (d->has_active_target) {
+    // Row 2: Active Segment / Target Name (t0_steer_lbl in Montserrat 14)
+    if (has_seg) {
+        snprintf(buf, buf_sz, "SEG: %s -> %s", seg.label_a, seg.label_b);
+    } else if (d->has_active_target) {
         snprintf(buf, buf_sz, "TGT: %s (%d/%d)",
                  d->target_label, d->active_target_idx + 1, d->total_targets);
     } else {

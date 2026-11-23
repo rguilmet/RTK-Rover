@@ -65,6 +65,12 @@ struct SystemSettings {
     char     ntrip_mountpoint[48];      // Private NTRIP mountpoint (empty default in public repo)
     char     ntrip_user_email[64];      // Private NTRIP user/email (empty default in public repo)
     char     ntrip_password[32];        // Default "none"
+    uint16_t settings_schema_version;   // settings.json schema version (v2 adds guidance/map fields)
+    float    line_log_max_m;            // Tile 0 log cross-track outer span (m, default 50.0)
+    float    line_audio_fade_m;         // Off-line directional audio silence cutoff (m, default 20.0)
+    float    line_arrow_green_deg;      // Heading lock green threshold (deg, default 4.0)
+    float    line_arrow_amber_deg;      // Heading lock orange threshold (deg, default 15.0)
+    float    map_zoom_m_per_px;         // Sticky Map View zoom (m/px, 0.0 = Auto-Fit)
 };
 
 extern struct SystemSettings current_settings;

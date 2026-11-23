@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.9.2`  
+**Firmware Version:** `v0.10.0`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
@@ -11,6 +11,10 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 ---
 
 ## 1. Overview & Key Capabilities
+
+* **Unified Tile 0 Log-Scale Guidance Triangle, Direct `A: HERE -> B` Anchor & Persistent Map View (`v0.10.0`, `settings.json` Schema v2):**
+  * **2-Mode Tile 0 Consolidation (`GUIDANCE` <-> `MAP VIEW`):** Merges old `Point Guidance` and `Line Stakeout` into one calm Line-Up Log-Scale Triangle screen (`A -> B` deed line or one-tap `[A: HERE]` direct anchor, automatic `< 4.8 m / > 5.3 m` Bullseye handoff). Renders Start `A` (`12 px`), Target `B` (`16 px`), Rover `R` (`14 px`) on a configurable symmetric log cross-track grid (`line_log_max_m`, default `50.0 m`) with perpendicular tie-line, `R -> B` hypotenuse, and barbed heading arrow (`<= 4 deg` Green / `<= 15 deg` Orange / White prioritizing `R -> B`, lighting up the active locked leg).
+  * **Acoustic Fade-Out `L/R` Audio & Sticky Map Zoom / Active Segment Highlight:** Directional `L/R` chirps speed up and ramp `ES8311` PCM gain (`25% -> 100%`) as cross-track offset shrinks toward `0`, fading cleanly to silence beyond `line_audio_fade_m` (`20.0 m`). Map View persists manual zoom across mode switches and reboots (`map_zoom_m_per_px`) and highlights the active followed segment in Emerald (`DEED A -> B`) or dashed Violet (`HERE -> B`). Adds `settings_schema_version = 2` auto-migration in [`settings_manager.cpp`](src/settings_manager/settings_manager.cpp).
 
 * **Plan 0 Field Survey Refinements, 6-Tile Ergonomic UI & Isolated `I2C1` Beam 9-DOF Fusion (`v0.8.19` - `v0.9.0`):**
   * **6-Tile Symmetric UI & Modular LVGL Split (`src/lvgl_port/`, `v0.8.19`):** Refactored the monolithic `4,225`-line UI into `11` `< 770 L` modules and centered `Tile 0` in a symmetric 6-tile wrap ring (`[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> ... <-> [Tile 4: Diag]`). Dedicated **Tile 5 Quick Settings** provides a `5x3` `94 x 44 px` touch deck (`VOL/AUD/BRI`, `SERIAL/NMEA/RTCM`, `TELEM/IMU/TOUCH`, `WIFI/UNITS/LORA`, `AUTO-OFF` `5m/15m/30m/OFF`, `CAL MAG`, reserved `BLE: PLAN2`), while dedicated **Tile 1 Survey** adds `40 px` controls, all `12` monument `kNoteTags`, active-tag `52 px` `LOG` button, pre-log quality card, Core 1 `pole_tilt_deg` capture, and circular `atan2` heading averaging.

@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.9.2"
+#define ROVER_FIRMWARE_VERSION "v0.10.0"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -119,6 +119,7 @@
 //   - TX Power:      30 dBm (Level 0)(REG1[1:0]=00)  -> REG1 = 0x20
 //   - Mode / LBT:    Transparent (REG3[6]=0), LBT Disabled (REG3[4]=0) -> REG3 = 0x00
 // =========================================================================
+#define ROVER_SETTINGS_SCHEMA_VERSION      2U    // settings.json schema version (adds Tile 0 guidance/map fields)
 #define ROVER_E220_PROFILE_REV             3     // One-time auto-migration revision for /settings.json E220 defaults
 #define ROVER_E220_TRANSPARENT_BAUD        115200
 #define ROVER_E220_CONFIG_BAUD             9600

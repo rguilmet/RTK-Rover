@@ -5,6 +5,22 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.0] - 2026-11-22
+### Added & Changed
+- **Unified Tile 0 Log-Scale Guidance Triangle & Direct `HERE -> B` Mode ([`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`waypoint_manager.h`](src/waypoint_manager/waypoint_manager.h), [`waypoint_manager.cpp`](src/waypoint_manager/waypoint_manager.cpp), [`lvgl_port.h`](src/lvgl_port/lvgl_port.h), [`lvgl_ui_internal.h`](src/lvgl_port/lvgl_ui_internal.h)):**
+  - Consolidated Tile 0 from 3 modes down to **2 modes (`GUIDANCE` <-> `MAP VIEW`)**, unifying `Point Guidance` and `Line Stakeout` into one Line-Up Log-Scale Triangle view (`A` bottom center, `B` top center, symmetric log-X cross-track scale from `0.02 m` to `line_log_max_m`, `18 px` overshoot/undershoot aprons, perpendicular tie `R -> Foot`, hypotenuse `R -> B`, and `< 4.8 m / > 5.3 m` automatic `BULLSEYE` handoff).
+  - Added single-source `ActiveGuidanceSegment_t` / `waypoint_guidance_get_segment()` supporting **`A: DEED`** (`idx_a -> idx_b`, tap title bar `[SWAP]` to reverse) and **`A: HERE`** direct-to mode (drops Start `A` at live GNSS position; tap bottom-left `[A: DEED]` / `[A: HERE]` button or `[SET A]` title bar to toggle/re-anchor; auto-engages on single-waypoint CSVs).
+  - Implemented `R -> B`-prioritized barbed heading arrow and active-leg highlighting (`<= line_arrow_green_deg` Green, `<= line_arrow_amber_deg` Orange, else White; perpendicular leg active only when `|offset| > 0.15 m`).
+- **Acoustic Fade-Out Directional Audio ([`RTK_Rover.ino`](RTK_Rover.ino)):**
+  - Added `gain_pct` PCM amplitude scaling (`audio_write_tone_or_silence()`, `play_rover_beep_gain()`, `play_rover_dual_beep_gain()`) in Priority-4 `task_audio_beep`.
+  - Outside Bullseye, L/R directional chirps run uniformly across Guidance & Map View whenever an active segment exists, accelerating (`2500 -> 220 ms`) and ramping PCM gain (`25% -> 100%`) as cross-track distance closes toward `0`, and fading silently above `line_audio_fade_m` (`20.0 m` default; `0` disables).
+- **Map View Sticky Zoom & Active-Segment Highlight ([`ui_tile0_map.c`](src/lvgl_port/ui_tile0_map.c), [`ui_tile2_waypoints.c`](src/lvgl_port/ui_tile2_waypoints.c)):**
+  - Removed the `s_map_auto_fit = true` reset on mode toggle and persisted `map_zoom_m_per_px` (`0.0` = Auto-Fit until manual `+`/`-`, cleared by `[FIT]`; preserves manual zoom on CSV file switch via `ui_tile0_map_on_file_changed()`).
+  - Added `t0_map_active_seg` highlight over the parcel boundary polygon (solid `4 px` Emerald for `A: DEED`, dashed `3 px` Violet for `A: HERE`) alongside prominent `A` (`12 px`) and `B` (`16 px`) pins.
+- **`settings.json` Schema v2 Migration ([`user_config.h`](user_config.h), [`settings_manager.h`](src/settings_manager/settings_manager.h), [`settings_manager.cpp`](src/settings_manager/settings_manager.cpp), [`settings.json`](settings.json)):**
+  - Added `ROVER_SETTINGS_SCHEMA_VERSION = 2U`, `settings_schema_version`, `line_log_max_m` (`50.0`), `line_audio_fade_m` (`20.0`), `line_arrow_green_deg` (`4.0`), `line_arrow_amber_deg` (`15.0`), and `map_zoom_m_per_px` (`0.0`) with automatic v1 -> v2 schema migration in `load_settings()` preserving existing user credentials and calibrations.
+  - Verified clean `arduino-cli --warnings default --upload -p COM3` compile & flash (`0` warnings, `1,746,294` bytes / `55%` flash, `68,536` bytes / `20%` static `DRAM0`), all `src/lvgl_port/*.c` files `<= 723` lines, and updated [`user_manual.md`](docs/user_manual.md) (`v1.10.0`) + [`project_overview.md`](docs/project_overview.md) (`v2.10.0`).
+
 ## [v0.9.2] - 2026-11-22
 ### Fixed & Improved
 - **Stationary FOC Gyro Gate ([`ahrs_9dof.cpp`](src/sensor_fusion/ahrs_9dof.cpp)):**

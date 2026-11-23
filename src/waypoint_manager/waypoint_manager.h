@@ -33,7 +33,21 @@ extern uint8_t  g_survey_prefix_idx;
 extern uint16_t g_survey_auto_num;
 extern uint8_t  g_survey_note_tag_idx;
 
-// Phase 4: Line Stakeout (Baseline A -> B)
+// Phase 4 & v0.10.0: Unified Active Guidance Segment (DEED A -> B or DIRECT HERE -> B)
+typedef struct {
+    bool    valid;
+    bool    is_direct_here;
+    int16_t idx_a;
+    int16_t idx_b;
+    double  lat_a;
+    double  lon_a;
+    char    label_a[WAYPOINT_LABEL_LEN];
+    double  lat_b;
+    double  lon_b;
+    char    label_b[WAYPOINT_LABEL_LEN];
+    char    notes_b[WAYPOINT_NOTES_LEN];
+} ActiveGuidanceSegment_t;
+
 extern int16_t g_stakeout_pt_a_idx;
 extern int16_t g_stakeout_pt_b_idx;
 extern bool    g_stakeout_custom_pair;
@@ -45,6 +59,10 @@ void waypoint_line_stakeout_get_points(WaypointRecord_t *wp_a_out,
 void waypoint_line_stakeout_swap(void);
 void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b);
 void waypoint_line_stakeout_reset_auto(void);
+void waypoint_guidance_set_direct_mode(bool direct_here, double cur_lat, double cur_lon);
+void waypoint_guidance_reanchor_here(double cur_lat, double cur_lon);
+bool waypoint_guidance_is_direct_mode(void);
+bool waypoint_guidance_get_segment(double cur_lat, double cur_lon, ActiveGuidanceSegment_t *seg_out);
 bool waypoint_get_at(int16_t idx, WaypointRecord_t *wp_out);
 
 // Phase 5: Cadastral Boundary Polygon & Tie-Line APIs
