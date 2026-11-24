@@ -30,8 +30,11 @@ By participating in this project, you agree to abide by basic open-source commun
   - Flash Size: **16MB (128Mb)**
   - Partition Scheme: **16M Flash (3MB APP/9.9MB FATFS)** (or **Custom** using `custom_large_partitions.csv`)
 
-### PlatformIO
-A `platformio.ini` is provided for VSCode/PlatformIO users. It automatically resolves dependencies and fetches the correct ESP32 Arduino 3.x core environment.
+### Arduino CLI
+For repeatable headless builds matching release CI/verification, compile from the workspace parent directory using `arduino-cli` with zero warnings enforced (`--warnings default`):
+```powershell
+arduino-cli compile --fqbn esp32:esp32:esp32s3:UploadSpeed=921600,USBMode=hwcdc,CDCOnBoot=cdc,PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB RTK_Rover --warnings default
+```
 
 ## Coding Standards
 

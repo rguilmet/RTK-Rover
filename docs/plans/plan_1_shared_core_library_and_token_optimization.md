@@ -1,8 +1,8 @@
 # Plan 1: Unified Shared Core Library (`Field_Instrument_Core`), Codebase Modularization & Token Optimization
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap (Updated November 24, 2026)  
-> **Document Version:** `1.2.0`  
+> **Status:** Active Execution Roadmap -- **Phase 1.0 COMPLETE (`2026-11-24`)**, Phase 1.1 Next  
+> **Document Version:** `1.2.1`  
 > **Baselines:** `RTK_Rover v0.10.7` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
 > **Completed Prerequisite:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`, refined through `v0.10.7` and archived `2026-11-24`: `lvgl_port.c` 11-file split, `I2C1` dual-bus `i2c_bsp`, `matrix_math`/`ahrs_9dof` port, `rtk-firmware-release`/`rtk-cad-pipeline` skills, and `build/`+`scratch/` purge completed).  
 > **Companion Roadmap:** [`plan_2_rover_enhancements_and_android_companion.md`](plan_2_rover_enhancements_and_android_companion.md) (`v1.3.0`)  
@@ -27,7 +27,7 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 
 | Tracked File | Bytes | Lines | Cap Overrun | Status / Disposition in Plan 1 |
 | :--- | :---: | :---: | :---: | :--- |
-| `CHANGELOG.md` | `247,369 B` | `1,371 L` | `5.37x B / 1.71x L` | Phase 1.0: Rolling archive split (`< v0.8.0` -> archive) |
+| `CHANGELOG.md` | `29,879 B` (`248 KB` pre-split) | `137 L` (`1,663 L` pre-split) | **Compliant** | **Done in Ph 1.0 (`2026-11-24`)**: `< v0.9.0` -> `docs/changelog_archive_v0_1_to_v0_8.md` |
 | `src/lvgl_port/` (`11` files) | `max 34 KB` | `max 792 L` | **Compliant** | **Done in Plan 0 (`11` files <= 792 L)**; decouple `lvgl_port_core.c` in Ph 1.1 |
 | `RTK_Rover.ino` | `80,693 B` | `1,531 L` | `1.75x B / 1.91x L` | Phase 1.1: Extract `rover_audio`, `rover_power` + `rover_sensors`/`CAL MAG` (`< 750 L`) |
 | `src/e220_driver/e220_driver.cpp` | `68,372 B` | `1,451 L` | `1.48x B / 1.81x L` | Phase 1.1: Split into `3` units + internal header (`< 550 L` each) |
@@ -43,9 +43,9 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 
 ### 2.2 Workspace, Cache & Tooling Hygiene Findings
 1. **In-Tree `build/` & `scratch/` Remnants (`DONE` `2026-11-24`):** Purged `RTK_Rover/build/` (`202.36 MB`, `2,860` items) and `RTK_Rover/scratch/` (`2` stale scripts from Oct 29); `arduino-cli` continues using `%LOCALAPPDATA%/arduino/sketches/`.
-2. **`scripts/` & Build-Config Clutter:** `scripts/__pycache__/` contains stale `.pyc` artifacts; two dead `302 B` wrapper stubs (`scripts/setup_um980.py`, `scripts/setup_unicore.py`) remain with zero callers; stale `platformio.ini` references retired `COM2`/old libs (F-19); `scripts/README.md` does not exist.
-3. **Workspace Skills Status:** Workspace `.agents/skills/` already provides `rtk-firmware-release/SKILL.md` and `rtk-cad-pipeline/SKILL.md`. Missing: a field log / wiretap triage runbook (`rtk-field-log-analysis`).
-4. **Critical `libraries/lv_conf.h` Shadowing Hazard:** `Documents/Arduino/libraries/lv_conf.h` (`26,137 B`, an LVGL `v8.4.0` config) sits next to `libraries/lvgl` (`v9.6.0`), `lv_conf - 9.x.h`, `RTK_Rover/lv_conf.h` (`1,389 L`, `v9.3.0`), and `Magnetic_Field_Scanner/lv_conf.h` (`1,396 L`). Arduino CLI compiles `lvgl` against `libraries/lv_conf.h` first, which is why `LV_USE_FLOAT` compiles as `0` despite `RTK_Rover/lv_conf.h` setting `1`! Must be audited and cleanly reconciled without breaking the mandatory `snprintf()` + `lv_label_set_text()` policy.
+2. **`scripts/` & Build-Config Clutter (`DONE` `2026-11-24`):** Deleted `scripts/__pycache__/` (`23` stale `.pyc` files), obsolete `302 B` wrapper stubs (`scripts/setup_um980.py`, `scripts/setup_unicore.py`), and obsolete `platformio.ini`; updated `CONTRIBUTING.md` with the authoritative `arduino-cli` command and added `scripts/README.md` indexing all `22` active utilities.
+3. **Workspace Skills Status (`DONE` `2026-11-24`):** Workspace `.agents/skills/` provides `rtk-firmware-release/SKILL.md`, `rtk-cad-pipeline/SKILL.md`, and newly added `rtk-field-log-analysis/SKILL.md` (covering `stage2_bench_verify.py`, `analyze_rtk_log.py`, `analyze_field_test.py`, `I2C` `0x103` triage, `[MEM] Post-Setup Heap`, `[10DOF]`, `[RTCM]`, and `[SCREENSHOT]` diagnostics).
+4. **`libraries/lv_conf.h` Resolution Audit & Fallback Reconciliation (`DONE` `2026-11-24`):** Verified via `.d` dependency files and `compile_commands.json` that `arduino-cli` passes `-I<sketch_dir>` to `libraries/lvgl` (`v9.6.0`), so `__has_include("lv_conf.h")` already resolves `RTK_Rover/lv_conf.h` (`0` warnings, `LV_USE_FLOAT 1`, zero `%f` calls in `lv_label_set_text_fmt()`) and `Magnetic_Field_Scanner/lv_conf.h` (`LV_USE_FLOAT 0`) ahead of the shared fallback. Archived the stale LVGL `v8.4.0` `libraries/lv_conf.h` as `libraries/lv_conf - v8.4.0.h` and replaced `libraries/lv_conf.h` with an LVGL `v9.6.0` fallback (`LV_USE_FLOAT 0`); `Magnetic_Field_Scanner/lv_conf.h` (`LV_COLOR_DEPTH`, `LV_ASSERT_HANDLER_INCLUDE`, `LV_CALENDAR_DEFAULT_*`, `LV_BUILD_EXAMPLES/DEMOS=1`) is deferred cleanly to Phase 1.3 Stage 2 (`MFS v5.1.x -> v6.0.0`).
 
 ---
 
@@ -73,18 +73,18 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 
 ## 4. Phased Implementation Roadmap
 
-### Phase 1.0 -- Immediate Repo, Search & Token Hygiene (Zero Functional Firmware Change)
+### Phase 1.0 -- Immediate Repo, Search & Token Hygiene (Zero Functional Firmware Change) -- `DONE (2026-11-24)`
 1. **Purge Stale In-Tree `build/` (`202.36 MB`) & `scratch/` (`DONE` `2026-11-24`):**
    * `RTK_Rover/build/` and `RTK_Rover/scratch/` deleted from disk; `.agents/skills/rtk-firmware-release/SKILL.md` confirms out-of-tree sketch cache (`%LOCALAPPDATA%/arduino/sketches`).
-2. **Clean `scripts/` Directory, Stale Configs & Document Utilities:**
-   * Delete `scripts/__pycache__/*.pyc` stale artifacts and retire obsolete `302 B` stubs `scripts/setup_um980.py` and `scripts/setup_unicore.py` (confirm zero callers). Remove or sync obsolete `platformio.ini` (per F-19).
-   * Create `scripts/README.md` indexing active deployment, Pacer, COGO, Stage 1/2 benchmark, and log-analysis tools (`__filename__` + SemVer header convention).
-3. **Split `CHANGELOG.md` (`1,371 L / 247 KB` -> `< 450 L / < 40 KB` active):**
-   * Move legacy entries `< v0.8.0` into a historical archive (`docs/changelog_archive_v0_1_to_v0_7.md`), keeping active `CHANGELOG.md` comfortably single-read (`< 800 L / < 46 KB`).
-4. **Complete Workspace Skill Coverage:**
-   * Keep existing `rtk-firmware-release/SKILL.md` and `rtk-cad-pipeline/SKILL.md`; add `.agents/skills/rtk-field-log-analysis/SKILL.md` covering `analyze_field_test.py`, `stage2_bench_verify.py`, I2C `0x103` triage, and `[MEM] Post-Setup Heap` interpretation without loading full log archives.
-5. **Reconcile `libraries/lv_conf.h` (`v8.4.0`) vs. `lvgl` (`v9.6.0`):**
-   * Audit which `lv_conf.h` is resolved by `arduino-cli` for both `RTK_Rover` and `Magnetic_Field_Scanner`, clean up the stale `v8.4.0` top-level `libraries/lv_conf.h` (preserving `LV_USE_FLOAT = 0` or explicitly documenting C `snprintf()` discipline), and verify zero compiler warnings on both sketches.
+2. **Clean `scripts/` Directory, Stale Configs & Document Utilities (`DONE` `2026-11-24`):**
+   * Deleted `scripts/__pycache__/` (`23` `.pyc` files), obsolete `302 B` wrapper stubs (`scripts/setup_um980.py`, `scripts/setup_unicore.py`), and obsolete `platformio.ini`; replaced PlatformIO instructions in `CONTRIBUTING.md` with `arduino-cli` (`custom_large_partitions.csv` retained).
+   * Created [`scripts/README.md`](../../scripts/README.md) indexing all `22` active utilities (`__filename__` + SemVer convention) and linked it from `README.md` Section 7.
+3. **Split `CHANGELOG.md` (`1,663 L / 248.4 KB` -> `137 L / 29,879 B` active, `DONE` `2026-11-24`):**
+   * Moved legacy entries `< v0.9.0` (`v0.1.0 - v0.8.19`, including `CAD v1.0.0 - v2.2.2`, `132` release headings) verbatim into [`docs/changelog_archive_v0_1_to_v0_8.md`](../changelog_archive_v0_1_to_v0_8.md), keeping active `CHANGELOG.md` (`v0.9.0+`, `14` headings) cleanly single-read (`< 450 L / < 40 KB`) with zero lost entries.
+4. **Complete Workspace Skill Coverage (`DONE` `2026-11-24`):**
+   * Added workspace skill `.agents/skills/rtk-field-log-analysis/SKILL.md` alongside `rtk-firmware-release` and `rtk-cad-pipeline`, documenting `analyze_field_test.py`, `analyze_rtk_log.py`, `stage2_bench_verify.py`, `I2C` `0x103` triage, `[MEM] Post-Setup Heap`, `[10DOF]`, `[RTCM]`, and `[SCREENSHOT]` diagnostics.
+5. **Reconcile `libraries/lv_conf.h` (`v8.4.0` -> `v9.6.0` Fallback, `DONE` `2026-11-24`):**
+   * Verified `arduino-cli` resolves `RTK_Rover/lv_conf.h` and `Magnetic_Field_Scanner/lv_conf.h` locally via `-I<sketch_dir>` + `__has_include("lv_conf.h")`. Archived `libraries/lv_conf.h` (`v8.4.0`) to `libraries/lv_conf - v8.4.0.h` and installed an LVGL `v9.6.0`-compatible `libraries/lv_conf.h` fallback (`LV_USE_FLOAT 0`, preserving strict C `snprintf()` + `lv_label_set_text()` discipline). Deferred `Magnetic_Field_Scanner/lv_conf.h` deprecation cleanup to Phase 1.3 Stage 2 (`MFS v5.1.x -> v6.0.0`) and verified zero warnings on `RTK_Rover`.
 
 ### Phase 1.1 -- In-Place Modularization (`<= 800 L`), Core Decoupling & Robustness Hardening (Prerequisite for Plan 2)
 
@@ -174,6 +174,6 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 | C/C++ files exceeding `800 L / 46 KB` | `4` app files (`ui` already split into `11` <= 792 L) | **`0` core/app source files** |
 | Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` (1 shared library)** |
 | In-tree `build/` & `scratch/` clutter | **`0 B` (purged `2026-11-24`)** | **`0 B` (permanent)** |
-| Active `CHANGELOG.md` size | `1,371 L` / `247 KB` | **`< 450 L` / `< 40 KB`** |
+| Active `CHANGELOG.md` size | `137 L` / `29.9 KB` (`DONE Ph 1.0`) | **`< 450 L` / `< 40 KB`** |
 | Active `docs/plans/` documents | `2` active (`Plan 1`, `Plan 2`) + `8` in `archive/` | **`2` sequenced plans + `archive/`** |
 | Shared math/fusion & dual-bus I2C readiness | **Done in `src/` (`v0.9.0..v0.9.2`)** | **Promoted into `Field_Instrument_Core` w/ host tests** |

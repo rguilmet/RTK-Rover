@@ -183,7 +183,7 @@ Settings are loaded from `/settings.json` on the MicroSD card (or internal `FFat
 
 ## 7. Cadastral, Waypoint & Security Utilities (`scripts/`)
 
-Python command-line tools in `scripts/` automate cadastral COGO network solving, waypoint generation, hardware pacing, and security verification:
+Python command-line tools and Pi deployment scripts in [`scripts/`](scripts/README.md) automate cadastral COGO network solving, waypoint generation, hardware pacing, bench verification, and security scanning (see [`scripts/README.md`](scripts/README.md) for the complete `22`-file index):
 
 * **`cogo_solver.py` (`v1.2.0`):** Generic schema-driven Cadastral Coordinate Geometry (COGO) & Traverse Engine. Solves metes-and-bounds deed descriptions, circular road curve geometry (PC, PT, center of curvature, arc midpoint), intermediate stationing, and ground-truth RTK control ties. Computes linear traverse misclosure, precision ratios (`1 : N`), and balances loops via Compass Rule (Bowditch Adjustment). Supports multi-parcel adjoiner boundary snapping and exports **`20`-column cadastral `waypoints.csv`** (`poly_order` boundary vertices & tie-lines), Google Earth KML, RFC 7946 GeoJSON, AutoCAD DXF (with dedicated layers), and ASCII closure reports. See the [Cadastral COGO Solver Guide](docs/cogo_solver_guide.md).
 * **`check_secrets.py` (`v1.1.1`):** Security and privacy verification engine. Scans Git tracked files and unpushed commits for exposed credentials, cryptographic keys, and absolute user paths. Dynamically loads local personal search tokens from an unversioned `.secrets.local` configuration.
