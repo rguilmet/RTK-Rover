@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.2.3 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.23 mirror of rover_specs.py v2.2.3
+// RTK Rover Option A Enclosure v2.2.4 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.23 mirror of rover_specs.py v2.2.4
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -91,11 +91,11 @@ SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 10.0;
 SPK_CX = -33.20; SPK_CY = 21.00;
 SPK_PEDESTAL_H = 11.5; SPK_WALL = 1.6; SPK_RIDGE_W = 2.0; SPK_SLOT_W = 15.0;
 
-// --- 3.5mm Panel-Mount Headphone Jack (REF-headphone-jack.stp on Bottom L-Tab) ---
+// --- 3.5mm Panel-Mount Headphone Jack (REF-headphone-jack.stp on Left L-Tab) ---
 HP_BODY_W = 12.00; HP_BODY_L = 14.00; HP_BODY_H = 6.30;
-HP_CX = SPK_CX; HP_Z_CTR = -21.50; HP_BORE_DIA = 6.20; HP_WALL = 1.50;
+HP_CY = SPK_CY; HP_Z_CTR = -21.50; HP_BORE_DIA = 6.20; HP_WALL = 1.50;
 HP_RECESS_W = HP_BODY_W + 2*FIT_CLEAR; HP_RECESS_H = HP_BODY_H + 2*FIT_CLEAR;
-HP_TAB_W = 22.0; HP_TAB_Z_TOP = -13.50;
+HP_TAB_W = 18.5; HP_TAB_Z_TOP = -13.50;
 
 // --- Holybro UM982 (34.8 x 53.2 x 14.4H) ---
 UM_W = 34.80; UM_BODY_H = 53.20; UM_Z_THK = 14.40;
@@ -253,8 +253,8 @@ module back_chassis_frame() {
     y_bot_m3 = COVER_M3_POINTS[0][1];
     y_top_m3 = COVER_M3_POINTS[4][1];
     x_bot_m3 = abs(COVER_M3_POINTS[0][0]);
-    hp_rim_l = HP_CX - HP_TAB_W/2 - NOTCH_CLEAR;
-    hp_rim_r = HP_CX + HP_TAB_W/2 + NOTCH_CLEAR;
+    hp_rim_b = HP_CY - HP_TAB_W/2 - NOTCH_CLEAR;
+    hp_rim_t = HP_CY + HP_TAB_W/2 + NOTCH_CLEAR;
 
     difference() {
         union() {
@@ -282,13 +282,13 @@ module back_chassis_frame() {
                        0.5*(Z_PLATE_INNER + PLUNGER_RAIL_Z_TOP) - 0.25])
                 cube([(PLUNGER_BLK_X0 + 0.5) - PLUNGER_RAIL_X0, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
                       PLUNGER_RAIL_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
-            // Partial-height Bottom Headphone L-Tab (X = -44.20..-22.20, Z = -28.0..-13.50)
-            translate([HP_CX, WALL_BOT/2, 0.5*(Z_PLATE_OUTER + 0.5 + HP_TAB_Z_TOP)])
-                cube([HP_TAB_W, WALL_BOT, HP_TAB_Z_TOP - (Z_PLATE_OUTER + 0.5)], center=true);
-            // Continuous Left, split Bottom around L-Tab, and Right inner cover-capture rim (Z = -25.0..-20.5)
-            for (t = [[-x_rim_ctr, 0.5*(y_bot_m3 + y_top_m3), RIM_THK, y_top_m3 - y_bot_m3],
-                      [0.5*(-x_bot_m3 + hp_rim_l), y_rim_ctr, hp_rim_l + x_bot_m3, RIM_THK],
-                      [0.5*(hp_rim_r + x_bot_m3),  y_rim_ctr, x_bot_m3 - hp_rim_r, RIM_THK],
+            // Partial-height Left Headphone L-Tab (X = -60..-57, Y = 11.75..30.25, Z = -28.0..-13.50)
+            translate([-CASE_W/2 + WALL_SIDE/2, HP_CY, 0.5*(Z_PLATE_OUTER + 0.5 + HP_TAB_Z_TOP)])
+                cube([WALL_SIDE, HP_TAB_W, HP_TAB_Z_TOP - (Z_PLATE_OUTER + 0.5)], center=true);
+            // Split Left around L-Tab, continuous Bottom, and Right inner cover-capture rim (Z = -25.0..-20.5)
+            for (t = [[-x_rim_ctr, 0.5*(y_bot_m3 + hp_rim_b), RIM_THK, hp_rim_b - y_bot_m3],
+                      [-x_rim_ctr, 0.5*(hp_rim_t + y_top_m3), RIM_THK, y_top_m3 - hp_rim_t],
+                      [ 0.0,       y_rim_ctr,                2*x_bot_m3, RIM_THK],
                       [ x_rim_ctr, 0.5*(y_bot_m3 + PLUNGER_BLK_Y0 + 0.5), RIM_THK, (PLUNGER_BLK_Y0 + 0.5) - y_bot_m3],
                       [ x_rim_ctr, 0.5*(PLUNGER_BLK_Y1 - 0.5 + y_top_m3), RIM_THK, y_top_m3 - (PLUNGER_BLK_Y1 - 0.5)]])
                 translate([t[0], t[1], Z_PLATE_INNER + (RIM_H - 0.5)/2])
@@ -366,17 +366,18 @@ module back_chassis_frame() {
         round_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5);
         round_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
         round_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
-        // Headphone jack M6 bore + inner 1.50 mm anti-rotation recess w/ 45-deg top bevel
-        round_y_bore(HP_CX, -0.5, WALL_BOT + 1.0, HP_Z_CTR, HP_BORE_DIA);
-        translate([HP_CX - HP_RECESS_W/2, 0, 0])
-            rotate([90, 0, 90])
+        // Headphone jack M6 bore + inner 1.50 mm anti-rotation recess w/ 45-deg top bevel (Left L-Tab)
+        translate([-CASE_W/2 - 0.5, HP_CY, HP_Z_CTR])
+            rotate([0, 90, 0]) cylinder(d=HP_BORE_DIA, h=WALL_SIDE + 1.0);
+        translate([0, HP_CY + HP_RECESS_W/2, 0])
+            rotate([90, 0, 0])
                 linear_extrude(height=HP_RECESS_W)
                     polygon([
-                        [WALL_BOT + 0.5, Z_PLATE_INNER],
-                        [HP_WALL, Z_PLATE_INNER],
-                        [HP_WALL, HP_Z_CTR + HP_RECESS_H/2],
-                        [WALL_BOT, HP_Z_CTR + HP_RECESS_H/2 + (WALL_BOT - HP_WALL)],
-                        [WALL_BOT + 0.5, HP_Z_CTR + HP_RECESS_H/2 + (WALL_BOT - HP_WALL)]
+                        [-CASE_W/2 + WALL_SIDE + 0.5, Z_PLATE_INNER],
+                        [-CASE_W/2 + HP_WALL, Z_PLATE_INNER],
+                        [-CASE_W/2 + HP_WALL, HP_Z_CTR + HP_RECESS_H/2],
+                        [-CASE_W/2 + WALL_SIDE, HP_Z_CTR + HP_RECESS_H/2 + (WALL_SIDE - HP_WALL)],
+                        [-CASE_W/2 + WALL_SIDE + 0.5, HP_Z_CTR + HP_RECESS_H/2 + (WALL_SIDE - HP_WALL)]
                     ]);
         // Pure round outer plunger bearing bores (Dia 4.60 mm, open to -X)
         for (by = WS_BTN_Y_LIST)
@@ -411,9 +412,9 @@ module top_cover() {
                 // Right Flange notch
                 translate([CASE_W/2 - 1.2, 0.5*(FLANGE_Y0+FLANGE_Y1), 0.5*(z_bot + Z_FRONT_INNER) - 0.25])
                     cube([WALL_SIDE + 2.0, (FLANGE_Y1 - FLANGE_Y0) + 2*NOTCH_CLEAR, cover_depth - WALL_FRONT + 0.5], center=true);
-                // Bottom Headphone L-Tab notch (keeps continuous 13.30 mm front bottom skirt support-free)
-                translate([HP_CX, 0.5*WALL_BOT, 0.5*(z_bot + HP_TAB_Z_TOP + NOTCH_CLEAR) - 0.25])
-                    cube([HP_TAB_W + 2*NOTCH_CLEAR, WALL_BOT + 1.0, (HP_TAB_Z_TOP + NOTCH_CLEAR - z_bot) + 0.5], center=true);
+                // Left Headphone L-Tab notch (keeps continuous 13.30 mm front left skirt & bottom wall support-free)
+                translate([-CASE_W/2 + 0.5*WALL_SIDE, HP_CY, 0.5*(z_bot + HP_TAB_Z_TOP + NOTCH_CLEAR) - 0.25])
+                    cube([WALL_SIDE + 1.0, HP_TAB_W + 2*NOTCH_CLEAR, (HP_TAB_Z_TOP + NOTCH_CLEAR - z_bot) + 0.5], center=true);
             }
             // U-groove reinforcing backing rib
             translate([SHIELD_U_X_LEFT, u_cy, -2.7]) cube([4.0, u_h + 2.5, 1.4], center=true);

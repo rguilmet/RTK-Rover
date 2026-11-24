@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.2.4] - 2026-11-23
+### Changed & Verified
+- **Left-Wall `3.5mm` Headphone Jack L-Tab & `Top_Cover` Notch Relocation ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.4`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.4`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.4`, [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Relocated the partial-height Headphone L-Tab (`HP_CY = SPK_CY = 21.00 mm`, `HP_TAB_W = 18.5 mm`, `X = -60.0..-57.0`, `Z = -28.0..-13.50`) and matching open-bottom `Top_Cover` notch from the bottom (`-Y`) wall to the left (`-X`) wall centered on the speaker tower's `-X` slot, keeping the inner `1.50 mm` anti-rotation recess + `45-deg` top bevel (`2.00 mm` exposed `M6` thread outside `X = -60.0`, pins `+Z` UP `1.85 mm` clear below speaker, `>= 26.24 mm` jack / `>= 24.39 mm` `35 mm` plug clear of [`REF-laser_pole_mount.stp`](docs/mechanical/cad/step/REF-laser_pole_mount.stp)).
+  - Restored [`Top_Cover.step`](docs/mechanical/cad/step/Top_Cover.step) (`64.39 cm^3`) to a completely continuous bottom wall (`USB-C` tunnel only) and restored the continuous bottom inner capture rim on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`90.36 cm^3`) while splitting the left inner capture rim cleanly around the Left L-Tab.
+  - Regenerated DXF/STEP/STL/assemblies/previews and verified `8/8` manifold checks, **`62/62` `0.0000 mm^3` boolean interference checks**, and clean OpenSCAD `Manifold --hardwarnings` builds on `back`, `back_print`, `top`, and `top_print`.
+
 ## [docs/mechanical/cad v2.2.3] - 2026-11-23
 ### Added & Changed
 - **`GX-12` Downward D-Flat, Bottom L-Tab `3.5mm` Headphone Jack & `4`-Side Slotted Speaker Tower ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.3`, [`REF_gx12.stp`](docs/mechanical/cad/step/REF_gx12.stp), [`REF-headphone-jack.stp`](docs/mechanical/cad/step/REF-headphone-jack.stp), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**

@@ -1,6 +1,6 @@
-# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.2.3`)
+# RTK Rover Snapmaker 2.0 PETG Print Guide & Fastener BOM (`CAD v2.2.4`)
 
-Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified fastener stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.2.3`).
+Complete 3D-printing profile, slicer overrides, heat-set insert reference, verified fastener stack-up calculations, and assembly order for the **RTK Rover Option A** mechanical enclosure (`CAD v2.2.4`).
 
 * **Enclosure Architecture & CAD Previews:** [`cad/README.md`](cad/README.md)
 * **Pre-Oriented Support-Free STL Files (`8` files):** [`cad/stl/`](cad/stl/)
@@ -26,7 +26,7 @@ Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **Orca
 | **Layer Height & Width** | `0.20 mm` layers, `0.40-0.42 mm` line width (enable Arachne perimeter generator if available) | Matches the `1.60 mm` (`4`-perimeter) capture rim, speaker frame, and sun shield walls cleanly. |
 | **Perimeters / Shells** | `4` perimeters (`1.60 mm` min wall), `5` top / `5` bottom layers (`1.00 mm`) | Guarantees solid wall rings around all `M2` / `M3` Ruthex heat-set bosses (`>= 1.3 mm` / `1.6 mm` CAD wall). |
 | **Elephant's Foot Comp.** | `0.15-0.20 mm` | Keeps first-layer dimensions true on `Top_Cover`'s `1.90 mm` Sun Shield U-groove, glass bezel, and `M3` CSK bores. |
-| **Supports** | **OFF (`None`)** | All horizontal holes (`USB-C`, `MicroSD`, `GX-12` & `E220` D-flats, `3.5mm` `M6` bore + `45-deg` top-beveled jack recess, inverted-U comb), `CSK` cones, `4`-side slotted speaker L-pillars, `Top_Cover`'s continuous `13.30 mm` front skirt over the L-tab notch, and `Pole_Tilt_Wedge_37_5`'s open Warren truss, pure round `1/4"-20` bores/wrench holes, and `45-deg` lofted spine pocket are self-supporting. |
+| **Supports** | **OFF (`None`)** | All horizontal holes (`USB-C`, `MicroSD`, `GX-12` & `E220` D-flats, `3.5mm` `M6` bore + `45-deg` top-beveled jack recess, inverted-U comb), `CSK` cones, `4`-side slotted speaker L-pillars, `Top_Cover`'s continuous `13.30 mm` front left skirt over the L-tab notch, and `Pole_Tilt_Wedge_37_5`'s open Warren truss, pure round `1/4"-20` bores/wrench holes, and `45-deg` lofted spine pocket are self-supporting. |
 
 ### Pre-Print PETG Tips
 * **Dry Spool First:** Even sealed PETG absorbs moisture; drying at `60-65 deg C` for `4-6 h` eliminates stringing inside the `Battery_Cradle` Warren truss, `Pole_Tilt_Wedge_37_5` open Warren-truss struts, `1.90 mm` Sun Shield U-groove, and `4` `Dia 1.95 mm` `UM982` LED holes.
@@ -39,15 +39,15 @@ Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **Orca
 | STL File | Vol (`cm^3`) | Print Size (`mm`) | Layer / Walls / Infill | Adhesion & Print Notes |
 | :--- | :---: | :---: | :--- | :--- |
 | [`button_plungers_print.stl`](cad/stl/button_plungers_print.stl) | `0.62` | `5.7 x 23.1 x 15.9` | **`0.12-0.16 mm`**, `4` walls, **`100%` infill** | **Print first (~15 min) as a PETG tuning check.** Slow to `20-25 mm/s`, fan `40-50%`, min layer time `12-15 s`, **`4-5 mm` outer brim** so all `3` `Dia 3.20 / 4.10 mm` stems print cleanly round. |
-| [`back_chassis_print.stl`](cad/stl/back_chassis_print.stl) | `90.46` | `120.0 x 180.0 x 25.4` | `0.20 mm`, `4` walls, `25-30%` gyroid | Add a **`5 mm` outer brim** when printing open-air (prevents corner lift on the `120 x 180 mm` base). Includes `4`-side slotted speaker corner L-pillars, Bottom Headphone L-Tab (`1.50 mm` inner anti-rotation recess w/ `45-deg` bevel), and downward `GX-12` D-flat; keep seam aligned along a rear/interior corner. |
-| [`top_cover_print.stl`](cad/stl/top_cover_print.stl) | `64.27` | `120.0 x 180.0 x 24.9` | `0.20 mm`, `4` walls, `25%` gyroid | Prints **face-down** (bed texture becomes front faceplate) with an open-top bottom notch clearing the headphone L-Tab. Use **outer-only brim** (or skirt only) so brim never fills the flush glass opening or `1.90 mm` U-groove. |
+| [`back_chassis_print.stl`](cad/stl/back_chassis_print.stl) | `90.36` | `120.0 x 180.0 x 25.4` | `0.20 mm`, `4` walls, `25-30%` gyroid | Add a **`5 mm` outer brim** when printing open-air (prevents corner lift on the `120 x 180 mm` base). Includes `4`-side slotted speaker corner L-pillars, Left Headphone L-Tab (`1.50 mm` inner anti-rotation recess w/ `45-deg` bevel), and downward `GX-12` D-flat; keep seam aligned along a rear/interior corner. |
+| [`top_cover_print.stl`](cad/stl/top_cover_print.stl) | `64.39` | `120.0 x 180.0 x 24.9` | `0.20 mm`, `4` walls, `25%` gyroid | Prints **face-down** (bed texture becomes front faceplate) with an open-top left notch clearing the headphone L-Tab. Use **outer-only brim** (or skirt only) so brim never fills the flush glass opening or `1.90 mm` U-groove. |
 | [`pole_lid_print.stl`](cad/stl/pole_lid_print.stl) | `63.24` | `92.0 x 132.0 x 19.2` | `0.20 mm`, **`5-6` walls**, **`60-100%` gyroid** | Primary structural mount carrying the `1/4"-20` survey pole clamp. Use `100%` infill (or a `100%` infill modifier over the central spine) so clamp torque cannot crush the bosses. |
 | [`pole_tilt_wedge_print.stl`](cad/stl/pole_tilt_wedge_print.stl) | `54.12` | `66.9 x 89.8 x 32.0` | `0.20 mm`, **`5-6` walls**, **`40-60%` gyroid** | Skeletonized open Warren-truss bracket (**`32.0 mm` tall, side-down `Z = 0`, `0` supports**) with pure round `1/4"-20` SHCS bores/holes (`3-4 mm` optional outer brim). Setting `6` walls (`2.40 mm` @ `0.40 mm`) makes the `4.5 mm` outer chords & mid-strut, `4.0 mm` tie struts, and `3.2 mm` skirts 100% solid perimeters while `40-60%` gyroid fills the `8.0 mm` spine plate & base boss. |
 | [`bat_cradle_print.stl`](cad/stl/bat_cradle_print.stl) | `32.14` | `92.0 x 132.0 x 12.8` | `0.20 mm`, **`5` walls**, `25%` gyroid | Setting `5` walls makes the `2.0 mm` outer/inner walls and `1.8 mm` Warren-truss web print as 100% solid perimeters. |
 | [`bat_adapter_5000_print.stl`](cad/stl/bat_adapter_5000_print.stl) | `13.90` | `64.0 x 115.8 x 12.6` | `0.20 mm`, **`5` walls**, `25%` gyroid | Only needed when installing the `5000 mAh` LiPo cell inside the standardized `10000 mAh` bay. |
 | [`slim_sun_shield_print.stl`](cad/stl/slim_sun_shield_print.stl) | `9.70` | `69.2 x 88.8 x 29.7` | `0.20 mm`, `4` walls (`100%` solid) | **Use a `5 mm` outer brim** (narrow `1.60 mm` U-channel footprint needs extra bed grip) and keep outer-wall speed at `25-30 mm/s`. |
 
-* **Total Filament Estimate:** `328.45 cm^3` CAD solid volume across all `8` parts (`314.55 cm^3` for the `10000 mAh` build omitting `bat_adapter_5000_print.stl`), using roughly `~270-325 g` of PETG (`~0.3` of a `1 kg` spool at `1.27 g/cm^3` with recommended wall/infill overrides and brims).
+* **Total Filament Estimate:** `328.47 cm^3` CAD solid volume across all `8` parts (`314.57 cm^3` for the `10000 mAh` build omitting `bat_adapter_5000_print.stl`), using roughly `~270-325 g` of PETG (`~0.3` of a `1 kg` spool at `1.27 g/cm^3` with recommended wall/infill overrides and brims).
 
 ---
 
@@ -103,7 +103,7 @@ Standard ISO/DIN length convention applies throughout:
   * `8 x M2` (`RX-M2x4.0`)
   * `3 x 1/4"-20` (`RX-1/4"x12.7`) -- `2` in `Pole_Lid` spine + `1` in `Pole_Tilt_Wedge_37_5` base saddle
 * **Panel Jack, Light Pipes, Pole Clamp & Optional Padding:**
-  * `1 x 3.5mm` panel-mount stereo headphone jack (`PJ-324M`, [`REF-headphone-jack.stp`](cad/step/REF-headphone-jack.stp)): `12.0 x 14.0 x 6.3 mm` rectangular body + **`Dia 8.0 mm M6` round knurled panel nut** (`2.00 mm` exposed thread outside `Y = 0` when seated in the `1.50 mm` inner anti-rotation recess).
+  * `1 x 3.5mm` panel-mount stereo headphone jack (`PJ-324M`, [`REF-headphone-jack.stp`](cad/step/REF-headphone-jack.stp)): `12.0 x 14.0 x 6.3 mm` rectangular body + **`Dia 8.0 mm M6` round knurled panel nut** (`2.00 mm` exposed thread outside `X = -60.0` when seated in the `1.50 mm` inner anti-rotation recess).
   * `4 x Dia 1.75 mm` clear PETG filament stubs (~`12 mm` long), pressed into `Top_Cover`'s `Dia 1.95 mm` `UM982` LED bores and trimmed flush.
   * `2 x 1/4"-20 x 3/4"` (or `5/8"`) stainless **Allen socket-head cap screws** (`SHCS`, `3/16"` hex, **no washer**) securing `Pole_Tilt_Wedge_37_5` to `Pole_Lid`'s twin inserts (`<= 12.7 mm` / `0.50 in` thread engagement).
   * **Mating Laser Pole Clamp ([`REF-laser_pole_mount.stp`](cad/step/REF-laser_pole_mount.stp)):** `60 x 135 x 10 mm min` sliding platform (`53.5 mm` slide travel `125.75..179.25 mm` from survey pole centerline); remove the laser-level adapter sleeve and knurled collar to expose the bare `8.0 mm` `1/4"-20` thumbscrew stud.
@@ -113,14 +113,14 @@ Standard ISO/DIN length convention applies throughout:
 
 ## 5. Recommended Assembly Sequence
 
-1. **Dry-Fit Check:** Before installing any inserts, test-slide `Top_Cover` over `Back_Chassis_Frame`'s split inner capture rim and Bottom Headphone L-Tab (`0.20 mm` notch lap clearance), test all `3` `Button_Plungers` in the Right Flange (`1.55 mm` travel), test-fit the `PJ-324M` headphone jack into the `12.50 mm` inner anti-rotation pocket (`0.25 mm/side`) and `REF_gx12.stp` into the downward (`-Z_asm`) `GX-12` D-flat bore (`Z_flat = -19.15 mm`), test-seat `Pole_Lid`'s `24 x 74 mm` spine into `Pole_Tilt_Wedge_37_5`'s `2.5 mm` `45-deg`-funneled alignment pocket, and test-straddle `Pole_Tilt_Wedge_37_5`'s `60.50 mm` front/rear skirts over the `60 mm` laser shelf (`53.5 mm` slot travel `24.80..78.30 mm`).
+1. **Dry-Fit Check:** Before installing any inserts, test-slide `Top_Cover` over `Back_Chassis_Frame`'s split-Left inner capture rim and Left Headphone L-Tab (`0.20 mm` notch lap clearance), test all `3` `Button_Plungers` in the Right Flange (`1.55 mm` travel), test-fit the `PJ-324M` headphone jack into the `12.50 mm` left-wall inner anti-rotation pocket (`0.25 mm/side`) and `REF_gx12.stp` into the downward (`-Z_asm`) `GX-12` D-flat bore (`Z_flat = -19.15 mm`), test-seat `Pole_Lid`'s `24 x 74 mm` spine into `Pole_Tilt_Wedge_37_5`'s `2.5 mm` `45-deg`-funneled alignment pocket, and test-straddle `Pole_Tilt_Wedge_37_5`'s `60.50 mm` front/rear skirts over the `60 mm` laser shelf (`53.5 mm` slot travel `24.80..78.30 mm`).
 2. **Install Heat-Set Inserts (`21` total):** Solder `10 x M3`, `8 x M2`, and `3 x 1/4"-20` inserts while `Back_Chassis_Frame`, `Pole_Lid`, and `Pole_Tilt_Wedge_37_5` are empty on the bench (keep `Pole_Tilt_Wedge_37_5` base `RX-1/4"x12.7` flush with the `V = 0` saddle floor).
 3. **Install Rear-Screwed Modules First (Must Precede Pod Mount):**
    * Snap `RTC` coin cell (`+` / wire harness toward `-Y`) into its under-display C-clip cradle (`(18.50, 64.00)`).
    * Mount `Waveshare 3.5B` with `4 x M2 x 20 mm CSK` from the rear (CSK heads flush at `Z = -28.0 mm`).
    * Mount `Holybro UM982` (`(-9.80, 151.40)`) with `4 x M2 x 12 mm CSK` from the rear (CSK heads seat inside the `1.60 mm` recessed pockets on `Back_Chassis_Frame`).
 4. **Install Remaining Interior Hardware:**
-   * Solder leads onto the `3.5mm` headphone jack **first**, seat the body into the Bottom L-Tab's `1.50 mm` inner anti-rotation recess with solder pins pointing **`+Z` UP** toward the speaker cavity, tighten the `Dia 8.0 mm` round knurled nut cleanly outside `Y = 0` (`2.00 mm` exposed `M6` thread), then press `Speaker` into its `4`-corner slotted tower (`+Y` wires exiting the `+Y` slot; `1.85 mm` clearance above jack pins).
+   * Solder leads onto the `3.5mm` headphone jack **first**, seat the body into the Left L-Tab's `1.50 mm` inner anti-rotation recess with solder pins pointing **`+Z` UP** toward the speaker cavity, tighten the `Dia 8.0 mm` round knurled nut cleanly outside `X = -60.0` (`2.00 mm` exposed `M6` thread), then press `Speaker` into its `4`-corner slotted tower (`+Y` wires exiting the `+Y` slot; `1.85 mm` clearance above jack pins).
    * Fasten `Power Board` (`4 x M2 x 6 mm` Button Head + `M2` flat washer) + `E220 LoRa` (`4 x M2 x 6 mm` Button Head + `M2` flat washer).
    * Fit `GX-12` bulkhead (`-39.50`, indexing its bottom key flat downward `-Z_asm` in the `11.25 mm` D-flat bore) and `E220` D-flat `SMA` pigtail (`+29.00`).
    * Slide the `3` `Button_Plungers` from `-X` into the Right Flange (`PWR`, `RESET`, `BOOT`).

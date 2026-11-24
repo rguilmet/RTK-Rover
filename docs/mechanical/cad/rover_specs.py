@@ -1,11 +1,12 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.3 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.4 enclosure.
 
-Architecture (v2.2.3 - GX-12 D-Flat, Slotted Speaker Tower & Bottom 3.5mm Audio Jack):
+Architecture (v2.2.4 - Left-Wall 3.5mm Audio Jack, GX-12 D-Flat & Slotted Speaker):
+- v2.2.4: Relocated the partial-height Headphone L-Tab and matching Top_Cover
+  notch from the bottom wall to the left (-X) wall centered on the speaker's -X
+  slot (HP_CY = SPK_CY = 21.00 mm), restoring a continuous bottom cover skirt.
 - v2.2.3: Added downward (-Z_asm) anti-rotation D-flat to the GX-12 crown bore
   (matching REF_gx12.stp), slotted all 4 walls of the Speaker tower top-to-bottom
-  (leaving 4 corner L-pillars), and added a partial-height Bottom L-Tab + inner
-  1.50 mm anti-rotation recess + matching Top_Cover bottom notch for the
-  panel-mount 3.5mm headphone jack (REF-headphone-jack.stp).
+  (leaving 4 corner L-pillars), and added the REF-headphone-jack.stp pocket.
 - v2.2.2: Eliminated teardrop crowns on Pole_Tilt_Wedge_37_5 SHCS holes (pure
   round Dia 6.80 / 11.40 mm) and skeletonized the side-profile extrusion into an
   open Warren-truss frame (54.12 cm^3, ~37% mass reduction, 100% support-free).
@@ -47,7 +48,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.3"
+__version__ = "v2.2.4"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -176,23 +177,23 @@ SPK_RIDGE_W = 2.0           # Continuous inner seating ledge width (24.4 x 24.4 
 SPK_SLOT_W = 15.0           # Top-to-bottom open slot on all 4 sides (leaves 8.3 mm corner L-pillars; clears 12 mm headphone jack & +Y speaker wires)
 
 # ==============================================================================
-# 4b. 3.5mm Panel-Mount Headphone Jack (from REF-headphone-jack.stp)
+# 4b. 3.5mm Panel-Mount Headphone Jack (from REF-headphone-jack.stp, Left Wall)
 # ==============================================================================
 # Body: 12.00 x 14.00 x 6.30H mm + 3.00 mm solder pins (total H = 9.30 mm) + Dia 5.90 x 3.50L M6 bushing.
-HP_BODY_W = 12.00           # Rectangular housing width (X)
-HP_BODY_L = 14.00           # Rectangular housing length (Y)
+HP_BODY_W = 12.00           # Rectangular housing width (Y when side-mounted)
+HP_BODY_L = 14.00           # Rectangular housing length (X when side-mounted)
 HP_BODY_H = 6.30            # Rectangular housing thickness (Z)
 HP_PIN_DROP = 3.00          # 5 solder lugs protruding +Z toward speaker cavity (total H = 9.30 mm)
 HP_BUSHING_DIA = 5.90       # M6 x 0.5 threaded panel bushing OD
 HP_BUSHING_L = 3.50         # Threaded bushing protrusion beyond front of jack body
-HP_CX = SPK_CX              # -33.20 (aligned dead-center with speaker tower -Y slot)
+HP_CY = SPK_CY              # 21.00 (aligned dead-center with speaker tower -X slot Y=[13.50, 28.50])
 HP_Z_CTR = -21.50           # Body Z=[-24.65, -18.35], pins +Z=[-18.35, -15.35] (1.85 mm clear below speaker -13.50)
 HP_BORE_DIA = 6.20          # Pure round M6 bushing pass-through (+0.30 mm PETG clearance)
-HP_WALL = 1.50              # Outer bulkhead web Y=[0.0, 1.50] (exposes 2.00 mm M6 thread for Dia 8 mm knurled nut)
+HP_WALL = 1.50              # Outer bulkhead web X=[-60.0, -58.50] (exposes 2.00 mm M6 thread outside X=-60.0 for Dia 8 mm knurled nut)
 HP_RECESS_W = HP_BODY_W + 2.0 * FIT_CLEAR   # 12.50 mm inner anti-rotation key pocket
 HP_RECESS_H = HP_BODY_H + 2.0 * FIT_CLEAR   # 6.80 mm pocket height (Z_top = -18.10; 45-deg bevel up to -16.60)
-HP_TAB_W = 22.0             # Bottom L-Tab outer width X=[-44.20, -22.20] (4.75 mm solid side piers)
-HP_TAB_Z_TOP = -13.50       # Partial-height Bottom L-Tab top (Z=-28.0..-13.50; Top_Cover keeps 13.3 mm front skirt)
+HP_TAB_W = 18.5             # Left L-Tab outer Y span Y=[11.75, 30.25] (3.00 mm side piers; 1.75 mm clear of Bot-Left M3 relief Y=9.80)
+HP_TAB_Z_TOP = -13.50       # Partial-height Left L-Tab top (Z=-28.0..-13.50; Top_Cover keeps 13.3 mm front left skirt)
 
 # ==============================================================================
 # 5. Holybro UM982 (from REF-holybro-um982.stp: 34.8 x 58.9 x 14.4H mm)

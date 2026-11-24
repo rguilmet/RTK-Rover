@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.3.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.4.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -6,9 +6,9 @@ Architecture:
     Board w/ 5.0 mm M2 Ruthex blind pockets, 4-side slotted Speaker corner pillars),
     full-width R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0
     (Z-centered GX-12 w/ downward D-flat, E220 SMA w/ downward D-flat, UM982 SMAs),
-    partial-height Bottom Headphone L-Tab (X = -33.20, inner 1.50 mm anti-rotation
+    partial-height Left Headphone L-Tab (Y = 21.00, inner 1.50 mm anti-rotation
     recess w/ 45-deg top bevel), Right Button-Plunger Flange + low support rail,
-    continuous Left/split-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top
+    split-Left/continuous-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top
     full-height M3 bosses (Z = -2.65 mm), and relocated horizontal under-Waveshare
     BAT_SLOT (25.0, 35.5).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
@@ -38,7 +38,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.3"
+__version__ = "v2.2.4"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -307,30 +307,30 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.union(plunger_blk).union(plunger_rail)
 
-    # 3b. Partial-Height Bottom Headphone L-Tab (X=[-44.20, -22.20], Y=[0.0, 3.0], Z=[-28.0, -13.50])
+    # 3b. Partial-Height Left Headphone L-Tab (X=[-60.00, -57.00], Y=[11.75, 30.25], Z=[-28.0, -13.50])
     # Mounts REF-headphone-jack.stp on Back_Chassis_Frame so all connectors remain bench-serviceable.
     hp_tab = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_OUTER + 0.5)
-        .center(S.HP_CX, S.WALL_BOT / 2.0)
-        .rect(S.HP_TAB_W, S.WALL_BOT)
+        .center(-S.CASE_W / 2.0 + S.WALL_SIDE / 2.0, S.HP_CY)
+        .rect(S.WALL_SIDE, S.HP_TAB_W)
         .extrude(S.HP_TAB_Z_TOP - S.Z_PLATE_OUTER - 0.5)
     )
     plate = plate.union(hp_tab)
 
-    # 4. Continuous Inner Cover-Capture Rim (Left, split Bottom around L-Tab, Right; Z = -25.0..-20.5)
+    # 4. Continuous Inner Cover-Capture Rim (split Left around L-Tab, continuous Bottom, Right; Z = -25.0..-20.5)
     # Braces Top_Cover's open perimeter lip against inward flex across all non-bulkhead edges.
     x_rim_ctr = (S.CASE_W / 2.0 - S.WALL_SIDE - S.RIM_CLEAR) - S.RIM_THK / 2.0
     y_rim_ctr = (S.WALL_BOT + S.RIM_CLEAR) + S.RIM_THK / 2.0
     y_bot_m3 = S.COVER_M3_POINTS[0][1]
     y_top_m3 = S.COVER_M3_POINTS[4][1]
     x_bot_m3 = abs(S.COVER_M3_POINTS[0][0])
-    hp_rim_l = S.HP_CX - S.HP_TAB_W / 2.0 - S.NOTCH_CLEAR
-    hp_rim_r = S.HP_CX + S.HP_TAB_W / 2.0 + S.NOTCH_CLEAR
+    hp_rim_b = S.HP_CY - S.HP_TAB_W / 2.0 - S.NOTCH_CLEAR
+    hp_rim_t = S.HP_CY + S.HP_TAB_W / 2.0 + S.NOTCH_CLEAR
     rim_segs = [
-        (-x_rim_ctr, 0.5 * (y_bot_m3 + y_top_m3), S.RIM_THK, y_top_m3 - y_bot_m3),                               # Left continuous (6.8..173.2)
-        (0.5 * (-x_bot_m3 + hp_rim_l), y_rim_ctr, hp_rim_l + x_bot_m3, S.RIM_THK),                               # Bottom left of L-Tab (-54.2..-44.4)
-        (0.5 * (hp_rim_r + x_bot_m3),  y_rim_ctr, x_bot_m3 - hp_rim_r, S.RIM_THK),                               # Bottom right of L-Tab (-22.0..+54.2)
+        (-x_rim_ctr, 0.5 * (y_bot_m3 + hp_rim_b), S.RIM_THK, hp_rim_b - y_bot_m3),                               # Left below L-Tab (6.8..11.55)
+        (-x_rim_ctr, 0.5 * (hp_rim_t + y_top_m3), S.RIM_THK, y_top_m3 - hp_rim_t),                               # Left above L-Tab (30.45..173.2)
+        (0.0,        y_rim_ctr,                   2.0 * x_bot_m3, S.RIM_THK),                                    # Bottom continuous under USB-C (-54.2..+54.2)
         ( x_rim_ctr, 0.5 * (y_bot_m3 + S.PLUNGER_BLK_Y0 + 0.5), S.RIM_THK, (S.PLUNGER_BLK_Y0 + 0.5) - y_bot_m3), # Right lower (6.8..22.5)
         ( x_rim_ctr, 0.5 * (S.PLUNGER_BLK_Y1 - 0.5 + y_top_m3), S.RIM_THK, y_top_m3 - (S.PLUNGER_BLK_Y1 - 0.5)), # Right upper (49.5..173.2)
     ]
@@ -591,28 +591,32 @@ def build_back_chassis_frame() -> cq.Workplane:
         )
         plate = plate.cut(um_bore).cut(um_pocket)
 
-    # 13c. Headphone Jack M6 Bore + Inner 1.50 mm Anti-Rotation Recess w/ 45-deg Top Bevel (Bottom L-Tab)
-    hp_bore = make_teardrop_y_bore(
-        S.HP_CX, y_start=-0.5, y_len=S.WALL_BOT + 1.0, z_ctr=S.HP_Z_CTR,
-        dia=S.HP_BORE_DIA, add_teardrop=False,
+    # 13c. Headphone Jack M6 Bore + Inner 1.50 mm Anti-Rotation Recess w/ 45-deg Top Bevel (Left L-Tab)
+    hp_bore = (
+        cq.Workplane("YZ")
+        .workplane(offset=-S.CASE_W / 2.0 - 0.5)
+        .center(S.HP_CY, S.HP_Z_CTR)
+        .circle(S.HP_BORE_DIA / 2.0)
+        .extrude(S.WALL_SIDE + 1.0)
     )
-    y_in = S.HP_WALL
-    y_back = S.WALL_BOT + 0.5
+    x_in = -S.CASE_W / 2.0 + S.HP_WALL
+    x_wall = -S.CASE_W / 2.0 + S.WALL_SIDE
+    x_back = x_wall + 0.5
     z_lo = S.Z_PLATE_INNER
     z_hi = S.HP_Z_CTR + S.HP_RECESS_H / 2.0
-    bevel_dz = S.WALL_BOT - S.HP_WALL
+    bevel_dz = S.WALL_SIDE - S.HP_WALL
     hp_recess = (
-        cq.Workplane("YZ")
-        .workplane(offset=S.HP_CX - S.HP_RECESS_W / 2.0)
+        cq.Workplane("XZ")
+        .workplane(offset=-(S.HP_CY - S.HP_RECESS_W / 2.0))
         .polyline([
-            (y_back, z_lo),
-            (y_in, z_lo),
-            (y_in, z_hi),
-            (S.WALL_BOT, z_hi + bevel_dz),
-            (y_back, z_hi + bevel_dz),
+            (x_back, z_lo),
+            (x_in, z_lo),
+            (x_in, z_hi),
+            (x_wall, z_hi + bevel_dz),
+            (x_back, z_hi + bevel_dz),
         ])
         .close()
-        .extrude(S.HP_RECESS_W)
+        .extrude(-S.HP_RECESS_W)
     )
     plate = plate.cut(hp_bore).cut(hp_recess)
 
@@ -673,17 +677,17 @@ def build_top_cover() -> cq.Workplane:
     )
     cover = cover.cut(right_notch)
 
-    # Notch out partial-height Bottom Headphone L-Tab window (X=[-44.40, -22.00], Z=[-24.85, -13.30])
-    # Keeps a continuous 13.30 mm front bottom skirt (Z = -13.30..0.0) that prints 100% support-free!
-    bot_hp_notch_top = S.HP_TAB_Z_TOP + S.NOTCH_CLEAR
-    bot_hp_notch = (
+    # Notch out partial-height Left Headphone L-Tab window (X=[-60.5, -56.5], Y=[11.55, 30.45], Z=[-24.85, -13.30])
+    # Keeps a continuous 13.30 mm front left skirt & unbroken bottom wall (100% support-free)!
+    left_hp_notch_top = S.HP_TAB_Z_TOP + S.NOTCH_CLEAR
+    left_hp_notch = (
         cq.Workplane("XY")
         .workplane(offset=z_cover_bot - 0.5)
-        .center(S.HP_CX, 0.5 * S.WALL_BOT)
-        .rect(S.HP_TAB_W + 2.0 * S.NOTCH_CLEAR, S.WALL_BOT + 1.0)
-        .extrude((bot_hp_notch_top - z_cover_bot) + 0.5)
+        .center(-S.CASE_W / 2.0 + 0.5 * S.WALL_SIDE, S.HP_CY)
+        .rect(S.WALL_SIDE + 1.0, S.HP_TAB_W + 2.0 * S.NOTCH_CLEAR)
+        .extrude((left_hp_notch_top - z_cover_bot) + 0.5)
     )
-    cover = cover.cut(bot_hp_notch)
+    cover = cover.cut(left_hp_notch)
 
     # Reinforcing bezel backing rib behind the Option H1 Sun Shield U-groove (Z = -2.4..-3.4)
     u_cx = 0.5 * (S.SHIELD_U_X_LEFT + S.SHIELD_U_X_RIGHT)
@@ -1433,14 +1437,18 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     # 7. GX-12 Compass Bulkhead (REF_gx12.stp is pre-aligned in Rover assembly coordinates w/ downward D-flat)
     refs["gx12"] = cq.importers.importStep(str(REF_FILES["gx12"]))
 
-    # 7b. 3.5mm Headphone Jack (REF-headphone-jack.stp normalized: body front at Y=HP_WALL+0.10, bushing out -Y, pins UP +Z)
+    # 7b. 3.5mm Headphone Jack (REF-headphone-jack.stp normalized: body front at X=-60+HP_WALL+0.10, bushing out -X, pins UP +Z)
     hp = cq.importers.importStep(str(REF_FILES["headphone"]))
     hbb = hp.val().BoundingBox()
     hp_cx = 0.5 * (hbb.xmin + hbb.xmax)
     hp_y_body_front = hbb.ymax - S.HP_BUSHING_L
     hp_z_ctr = hbb.zmax - S.HP_BODY_H / 2.0
-    hp_rot = hp.translate((-hp_cx, -hp_y_body_front, -hp_z_ctr)).rotate((0, 0, 0), (1, 0, 0), 180)
-    refs["headphone"] = hp_rot.translate((S.HP_CX, S.HP_WALL + 0.10, S.HP_Z_CTR))
+    hp_rot = (
+        hp.translate((-hp_cx, -hp_y_body_front, -hp_z_ctr))
+        .rotate((0, 0, 0), (1, 0, 0), 180)
+        .rotate((0, 0, 0), (0, 0, 1), -90)
+    )
+    refs["headphone"] = hp_rot.translate((-S.CASE_W / 2.0 + S.HP_WALL + 0.10, S.HP_CY, S.HP_Z_CTR))
 
     # 8. E220 LoRa Female SMA Bulkhead (rotated -90 deg X; inner hex flange face Z_ref=2.0 at Y=177.40)
     sma = cq.importers.importStep(str(REF_FILES["sma"]))
@@ -1624,7 +1632,7 @@ def export_2d_dxf(path: Path) -> None:
     add_rect(S.WS_CX, S.WS_CY, S.WS_GLASS_W, S.WS_GLASS_H, "MODULES")
     add_rect(S.PB_CX, S.PB_CY, S.PB_W, S.PB_H, "MODULES")
     add_rect(S.SPK_CX, S.SPK_CY, S.SPK_W, S.SPK_H, "MODULES")
-    add_rect(S.HP_CX, S.HP_WALL + S.HP_BODY_L / 2.0, S.HP_BODY_W, S.HP_BODY_L, "MODULES")
+    add_rect(-S.CASE_W / 2.0 + S.HP_WALL + S.HP_BODY_L / 2.0, S.HP_CY, S.HP_BODY_L, S.HP_BODY_W, "MODULES")
     add_rect(S.E220_CX, S.E220_CY, S.E220_W, S.E220_H, "MODULES")
     add_rect(S.UM_CX, S.UM_CY, S.UM_W, S.UM_BODY_H, "MODULES")
     msp.add_circle((S.RTC_CX, S.RTC_CY), 13.25, dxfattribs={"layer": "MODULES"})
