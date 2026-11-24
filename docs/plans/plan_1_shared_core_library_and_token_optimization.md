@@ -1,9 +1,9 @@
 # Plan 1: Unified Shared Core Library (`Field_Instrument_Core`), Codebase Modularization & Token Optimization
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap -- **Phase 1.0 COMPLETE (`2026-11-24`)**, Phase 1.1 Next  
-> **Document Version:** `1.2.1`  
-> **Baselines:** `RTK_Rover v0.10.7` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
+> **Status:** Active Execution Roadmap -- **Phase 1.0 & Phase 1.1A (`v0.10.8`) COMPLETE (`2026-11-24`)**, Phase 1.1B Next  
+> **Document Version:** `1.2.2`  
+> **Baselines:** `RTK_Rover v0.10.8` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
 > **Completed Prerequisite:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`, refined through `v0.10.7` and archived `2026-11-24`: `lvgl_port.c` 11-file split, `I2C1` dual-bus `i2c_bsp`, `matrix_math`/`ahrs_9dof` port, `rtk-firmware-release`/`rtk-cad-pipeline` skills, and `build/`+`scratch/` purge completed).  
 > **Companion Roadmap:** [`plan_2_rover_enhancements_and_android_companion.md`](plan_2_rover_enhancements_and_android_companion.md) (`v1.3.0`)  
 > **Supersedes / Consolidates:** [`archive/plan_project_structure_and_token_optimization.md`](archive/plan_project_structure_and_token_optimization.md), Phase 1 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), residual F-19 `COM2` naming cleanup from [`archive/plan_phase9_gps_disciplined_tdma.md`](archive/plan_phase9_gps_disciplined_tdma.md), open Core-tier robustness findings (`F-12`, `F-13`, `F-14`, `F-17`) from archived `project_review_sonnet.md`, and Section 7 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md).
@@ -30,9 +30,9 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 | `CHANGELOG.md` | `29,879 B` (`248 KB` pre-split) | `137 L` (`1,663 L` pre-split) | **Compliant** | **Done in Ph 1.0 (`2026-11-24`)**: `< v0.9.0` -> `docs/changelog_archive_v0_1_to_v0_8.md` |
 | `src/lvgl_port/` (`11` files) | `max 34 KB` | `max 792 L` | **Compliant** | **Done in Plan 0 (`11` files <= 792 L)**; decouple `lvgl_port_core.c` in Ph 1.1 |
 | `RTK_Rover.ino` | `80,693 B` | `1,531 L` | `1.75x B / 1.91x L` | Phase 1.1: Extract `rover_audio`, `rover_power` + `rover_sensors`/`CAL MAG` (`< 750 L`) |
-| `src/e220_driver/e220_driver.cpp` | `68,372 B` | `1,451 L` | `1.48x B / 1.81x L` | Phase 1.1: Split into `3` units + internal header (`< 550 L` each) |
-| `src/waypoint_manager/waypoint_manager.cpp` | `45,645 B` | `1,060 L` | `0.99x B / 1.33x L` | Phase 1.1: Split CSV store vs. survey logger (`2` files) |
-| `src/um982_driver/um982_driver.cpp` | `47,460 B` | `1,020 L` | `1.03x B / 1.28x L` | Phase 1.1: Split into `2` units + finish F-19 `COM2` cleanup & F-13 CRC32 |
+| `src/e220_driver/` (`5` split files) | `max 25,759 B` (`68.4 KB` pre-split) | `max 626 L` (`1,596 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `config_mode3` (`626 L`), `gatekeeper` (`449 L`), `tdma` (`535 L`), `internal.h` (`104 L`) |
+| `src/waypoint_manager/waypoint_manager.cpp` | `45,645 B` | `1,060 L` | `0.99x B / 1.33x L` | Phase 1.1B: Split CSV store vs. survey logger (`2` files) |
+| `src/um982_driver/` (`4` split files) | `max 29,344 B` (`47.5 KB` pre-split) | `max 734 L` (`1,146 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `nmea_parser` (`734 L`), `config_audit` (`546 L`), `internal.h` (`53 L`) + F-19/F-13/F-14 |
 | `src/settings_manager/settings_manager.cpp` | `40,720 B` | `714 L` | Near byte cap | Phase 1.1: Monitor size + add F-12 atomic `.tmp` + `rename()` save |
 | `scripts/e220_pacer.py` | `81,545 B` | `1,668 L` | `1.77x B / 2.09x L` | Optional split (`rover_protocol.py` + `update_e220_pacer.sh`) |
 | `scripts/generate_wiring_diagrams.py` | `87,745 B` | `1,319 L` | `1.90x B / 1.65x L` | Split lazily when diagrams change next |
@@ -97,13 +97,13 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
 **Exact File Splits, Decouplings & Hardening (`v0.10.7` Baseline):**
 1. **`src/lvgl_port/` (`11`-File Split COMPLETE in Plan 0 -> Core Decouple Here):**
    * Remove `lvgl_ui_internal.h` include from `lvgl_port_core.c`; parameterize `lvgl_port_core.c` (`BoardDisplayCfg_t`, PSRAM `extmem_enable(64)` wrapper, mutex, lock-free FB capture) so `ui_header_nav.c` and `ui_tile0..tile5*.c` stay strictly sketch-local in `RTK_Rover`.
-2. **Split `src/e220_driver/e220_driver.cpp` (`1,451 L / 68 KB` -> `3` Units + `e220_driver_internal.h`):**
-   * `e220_config_mode3.cpp` (`~500 L`), `e220_rtcm_gatekeeper.cpp` (`~380 L` -- exposing clean RTCM3 validation hook for Plan 2's `rtcm_arbiter`), `e220_tdma_scheduler.cpp` (`~520 L`).
-3. **Split `src/um982_driver/um982_driver.cpp` (`1,020 L / 47.5 KB` -> `2` Units + Finish F-13, F-14, F-19):**
-   * `um982_config_audit.cpp` + `um982_nmea_parser.cpp` (`~520 L` each).
-   * **F-19 (`COM2` Cleanup):** Remove `~42` residual `COM2` legacy aliases/comments (`um982_forward_rtcm_to_com2`, `um982_poll_com2`, `send_um982_com2_test_pulse`, `com2_rx_bytes`, `ROVER_UM982_COM2_BAUD`, and `COM2` comments across `RTK_Rover.ino`, `rover_api.h`, `user_config.h`, `ui_tile4_diagnostics.c`, `e220_driver`).
-   * **F-13 (Unicore CRC32 Check):** Verify trailing 32-bit CRC32 on `#UNIHEADINGA` / `#BASEINFOA` / `#VERSIONA` ASCII lines alongside NMEA XOR `*XX` checksums so corrupted Unicore frames are cleanly dropped.
-   * **F-14 (Non-Blocking Receiver Audit Safety):** Bound or state-machine `um982_query_receiver_state()` blocking retries when triggered interactively or ahead of Plan 2 BLE command exposure so Core 0 never drops RTCM3 > 1 s.
+2. **Split `src/e220_driver/e220_driver.cpp` (`1,596 L / 68.4 KB` -> `3` Units + `e220_driver_internal.h`, `DONE` `v0.10.8` `2026-11-24`):**
+   * `e220_config_mode3.cpp` (`626 L / 23,981 B`), `e220_rtcm_gatekeeper.cpp` (`449 L / 18,564 B` -- exporting `e220_rtcm_crc24q_compute()` & `e220_rtcm_validate_frame()` for Plan 2's `rtcm_arbiter`), `e220_tdma_scheduler.cpp` (`535 L / 25,759 B`), and `e220_driver_internal.h` (`104 L / 3,944 B`).
+3. **Split `src/um982_driver/um982_driver.cpp` (`1,146 L / 47.5 KB` -> `2` Units + `um982_driver_internal.h` + F-13/F-14/F-19, `DONE` `v0.10.8` `2026-11-24`):**
+   * `um982_nmea_parser.cpp` (`734 L / 29,344 B`) + `um982_config_audit.cpp` (`546 L / 24,390 B`) + `um982_driver_internal.h` (`53 L / 1,967 B`).
+   * **F-19 (`COM2` Cleanup, `DONE`):** Removed obsolete ESP32 `COM2` legacy macros/stubs/aliases (`um982_forward_rtcm_to_com2`, `um982_poll_com2`, `send_um982_com2_test_pulse`, `com2_rx_bytes` -> `unicore_crc_errors`, `ROVER_UM982_COM2_BAUD`, `ROVER_PIN_UM982_TXD1`/`RXD1`, `t4_com2_lbl` -> `t4_um982_audit_lbl`, and `COM2` comments across `RTK_Rover.ino`, `rover_api.h`, `user_config.h`, `ui_tile4_diagnostics.c`, `e220_driver`), preserving receiver-side `UNLOGALL COM2` and `#LOGLIST` `COM2:0` verification.
+   * **F-13 (Unicore CRC32 Check, `DONE`):** Added bitwise NovAtel/Unicore CRC32 (`um982_verify_unicore_crc32()`, `0 B` `DRAM0`) on `#VERSIONA`, `#UNIHEADINGA`, and `#BASEINFOA` before logging or parsing alongside NMEA XOR `*XX` (`um982_verify_nmea_checksum()`), verified against `71,304` captured frames (`71,300/71,300` valid matched, `4/4` corrupted frames rejected).
+   * **F-14 (Non-Blocking Receiver Audit Safety, `DONE`):** Replaced runtime blocking audit/reconfig loops with `um982_audit_and_config_step()` state machine (`um982_request_receiver_audit()`, `um982_is_receiver_audit_active()`) so Core 0 never drops RTCM3 > `1 s` on reconnects or runtime queries.
 4. **Split `src/waypoint_manager/waypoint_manager.cpp` (`1,060 L / 45.6 KB` -> `2` Units):**
    * `waypoint_csv_store.cpp` + `waypoint_survey_log.cpp` (with injected FS + mutex).
 5. **Slim `RTK_Rover.ino` (`1,531 L / 80.7 KB` -> `< 750 L / < 42 KB`):**

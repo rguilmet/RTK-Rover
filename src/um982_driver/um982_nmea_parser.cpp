@@ -1,49 +1,22 @@
-#include "um982_driver.h"
-#include "../../user_config.h"
-#include "../settings_manager/settings_manager.h"
-#include "../storage/nmea_logger.h"
-#include <Arduino.h>
-#include <string.h>
-#include <stdlib.h>
-#include <math.h>
-#include <sys/time.h>
-#include <time.h>
+#include "um982_driver_internal.h"
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
+RoverUIData_t          gnss_state               = {};
+Um982PortStats_t       port_stats               = {};
+volatile GpsTimeSync_t gps_time_sync            = {};
+bool                   s_com1_rx_backlog_active = false;
 
-static RoverUIData_t     gnss_state = {};
-static Um982PortStats_t  port_stats = {};
-volatile GpsTimeSync_t   gps_time_sync = {};
-static char              com1_line_buf[512];
-static uint16_t          com1_line_pos      = 0;
-static bool              com1_line_overflow = false;
-static SemaphoreHandle_t s_com1_tx_mutex    = NULL;
-static volatile bool     s_com1_tx_boot_complete = false;
+static char     com1_line_buf[512];
+static uint16_t com1_line_pos      = 0;
+static bool     com1_line_overflow = false;
 
-static bool              rtc_synced_from_gnss    = false;
-static volatile bool     rtc_sync_pending        = false;
-static volatile time_t   s_pending_rtc_epoch     = 0;
-static volatile uint32_t s_pending_rtc_sync_ms   = 0;
-static uint32_t          s_last_rtc_chip_sync_ms  = 0;
-static uint32_t          s_last_sysclock_sync_ms  = 0;
-static uint32_t          s_last_com1_poll_ms      = 0;
-static bool              s_com1_rx_backlog_active = false;
-
-static volatile bool     version_ack_received    = false;
-static volatile bool     saveconfig_ack_received = false;
-static volatile bool     mode_query_ack_received = false;
-static volatile bool     config_query_ack_received  = false;
-static volatile bool     loglist_query_ack_received = false;
-
-static char              s_cfg_pvtalg[16]   = "--";
-static char              s_cfg_hdg_mode[16] = "--";
-static char              s_cfg_hdg_len[24]  = "--";
-static char              s_cfg_hdg_dyn[16]  = "--";
-static char              s_cfg_com1[16]     = "115200";
-static uint8_t           s_loglist_com1_cnt = 0;
-static uint8_t           s_loglist_com2_cnt = 0;
-static uint8_t           s_loglist_mask     = 0; // Bitmask: 0=GGA,1=RMC,2=GST,3=GSV,4=HDG,5=GGAH,6=BASE
+static bool              rtc_synced_from_gnss   = false;
+static volatile bool     rtc_sync_pending       = false;
+static volatile time_t   s_pending_rtc_epoch    = 0;
+static volatile uint32_t s_pending_rtc_sync_ms  = 0;
+static uint32_t          s_last_rtc_chip_sync_ms = 0;
+static uint32_t          s_last_sysclock_sync_ms = 0;
+static uint32_t          s_last_com1_poll_ms     = 0;
+static uint32_t          s_last_crc_warn_ms      = 0;
 
 static uint8_t  gsv_sats_gp = 0;
 static uint8_t  gsv_sats_gl = 0;
@@ -57,6 +30,14 @@ static uint32_t gsv_last_gb_ms = 0;
 static uint32_t gsv_last_gq_ms = 0;
 static uint32_t s_last_offline_probe_ms = 0;
 static bool     s_was_com1_online       = false;
+
+static int parse_hex_nibble(char c)
+{
+    if (c >= '0' && c <= '9') return (int)(c - '0');
+    if (c >= 'a' && c <= 'f') return (int)(c - 'a' + 10);
+    if (c >= 'A' && c <= 'F') return (int)(c - 'A' + 10);
+    return -1;
+}
 
 static double parse_nmea_deg_min(const char *str, const char *hemisphere)
 {
@@ -472,134 +453,80 @@ static void handle_baseinfoa_sentence(char *line)
     }
 }
 
-static bool verify_nmea_xor_checksum(const char *line)
+extern "C" bool um982_verify_nmea_checksum(const char *line)
 {
-    if (!line || line[0] != '$') return true;
+    if (!line || line[0] != '$') return false;
     const char *star = strrchr(line, '*');
     if (!star || !star[1] || !star[2]) return true; // Allow if unchecksummed
+    if (star[3] != '\0') return false;
+    int hi = parse_hex_nibble(star[1]);
+    int lo = parse_hex_nibble(star[2]);
+    if (hi < 0 || lo < 0) return false;
     uint8_t calc = 0;
     for (const char *p = line + 1; p < star; p++) {
         calc ^= (uint8_t)(*p);
     }
-    uint8_t expected = (uint8_t)strtoul(star + 1, NULL, 16);
+    uint8_t expected = (uint8_t)((hi << 4) | lo);
     return (calc == expected);
 }
 
-static void strip_checksum_in_place(char *str)
+extern "C" bool um982_verify_unicore_crc32(const char *line)
+{
+    if (!line || line[0] != '#') return false;
+    const char *star = strrchr(line, '*');
+    if (!star || star <= (line + 1)) return false;
+
+    uint32_t expected = 0UL;
+    for (int i = 1; i <= 8; i++) {
+        int nib = parse_hex_nibble(star[i]);
+        if (nib < 0) return false;
+        expected = (expected << 4) | (uint32_t)nib;
+    }
+    if (star[9] != '\0') return false;
+
+    // Bitwise NovAtel/Unicore OEM ASCII CRC32 (init=0, reflected poly=0xEDB88320, xorout=0 -> 0 B DRAM0)
+    uint32_t crc = 0UL;
+    for (const char *p = line + 1; p < star; p++) {
+        crc ^= (uint32_t)(uint8_t)(*p);
+        for (int bit = 0; bit < 8; bit++) {
+            if (crc & 1UL) {
+                crc = (crc >> 1) ^ 0xEDB88320UL;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return (crc == expected);
+}
+
+static void record_unicore_crc32_drop(const char *line)
+{
+    port_stats.unicore_crc_errors++;
+    uint32_t now = millis();
+    if (current_settings.enable_serial_logging &&
+        (s_last_crc_warn_ms == 0U || (now - s_last_crc_warn_ms) >= 2000U)) {
+        s_last_crc_warn_ms = (now == 0U) ? 1U : now;
+        Serial.printf("[UM982 CRC32 DROP] Invalid Unicore CRC32 (errs=%lu): %.48s\n",
+                      (unsigned long)port_stats.unicore_crc_errors,
+                      line ? line : "");
+    }
+}
+
+void um982_strip_checksum_in_place(char *str)
 {
     if (!str) return;
     char *star = strrchr(str, '*');
     if (star) *star = '\0';
 }
 
-static void rebuild_known_state_summary(void)
-{
-    snprintf(port_stats.um982_config_summary, sizeof(port_stats.um982_config_summary),
-             "PVT:%s | HDG:%s %s %s | C1:%s",
-             s_cfg_pvtalg, s_cfg_hdg_mode, s_cfg_hdg_len, s_cfg_hdg_dyn, s_cfg_com1);
-
-    snprintf(port_stats.um982_loglist, sizeof(port_stats.um982_loglist),
-             "COM1(%u):%s%s%s%s%s%s%s | COM2:%u",
-             (unsigned)s_loglist_com1_cnt,
-             (s_loglist_mask & (1U << 0)) ? " GGA"  : "",
-             (s_loglist_mask & (1U << 1)) ? " RMC"  : "",
-             (s_loglist_mask & (1U << 2)) ? " GST"  : "",
-             (s_loglist_mask & (1U << 3)) ? " GSV"  : "",
-             (s_loglist_mask & (1U << 4)) ? " HDG"  : "",
-             (s_loglist_mask & (1U << 5)) ? " GGAH" : "",
-             (s_loglist_mask & (1U << 6)) ? " BASE" : "",
-             (unsigned)s_loglist_com2_cnt);
-
-    bool survey_ok = (strstr(port_stats.um982_mode, "SURVEY") != NULL);
-    bool logs_ok   = (s_loglist_mask == 0x7FU && s_loglist_com2_cnt == 0);
-    port_stats.known_state_ok = (survey_ok && logs_ok);
-}
-
-static void parse_config_response_line(const char *line)
-{
-    if (strstr(line, "CONFIG PVTALG ") != NULL) {
-        const char *p = strstr(line, "CONFIG PVTALG ") + 14;
-        strncpy(s_cfg_pvtalg, p, sizeof(s_cfg_pvtalg) - 1);
-        s_cfg_pvtalg[sizeof(s_cfg_pvtalg) - 1] = '\0';
-        strip_checksum_in_place(s_cfg_pvtalg);
-    } else if (strstr(line, "CONFIG HEADING FIXLENGTH") != NULL) {
-        strncpy(s_cfg_hdg_mode, "FIXLEN", sizeof(s_cfg_hdg_mode) - 1);
-    } else if (strstr(line, "CONFIG HEADING VARLENGTH") != NULL) {
-        strncpy(s_cfg_hdg_mode, "VARLEN", sizeof(s_cfg_hdg_mode) - 1);
-    } else if (strstr(line, "CONFIG HEADING LENGTH ") != NULL) {
-        const char *p = strstr(line, "CONFIG HEADING LENGTH ") + 22;
-        strncpy(s_cfg_hdg_len, p, sizeof(s_cfg_hdg_len) - 1);
-        s_cfg_hdg_len[sizeof(s_cfg_hdg_len) - 1] = '\0';
-        strip_checksum_in_place(s_cfg_hdg_len);
-    } else if (strstr(line, "CONFIG HEADING LOWDYNAMIC") != NULL) {
-        strncpy(s_cfg_hdg_dyn, "LOWDYN", sizeof(s_cfg_hdg_dyn) - 1);
-    } else if (strstr(line, "CONFIG COM1 ") != NULL) {
-        const char *p = strstr(line, "CONFIG COM1 ") + 12;
-        strncpy(s_cfg_com1, p, sizeof(s_cfg_com1) - 1);
-        s_cfg_com1[sizeof(s_cfg_com1) - 1] = '\0';
-        strip_checksum_in_place(s_cfg_com1);
-    }
-    rebuild_known_state_summary();
-}
-
-static void parse_loglist_response_line(const char *line)
-{
-    // Unicore #LOGLIST format:
-    // #LOGLIST,97,GPS,FINE,...;<count>,COM1,GPGGA,ONTIME,0.5,COM1,GPRMC,ONTIME,1,...*XX
-    const char *body = strchr(line, ';');
-    if (!body) body = line;
-    else body++;
-
-    char buf[512];
-    strncpy(buf, body, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-    strip_checksum_in_place(buf);
-
-    // If this is the header of a #LOGLIST;count,... dump, reset counters before scanning tokens
-    if (strncmp(line, "#LOGLIST", 8) == 0) {
-        s_loglist_com1_cnt = 0;
-        s_loglist_com2_cnt = 0;
-        s_loglist_mask     = 0;
-    }
-
-    char *tok = strtok(buf, ",");
-    while (tok != NULL) {
-        if (strcmp(tok, "COM1") == 0) {
-            s_loglist_com1_cnt++;
-            char *msg = strtok(NULL, ",");
-            if (msg) {
-                if (strstr(msg, "GGAH") != NULL)           s_loglist_mask |= (1U << 5);
-                else if (strstr(msg, "GGA") != NULL)       s_loglist_mask |= (1U << 0);
-                else if (strstr(msg, "RMC") != NULL)       s_loglist_mask |= (1U << 1);
-                else if (strstr(msg, "GST") != NULL)       s_loglist_mask |= (1U << 2);
-                else if (strstr(msg, "GSV") != NULL)       s_loglist_mask |= (1U << 3);
-                else if (strstr(msg, "UNIHEADING") != NULL)s_loglist_mask |= (1U << 4);
-                else if (strstr(msg, "BASEINFO") != NULL)  s_loglist_mask |= (1U << 6);
-            }
-        } else if (strcmp(tok, "COM2") == 0 || strcmp(tok, "COM3") == 0) {
-            s_loglist_com2_cnt++;
-        }
-        tok = strtok(NULL, ",");
-    }
-    rebuild_known_state_summary();
-}
-
-static void mark_com1_rx_alive(void)
+void um982_mark_com1_rx_alive(void)
 {
     port_stats.last_com1_rx_ms  = millis();
     port_stats.com1_online      = true;
     port_stats.com1_test_passed = true;
 }
 
-static void record_cmd_response_line(const char *line)
-{
-    mark_com1_rx_alive();
-    port_stats.cmd_responses_ok++;
-    strncpy(port_stats.last_cmd_ack_line, line, sizeof(port_stats.last_cmd_ack_line) - 1);
-    port_stats.last_cmd_ack_line[sizeof(port_stats.last_cmd_ack_line) - 1] = '\0';
-}
-
-static void process_com1_line(char *line, uint16_t line_len)
+void um982_process_com1_line(char *line, uint16_t line_len)
 {
     if (!line || line[0] == '\0') return;
 
@@ -608,12 +535,16 @@ static void process_com1_line(char *line, uint16_t line_len)
     // Handled first so command responses NEVER pollute .nmea logs or overwrite last_com1_line!
     // =====================================================================
     if (strncmp(line, "#VERSIONA", 9) == 0) {
-        record_cmd_response_line(line);
+        if (!um982_verify_unicore_crc32(line)) {
+            record_unicore_crc32_drop(line);
+            return;
+        }
+        um982_record_cmd_response_line(line);
         char *semi = strchr(line, ';');
         if (semi) {
             strncpy(port_stats.um982_version, semi + 1, sizeof(port_stats.um982_version) - 1);
             port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
-            strip_checksum_in_place(port_stats.um982_version);
+            um982_strip_checksum_in_place(port_stats.um982_version);
         } else {
             strncpy(port_stats.um982_version, "UM982_ONLINE", sizeof(port_stats.um982_version) - 1);
         }
@@ -623,37 +554,38 @@ static void process_com1_line(char *line, uint16_t line_len)
     }
 
     if (strncmp(line, "#MODE", 5) == 0 || strncmp(line, "$MODE", 5) == 0) {
-        record_cmd_response_line(line);
+        um982_record_cmd_response_line(line);
         const char *semi = strchr(line, ';');
         const char *m_str = semi ? (semi + 1) : (strchr(line, ',') ? strchr(line, ',') + 1 : line);
         if (strncmp(m_str, "MODE ", 5) == 0) m_str += 5;
         strncpy(port_stats.um982_mode, m_str, sizeof(port_stats.um982_mode) - 1);
         port_stats.um982_mode[sizeof(port_stats.um982_mode) - 1] = '\0';
-        strip_checksum_in_place(port_stats.um982_mode);
-        rebuild_known_state_summary();
+        um982_strip_checksum_in_place(port_stats.um982_mode);
+        um982_rebuild_known_state_summary();
         mode_query_ack_received = true;
         Serial.printf("[UM982 CMD RX] %s\n", line);
         return;
     }
 
     if (strncmp(line, "$CONFIG,", 8) == 0 || strncmp(line, "#CONFIG,", 8) == 0) {
-        record_cmd_response_line(line);
-        parse_config_response_line(line);
+        um982_record_cmd_response_line(line);
+        um982_parse_config_response_line(line);
         config_query_ack_received = true;
+        s_last_config_line_ms = millis();
         Serial.printf("[UM982 CMD RX] %s\n", line);
         return;
     }
 
     if (strncmp(line, "#LOGLIST", 8) == 0 || strncmp(line, "$LOGLIST", 8) == 0) {
-        record_cmd_response_line(line);
-        parse_loglist_response_line(line);
+        um982_record_cmd_response_line(line);
+        um982_parse_loglist_response_line(line);
         loglist_query_ack_received = true;
         Serial.printf("[UM982 CMD RX] %s\n", line);
         return;
     }
 
     if (strncmp(line, "$command,", 9) == 0) {
-        record_cmd_response_line(line);
+        um982_record_cmd_response_line(line);
         if (strstr(line, "SAVECONFIG") != NULL && strstr(line, "response:") != NULL) {
             saveconfig_ack_received = true;
         }
@@ -665,11 +597,16 @@ static void process_com1_line(char *line, uint16_t line_len)
     // Stream 1 & 2: Periodic NMEA 0183 & Unicore ASCII Navigation Logs
     // Only valid navigation sentences reach nmea_logger_feed() and last_com1_line.
     // =====================================================================
-    if (line[0] == '$' && !verify_nmea_xor_checksum(line)) {
+    if (line[0] == '$' && !um982_verify_nmea_checksum(line)) {
+        return;
+    }
+    if ((strncmp(line, "#UNIHEADINGA", 12) == 0 || strncmp(line, "#BASEINFOA", 10) == 0) &&
+        !um982_verify_unicore_crc32(line)) {
+        record_unicore_crc32_drop(line);
         return;
     }
     if (line[0] == '$' || line[0] == '#') {
-        mark_com1_rx_alive();
+        um982_mark_com1_rx_alive();
     }
 
     nmea_logger_feed((const uint8_t *)line, line_len);
@@ -706,251 +643,6 @@ static void process_com1_line(char *line, uint16_t line_len)
     }
 }
 
-extern "C" void send_um982_com1_command(const char *cmd)
-{
-    if (!cmd) return;
-    size_t len = strlen(cmd);
-    if (s_com1_tx_mutex) {
-        if (xSemaphoreTake(s_com1_tx_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
-            port_stats.com1_tx_mutex_timeouts++;
-            return;
-        }
-    }
-    if (Serial) Serial.printf("[UM982 COM1 TX] %s\n", cmd);
-    Serial1.write((const uint8_t *)cmd, len);
-    Serial1.write((const uint8_t *)"\r\n", 2);
-    port_stats.com1_tx_bytes += (uint32_t)(len + 2);
-    if (s_com1_tx_mutex) xSemaphoreGive(s_com1_tx_mutex);
-}
-
-extern "C" void send_um982_com2_test_pulse(void)
-{
-    // Legacy stub: COM2 is consolidated onto Single-UART COM1 in v0.8.0+
-    um982_query_receiver_state();
-}
-
-extern "C" void um982_query_receiver_state(void)
-{
-    Serial.println("\n--- [UM982 Known-State Audit: VERSIONA / MODE / CONFIG / LOGLIST] ---");
-
-    // 1. VERSIONA
-    version_ack_received = false;
-    send_um982_com1_command("VERSIONA");
-    uint32_t t0 = millis();
-    while (!version_ack_received && (millis() - t0 < 500)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    // 2. MODE
-    mode_query_ack_received = false;
-    send_um982_com1_command("MODE");
-    t0 = millis();
-    while (!mode_query_ack_received && (millis() - t0 < 500)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    // 3. CONFIG (returns multiple $CONFIG,... lines)
-    config_query_ack_received = false;
-    send_um982_com1_command("CONFIG");
-    t0 = millis();
-    while (millis() - t0 < 600) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    // 4. LOGLIST (verifies all 7 logs on COM1 and 0 logs on COM2/COM3)
-    loglist_query_ack_received = false;
-    send_um982_com1_command("LOGLIST");
-    t0 = millis();
-    while (!loglist_query_ack_received && (millis() - t0 < 600)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    // Drain any trailing lines
-    t0 = millis();
-    while (millis() - t0 < 100) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    port_stats.single_uart_audit_passed = port_stats.com1_test_passed;
-    Serial.printf("[UM982 AUDIT SUMMARY] State:%s | Ver:%s | Mode:%s | Cfg:[%s] | Logs:[%s]\n",
-                  port_stats.known_state_ok ? "KNOWN STATE OK" : "CHECK LOGS/MODE",
-                  port_stats.um982_version,
-                  port_stats.um982_mode,
-                  port_stats.um982_config_summary,
-                  port_stats.um982_loglist);
-}
-
-extern "C" void um982_configure_rover_defaults(void)
-{
-    float spacing_m = (current_settings.antenna_spacing_m > 0.05f) ? current_settings.antenna_spacing_m : 0.555f;
-    float spacing_cm = spacing_m * 100.0f;
-    char exp_len_prefix[16];
-    snprintf(exp_len_prefix, sizeof(exp_len_prefix), "%.1f", spacing_cm);
-
-    // Query existing NVM receiver state first to prevent redundant SAVECONFIG flash wear on warm boots
-    um982_query_receiver_state();
-    if (port_stats.known_state_ok &&
-        strstr(port_stats.um982_mode, "SURVEY") != NULL &&
-        strstr(s_cfg_hdg_len, exp_len_prefix) != NULL) {
-        Serial.println("[UM982] Warm boot: Receiver already in KNOWN STATE OK -> Skipping reconfig & SAVECONFIG.");
-        return;
-    }
-
-    // Phase 1: Quiet-First Setup (Silence periodic logs on COM1 & COM2 so commands do not collide with NMEA)
-    send_um982_com1_command("CONFIG COM1 115200");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    send_um982_com1_command("UNLOGALL COM1");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    send_um982_com1_command("UNLOGALL COM2");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    // Phase 2: Receiver Algorithm, Mode & Fixed-Baseline Heading Configuration (while COM1 is quiet)
-    send_um982_com1_command("CONFIG PVTALG MULTI");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    // Put UM982 into precision surveying mode (overrides factory default UAV drone mode)
-    send_um982_com1_command("MODE ROVER SURVEY");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    send_um982_com1_command("CONFIG HEADING LOWDYNAMIC");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    send_um982_com1_command("CONFIG HEADING FIXLENGTH");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    char hdg_cmd[64];
-    // Parameter 1: baseline length in centimeters (Table 4-14 in manual: 55.5 cm)
-    // Parameter 2: tolerance in centimeters (12 cm tolerance)
-    snprintf(hdg_cmd, sizeof(hdg_cmd), "CONFIG HEADING LENGTH %.1f 12", spacing_cm);
-    send_um982_com1_command(hdg_cmd);
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    // Phase 3: Enable the 7 Required Periodic Logs strictly on COM1
-    send_um982_com1_command("GPGGA COM1 0.5");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    send_um982_com1_command("GPRMC COM1 1");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    send_um982_com1_command("GPGST COM1 0.5");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    send_um982_com1_command("GPGSV COM1 1");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    // UNIHEADINGA provides heading, pitch, baseline length, and NARROW_INT fix type at 2 Hz
-    send_um982_com1_command("UNIHEADINGA COM1 0.5");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    // GNGGAH provides Slave Antenna (ANT2) fix quality, satellites used, HDOP at 1 Hz
-    send_um982_com1_command("GNGGAH COM1 1");
-    vTaskDelay(pdMS_TO_TICKS(40));
-    // BASEINFOA provides base station ID, health status, and ECEF coordinates at 1 Hz
-    send_um982_com1_command("BASEINFOA COM1 1");
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    // Phase 4: Persist to UM982 Non-Volatile Flash
-    saveconfig_ack_received = false;
-    send_um982_com1_command("SAVECONFIG");
-    uint32_t t_save = millis();
-    while (!saveconfig_ack_received && (millis() - t_save < 1500)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    vTaskDelay(pdMS_TO_TICKS(50));
-
-    // Phase 5: Execute Full 4-Command Known-State Audit (VERSIONA, MODE, CONFIG, LOGLIST)
-    um982_query_receiver_state();
-}
-
-extern "C" void um982_run_powerup_selftest(void)
-{
-    Serial.println("\n--- [UM982 Single-UART (COM1) Power-Up Self-Test] ---");
-
-    // Preserve any warm-boot NMEA/log configuration during self-test so um982_configure_rover_defaults()
-    // can audit the live receiver state without unnecessary UNLOGALL/SAVECONFIG flash wear.
-    while (Serial1.available()) Serial1.read();
-
-    Serial.println("[UM982 COM1] Testing Full-Duplex UART1 (RX=IO17, TX=IO18 @ 115200) with VERSIONA...");
-    version_ack_received = false;
-    send_um982_com1_command("VERSIONA");
-    uint32_t t0 = millis();
-    while (!version_ack_received && (millis() - t0 < 600)) {
-        um982_poll_com1();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (port_stats.com1_test_passed) {
-        port_stats.single_uart_audit_passed = true;
-        Serial.printf("[UM982 COM1 TEST] PASS — RX=%lu B | Version: %s | Last ACK: %s\n",
-                      (unsigned long)port_stats.com1_rx_bytes,
-                      port_stats.um982_version,
-                      port_stats.last_cmd_ack_line);
-    } else {
-        Serial.println("[UM982 COM1 TEST] FAIL — No response on IO17/18 @ 115200");
-    }
-}
-
-extern "C" void um982_driver_init(void)
-{
-    if (s_com1_tx_mutex == NULL) {
-        s_com1_tx_mutex = xSemaphoreCreateMutex();
-    }
-    s_com1_tx_boot_complete = false;
-
-    strncpy(port_stats.um982_version, "Waiting COM1...", sizeof(port_stats.um982_version) - 1);
-    port_stats.um982_version[sizeof(port_stats.um982_version) - 1] = '\0';
-    strncpy(port_stats.um982_mode, "INIT...", sizeof(port_stats.um982_mode) - 1);
-    port_stats.um982_mode[sizeof(port_stats.um982_mode) - 1] = '\0';
-    strncpy(port_stats.um982_config_summary, "Querying CONFIG...", sizeof(port_stats.um982_config_summary) - 1);
-    port_stats.um982_config_summary[sizeof(port_stats.um982_config_summary) - 1] = '\0';
-    strncpy(port_stats.um982_loglist, "Querying LOGLIST...", sizeof(port_stats.um982_loglist) - 1);
-    port_stats.um982_loglist[sizeof(port_stats.um982_loglist) - 1] = '\0';
-    strncpy(port_stats.last_com1_line, "No COM1 NMEA yet", sizeof(port_stats.last_com1_line) - 1);
-    port_stats.last_com1_line[sizeof(port_stats.last_com1_line) - 1] = '\0';
-    strncpy(port_stats.last_cmd_ack_line, "No CMD ACK yet", sizeof(port_stats.last_cmd_ack_line) - 1);
-    port_stats.last_cmd_ack_line[sizeof(port_stats.last_cmd_ack_line) - 1] = '\0';
-
-    pinMode(ROVER_PIN_UM982_TXD0, INPUT_PULLDOWN);
-    pinMode(ROVER_PIN_UM982_RXD0, INPUT_PULLDOWN);
-    delay(2);
-    Serial.printf("[UM982 LINE PROBE] Single-UART COM1: IO17(ESP_RX)=%d IO18(ESP_TX)=%d | COM2(IO47/48): FREED\n",
-                  digitalRead(ROVER_PIN_UM982_TXD0),
-                  digitalRead(ROVER_PIN_UM982_RXD0));
-
-    // Expand Serial1 TX buffer to 4096B to absorb full-duplex RTCM3 bursts without blocking
-    Serial1.setRxBufferSize(4096);
-    Serial1.setTxBufferSize(4096);
-    Serial1.begin(ROVER_UM982_COM1_BAUD, SERIAL_8N1, ROVER_PIN_UM982_TXD0, ROVER_PIN_UM982_RXD0);
-
-    um982_run_powerup_selftest();
-    um982_configure_rover_defaults();
-
-    // Allow Core 0 to begin forwarding atomic CRC24Q-verified RTCM3 frames onto COM1 (Serial1)
-    s_com1_tx_boot_complete = true;
-}
-
-extern "C" void um982_forward_rtcm(const uint8_t *data, size_t len)
-{
-    if (!s_com1_tx_boot_complete || !data || len == 0) return;
-    if (s_com1_tx_mutex) {
-        if (xSemaphoreTake(s_com1_tx_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
-            port_stats.com1_tx_mutex_timeouts++;
-            return;
-        }
-    }
-    size_t written = Serial1.write(data, len);
-    gps_time_sync.last_rtcm_forward_ms = millis();
-    port_stats.rtcm_tx_bytes += (uint32_t)written; // Tracks RTCM3 bytes forwarded to UM982
-    port_stats.com1_tx_bytes += (uint32_t)written;
-    if (s_com1_tx_mutex) xSemaphoreGive(s_com1_tx_mutex);
-}
-
-extern "C" void um982_forward_rtcm_to_com2(const uint8_t *data, size_t len)
-{
-    um982_forward_rtcm(data, len);
-}
-
 extern "C" void um982_poll_com1(void)
 {
     uint32_t entry_ms = millis();
@@ -974,7 +666,7 @@ extern "C" void um982_poll_com1(void)
                 com1_line_buf[com1_line_pos] = '\0';
                 // Suppress GNSS wall-clock discipline while draining stale NMEA queued across blocking Core 0 work
                 s_com1_rx_backlog_active = (backlog_bytes_remaining > 0);
-                process_com1_line(com1_line_buf, com1_line_pos);
+                um982_process_com1_line(com1_line_buf, com1_line_pos);
                 com1_line_pos = 0;
             }
         } else if (!com1_line_overflow) {
@@ -995,8 +687,8 @@ extern "C" void um982_poll_com1(void)
     if (is_online && !s_was_com1_online) {
         s_was_com1_online = true;
         if (s_com1_tx_boot_complete && !port_stats.known_state_ok) {
-            Serial.println("[UM982] COM1 link came ONLINE after boot -> Running receiver state check/config.");
-            um982_configure_rover_defaults();
+            Serial.println("[UM982] COM1 link came ONLINE after boot -> Starting non-blocking receiver state check/config.");
+            um982_start_audit_or_config_pipeline(true);
         }
     } else if (!is_online) {
         if (s_was_com1_online) {
@@ -1016,131 +708,27 @@ extern "C" void um982_poll_com1(void)
         }
     }
 
+    um982_audit_and_config_step(now_ms);
     s_last_com1_poll_ms = millis();
-}
-
-extern "C" void um982_poll_com2(void)
-{
-    // No-op in v0.8.0+ Single-UART COM1 architecture (Serial2 disabled, freeing IO47/48 & ~6KB DRAM0)
-}
-
-extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
-{
-    if (!state_out) return;
-
-    // Age-of-data expiration: expire stale GGA, GPS UTC sync, and dual-antenna heading on UART/antenna dropout
-    uint32_t now_ms = millis();
-    bool com1_alive = (port_stats.last_com1_rx_ms > 0) &&
-                      ((now_ms - port_stats.last_com1_rx_ms) <= 3000U);
-    port_stats.com1_online      = com1_alive;
-    port_stats.com1_test_passed = com1_alive;
-    if (!com1_alive) {
-        gnss_state.fix_type          = GNSS_FIX_NONE;
-        gnss_state.num_sats          = 0;
-        gnss_state.sats_in_view      = 0;
-        gnss_state.h_acc_m           = 99.9f;
-        gnss_state.v_acc_m           = 99.9f;
-        gnss_state.slave_fix_type    = GNSS_FIX_NONE;
-        gnss_state.slave_num_sats    = 0;
-        gnss_state.baseline_length_m = 0.0f;
-    }
-    if (gps_time_sync.last_gga_ms == 0 || (now_ms - gps_time_sync.last_gga_ms > 2000U)) {
-        gnss_state.fix_type = GNSS_FIX_NONE;
-        gnss_state.h_acc_m  = 99.9f;
-        gnss_state.v_acc_m  = 99.9f;
-    }
-    if (gps_time_sync.time_synced &&
-        (now_ms - gps_time_sync.last_gga_ms > 15000U) &&
-        (now_ms - gps_time_sync.last_rmc_ms > 15000U)) {
-        gps_time_sync.time_synced = false;
-    }
-    if ((gnss_state.heading_source == HDG_SRC_DUAL_FIX || gnss_state.heading_source == HDG_SRC_DUAL_FLT) &&
-        (gps_time_sync.last_uniheadinga_ms == 0 || (now_ms - gps_time_sync.last_uniheadinga_ms > 3000U))) {
-        gnss_state.heading_valid    = false;
-        gnss_state.heading_is_fixed = false;
-        gnss_state.heading_source   = HDG_SRC_NONE;
-        gnss_state.slave_fix_type   = GNSS_FIX_NONE;
-    }
-
-    state_out->raw_lat            = gnss_state.raw_lat;
-    state_out->raw_lon            = gnss_state.raw_lon;
-    state_out->raw_alt_m          = gnss_state.raw_alt_m;
-    state_out->fix_type           = gnss_state.fix_type;
-    state_out->num_sats           = gnss_state.num_sats;
-    state_out->sats_in_view       = gnss_state.sats_in_view;
-    state_out->hdop               = gnss_state.hdop;
-    state_out->h_acc_m            = gnss_state.h_acc_m;
-    state_out->v_acc_m            = gnss_state.v_acc_m;
-    state_out->diff_age_s         = gnss_state.diff_age_s;
-    state_out->heading_valid      = gnss_state.heading_valid;
-    state_out->heading_is_fixed   = gnss_state.heading_is_fixed;
-    state_out->heading_source     = gnss_state.heading_source;
-    state_out->true_heading_deg   = gnss_state.true_heading_deg;
-    state_out->baseline_pitch_deg = gnss_state.baseline_pitch_deg;
-    state_out->baseline_length_m  = gnss_state.baseline_length_m;
-    state_out->speed_m_s          = gnss_state.speed_m_s;
-    state_out->cog_deg            = gnss_state.cog_deg;
-    state_out->slave_fix_type     = gnss_state.slave_fix_type;
-    state_out->slave_num_sats     = gnss_state.slave_num_sats;
-    state_out->slave_hdop         = gnss_state.slave_hdop;
-    state_out->slave_alt_m        = gnss_state.slave_alt_m;
-
-    // Slave Antenna (ANT2) Coordinates
-    if (gnss_state.slave_lat != 0.0 && gnss_state.slave_lon != 0.0) {
-        state_out->slave_lat      = gnss_state.slave_lat;
-        state_out->slave_lon      = gnss_state.slave_lon;
-    } else if (gnss_state.heading_valid && gnss_state.baseline_length_m > 0.05f && gnss_state.raw_lat != 0.0) {
-        // Geodetic projection from ANT1 to ANT2 along verified dual-antenna baseline vector
-        double lat_rad = gnss_state.raw_lat * (M_PI / 180.0);
-        double hdg_rad = gnss_state.true_heading_deg * (M_PI / 180.0);
-        double pitch_rad = gnss_state.baseline_pitch_deg * (M_PI / 180.0);
-        double horiz_len = gnss_state.baseline_length_m * cos(pitch_rad);
-        double d_north = horiz_len * cos(hdg_rad);
-        double d_east  = horiz_len * sin(hdg_rad);
-        double m_per_deg_lat = 111132.954 - 559.822 * cos(2.0 * lat_rad) + 1.175 * cos(4.0 * lat_rad);
-        double m_per_deg_lon = (111412.84 * cos(lat_rad) - 93.5 * cos(3.0 * lat_rad));
-        state_out->slave_lat      = gnss_state.raw_lat + (d_north / m_per_deg_lat);
-        state_out->slave_lon      = gnss_state.raw_lon + (d_east / m_per_deg_lon);
-    } else {
-        state_out->slave_lat      = 0.0;
-        state_out->slave_lon      = 0.0;
-    }
-
-    // Base Station Telemetry
-    state_out->base_station_id    = gnss_state.base_station_id;
-    state_out->base_coords_valid  = gnss_state.base_coords_valid;
-    state_out->base_lat           = gnss_state.base_lat;
-    state_out->base_lon           = gnss_state.base_lon;
-    state_out->base_alt_m         = gnss_state.base_alt_m;
-    state_out->base_ecef_x        = gnss_state.base_ecef_x;
-    state_out->base_ecef_y        = gnss_state.base_ecef_y;
-    state_out->base_ecef_z        = gnss_state.base_ecef_z;
-}
-
-extern "C" void um982_get_port_stats(Um982PortStats_t *stats_out)
-{
-	if (stats_out) {
-		*stats_out = port_stats;
-	}
 }
 
 extern "C" bool um982_poll_pending_rtc_sync(uint16_t *yy, uint8_t *mo, uint8_t *dd, uint8_t *hh, uint8_t *mm, uint8_t *ss)
 {
-	if (!rtc_sync_pending) return false;
-	time_t latched_epoch = s_pending_rtc_epoch;
-	uint32_t latched_ms  = s_pending_rtc_sync_ms;
-	rtc_sync_pending     = false;
+    if (!rtc_sync_pending) return false;
+    time_t latched_epoch = s_pending_rtc_epoch;
+    uint32_t latched_ms  = s_pending_rtc_sync_ms;
+    rtc_sync_pending     = false;
 
-	uint32_t elapsed_s = (millis() - latched_ms + 500U) / 1000U;
-	time_t live_epoch  = latched_epoch + (time_t)elapsed_s;
-	struct tm tm_utc;
-	if (!gmtime_r(&live_epoch, &tm_utc)) return false;
+    uint32_t elapsed_s = (millis() - latched_ms + 500U) / 1000U;
+    time_t live_epoch  = latched_epoch + (time_t)elapsed_s;
+    struct tm tm_utc;
+    if (!gmtime_r(&live_epoch, &tm_utc)) return false;
 
-	if (yy) *yy = (uint16_t)(tm_utc.tm_year + 1900);
-	if (mo) *mo = (uint8_t)(tm_utc.tm_mon + 1);
-	if (dd) *dd = (uint8_t)tm_utc.tm_mday;
-	if (hh) *hh = (uint8_t)tm_utc.tm_hour;
-	if (mm) *mm = (uint8_t)tm_utc.tm_min;
-	if (ss) *ss = (uint8_t)tm_utc.tm_sec;
-	return true;
+    if (yy) *yy = (uint16_t)(tm_utc.tm_year + 1900);
+    if (mo) *mo = (uint8_t)(tm_utc.tm_mon + 1);
+    if (dd) *dd = (uint8_t)tm_utc.tm_mday;
+    if (hh) *hh = (uint8_t)tm_utc.tm_hour;
+    if (mm) *mm = (uint8_t)tm_utc.tm_min;
+    if (ss) *ss = (uint8_t)tm_utc.tm_sec;
+    return true;
 }

@@ -7,7 +7,7 @@
 // =========================================================================
 // Firmware Identity & Semantic Versioning
 // =========================================================================
-#define ROVER_FIRMWARE_VERSION "v0.10.7"
+#define ROVER_FIRMWARE_VERSION "v0.10.8"
 
 // =========================================================================
 // Display Configuration (Waveshare ESP32-S3-Touch-LCD-3.5B)
@@ -93,16 +93,11 @@
 //   UM982_RXD0 = UM982 COM1 Receive Input   <- ESP32 UART1 TX Output (IO18)
 // Phase 8 (v0.8.0): Full-duplex COM1 carries NMEA/Heading/Response RX (IO17)
 // and ASCII Setup Commands + CRC24Q-verified Binary RTCM3 TX (IO18).
-// Serial2 (COM2 on IO47/IO48) is disabled, freeing IO47/IO48 and ~6 KB DRAM0.
+// Serial2 is retired, freeing GPIO 47/48 for isolated I2C1 (SEN0696) and ~6 KB DRAM0.
 // =========================================================================
 #define ROVER_UM982_COM1_BAUD     115200
 #define ROVER_PIN_UM982_TXD0      17  // Connected to ESP32 RX (Serial1 RX)
 #define ROVER_PIN_UM982_RXD0      18  // Connected to ESP32 TX (Serial1 TX: Commands + RTCM3)
-
-// Legacy COM2 Pin Definitions (Unused in Single-UART Mode; GPIO 47/48 assigned to I2C1 SEN0696)
-#define ROVER_UM982_COM2_BAUD     115200
-#define ROVER_PIN_UM982_TXD1      (-1) // Assigned to ROVER_PIN_I2C1_SDA (GPIO 47)
-#define ROVER_PIN_UM982_RXD1      (-1) // Assigned to ROVER_PIN_I2C1_SCL (GPIO 48)
 
 // =========================================================================
 // Ebyte E220-900T30S LoRa Module Mapping & Radio Configuration

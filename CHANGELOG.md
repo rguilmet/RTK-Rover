@@ -5,6 +5,18 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.8] - 2026-11-24
+### Refactored & Hardened
+- **Plan 1 Phase 1.1A -- `e220_driver` Modular Split & Plan 2 RTCM Validation Hooks ([`e220_driver.h`](src/e220_driver/e220_driver.h), [`e220_driver_internal.h`](src/e220_driver/e220_driver_internal.h), [`e220_config_mode3.cpp`](src/e220_driver/e220_config_mode3.cpp), [`e220_rtcm_gatekeeper.cpp`](src/e220_driver/e220_rtcm_gatekeeper.cpp), [`e220_tdma_scheduler.cpp`](src/e220_driver/e220_tdma_scheduler.cpp)):**
+  - Split `e220_driver.cpp` (`1,596 L / 68.4 KB`) into `3` single-read modules + internal header: `e220_config_mode3.cpp` (`626 L`), `e220_rtcm_gatekeeper.cpp` (`449 L`), and `e220_tdma_scheduler.cpp` (`535 L`).
+  - Exported `e220_rtcm_crc24q_compute()` and `e220_rtcm_validate_frame()` in `e220_driver.h` for Plan 2 `rtcm_arbiter` and host unit-test reuse.
+- **`um982_driver` Modular Split, `F-19` `COM2` Cleanup, `F-13` Unicore CRC32 & `F-14` Non-Blocking Audit ([`um982_driver.h`](src/um982_driver/um982_driver.h), [`um982_driver_internal.h`](src/um982_driver/um982_driver_internal.h), [`um982_nmea_parser.cpp`](src/um982_driver/um982_nmea_parser.cpp), [`um982_config_audit.cpp`](src/um982_driver/um982_config_audit.cpp), [`user_config.h`](user_config.h), [`rover_api.h`](src/rover_api.h), [`ui_tile4_diagnostics.c`](src/lvgl_port/ui_tile4_diagnostics.c)):**
+  - Split `um982_driver.cpp` (`1,146 L / 47.5 KB`) into `um982_nmea_parser.cpp` (`734 L`) and `um982_config_audit.cpp` (`546 L`).
+  - **F-19:** Removed obsolete ESP32 `COM2` legacy macros/stubs/aliases (`ROVER_UM982_COM2_BAUD`, `ROVER_PIN_UM982_TXD1`/`RXD1`, `com2_rx_bytes`, `um982_poll_com2`, `um982_forward_rtcm_to_com2`, `send_um982_com2_test_pulse`, `t4_com2_lbl` -> `t4_um982_audit_lbl`), while preserving receiver-side `UNLOGALL COM2` and `#LOGLIST` `COM2:0` auditing.
+  - **F-13:** Added bitwise NovAtel/Unicore OEM ASCII CRC32 verification (`um982_verify_unicore_crc32()`, `0 B` `DRAM0` LUT, `init=0`, `poly=0xEDB88320`) on `#VERSIONA`, `#UNIHEADINGA`, and `#BASEINFOA` before logging or state mutation, tracking drops in `Um982PortStats_t::unicore_crc_errors` (`71,300/71,300` valid captured frames matched; `4/4` corrupted frames caught).
+  - **F-14:** Replaced runtime blocking audit/reconfig loops in `um982_query_receiver_state()` / `um982_configure_rover_defaults()` with non-blocking state machine `um982_audit_and_config_step()` (`um982_request_receiver_audit()`, `um982_is_receiver_audit_active()`) so Core 0 never drops RTCM3 > `1 s` on post-boot reconnects or runtime queries.
+  - Verified clean `arduino-cli --warnings default` build (`0` warnings, `1,754,286 B` / `55%` flash, `68,696 B` / `20%` static `DRAM0`), `stage2_bench_verify.py --self-test` (`7/7`), `test_rover_telemetry.py`, `test_line_stakeout.py`, and `check_secrets.py`.
+
 ## [Plan 1 Phase 1.0] - 2026-11-24
 ### Changed & Cleaned
 - **Repo, Script & Changelog Token Hygiene ([`plan_1`](docs/plans/plan_1_shared_core_library_and_token_optimization.md) `v1.2.1`, [`scripts/README.md`](scripts/README.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`README.md`](README.md)):**

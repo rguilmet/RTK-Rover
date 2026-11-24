@@ -258,7 +258,7 @@ void task_audio_beep(void *pvParameters)
 }
 
 // =========================================================================
-// Core 0 Task: Real-Time UART Bridge (E220 <-> UM982 COM2) & Geodesic Math
+// Core 0 Task: Real-Time UART Bridge (E220 <-> UM982 COM1) & Geodesic Math
 // NOTE: Core 0 performs ZERO I2C bus transactions. All I2C0 peripherals live
 // exclusively on Core 1 to eliminate cross-core I2C bus contention.
 // =========================================================================

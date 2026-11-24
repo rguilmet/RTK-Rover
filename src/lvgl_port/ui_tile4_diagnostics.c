@@ -18,7 +18,7 @@ static lv_obj_t *t4_ant_master_lbl      = NULL;
 static lv_obj_t *t4_ant_slave_lbl       = NULL;
 static lv_obj_t *t4_base_station_lbl    = NULL;
 static lv_obj_t *t4_com1_lbl            = NULL;
-static lv_obj_t *t4_com2_lbl            = NULL;
+static lv_obj_t *t4_um982_audit_lbl     = NULL;
 static lv_obj_t *t4_e220_lbl            = NULL;
 static lv_obj_t *t4_e220_cfg_lbl        = NULL;
 static lv_obj_t *t4_power_lbl           = NULL;
@@ -150,13 +150,13 @@ void ui_tile4_diagnostics_create(lv_obj_t *parent)
     lv_obj_set_style_text_color(t4_com1_lbl, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(t4_com1_lbl, &lv_font_montserrat_12, 0);
 
-    // 6. UM982 Receiver State & Loglist Audit (Replaces legacy COM2 card)
-    t4_com2_lbl = lv_label_create(t4_scroll_cont);
-    lv_obj_set_width(t4_com2_lbl, 300);
-    lv_label_set_long_mode(t4_com2_lbl, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(t4_com2_lbl, "[UM982 RECEIVER STATE & LOGLIST]\nVer: Querying...\nMode: -- | Cfg: --\nLogs: --\nLast ACK: Waiting...");
-    lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
-    lv_obj_set_style_text_font(t4_com2_lbl, &lv_font_montserrat_12, 0);
+    // 6. UM982 Receiver State & Loglist Audit
+    t4_um982_audit_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_um982_audit_lbl, 300);
+    lv_label_set_long_mode(t4_um982_audit_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(t4_um982_audit_lbl, "[UM982 RECEIVER STATE & LOGLIST]\nVer: Querying...\nMode: -- | Cfg: --\nLogs: --\nLast ACK: Waiting...");
+    lv_obj_set_style_text_color(t4_um982_audit_lbl, lv_color_hex(0x00FFAA), 0);
+    lv_obj_set_style_text_font(t4_um982_audit_lbl, &lv_font_montserrat_12, 0);
 
     // 7. E220 LoRa Info
     char init_buf[192];
@@ -458,7 +458,7 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
         lv_label_set_text(t4_com1_lbl, buf);
     }
 
-    if (t4_com2_lbl) {
+    if (t4_um982_audit_lbl) {
         snprintf(buf, buf_sz,
                  "[UM982 RECEIVER STATE & LOGLIST] [%s]\n"
                  "Ver: %s\n"
@@ -472,11 +472,11 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
                  d->um982_stats.um982_loglist,
                  (unsigned long)d->um982_stats.cmd_responses_ok,
                  d->um982_stats.last_cmd_ack_line);
-        lv_label_set_text(t4_com2_lbl, buf);
+        lv_label_set_text(t4_um982_audit_lbl, buf);
         if (d->um982_stats.known_state_ok) {
-            lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0x00FFAA), 0);
+            lv_obj_set_style_text_color(t4_um982_audit_lbl, lv_color_hex(0x00FFAA), 0);
         } else {
-            lv_obj_set_style_text_color(t4_com2_lbl, lv_color_hex(0xFFA500), 0);
+            lv_obj_set_style_text_color(t4_um982_audit_lbl, lv_color_hex(0xFFA500), 0);
         }
     }
 

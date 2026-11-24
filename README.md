@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.10.7`  
+**Firmware Version:** `v0.10.8`  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
@@ -54,7 +54,7 @@ The user interface is optimized for high-contrast sunlight readability on the Wa
 * `24pt` True Heading readout with provenance and `[IRON ANOMALY]` warning, `224 px` spirit bubble level with 8-point compass ring, `300`-sample 360-deg ellipsoid `CAL MAG` wizard, plumb `TARE` button, `BEAM 10DOF I2C1` status, and `Baro Rel Elev`.
 
 ### Tile 4: Hardware Diagnostics & Live Observers
-* Pinned firmware header (`RTK ROVER v0.10.7`), calibrated LoRa RF survey card (`Noise`, `Pkt`, `AUX`, `RTCM3`, `Err/Trunc`), `Auto-Off` countdown/inhibit observer, MicroSD/`FFat` status, `ANT1`/`ANT2`/`Base Station` (`ECEF -> WGS84`), `SEN0696` (`Orient`/`FOC`/`3D-Cal`/`BMP581`) + `QMI8658` Pose, dual `I2C0/I2C1` error counters, and `E220` pin self-test (`M0`/`M1`).
+* Pinned firmware header (`RTK ROVER v0.10.8`), calibrated LoRa RF survey card (`Noise`, `Pkt`, `AUX`, `RTCM3`, `Err/Trunc`), `Auto-Off` countdown/inhibit observer, MicroSD/`FFat` status, `ANT1`/`ANT2`/`Base Station` (`ECEF -> WGS84`), `SEN0696` (`Orient`/`FOC`/`3D-Cal`/`BMP581`) + `QMI8658` Pose, dual `I2C0/I2C1` error counters, and `E220` pin self-test (`M0`/`M1`).
 
 ### Tile 5: Dedicated `5x3` Quick Settings Deck
 * `15` enlarged `94 x 44 px` field controls (`VOL`, `AUD`, `BRI`, `SERIAL`, `NMEA`, `RTCM`, `TELEM`, `IMU`, `TOUCH`, `WIFI`, `UNITS`, `LORA`, `AUTO-OFF`, `CAL MAG`, reserved `BLE: PLAN2`) above a dedicated Wi-Fi/Auto-Off/LoRa status footer.

@@ -54,11 +54,11 @@ typedef struct {
 // =========================================================================
 typedef struct {
     uint32_t rx_bytes_total;
-    uint32_t rtcm_bytes_forwarded; // Verified CRC24Q-valid bytes forwarded to UM982 COM2
+    uint32_t rtcm_bytes_forwarded; // Verified CRC24Q-valid bytes forwarded to UM982 COM1
     uint32_t rtcm_frames_ok;
     uint32_t rtcm_crc_errors;      // Total dropped frames (CRC mismatch + mid-frame truncation)
     uint32_t rtcm_trunc_drops;     // Frames aborted due to missing tail subpacket (>220ms silence)
-    uint32_t rtcm_orphan_bytes;    // Non-preamble / orphan tail bytes stripped before UM982 COM2
+    uint32_t rtcm_orphan_bytes;    // Non-preamble / orphan tail bytes stripped before UM982 COM1
     uint32_t aux_fall_count;       // Mode 0 AUX (IO21) falling-edge interrupt counter
     uint32_t aux_last_low_us;      // Most recent Mode 0 AUX LOW pulse width (microseconds)
     uint32_t last_rx_ms;
@@ -99,7 +99,7 @@ typedef struct {
 typedef struct {
     uint32_t com1_rx_bytes;
     uint32_t com1_tx_bytes;
-    uint32_t com2_rx_bytes;            // Legacy counter (0 in Single-UART COM1 mode)
+    uint32_t unicore_crc_errors;       // Dropped #VERSIONA/#UNIHEADINGA/#BASEINFOA CRC32 failures
     uint32_t rtcm_tx_bytes;            // Verified RTCM3 bytes forwarded to UM982 (via COM1 in v0.8.0+)
     uint32_t com1_tx_mutex_timeouts;   // Bounded 50ms mutex contention drops on COM1 TX
     uint32_t nmea_sentences_ok;
@@ -292,7 +292,6 @@ void trigger_mag_cal_cancel(void);
 void request_e220_config_read(void);
 void request_e220_config_write(void);
 void send_um982_com1_command(const char *cmd);
-void send_um982_com2_test_pulse(void);
 void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms);
 void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms, uint16_t freq2_hz, uint16_t dur2_ms);
 
