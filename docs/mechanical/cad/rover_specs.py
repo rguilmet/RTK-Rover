@@ -1,9 +1,14 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.2 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.3 enclosure.
 
-Architecture (v2.2.2 - Skeletonized Open-Truss Tilt Wedge + Pure Round Holes):
+Architecture (v2.2.3 - GX-12 D-Flat, Slotted Speaker Tower & Bottom 3.5mm Audio Jack):
+- v2.2.3: Added downward (-Z_asm) anti-rotation D-flat to the GX-12 crown bore
+  (matching REF_gx12.stp), slotted all 4 walls of the Speaker tower top-to-bottom
+  (leaving 4 corner L-pillars), and added a partial-height Bottom L-Tab + inner
+  1.50 mm anti-rotation recess + matching Top_Cover bottom notch for the
+  panel-mount 3.5mm headphone jack (REF-headphone-jack.stp).
 - v2.2.2: Eliminated teardrop crowns on Pole_Tilt_Wedge_37_5 SHCS holes (pure
   round Dia 6.80 / 11.40 mm) and skeletonized the side-profile extrusion into an
-  open Warren-truss frame (54.39 cm^3, ~37% mass reduction, 100% support-free).
+  open Warren-truss frame (54.12 cm^3, ~37% mass reduction, 100% support-free).
 - v2.2.1: Rotated Pole_Tilt_Wedge_37_5 by 90 deg around the vertical 1/4"-20
   laser-mount stud so the 60 x 135 mm platform runs sideways (parallel to screen
   width) beside the pole clamp (REF-laser_pole_mount.stp), integrated the
@@ -42,7 +47,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.2"
+__version__ = "v2.2.3"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -168,6 +173,26 @@ SPK_CY = 21.00              # Body Y: [7.00, 35.00], wire bump Y=[35.0, 37.0]; c
 SPK_PEDESTAL_H = 11.5       # Seating ridge at Z = -13.50 -> speaker front cone at Z = -3.50 (1.1 mm behind Top_Cover)
 SPK_WALL = 1.6              # 4-perimeter pocket wall (31.6 x 31.6 outer)
 SPK_RIDGE_W = 2.0           # Continuous inner seating ledge width (24.4 x 24.4 open acoustic chamber)
+SPK_SLOT_W = 15.0           # Top-to-bottom open slot on all 4 sides (leaves 8.3 mm corner L-pillars; clears 12 mm headphone jack & +Y speaker wires)
+
+# ==============================================================================
+# 4b. 3.5mm Panel-Mount Headphone Jack (from REF-headphone-jack.stp)
+# ==============================================================================
+# Body: 12.00 x 14.00 x 6.30H mm + 3.00 mm solder pins (total H = 9.30 mm) + Dia 5.90 x 3.50L M6 bushing.
+HP_BODY_W = 12.00           # Rectangular housing width (X)
+HP_BODY_L = 14.00           # Rectangular housing length (Y)
+HP_BODY_H = 6.30            # Rectangular housing thickness (Z)
+HP_PIN_DROP = 3.00          # 5 solder lugs protruding +Z toward speaker cavity (total H = 9.30 mm)
+HP_BUSHING_DIA = 5.90       # M6 x 0.5 threaded panel bushing OD
+HP_BUSHING_L = 3.50         # Threaded bushing protrusion beyond front of jack body
+HP_CX = SPK_CX              # -33.20 (aligned dead-center with speaker tower -Y slot)
+HP_Z_CTR = -21.50           # Body Z=[-24.65, -18.35], pins +Z=[-18.35, -15.35] (1.85 mm clear below speaker -13.50)
+HP_BORE_DIA = 6.20          # Pure round M6 bushing pass-through (+0.30 mm PETG clearance)
+HP_WALL = 1.50              # Outer bulkhead web Y=[0.0, 1.50] (exposes 2.00 mm M6 thread for Dia 8 mm knurled nut)
+HP_RECESS_W = HP_BODY_W + 2.0 * FIT_CLEAR   # 12.50 mm inner anti-rotation key pocket
+HP_RECESS_H = HP_BODY_H + 2.0 * FIT_CLEAR   # 6.80 mm pocket height (Z_top = -18.10; 45-deg bevel up to -16.60)
+HP_TAB_W = 22.0             # Bottom L-Tab outer width X=[-44.20, -22.20] (4.75 mm solid side piers)
+HP_TAB_Z_TOP = -13.50       # Partial-height Bottom L-Tab top (Z=-28.0..-13.50; Top_Cover keeps 13.3 mm front skirt)
 
 # ==============================================================================
 # 5. Holybro UM982 (from REF-holybro-um982.stp: 34.8 x 58.9 x 14.4H mm)
@@ -226,10 +251,11 @@ E220_SMA_DIA = 6.6
 E220_SMA_FLAT = 5.98        # Across-flat height from +Z crown to -Z flat (flat at Z=-13.930, 0.125 mm clear of -13.805)
 E220_SMA_WALL = 2.6         # Inner flange face at Y = 177.40
 
-# GX-12 5-Pin Compass Bulkhead (from REF-compass-module-input-connector.stp, Z-centered in main body)
+# GX-12 5-Pin Compass Bulkhead (from REF_gx12.stp, Z-centered in main body w/ downward -Z_asm D-flat)
 GX12_X = -39.50             # Flange [-47.25, -31.75]; clears Top-Left M3 (-54.2) & UM982 (-27.2)
 GX12_Z = -14.00             # Exact center of 28.0 mm main chassis Z = [0.00, -28.00]
-GX12_HOLE_DIA = 12.2        # Pure round M12 x 0.75 barrel clearance (no teardrop)
+GX12_HOLE_DIA = 12.2        # M12 x 0.75 barrel clearance
+GX12_FLAT = 11.25           # Downward (-Z_asm) anti-rotation D-flat across-flat height (Z_flat=-19.15, 0.15 mm clear of REF_gx12 -19.000)
 GX12_NUT_RECESS_DIA = 17.5
 GX12_WALL = 2.6             # Inner wall Y = 177.40 -> outer Y = 180.00
 

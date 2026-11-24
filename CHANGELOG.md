@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.2.3] - 2026-11-23
+### Added & Changed
+- **`GX-12` Downward D-Flat, Bottom L-Tab `3.5mm` Headphone Jack & `4`-Side Slotted Speaker Tower ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.3`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.3`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.3`, [`REF_gx12.stp`](docs/mechanical/cad/step/REF_gx12.stp), [`REF-headphone-jack.stp`](docs/mechanical/cad/step/REF-headphone-jack.stp), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Added a downward (`-Z_asm`) anti-rotation D-flat (`GX12_FLAT = 11.25 mm`, `Z_flat = -19.15 mm`, `0.15 mm` clear) to the `GX-12` crown bore on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`90.46 cm^3`) matching [`REF_gx12.stp`](docs/mechanical/cad/step/REF_gx12.stp).
+  - Integrated a partial-height **Bottom Headphone L-Tab** (`HP_CX = -33.20`, `HP_TAB_W = 22.0 mm`, `Z = -28.0..-13.50`) on `Back_Chassis_Frame` with an inner `1.50 mm` anti-rotation recess + `45-deg` top bevel (`Dia 6.20 mm` round bore exposing `2.00 mm` of `M6` thread for the `Dia 8.0 mm` round knurled nut) mounting [`REF-headphone-jack.stp`](docs/mechanical/cad/step/REF-headphone-jack.stp) pins pointing `+Z` UP (`1.85 mm` clear below the speaker, `>= 34.86 mm` clear of [`REF-laser_pole_mount.stp`](docs/mechanical/cad/step/REF-laser_pole_mount.stp)), split the bottom inner capture rim, and added a matching open-bottom notch on [`Top_Cover.step`](docs/mechanical/cad/step/Top_Cover.step) (`64.27 cm^3`, continuous `13.30 mm` front bottom skirt).
+  - Slotted all `4` walls of the Speaker tower top-to-bottom (`SPK_SLOT_W = 15.0 mm`, leaving `4` rigid `8.3 mm`-leg corner L-pillars), opening `-Y` for the jack body/pins and `+Y` for speaker leads (`100%` support-free).
+  - Regenerated DXF/STEP/STL/assemblies/previews and verified `8/8` manifold checks, **`62/62` `0.0000 mm^3` boolean interference checks** (`15` printed-part pairs + `25` hardware pairs + `REF_headphone` vs `REF_speaker` + `21` laser-mount pairs), and clean OpenSCAD `Manifold --hardwarnings` builds on `back`, `back_print`, `top`, and `top_print`.
+
 ## [v0.10.7] - 2026-11-23
 ### Changed
 - **Signed Along-Line `A:` / `Line->B:` Progress Readout ([`nav_engine.h`](src/nav_engine/nav_engine.h), [`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`ui_tile0_guidance.c`](src/lvgl_port/ui_tile0_guidance.c), [`ui_tile0_views.c`](src/lvgl_port/ui_tile0_views.c), [`user_config.h`](user_config.h), [`README.md`](README.md)):**
