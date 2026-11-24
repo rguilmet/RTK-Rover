@@ -1,9 +1,9 @@
 # Plan 1: Unified Shared Core Library (`Field_Instrument_Core`), Codebase Modularization & Token Optimization
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap -- **Phase 1.0 & Phase 1.1A (`v0.10.8`) COMPLETE (`2026-11-24`)**, Phase 1.1B Next  
-> **Document Version:** `1.2.2`  
-> **Baselines:** `RTK_Rover v0.10.8` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
+> **Status:** Active Execution Roadmap -- **Phase 1.0, Phase 1.1A (`v0.10.8`) & Phase 1.1B (`v0.10.9`) COMPLETE (`2026-11-24`)**, Phase 1.1C Next  
+> **Document Version:** `1.2.3`  
+> **Baselines:** `RTK_Rover v0.10.9` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
 > **Completed Prerequisite:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`, refined through `v0.10.7` and archived `2026-11-24`: `lvgl_port.c` 11-file split, `I2C1` dual-bus `i2c_bsp`, `matrix_math`/`ahrs_9dof` port, `rtk-firmware-release`/`rtk-cad-pipeline` skills, and `build/`+`scratch/` purge completed).  
 > **Companion Roadmap:** [`plan_2_rover_enhancements_and_android_companion.md`](plan_2_rover_enhancements_and_android_companion.md) (`v1.3.0`)  
 > **Supersedes / Consolidates:** [`archive/plan_project_structure_and_token_optimization.md`](archive/plan_project_structure_and_token_optimization.md), Phase 1 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), residual F-19 `COM2` naming cleanup from [`archive/plan_phase9_gps_disciplined_tdma.md`](archive/plan_phase9_gps_disciplined_tdma.md), open Core-tier robustness findings (`F-12`, `F-13`, `F-14`, `F-17`) from archived `project_review_sonnet.md`, and Section 7 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md).
@@ -29,9 +29,9 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 | :--- | :---: | :---: | :---: | :--- |
 | `CHANGELOG.md` | `29,879 B` (`248 KB` pre-split) | `137 L` (`1,663 L` pre-split) | **Compliant** | **Done in Ph 1.0 (`2026-11-24`)**: `< v0.9.0` -> `docs/changelog_archive_v0_1_to_v0_8.md` |
 | `src/lvgl_port/` (`11` files) | `max 34 KB` | `max 792 L` | **Compliant** | **Done in Plan 0 (`11` files <= 792 L)**; decouple `lvgl_port_core.c` in Ph 1.1 |
-| `RTK_Rover.ino` | `80,693 B` | `1,531 L` | `1.75x B / 1.91x L` | Phase 1.1: Extract `rover_audio`, `rover_power` + `rover_sensors`/`CAL MAG` (`< 750 L`) |
+| `RTK_Rover.ino` + `rover_*` (`7` files) | `max 34,453 B` (`80.7 KB` pre-split) | `max 754 L` (`1,675 L` pre-split) | **Compliant** | **Done in Ph 1.1B (`v0.10.9`)**: `.ino` (`575 L / 28,043 B`), `rover_audio` (`321 L`), `rover_power` (`175 L`), `rover_sensors` (`754 L`) |
 | `src/e220_driver/` (`5` split files) | `max 25,759 B` (`68.4 KB` pre-split) | `max 626 L` (`1,596 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `config_mode3` (`626 L`), `gatekeeper` (`449 L`), `tdma` (`535 L`), `internal.h` (`104 L`) |
-| `src/waypoint_manager/waypoint_manager.cpp` | `45,645 B` | `1,060 L` | `0.99x B / 1.33x L` | Phase 1.1B: Split CSV store vs. survey logger (`2` files) |
+| `src/waypoint_manager/` (`4` split files) | `max 28,195 B` (`45.6 KB` pre-split) | `max 748 L` (`1,181 L` pre-split) | **Compliant** | **Done in Ph 1.1B (`v0.10.9`)**: `csv_store` (`748 L`), `survey_log` (`471 L`), `internal.h` (`18 L`), injected FS/mutex hook |
 | `src/um982_driver/` (`4` split files) | `max 29,344 B` (`47.5 KB` pre-split) | `max 734 L` (`1,146 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `nmea_parser` (`734 L`), `config_audit` (`546 L`), `internal.h` (`53 L`) + F-19/F-13/F-14 |
 | `src/settings_manager/settings_manager.cpp` | `40,720 B` | `714 L` | Near byte cap | Phase 1.1: Monitor size + add F-12 atomic `.tmp` + `rename()` save |
 | `scripts/e220_pacer.py` | `81,545 B` | `1,668 L` | `1.77x B / 2.09x L` | Optional split (`rover_protocol.py` + `update_e220_pacer.sh`) |
@@ -104,12 +104,12 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
    * **F-19 (`COM2` Cleanup, `DONE`):** Removed obsolete ESP32 `COM2` legacy macros/stubs/aliases (`um982_forward_rtcm_to_com2`, `um982_poll_com2`, `send_um982_com2_test_pulse`, `com2_rx_bytes` -> `unicore_crc_errors`, `ROVER_UM982_COM2_BAUD`, `ROVER_PIN_UM982_TXD1`/`RXD1`, `t4_com2_lbl` -> `t4_um982_audit_lbl`, and `COM2` comments across `RTK_Rover.ino`, `rover_api.h`, `user_config.h`, `ui_tile4_diagnostics.c`, `e220_driver`), preserving receiver-side `UNLOGALL COM2` and `#LOGLIST` `COM2:0` verification.
    * **F-13 (Unicore CRC32 Check, `DONE`):** Added bitwise NovAtel/Unicore CRC32 (`um982_verify_unicore_crc32()`, `0 B` `DRAM0`) on `#VERSIONA`, `#UNIHEADINGA`, and `#BASEINFOA` before logging or parsing alongside NMEA XOR `*XX` (`um982_verify_nmea_checksum()`), verified against `71,304` captured frames (`71,300/71,300` valid matched, `4/4` corrupted frames rejected).
    * **F-14 (Non-Blocking Receiver Audit Safety, `DONE`):** Replaced runtime blocking audit/reconfig loops with `um982_audit_and_config_step()` state machine (`um982_request_receiver_audit()`, `um982_is_receiver_audit_active()`) so Core 0 never drops RTCM3 > `1 s` on reconnects or runtime queries.
-4. **Split `src/waypoint_manager/waypoint_manager.cpp` (`1,060 L / 45.6 KB` -> `2` Units):**
-   * `waypoint_csv_store.cpp` + `waypoint_survey_log.cpp` (with injected FS + mutex).
-5. **Slim `RTK_Rover.ino` (`1,531 L / 80.7 KB` -> `< 750 L / < 42 KB`):**
-   * Extract Priority-4 ES8311 `task_audio_beep` + `beepQueue` into `src/rover_audio/`.
-   * Extract AXP2101 auto-shutdown / startup power logic into `src/rover_power/` (also staging Plan 2's `< 3.40 V` low-battery SD flush hook).
-   * Extract Core 1 `SEN0696` / `QMI8658` / `CAL MAG` sensor-fusion orchestration loop into `src/rover_sensors/` (`~450-550 L`) so `RTK_Rover.ino` drops cleanly below both `800 L` and `46 KB`.
+4. **Split `src/waypoint_manager/waypoint_manager.cpp` (`1,181 L / 45,645 B` -> `2` Units + `waypoint_manager_internal.h`, `DONE` `v0.10.9` `2026-11-24`):**
+   * `waypoint_csv_store.cpp` (`748 L / 28,195 B`) + `waypoint_survey_log.cpp` (`471 L / 18,379 B`) + `waypoint_manager_internal.h` (`18 L / 461 B`), adding C++ `waypoint_manager_set_fs()` FS/mutex injection while preserving PSRAM `g_waypoints`, `12` `kNoteTags`, `s_stem_cache[64]`, and circular `atan2` heading averaging.
+5. **Slim `RTK_Rover.ino` (`1,675 L / 80,693 B` -> `575 L / 28,043 B`, `DONE` `v0.10.9` `2026-11-24`):**
+   * Extracted Priority-4 ES8311 `task_audio_beep` + `beepQueue` + `rover_audio_update_nav_guidance()` into `src/rover_audio/` (`rover_audio.cpp` `321 L / 13,111 B`).
+   * Extracted AXP2101 polling, `rover_power_get_snapshot()`, `rover_power_flush_all_logs()` (staging Plan 2's `< 3.40 V` low-battery SD flush hook), and 30s auto-shutdown timer into `src/rover_power/` (`rover_power.cpp` `175 L / 7,559 B`).
+   * Extracted Core 1 QMI8658/MMC5983MA/SEN0696 10-DOF polling, PSRAM `s_beam_ahrs` init + `|B|` collapse self-heal, `MagCalWizard_t`, and BMP581 baro elevation into `src/rover_sensors/` (`rover_sensors.cpp` `754 L / 34,453 B`), compiling with `0` warnings (`1,754,134 B` / `55%` flash, `69,184 B` / `21%` static `DRAM0`).
 6. **Decouple Core Candidates & Settings Integrity (`F-12`):**
    * Strip `settings_manager.h` + `serial_logger.h` from `imu_bsp.c`; inject UTC offset & remove `um982_driver.h` from `rtc_bsp.cpp`; convert `sen0696_driver.cpp` to `FicSen0696_t *`; align `nmea_logger.cpp` and `route_logger.cpp` to `rtcm_logger`'s decoupled `s_buf_mux`/`s_file_mux`.
    * **F-12 (`settings_manager` Atomicity):** Write settings to `/settings.json.tmp` on SD/`FFat` before atomic `rename()` over `/settings.json` (plus add a read/write snapshot mutex where multi-task reads occur) so brownout mid-save never leaves a 0-byte config.
@@ -171,7 +171,7 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 
 | Metric | Current (`v0.10.7`) | Target (End of Plan 1) |
 | :--- | :---: | :--- |
-| C/C++ files exceeding `800 L / 46 KB` | `4` app files (`ui` already split into `11` <= 792 L) | **`0` core/app source files** |
+| C/C++ files exceeding `800 L / 46 KB` | `4` app files (`Ph 1.1A/1.1B DONE`; `nav_engine.cpp` at `804 L`) | **`0` core/app source files** |
 | Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` (1 shared library)** |
 | In-tree `build/` & `scratch/` clutter | **`0 B` (purged `2026-11-24`)** | **`0 B` (permanent)** |
 | Active `CHANGELOG.md` size | `137 L` / `29.9 KB` (`DONE Ph 1.0`) | **`< 450 L` / `< 40 KB`** |

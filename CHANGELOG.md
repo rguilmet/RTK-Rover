@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.9] - 2026-11-24
+### Refactored & Modularized
+- **Plan 1 Phase 1.1B -- `waypoint_manager` Split & `RTK_Rover.ino` Extraction ([`waypoint_manager.h`](src/waypoint_manager/waypoint_manager.h), [`waypoint_manager_internal.h`](src/waypoint_manager/waypoint_manager_internal.h), [`waypoint_csv_store.cpp`](src/waypoint_manager/waypoint_csv_store.cpp), [`waypoint_survey_log.cpp`](src/waypoint_manager/waypoint_survey_log.cpp), [`rover_audio`](src/rover_audio/rover_audio.h), [`rover_power`](src/rover_power/rover_power.h), [`rover_sensors`](src/rover_sensors/rover_sensors.h), [`RTK_Rover.ino`](RTK_Rover.ino), [`user_config.h`](user_config.h)):**
+  - Split `waypoint_manager.cpp` (`1,181 L / 45,645 B`) into `waypoint_csv_store.cpp` (`748 L / 28,195 B`) and `waypoint_survey_log.cpp` (`471 L / 18,379 B`) plus `waypoint_manager_internal.h` (`18 L`), adding C++ `waypoint_manager_set_fs()` filesystem/mutex injection while preserving PSRAM `g_waypoints`, `12` `kNoteTags`, `s_stem_cache[64]`, and circular `atan2` heading averaging.
+  - Extracted ES8311 I2S Priority-4 `RoverAudio` synthesis (`beepQueue` + `rover_audio_update_nav_guidance()` L/R acoustic fade & Geiger/Beep proximity) into `src/rover_audio/` (`rover_audio.cpp` `321 L / 13,111 B`).
+  - Extracted AXP2101 0.5 Hz polling, thread-safe `rover_power_get_snapshot()`, `rover_power_flush_all_logs()` shutdown/brownout hook, and motion/logger-safe 30s auto-shutdown timer into `src/rover_power/` (`rover_power.cpp` `175 L / 7,559 B`).
+  - Extracted Core 1 QMI8658/MMC5983MA/SEN0696 10-DOF polling, PSRAM `s_beam_ahrs` init + `|B|` collapse self-heal, `MagCalWizard_t` 3D ellipsoid calibration, BMP581 RTK-disciplined baro elevation, and `1 Hz` `[10DOF]` diagnostics into `src/rover_sensors/` (`rover_sensors.cpp` `754 L / 34,453 B`).
+  - Slimmed [`RTK_Rover.ino`](RTK_Rover.ino) from `1,675 L / 80,693 B` down to `575 L / 28,043 B`, preserving exact FreeRTOS task priorities/stacks (`RoverAudio` Prio 4 Core 1, `RoverCore0` Prio 4 Core 0, `RoverUI` Prio 2 Core 1) and hardware setup sequence, and updated the stale `UART1 & UART2` setup comment to `Single-UART COM1`.
+  - Verified zero warnings with `arduino-cli --warnings default` (`1,754,134 B` / `55%` flash, `69,184 B` / `21%` static `DRAM0`), `stage2_bench_verify.py --self-test` (`7/7`), `test_rover_telemetry.py`, `test_line_stakeout.py`, and `check_secrets.py`.
+
 ## [v0.10.8] - 2026-11-24
 ### Refactored & Hardened
 - **Plan 1 Phase 1.1A -- `e220_driver` Modular Split & Plan 2 RTCM Validation Hooks ([`e220_driver.h`](src/e220_driver/e220_driver.h), [`e220_driver_internal.h`](src/e220_driver/e220_driver_internal.h), [`e220_config_mode3.cpp`](src/e220_driver/e220_config_mode3.cpp), [`e220_rtcm_gatekeeper.cpp`](src/e220_driver/e220_rtcm_gatekeeper.cpp), [`e220_tdma_scheduler.cpp`](src/e220_driver/e220_tdma_scheduler.cpp)):**

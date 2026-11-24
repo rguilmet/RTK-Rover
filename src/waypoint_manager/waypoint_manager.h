@@ -85,4 +85,11 @@ void        waypoint_update_survey_averaging(const RoverUIData_t *live_state,
 }
 #endif
 
+#ifdef __cplusplus
+#include <FS.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+void waypoint_manager_set_fs(fs::FS *primary_fs, SemaphoreHandle_t mux);
+#endif
+
 #endif // WAYPOINT_MANAGER_H
