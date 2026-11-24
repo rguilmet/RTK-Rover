@@ -1,11 +1,15 @@
 # Plan 0: Field Survey Refinements, 6-Tile Ergonomic UI, Auto-Off & SEN0696 I2C1 Fusion
 
+> [!IMPORTANT]
+> **ARCHIVED (`2026-11-24`):** Plan 0 implementation completed cleanly across `v0.8.19 -> v0.9.0` and was further refined through **`v0.10.7`** (`2D/3D CAL MAG` self-heal, stationary gyro FOC gate, 2-mode Unified Tile 0 Log-Scale Guidance Triangle, lock-free framebuffer screenshots, `BS` Base Station map symbol, and signed `A:` / `Line->B:` progress readout).  
+> **Carry-Over Tracking:** Residual outdoor field checks (30-min outdoor `I2C1` soak, `< 2 deg` static beam compass vs. `HDG_FIX` accuracy, `0.0 s` switchover, and battery `AUTO-OFF` verification) are folded into **[Plan 2 Gates G1 & G5](../plan_2_rover_enhancements_and_android_companion.md)**; remaining `< 800 L` driver splits & `Field_Instrument_Core` extraction live in **[Plan 1](../plan_1_shared_core_library_and_token_optimization.md)**.
+
 > [!NOTE]
-> **Status:** Complete -- Phases 0.1-0.5 Shipped in `v0.8.19`; Phase 0.6 Shipped in `v0.9.0` (November 22, 2026)  
+> **Original Completion Status:** Complete -- Phases 0.1-0.5 Shipped in `v0.8.19`; Phase 0.6 Shipped in `v0.9.0` (November 22, 2026)  
 > **Document Version:** `v1.3.0`  
-> **Baseline:** `RTK_Rover v0.9.0` | `CAD v2.2.2` | `e220_pacer.py v3.7.1`  
+> **Baseline at Completion:** `RTK_Rover v0.9.0` (later refined through `v0.10.7`) | `CAD v2.2.2` (`v2.2.4` current) | `e220_pacer.py v3.7.1`  
 > **Delivered Releases:** `v0.8.19` (LVGL 11-File Split, 6-Tile UI, Unified Line+Bullseye, L/R Audio, Safe Auto-Off, NTRIP Config Persistence) -> `v0.9.0` (Phase 0.6: `SEN0696` `I2C1 GPIO 47/48` Isolation & Calibrated Beam 9-DOF Fusion)  
-> **Execution Order:** **Plan 0 (`v0.8.19` - `v0.9.0`, COMPLETE)** -> [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](plan_2_rover_enhancements_and_android_companion.md)
+> **Next Active Plans:** [`Plan 1` (`Field_Instrument_Core` & Remaining Splits)](../plan_1_shared_core_library_and_token_optimization.md) -> [`Plan 2` (`3.5B` BLE NUS, RTCM Arbiter & Android Slave Mode)](../plan_2_rover_enhancements_and_android_companion.md)
 
 ---
 
