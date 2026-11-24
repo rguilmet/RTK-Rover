@@ -2,7 +2,7 @@
 
 **Document Version:** `v2.10.7`  
 **Last Updated:** November 24, 2026  
-**Firmware Target:** `v0.10.7`  
+**Firmware Target:** `v0.11.0` (depends on `Field_Instrument_Core >= v1.0.1`; standalone snapshot at Git tag `v0.10.10`)  
 **Python Ecosystem Target:** `e220_pacer.py v3.7.1` | `stage2_bench_verify.py v1.0.3` | `cogo_solver.py v1.2.0`  
 **Mechanical CAD Baseline:** `v2.2.4`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
@@ -92,24 +92,24 @@ In dense forest canopy when secondary (`ANT2`) carrier lock drops, `nav_heading_
 
 ---
 
-## 5. FreeRTOS, Core Libraries & LVGL 9 Architecture (`v0.10.7`)
+## 5. FreeRTOS, Core Libraries & LVGL 9 Architecture (`v0.11.0`)
 
 ### Core Separation
 * **Core 0 (`task_rover_core0` / `"RoverCore0"`, Priority 4 -- Zero I2C Access):**
   * Polls `E220` (`Serial0`), logs raw bytes to `rtcm-base_*.txt`, stages incoming bytes through the `rx_stage` `CRC24Q` Gatekeeper (`280 / 380 / 480 ms` truncation timeouts), forwards intact RTCM3 frames to `UM982 COM1` (`s_com1_tx_mutex`), runs `Second 0` uplink (`48 B` V3) & Mode 0 RSSI polling, and handles 4-ACK 3-rate switching.
   * Polls `UM982 COM1` (`Serial1`), runs 30 Hz midpoint lever-arm + `nav_heading_beam_update()`, and wakes within `<= 2 ms` via `g_waypoint_change_seq`.
 * **Core 1 (`RoverAudio` Pri 4, `lvgl_port_task` Pri 3, `RoverUI` Pri 2, `loopTask` Pri 1 -- Exclusive `I2C0` & `I2C1` Owner):**
-  * **`task_audio_beep` (`"RoverAudio"`, Priority 4):** `< 1 ms` ES8311 I2S tone/chirp synthesis driven by `beepQueue`.
-  * **`rover_lvgl_port_task` (Priority 3):** Renders the modular 6-tile LVGL 9 UI (`src/lvgl_port/`, `11` modules `<= 792 L`), runs `0 ms` same-frame button recomputation (`refresh_t0_guidance_readout_immediately()`), and services lock-free one-shot PSRAM framebuffer screenshot requests (`s_fb_capture_dst` / `s_fb_capture_done_sem` in `lvgl_port_core.c`) directly inside flush/idle ticks without Core 1 mutex starvation (`v0.10.4`).
-  * **`task_display_and_audio` (`"RoverUI"`, Priority 2):** Exclusive `I2C0` + `I2C1` owner (`400 kHz`, `.scl_wait_us = 20000`, `s_ports[2]` mutexes, 18-clock GPIO SCL bus-clear, automatic bus reinit, `0x61`/`0x71` sentinel filters): polls touch, `SEN0696` (`25-30 Hz` / `~3 Hz` baro), `QMI8658`, `PCF85063`, and `AXP2101`; runs audio guidance (`L/R` chirps + Geiger/Beeps), `CAL MAG` capture, and safe Auto-Off countdown/logger flush.
-  * **`loopTask` (Priority 1):** Executes 5s debounced `save_settings()` with smart `FFat` skip (`non_index_settings_equal()`), hosts `handle_wifi_server()`, flushes PSRAM ring loggers (`s_io_owner_task` re-entrancy), and executes 24-bit BMP screenshot file writes using a `2`-row (`1,920 B`) internal DMA chunk buffer w/ `FFat` fallback and post-`close()` size verification (`460,854 B`).
-* **Portable Zero-App-Dependency Core Modules (Seeded for Plan 1 `Field_Instrument_Core`):**
-  * [`src/matrix_math/matrix_math.h`](../src/matrix_math/matrix_math.h) (`698 L`) & [`src/sensor_fusion/ahrs_9dof.{h,cpp}`](../src/sensor_fusion/ahrs_9dof.cpp) (`116 / 469 L`).
+  * **`task_audio_beep` (`"RoverAudio"`, Priority 4):** `< 1 ms` ES8311 I2S tone/chirp synthesis driven by `fic_audio_beeper` inside `Field_Instrument_Core`.
+  * **`fic_lvgl_port_task` (Priority 3):** Renders the modular 6-tile LVGL 9 UI (`src/lvgl_port/`, `9` UI `.c` + `2` `.h` modules `<= 789 L`), runs `0 ms` same-frame button recomputation (`refresh_t0_guidance_readout_immediately()`), and services lock-free one-shot PSRAM framebuffer screenshot requests (`fic_lvgl_capture_framebuffer()`) directly inside flush/idle ticks without Core 1 mutex starvation.
+  * **`task_display_and_audio` (`"RoverUI"`, Priority 2):** Exclusive `I2C0` + `I2C1` owner (`400 kHz`, `.scl_wait_us = 20000`, `fic_i2c_lock_port()` mutexes, 18-clock GPIO SCL bus-clear, automatic bus reinit, `0x61`/`0x71` sentinel filters): polls touch, `SEN0696` (`25-30 Hz` / `~3 Hz` baro), `QMI8658`, `PCF85063`, and `AXP2101`; runs audio guidance (`L/R` chirps + Geiger/Beeps), `CAL MAG` capture, and safe Auto-Off countdown/logger flush.
+  * **`loopTask` (Priority 1):** Executes 5s debounced `save_settings()` with smart `FFat` skip (`non_index_settings_equal()`), hosts `fic_web_portal_handle()`, flushes PSRAM ring loggers (`fic_core_log` + `fic_ring_logger`), and executes 24-bit BMP screenshot writes (`fic_screenshot_save_bmp()`, `2`-row DMA chunk buffer, `FFat` fallback, `460,854 B` post-`close()` check).
+* **Shared BSP & Core Library (`Field_Instrument_Core >= v1.0.1`):**
+  * Provides `waveshare_s3_35b.h`, dual-bus `fic_i2c_bsp`, `tca9554`, `fic_lvgl_port`, `fic_screenshot`, `esp_codec_dev`/`codec_board`/`fic_audio_beeper`, `fic_qmi8658`, `fic_sen0696`, `fic_mmc5983ma`, `fic_pcf85063`, `fic_axp2101`, `fic_matrix_math`, `fic_ahrs_9dof`, `fic_fs_manager`/`fic_core_log`/`fic_ring_logger`/`fic_settings_json`, and `fic_web_portal`.
 
-### Memory Partitioning (`v0.10.7` Verified on `COM3`)
-* **Binary Image:** `1,753,634 B` (`55%` of `3,145,728 B` app slot under `app3M_fat9M_16MB`).
-* **8 MB Octal PSRAM (`~7.38 MB` runtime free):** Dual RGB565 framebuffers (`614.4 KB`), `serial`/`rtcm`/`nmea` ring buffers (`57.3 KB`), `g_waypoints` (`MAX_WAYPOINTS = 128`), `CAL MAG` sample array, and ~400+ LVGL 9 UI objects scoped via `heap_caps_malloc_extmem_enable(64)` -> `4096`.
-* **Internal `DRAM0` / DMA SRAM:** Static global dynamic usage = **`68,672 B` (`20%` of `327,680 B`)**, leaving **`~154-158 KB` free internal heap (`~106-114 KB` largest block, `~147-150 KB` DMA)** for Wi-Fi / future BLE stacks and QSPI/SD/I2S DMA.
+### Memory Partitioning (`v0.11.0` Compiled Output & PSRAM Allocation)
+* **Binary Image:** `1,760,414 B` (`55%` of `3,145,728 B` app slot under `app3M_fat9M_16MB`), `0` compiler warnings (`--warnings default`).
+* **8 MB Octal PSRAM:** Dual RGB565 framebuffers (`614.4 KB`), `serial`/`rtcm`/`nmea`/`route` ring buffers (`61.4 KB`), `g_waypoints` (`MAX_WAYPOINTS = 128`), `CAL MAG` sample array, and ~400+ LVGL 9 UI objects scoped via `heap_caps_malloc_extmem_enable(64)` -> `4096`.
+* **Internal `DRAM0` / DMA SRAM:** Static global dynamic usage = **`68,712 B` (`20%` of `327,680 B`)** (bench-verified `~155 KB` free internal heap on `v0.10.10` prior to `v0.11.0` smoke flash).
 
 ---
 

@@ -11,29 +11,28 @@
 #include <esp_task_wdt.h>
 
 #include "user_config.h"
+#include <Field_Instrument_Core.h>
+#include <boards/waveshare_s3_35b.h>
 #include "src/rover_api.h"
-#include "src/i2c_bsp/i2c_bsp.h"
-#include "src/tca9554/esp_io_expander_tca9554.h"
-#include "src/axp2101_bsp/axp2101_bsp.h"
-#include "src/rtc_bsp/rtc_bsp.h"
-#include "src/beam_imu_bsp/sen0696_driver.h"
 #include "src/settings_manager/settings_manager.h"
 #include "src/nav_engine/nav_engine.h"
 #include "src/waypoint_manager/waypoint_manager.h"
 #include "src/e220_driver/e220_driver.h"
 #include "src/um982_driver/um982_driver.h"
 #include "src/lvgl_port/lvgl_port.h"
-#include "src/screenshot/screenshot.h"
 #include "src/storage/route_logger.h"
 #include "src/storage/nmea_logger.h"
 #include "src/storage/rtcm_logger.h"
 #include "src/storage/serial_logger.h"
-#include "src/web_server/web_server.h"
 #include "src/rover_audio/rover_audio.h"
 #include "src/rover_power/rover_power.h"
 #include "src/rover_sensors/rover_sensors.h"
 
-extern esp_io_expander_handle_t io_expander;
+extern SemaphoreHandle_t fs_mux;
+extern "C" void update_wifi_ip_label(const char *ip);
+
+static esp_io_expander_handle_t s_io_expander = NULL;
+static FicBoardProfile_t        s_board_cfg   = fic_board_waveshare_s3_35b();
 bool sd_card_mounted = false;
 bool sd_card_use_spi = false;
 
@@ -77,27 +76,83 @@ static bool rover_rtc_allow_sys_sync_cb(void)
     return !gps_time_sync.time_synced;
 }
 
+static bool rover_get_wifi_creds_cb(char *ssid_out, size_t ssid_sz, char *pass_out, size_t pass_sz)
+{
+    SystemSettings snap;
+    settings_get_snapshot(&snap);
+    strncpy(ssid_out, snap.wifi_ssid, ssid_sz - 1U);
+    ssid_out[ssid_sz - 1U] = '\0';
+    strncpy(pass_out, snap.wifi_password, pass_sz - 1U);
+    pass_out[pass_sz - 1U] = '\0';
+    return true;
+}
+
+static void rover_web_file_uploaded_cb(const char *filename, const char *fs_key)
+{
+    (void)fs_key;
+    if (!filename) return;
+    String fn(filename);
+    if (fn.endsWith(".csv") || fn.endsWith(".CSV")) {
+        waypoint_scan_files();
+        if (fn.endsWith("waypoints.csv")) {
+            waypoint_load_csv(current_settings.active_waypoint_file);
+        }
+        if (fic_lvgl_lock(100)) {
+            refresh_waypoint_table_ui();
+            fic_lvgl_unlock();
+        }
+        Serial.printf("[WEB] Refreshed waypoint list after CSV upload (%s)\n", filename);
+    } else if (fn.endsWith("settings.json")) {
+        load_settings();
+        Serial.println("[WEB] Reloaded settings.json after dual-FS sync upload!");
+    }
+}
+
+static void rover_filename_ts_cb(char *buf, size_t max_len)
+{
+    fic_rtc_get_formatted_timestamp(buf, max_len, true);
+}
+
+static uint64_t rover_screenshot_free_kb_cb(fs::FS *fs)
+{
+    if (sd_card_mounted) {
+        if (sd_card_use_spi && fs == &SD) {
+            return (SD.totalBytes() - SD.usedBytes()) / 1024ULL;
+        }
+        if (!sd_card_use_spi && fs == &SD_MMC) {
+            return (SD_MMC.totalBytes() - SD_MMC.usedBytes()) / 1024ULL;
+        }
+    }
+    if (fs == &FFat) {
+        return FFat.freeBytes() / 1024ULL;
+    }
+    return 0ULL;
+}
+
+static bool rover_take_screenshot(void)
+{
+    FicScreenshotCfg_t scfg = {};
+    fs::FS *sd_fs      = sd_card_mounted ? (sd_card_use_spi ? (fs::FS *)&SD : (fs::FS *)&SD_MMC) : nullptr;
+    scfg.primary_fs    = sd_fs ? sd_fs : (fs::FS *)&FFat;
+    scfg.primary_name  = sd_fs ? "SD" : "FFat";
+    scfg.fallback_fs   = sd_fs ? (fs::FS *)&FFat : nullptr;
+    scfg.fallback_name = sd_fs ? "FFat" : nullptr;
+    scfg.fs_mux        = fs_mux;
+    scfg.dir_path      = "/screenshots";
+    scfg.width         = ROVER_LCD_H_RES;
+    scfg.height        = ROVER_LCD_V_RES;
+    scfg.timestamp_cb  = rover_filename_ts_cb;
+    scfg.free_kb_cb    = rover_screenshot_free_kb_cb;
+    scfg.log_cb        = rover_printf;
+    return fic_screenshot_save_bmp(&scfg, NULL, 0);
+}
+
 static void rover_init_display(void)
 {
-    BoardDisplayCfg_t cfg = {};
-    cfg.h_res                = ROVER_LCD_H_RES;
-    cfg.v_res                = ROVER_LCD_V_RES;
+    FicLvglDisplayCfg_t cfg = {};
+    fic_lvgl_cfg_from_board(&s_board_cfg, &cfg);
     cfg.dma_buf_bytes        = LVGL_DMA_BUFF_LEN;
     cfg.spiram_buf_bytes     = LVGL_SPIRAM_BUFF_LEN;
-    cfg.spi_host             = LCD_HOST;
-    cfg.pin_cs               = ROVER_PIN_LCD_CS;
-    cfg.pin_pclk             = ROVER_PIN_LCD_PCLK;
-    cfg.pin_data0            = ROVER_PIN_LCD_DATA0;
-    cfg.pin_data1            = ROVER_PIN_LCD_DATA1;
-    cfg.pin_data2            = ROVER_PIN_LCD_DATA2;
-    cfg.pin_data3            = ROVER_PIN_LCD_DATA3;
-    cfg.pin_bk_light         = ROVER_PIN_BK_LIGHT;
-    cfg.pclk_hz              = 40U * 1000U * 1000U;
-    cfg.tca9554_addr         = ROVER_I2C_ADDR_TCA9554;
-    cfg.exio_input_mask      = (uint32_t)(ROVER_EXIO_TP_INT | ROVER_EXIO_RTC_INT | ROVER_EXIO_AXP_IRQ | ROVER_EXIO_SYS_OUT);
-    cfg.exio_output_mask     = (uint32_t)(ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN);
-    cfg.exio_lcd_rst_mask    = (uint32_t)ROVER_EXIO_LCD_RST;
-    cfg.exio_cam_pwdn_mask   = (uint32_t)ROVER_EXIO_CAM_PWDN;
     cfg.tick_period_ms       = LVGL_TICK_PERIOD_MS;
     cfg.task_max_delay_ms    = LVGL_TASK_MAX_DELAY_MS;
     cfg.task_min_delay_ms    = LVGL_TASK_MIN_DELAY_MS;
@@ -107,7 +162,8 @@ static void rover_init_display(void)
     cfg.create_ui_cb         = create_rover_ui;
     cfg.touch_log_enabled_cb = rover_touch_log_enabled_cb;
     cfg.log_printf_cb        = rover_printf;
-    lvgl_port_init_with_cfg(&cfg);
+    fic_lvgl_set_io_expander(s_io_expander);
+    fic_lvgl_port_init(&cfg);
 }
 
 // =========================================================================
@@ -217,7 +273,7 @@ void task_rover_core0(void *pvParameters)
                     snprintf(rssi_str, sizeof(rssi_str), "Noise:--dBm Pkt:--dBm");
                 }
                 char pwr_str[32];
-                Axp2101Status_t pwr_snap;
+                FicAxp2101Status_t pwr_snap;
                 rover_power_get_snapshot(&pwr_snap);
                 if (!pwr_snap.online) {
                     snprintf(pwr_str, sizeof(pwr_str), "Pwr:--");
@@ -284,7 +340,7 @@ void task_display_and_audio(void *pvParameters)
         // 1..3: Execute Core 1 I2C transactions (RTC sync, IMU/Mag/10DOF AHRS, PMIC)
         uint16_t yy; uint8_t mo, dd, hh, mm, ss;
         if (um982_poll_pending_rtc_sync(&yy, &mo, &dd, &hh, &mm, &ss)) {
-            i2c_rtc_setTime(yy, mo, dd, hh, mm, ss);
+            fic_rtc_set_time(yy, mo, dd, hh, mm, ss);
             Serial.printf("RTC auto-synced to GNSS UTC: %04u-%02u-%02u %02u:%02u:%02u\n", yy, mo, dd, hh, mm, ss);
         }
 
@@ -411,21 +467,21 @@ void setup()
     // 1. Initialize Shared I2C0 Bus (IO7=SCL, IO8=SDA), Isolated I2C1 Bus (IO47=SDA, IO48=SCL) & TCA9554 IO Expander
     // Match Waveshare 01_factory: leave EXIO3 (ROVER_EXIO_SD_CS) as Input/High-Z initially.
     // Retry with full GPIO SCL bus-clear recovery so a slave holding SDA low across a warm/UPS reset never causes a panic loop.
-    i2c_master_Init();
-    i2c_bsp_i2c1_init();
+    fic_i2c_set_log_callback(rover_printf);
+    (void)fic_i2c_init_from_board(&s_board_cfg);
     esp_err_t exio_err = ESP_FAIL;
     for (int attempt = 1; attempt <= 5; attempt++) {
-        exio_err = esp_io_expander_new_i2c_tca9554(user_i2c_port0_handle, ROVER_I2C_ADDR_TCA9554, &io_expander);
-        if (exio_err == ESP_OK && io_expander != NULL) {
+        exio_err = esp_io_expander_new_i2c_tca9554(fic_i2c0_bus, ROVER_I2C_ADDR_TCA9554, &s_io_expander);
+        if (exio_err == ESP_OK && s_io_expander != NULL) {
             break;
         }
         Serial.printf("[I2C WARN] TCA9554 init attempt %d/5 failed (err=0x%X) -> running GPIO bus-clear & reinit\n",
                       attempt, (unsigned int)exio_err);
-        i2c_bsp_reinit_bus();
+        fic_i2c_reinit_bus();
         delay(30);
     }
-    if (io_expander != NULL) {
-        esp_io_expander_set_dir(io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT);
+    if (s_io_expander != NULL) {
+        esp_io_expander_set_dir(s_io_expander, ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN, IO_EXPANDER_OUTPUT);
     } else {
         Serial.printf("[I2C ERROR] TCA9554 (0x20) unresponsive after 5 bus-clear attempts (err=0x%X); continuing degraded boot\n",
                       (unsigned int)exio_err);
@@ -435,23 +491,25 @@ void setup()
     uint8_t i2c0_beam_addr = sen0696_detect_i2c_addr_on_bus(0U, ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX);
     uint8_t i2c1_beam_addr = sen0696_detect_i2c_addr_on_bus(1U, ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX);
     Serial.printf("[I2C0 SCAN] TCA9554(0x20):%s | AXP2101(0x34):%s | Touch(0x3B):%s | RTC(0x51):%s | IMU(0x6B):%s | ES8311(0x18):%s | MAG(0x30):%s | 10DOF(0x%02X):%s\n",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TCA9554)         ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_AXP2101)         ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_TOUCH)           ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_RTC)             ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_IMU)             ? "OK" : "--",
-                  i2c_bsp_probe_addr(ROVER_I2C_ADDR_ES8311)          ? "OK" : "--",
-                  i2c_bsp_probe_optional_addr(ROVER_I2C_ADDR_MAG)    ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_TCA9554)         ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_AXP2101)         ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_TOUCH)           ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_RTC)             ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_IMU)             ? "OK" : "--",
+                  fic_i2c_probe_addr(ROVER_I2C_ADDR_ES8311)          ? "OK" : "--",
+                  fic_i2c_probe_optional_addr(ROVER_I2C_ADDR_MAG)    ? "OK" : "--",
                   (unsigned)(i2c0_beam_addr ? i2c0_beam_addr : ROVER_I2C_ADDR_BEAM_IMU),
                   i2c0_beam_addr                                     ? "OK" : "--");
     Serial.printf("[I2C1 SCAN] (IO47 SDA / IO48 SCL @ 400kHz) | 10DOF(0x%02X):%s\n",
                   (unsigned)(i2c1_beam_addr ? i2c1_beam_addr : ROVER_I2C_ADDR_BEAM_IMU),
                   i2c1_beam_addr                                     ? "OK" : "--");
 
-    axp2101_bsp_init();
-    rtc_bsp_set_utc_offset_provider(rover_rtc_utc_offset_cb);
-    rtc_bsp_set_sys_clock_sync_guard(rover_rtc_allow_sys_sync_cb);
-    rtc_bsp_init();
+    fic_axp2101_set_log_callback(rover_printf);
+    fic_axp2101_init();
+    fic_rtc_set_log_callback(rover_printf);
+    fic_rtc_set_utc_offset_callback(rover_rtc_utc_offset_cb);
+    fic_rtc_set_sys_clock_guard_callback(rover_rtc_allow_sys_sync_cb);
+    fic_rtc_init();
     rover_sensors_hw_init();
 
     // 3. Mount Internal FFat & MicroSD Card (CLK=11, CMD=10, D0=9)
@@ -470,8 +528,8 @@ void setup()
     vTaskDelay(pdMS_TO_TICKS(50));
 
     // Stage 1: Native 1-bit SD_MMC with EXIO3 High-Z (Input with 100k internal pull-up, matching Waveshare 01_factory)
-    if (io_expander != NULL) {
-        esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_INPUT);
+    if (s_io_expander != NULL) {
+        esp_io_expander_set_dir(s_io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_INPUT);
     }
     vTaskDelay(pdMS_TO_TICKS(20));
     SD_MMC.setPins(ROVER_PIN_SD_SCLK, ROVER_PIN_SD_MOSI, ROVER_PIN_SD_MISO);
@@ -482,9 +540,9 @@ void setup()
     } else {
         SD_MMC.end();
         // Stage 2: Native 1-bit SD_MMC with EXIO3 driven LOW (in case EXIO3 drives a P-MOSFET high-side SD power switch)
-        if (io_expander != NULL) {
-            esp_io_expander_set_dir(io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_OUTPUT);
-            esp_io_expander_set_level(io_expander, ROVER_EXIO_SD_CS, 0);
+        if (s_io_expander != NULL) {
+            esp_io_expander_set_dir(s_io_expander, ROVER_EXIO_SD_CS, IO_EXPANDER_OUTPUT);
+            esp_io_expander_set_level(s_io_expander, ROVER_EXIO_SD_CS, 0);
         }
         vTaskDelay(pdMS_TO_TICKS(60));
         gpio_pullup_en((gpio_num_t)ROVER_PIN_SD_SCLK);
@@ -522,8 +580,51 @@ void setup()
                       sd_card_use_spi ? "SPI" : "SD_MMC", typeStr, cardSizeMB, usedSizeMB, totalSizeMB);
     }
 
-    // 4. Load Settings, Allocate PSRAM Beam AHRS & CSV Waypoints
+    // 4. Load Settings, Register Storage & Configure Web Portal, Allocate PSRAM Beam AHRS & CSV Waypoints
     init_settings_manager();
+    {
+        FicStorageHandle_t ffat_h = {
+            &FFat,
+            "Internal Flash (FFat)",
+            "/ffat",
+            fs_mux,
+            false,
+            false
+        };
+        fic_fs_register_fallback(&ffat_h);
+        if (sd_card_mounted) {
+            FicStorageHandle_t sd_h = {
+                sd_card_use_spi ? (fs::FS *)&SD : (fs::FS *)&SD_MMC,
+                "MicroSD Card",
+                "/sdcard",
+                fs_mux,
+                true,
+                sd_card_use_spi
+            };
+            fic_fs_register_primary(&sd_h);
+        }
+        FicWebPortalCfg_t wcfg = {};
+        wcfg.portal_title        = "RTK Rover";
+        wcfg.version_str         = ROVER_FIRMWARE_VERSION;
+        wcfg.ap_ssid             = "RTK_Rover_AP";
+        wcfg.ap_password         = "";
+        wcfg.ntp_server          = "pool.ntp.org";
+        wcfg.http_port           = 80U;
+        wcfg.primary_fs          = sd_card_mounted ? (sd_card_use_spi ? (fs::FS *)&SD : (fs::FS *)&SD_MMC) : nullptr;
+        wcfg.primary_label       = "MicroSD Card";
+        wcfg.primary_vfs_path    = "/sdcard";
+        wcfg.fallback_fs         = &FFat;
+        wcfg.fallback_label      = "Internal Flash (FFat)";
+        wcfg.fallback_vfs_path   = "/ffat";
+        wcfg.fs_mux              = fs_mux;
+        wcfg.mirror_filename     = "settings.json";
+        wcfg.get_wifi_creds_cb   = rover_get_wifi_creds_cb;
+        wcfg.on_status_cb        = update_wifi_ip_label;
+        wcfg.on_set_time_cb      = fic_rtc_set_time;
+        wcfg.on_file_uploaded_cb = rover_web_file_uploaded_cb;
+        wcfg.log_cb              = rover_printf;
+        fic_web_portal_configure(&wcfg);
+    }
     rover_sensors_ahrs_init();
     if (current_settings.enable_serial_logging) {
         serial_logger_start();
@@ -565,7 +666,7 @@ void setup()
 void loop()
 {
     // Process active Web Portal requests (File manager, downloads, uploads)
-    handle_wifi_server();
+    fic_web_portal_handle();
 
     // Flush pending buffered route CSV points to active storage medium
     if (route_logger_is_active()) {
@@ -616,7 +717,7 @@ void loop()
             long_press_fired = true;
             Serial.println("BOOT Long-Press: Taking Screenshot...");
             play_rover_beep(2000, 40);
-            if (take_screenshot_to_sd()) {
+            if (rover_take_screenshot()) {
                 play_rover_beep(2600, 100);
             } else {
                 play_rover_beep(400, 120);

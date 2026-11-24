@@ -1,5 +1,4 @@
 #include "lvgl_ui_internal.h"
-#include "../web_server/web_server.h"
 #include "../e220_driver/e220_driver.h"
 
 // =========================================================================
@@ -656,9 +655,9 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
 
     // 10. Update Tile 4: Wi-Fi & Web Portal Diagnostics
     if (t4_wifi_lbl) {
-        bool active = is_wifi_active();
-        bool softap = is_wifi_softap();
-        const char *ip = get_wifi_ip();
+        bool active = fic_web_portal_is_active();
+        bool softap = fic_web_portal_is_softap();
+        const char *ip = fic_web_portal_get_ip();
         if (active && ip && ip[0] && strcmp(ip, "0.0.0.0") != 0) {
             snprintf(buf, buf_sz,
                      "[WIFI & WEB PORTAL]\n"

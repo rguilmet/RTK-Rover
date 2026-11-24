@@ -2,7 +2,8 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.10.10`  
+**Firmware Version:** `v0.11.0`  
+**Shared Core Dependency:** [`Field_Instrument_Core`](https://github.com/rguilmet/field-instrument-core) (`>= v1.0.1`, install into `Arduino/libraries/Field_Instrument_Core`; standalone self-contained snapshot preserved at Git tag `v0.10.10`)  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
 **Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
@@ -18,7 +19,7 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 * **Plan 0 Field Survey Refinements, 6-Tile Ergonomic UI & Isolated `I2C1` Beam 9-DOF Fusion (`v0.8.19` - `v0.9.2`, Archived):**
   * **6-Tile Symmetric UI & Modular LVGL Split (`src/lvgl_port/`):** Refactored the `4,225`-line monolith into `11` `< 800 L` modules centered around Tile 0 (`[Tile 5: Settings] <-> [Tile 0: Nav] <-> [Tile 1: Survey] <-> ... <-> [Tile 4: Diag]`), featuring Tile 5 `5x3` `94 x 44 px` Quick Settings, Tile 1 `40 px` Survey Logger w/ `12` monument `kNoteTags`, circular `atan2` heading averaging, Core 1 `pole_tilt_deg` capture, and motion/`REC`/logger-safe 30s Auto-Off shutdown modal.
-  * **Isolated `I2C1` (`GPIO 47/48`) `SEN0696` Beam 10-DOF & Portable 9-DOF Fusion:** Isolates `DFRobot SEN0696` (`0x4A..0x4D`) onto `I2C_NUM_1` (`GPIO 47/48 @ 400 kHz` w/ `I2C0` bench fallback), polling at `25-30 Hz` (`~3 Hz` baro) through zero-app-dependency [`matrix_math.h`](src/matrix_math/matrix_math.h) + [`ahrs_9dof.{h,cpp}`](src/sensor_fusion/ahrs_9dof.cpp) (`beam_imu_orient_mode = 4`, stationary gyro FOC, `CAL MAG` 3D ellipsoid w/ regularized sphere fallback + `BZ_ref` self-heal, triple-condition iron gate, `0.0 s` `[CMP]` switchover, `BMP581` `Baro Rel Elev`).
+  * **Isolated `I2C1` (`GPIO 47/48`) `SEN0696` Beam 10-DOF & Portable 9-DOF Fusion:** Isolates `DFRobot SEN0696` (`0x4A..0x4D`) onto `I2C_NUM_1` (`GPIO 47/48 @ 400 kHz` w/ `I2C0` bench fallback), polling at `25-30 Hz` (`~3 Hz` baro) through shared `Field_Instrument_Core` (`fic_matrix_math.h` + `fic_ahrs_9dof.{h,cpp}`, `beam_imu_orient_mode = 4`, stationary gyro FOC, `CAL MAG` 3D ellipsoid w/ regularized sphere fallback + `BZ_ref` self-heal, triple-condition iron gate, `0.0 s` `[CMP]` switchover, `BMP581` `Baro Rel Elev`).
 
 * **Architecture 2B Asynchronous Ping-Pong Mailbox LoRa Transport, Consolidated Macro-Cycle & Mode 0/3 Hardening (`v0.8.12`, `e220_pacer.py v3.7.1`):**
   * **Asynchronous Ping-Pong Mailboxes & `<= 200 B` Coalescing:** Background ingress thread validates `CRC24Q`, drops empty MSMs (`<= 28 B`), overwrites per-type latest-value mailboxes (`2.5 s` dynamic / `15.0 s` static TTL), prioritizes metadata (`1005/1006/1033/1230`), uses starvation-fair round robin (`1074` tie-breaker), and packs small frames (`<= 200 B`) cleanly.
@@ -98,7 +99,7 @@ All peripheral UART pin labels are **device-relative** (`<DEV>_TXD` is an output
 
 ## 5. FreeRTOS Dual-Core & Dual-Bus Architecture
 
-* **Portable Core Modules (`src/`):** [`src/matrix_math/matrix_math.h`](src/matrix_math/matrix_math.h) and [`src/sensor_fusion/ahrs_9dof.{h,cpp}`](src/sensor_fusion/ahrs_9dof.cpp) (`0` app dependencies) + modular [`src/lvgl_port/`](src/lvgl_port) (`10` `.c` + `2` `.h` UI modules).
+* **Shared BSP & Core Library (`<Field_Instrument_Core.h>`):** `Field_Instrument_Core` (`>= v1.0.1`, `boards/waveshare_s3_35b.h`) supplies dual-bus I2C recovery, TCA9554 IO expander, AXS15231B LVGL port + PSRAM isolation + lock-free BMP screenshots, ES8311 codec & Priority-4 beeper, `fic_core_log`, PSRAM ring loggers, `F-12` atomic JSON, Wi-Fi STA/AP web portal, QMI8658, SEN0696, MMC5983MA, PCF85063, AXP2101, `fic_matrix_math`, and `fic_ahrs_9dof`. Sketch-local [`src/`](src) retains RTK/cadastral modules (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, `rover_power`, `rover_audio`, `settings_manager`, storage wrappers, and [`src/lvgl_port/`](src/lvgl_port) UI tiles).
 
 ```mermaid
 flowchart TD

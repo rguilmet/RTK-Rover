@@ -1,7 +1,5 @@
 #include "lvgl_ui_internal.h"
 #include "esp_timer.h"
-#include "../rtc_bsp/rtc_bsp.h"
-#include "../web_server/web_server.h"
 #include "../e220_driver/e220_driver.h"
 
 // =========================================================================
@@ -380,8 +378,8 @@ void update_rover_ui(const RoverUIData_t *d)
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
     // 1. Update Persistent Header Bar (Date, Time, Units, Battery, Fix, RTCM)
-    RtcDateTime_t lt;
-    get_local_datetime(&lt);
+    FicRtcTime_t lt;
+    fic_rtc_get_local_datetime(&lt);
     snprintf(buf, sizeof(buf), "%04u-%02u-%02u %02u:%02u:%02u %s",
              lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second,
              current_settings.timezone_label);
@@ -414,13 +412,13 @@ void update_rover_ui(const RoverUIData_t *d)
     // Wi-Fi Status Badge in Row 1 (Icon only: Slate=OFF, Amber=Connecting, Cyan=Router STA, Purple=AP)
     if (hdr_wifi_lbl) {
         lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
-        if (is_wifi_active()) {
-            if (is_wifi_softap()) {
+        if (fic_web_portal_is_active()) {
+            if (fic_web_portal_is_softap()) {
                 lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xA855F7), 0); // Purple / Violet (AP)
             } else {
                 lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x22D3EE), 0); // Cyan (Router STA)
             }
-        } else if (is_wifi_starting()) {
+        } else if (fic_web_portal_is_starting()) {
             lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xF59E0B), 0);     // Amber (Connecting)
         } else {
             lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);     // Dim slate (OFF)

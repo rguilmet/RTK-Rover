@@ -1,6 +1,6 @@
 #include "waypoint_manager_internal.h"
 #include "../../user_config.h"
-#include "../rtc_bsp/rtc_bsp.h"
+#include <Field_Instrument_Core.h>
 #include "../nav_engine/nav_engine.h"
 #include <math.h>
 #include <Arduino.h>
@@ -276,8 +276,8 @@ static void save_survey_record_to_csv(double lat, double lon, double height_m,
     }
 
     // Standardized ISO / MFS timestamp format matching route logger
-    RtcDateTime_t lt;
-    get_local_datetime(&lt);
+    FicRtcTime_t lt;
+    fic_rtc_get_local_datetime(&lt);
     uint16_t ms = (uint16_t)(millis() % 1000);
     char sign = (current_settings.minutesOffsetToUTC >= 0) ? '+' : '-';
     int abs_offset = abs(current_settings.minutesOffsetToUTC);

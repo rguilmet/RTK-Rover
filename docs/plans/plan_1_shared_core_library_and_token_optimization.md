@@ -116,9 +116,9 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
    * Keep `src/matrix_math/` (`698 L`) and `src/sensor_fusion/` (`469 L`) strictly zero-app-dependency for direct Phase 1.2 adoption.
    * *Optional Python split:* When modifying `scripts/e220_pacer.py` or `scripts/cogo_solver.py`, extract `rover_protocol.py` (updating `scripts/update_e220_pacer.sh` together!) and `cogo_math.py`.
 
-### Phase 1.2 -- Separate Unified Library Repository (`Field_Instrument_Core`)
+### Phase 1.2 -- Separate Unified Library Repository (`Field_Instrument_Core`) -- `DONE (v1.0.0 / v1.0.1, 2026-11-24)`
 
-Create an independent public Git repository (**`Field-Instrument-Core`**), checked out locally at `Documents/Arduino/libraries/Field_Instrument_Core/` (`library.properties`, SemVer `v1.0.0+`). Keep RTK/cadastral-specific code (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, `e220_pacer.py`, `cogo_solver.py`) inside `RTK_Rover`, and keep `MFS` magnetic-survey UI/DSP inside `Magnetic_Field_Scanner`.
+Created independent public Git repository (**[`field-instrument-core`](https://github.com/rguilmet/field-instrument-core)**), checked out locally at `Documents/Arduino/libraries/Field_Instrument_Core/` (`library.properties` `v1.0.1`, MIT license + preserved Espressif Apache-2.0 / ESPRESSIF MIT headers). Kept RTK/cadastral-specific code (`um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, `e220_pacer.py`, `cogo_solver.py`) inside `RTK_Rover`, and keeps `MFS` magnetic-survey UI/DSP inside `Magnetic_Field_Scanner`.
 
 ```text
 Documents/Arduino/libraries/Field_Instrument_Core/
@@ -155,11 +155,11 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 
 ### Phase 1.3 -- Consumer Migration, Host Tests (`F-17`) & Dual-Compile Verification
 
-1. **Stage 1 (`RTK_Rover` Migration):**
-   * Point `RTK_Rover` includes to `<Field_Instrument_Core.h>` (`waveshare_s3_35b.h`), delete the `~65` duplicated BSP/codec/driver files from `RTK_Rover/src/`, and keep `um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, UI tiles, and [Plan 2](plan_2_rover_enhancements_and_android_companion.md) features sketch-local.
-   * **Host C/C++ Unit Tests (`F-17`):** Add native host test suite (`g++` / `pytest` harness in `Field_Instrument_Core/extras/unit_tests/` and `RTK_Rover/scripts/`) exercising `fic_matrix_math` ellipsoid fit, `fic_ahrs_9dof` FOC/heading, `nav_compute_line_stakeout()`, `nav_format_along_line()`, and `um982` NMEA/Unicore CRC parsers.
-   * **Gate:** `arduino-cli compile` (`--warnings default`) produces **`0` warnings**, static `DRAM0 <= 25%` (`< 80 KB`), `[MEM] Post-Setup Heap` internal free `>= 150 KB`, and all `stage2_bench_verify.py`, `test_rover_telemetry.py`, host unit tests (`F-17`), and `check_secrets.py` suites pass.
-2. **Stage 2 (`Magnetic_Field_Scanner` Migration, `v5.1.x -> v6.0.0`):**
+1. **Stage 1 (`RTK_Rover` Migration) -- `DONE (v0.11.0, 2026-11-24)`:**
+   * Tagged final standalone self-contained `RTK_Rover` release at `v0.10.10` (`337ad35`), then migrated `RTK_Rover` (`v0.11.0`) onto `<Field_Instrument_Core.h>` (`waveshare_s3_35b.h`), removing `14` duplicated BSP/codec/driver/portal directories (`~90` files) and `lvgl_port_core.c`, while keeping `um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, UI tiles, and [Plan 2](plan_2_rover_enhancements_and_android_companion.md) features sketch-local.
+   * **Host C/C++ Unit Tests (`F-17`, `DONE`):** Added [`Field_Instrument_Core/extras/unit_tests/run_tests.py`](../../../libraries/Field_Instrument_Core/extras/unit_tests/run_tests.py) (`2/2` + `xtensa-esp32s3-elf-g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only`) and [`scripts/test_rover_core_math.py`](../../scripts/test_rover_core_math.py) (`5/5` + syntax gate).
+   * **Verified (`v0.11.0`):** `ci_compile_all.ps1 -Target Rover` passed with **`0` warnings**, `1,760,414 B` (`55%`) flash, **`68,712 B` (`20%`)** static `DRAM0`, `test_rover_core_math.py` (`5/5`), `test_line_stakeout.py`, `test_rover_telemetry.py`, and `check_secrets.py` (`[PASS] 100% CLEAN`). (*Live USB flash check on `COM3` optional prior to Stage 2.*)
+2. **Stage 2 (`Magnetic_Field_Scanner` Migration, `v5.1.x -> v6.0.0`) -- `PENDING`:**
    * Migrate `Magnetic_Field_Scanner` onto `Field_Instrument_Core` (`waveshare_s3_349_v3.h`), replacing `MFS`'s unguarded `i2c_bsp`, `QMI8658`, `tca9554`, `esp_codec_dev`, `screenshot`, `web_server`, and global `MadgwickAHRS.c` with the hardened Core implementations.
    * Preserve `MFS`'s dual-I2C topology (`I2C0` @ `200 kHz` sensors + `I2C1` Touch), TDM `ES8311+ES7210` streaming, dual `RM3100` DRDY interrupts, and existing magnetometer survey workflows (`0` functional regression).
 3. **Dual-Compile CI Gate (`extras/ci_compile_all.ps1`):**
@@ -169,11 +169,11 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 
 ## 5. Target Token & Maintainability Outcomes
 
-| Metric | Current (`v0.10.7`) | Target (End of Plan 1) |
+| Metric | Prior Baseline (`v0.10.7`) | Current (`v0.11.0`, Phase 1.3 Stage 1) |
 | :--- | :---: | :--- |
-| C/C++ files exceeding `800 L / 46 KB` | `4` app files (`Ph 1.1A/1.1B DONE`; `nav_engine.cpp` at `804 L`) | **`0` core/app source files** |
-| Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` (1 shared library)** |
-| In-tree `build/` & `scratch/` clutter | **`0 B` (purged `2026-11-24`)** | **`0 B` (permanent)** |
+| C/C++ files exceeding `800 L / 46 KB` | `4` app files (`nav_engine.cpp` at `804 L`) | **`0` source files in `RTK_Rover` & `Core`** |
+| Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` in `RTK_Rover`** (Stage 2 remaining for `MFS`) |
+| In-tree `build/` & `scratch/` clutter | `202+ MB` (`build/`, `scratch/`) | **`0 B` (permanent)** |
 | Active `CHANGELOG.md` size | `137 L` / `29.9 KB` (`DONE Ph 1.0`) | **`< 450 L` / `< 40 KB`** |
 | Active `docs/plans/` documents | `2` active (`Plan 1`, `Plan 2`) + `8` in `archive/` | **`2` sequenced plans + `archive/`** |
-| Shared math/fusion & dual-bus I2C readiness | **Done in `src/` (`v0.9.0..v0.9.2`)** | **Promoted into `Field_Instrument_Core` w/ host tests** |
+| Shared math/fusion & dual-bus I2C readiness | Seeded in `src/` | **`Field_Instrument_Core v1.0.1` + `F-17` tests** |

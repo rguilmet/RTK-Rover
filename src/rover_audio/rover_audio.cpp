@@ -1,44 +1,19 @@
 #include "rover_audio.h"
 #include "../../user_config.h"
-#include "../i2c_bsp/i2c_bsp.h"
-#include "../tca9554/esp_io_expander_tca9554.h"
-#include "../codec_board/codec_board.h"
-#include "../codec_board/codec_init.h"
+#include <Field_Instrument_Core.h>
 #include "../settings_manager/settings_manager.h"
+#include "../storage/serial_logger.h"
 #include <Arduino.h>
 #include <math.h>
 #include <string.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/queue.h>
-
-extern esp_io_expander_handle_t io_expander;
-
-#define AUDIO_SAMPLE_RATE 24000
-
-typedef struct {
-    uint16_t freq1_hz;
-    uint16_t dur1_ms;
-    uint16_t gap_ms;
-    uint16_t freq2_hz;
-    uint16_t dur2_ms;
-    uint8_t  gain_pct;
-} RoverBeep_t;
-
-static QueueHandle_t          beepQueue       = NULL;
-static esp_codec_dev_handle_t playback_handle = NULL;
 
 extern "C" void set_rover_volume(uint8_t volume_pct)
 {
     if (volume_pct > 100) volume_pct = 100;
     current_settings.volume = volume_pct;
     current_settings.is_muted = (volume_pct == 0);
-    if (playback_handle) {
-        if (i2c_bsp_lock(250)) {
-            esp_codec_dev_set_out_vol(playback_handle, (int)volume_pct);
-            i2c_bsp_unlock();
-        }
-    }
+    fic_audio_beeper_set_volume(volume_pct);
+    fic_audio_beeper_set_muted(current_settings.is_muted);
 }
 
 // =========================================================================
@@ -46,137 +21,41 @@ extern "C" void set_rover_volume(uint8_t volume_pct)
 // =========================================================================
 extern "C" void rover_audio_init(void)
 {
-    if (io_expander != NULL) {
-        esp_io_expander_set_dir(io_expander, ROVER_EXIO_PA_CTRL, IO_EXPANDER_OUTPUT);
-        esp_io_expander_set_level(io_expander, ROVER_EXIO_PA_CTRL, 1);
-    }
-
-    set_codec_board_type("S3_LCD_3_5B");
-    codec_init_cfg_t codec_cfg = {
-        .in_mode = CODEC_I2S_MODE_NONE,
-        .out_mode = CODEC_I2S_MODE_STD,
-        .in_use_tdm = false,
-        .reuse_dev = false,
-    };
-    bool locked = i2c_bsp_lock(250);
-    if (init_codec(&codec_cfg) == 0) {
-        playback_handle = get_playback_handle();
-        if (playback_handle) {
-            esp_codec_dev_set_out_vol(playback_handle, (int)current_settings.volume);
-            esp_codec_dev_sample_info_t fs = {};
-            fs.sample_rate = AUDIO_SAMPLE_RATE;
-            fs.channel = 2;
-            fs.bits_per_sample = 16;
-            esp_codec_dev_open(playback_handle, &fs);
-        }
-    }
-    if (locked) {
-        i2c_bsp_unlock();
-    }
+    FicAudioBeeperCfg_t cfg;
+    fic_audio_beeper_default_cfg(&cfg,
+                                 "S3_LCD_3_5B",
+                                 fic_lvgl_get_io_expander(),
+                                 (uint32_t)ROVER_EXIO_PA_CTRL);
+    cfg.initial_volume = current_settings.volume;
+    cfg.initial_muted  = current_settings.is_muted;
+    cfg.log_cb         = rover_printf;
+    (void)fic_audio_beeper_init(&cfg);
 }
 
 extern "C" void play_rover_beep(uint16_t freq_hz, uint16_t duration_ms)
 {
-    if (beepQueue) {
-        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0, 100U };
-        xQueueSend(beepQueue, &b, 0);
-    }
+    fic_audio_beeper_play(freq_hz, duration_ms);
 }
 
 extern "C" void play_rover_dual_beep(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms, uint16_t freq2_hz, uint16_t dur2_ms)
 {
-    if (beepQueue) {
-        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms, 100U };
-        xQueueSend(beepQueue, &b, 0);
-    }
+    fic_audio_beeper_play_dual(freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms);
 }
 
 extern "C" void play_rover_beep_gain(uint16_t freq_hz, uint16_t duration_ms, uint8_t gain_pct)
 {
-    if (beepQueue) {
-        RoverBeep_t b = { freq_hz, duration_ms, 0, 0, 0, gain_pct };
-        xQueueSend(beepQueue, &b, 0);
-    }
+    fic_audio_beeper_play_gain(freq_hz, duration_ms, gain_pct);
 }
 
 extern "C" void play_rover_dual_beep_gain(uint16_t freq1_hz, uint16_t dur1_ms, uint16_t gap_ms,
                                           uint16_t freq2_hz, uint16_t dur2_ms, uint8_t gain_pct)
 {
-    if (beepQueue) {
-        RoverBeep_t b = { freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms, gain_pct };
-        xQueueSend(beepQueue, &b, 0);
-    }
-}
-
-static void audio_write_tone_or_silence(int16_t *pcm_buf, uint16_t freq_hz, uint16_t dur_ms, uint8_t gain_pct)
-{
-    if (!playback_handle || !pcm_buf || dur_ms == 0) return;
-    uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)dur_ms) / 1000U;
-    if (total_samples == 0) return;
-
-    if (gain_pct < 10U)  gain_pct = 10U;
-    if (gain_pct > 100U) gain_pct = 100U;
-    int16_t amp = (int16_t)((6000L * (long)gain_pct) / 100L);
-
-    float phase = 0.0f;
-    float phase_inc = (freq_hz > 0) ? (2.0f * (float)M_PI * (float)freq_hz / (float)AUDIO_SAMPLE_RATE) : 0.0f;
-    uint32_t written = 0;
-
-    while (written < total_samples) {
-        uint32_t rem   = total_samples - written;
-        uint32_t chunk = (rem < 256U) ? rem : 256U;
-        if (freq_hz == 0) {
-            memset(pcm_buf, 0, chunk * 2U * sizeof(int16_t));
-        } else {
-            for (uint32_t i = 0; i < chunk; i++) {
-                int16_t s = (phase < (float)M_PI) ? amp : -amp;
-                pcm_buf[i * 2U]      = s;
-                pcm_buf[i * 2U + 1U] = s;
-                phase += phase_inc;
-                if (phase >= 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
-            }
-        }
-        esp_codec_dev_write(playback_handle, pcm_buf, chunk * 2U * sizeof(int16_t));
-        written += chunk;
-    }
-}
-
-// =========================================================================
-// Dedicated Core 1 Real-Time Audio Task (Priority 4)
-// Immediately synthesizes button-press and proximity tones via I2S DMA so UI
-// tactile audio never lags behind LVGL rendering, SD card, or flash I/O.
-// =========================================================================
-static void task_audio_beep(void *pvParameters)
-{
-    (void)pvParameters;
-    static int16_t s_beep_pcm[256 * 2];
-    RoverBeep_t beep_req;
-
-    for (;;) {
-        if (beepQueue && xQueueReceive(beepQueue, &beep_req, portMAX_DELAY) == pdPASS) {
-            if (playback_handle && !current_settings.is_muted) {
-                if (beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq1_hz, beep_req.dur1_ms, beep_req.gain_pct);
-                }
-                if (beep_req.gap_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, 0, beep_req.gap_ms, 100U);
-                }
-                if (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0) {
-                    audio_write_tone_or_silence(s_beep_pcm, beep_req.freq2_hz, beep_req.dur2_ms, beep_req.gain_pct);
-                }
-                if ((beep_req.freq1_hz > 0 && beep_req.dur1_ms > 0) ||
-                    (beep_req.freq2_hz > 0 && beep_req.dur2_ms > 0)) {
-                    audio_write_tone_or_silence(s_beep_pcm, 0, 4, 100U);
-                }
-            }
-        }
-    }
+    fic_audio_beeper_play_dual_gain(freq1_hz, dur1_ms, gap_ms, freq2_hz, dur2_ms, gain_pct);
 }
 
 extern "C" void rover_audio_start_task(void)
 {
-    beepQueue = xQueueCreate(12, sizeof(RoverBeep_t));
-    xTaskCreatePinnedToCore(task_audio_beep, "RoverAudio", 3072, NULL, 4, NULL, 1);
+    (void)fic_audio_beeper_start_task();
 }
 
 extern "C" void rover_audio_update_nav_guidance(const RoverUIData_t *ui_state,

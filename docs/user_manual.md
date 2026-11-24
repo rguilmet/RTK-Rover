@@ -1,7 +1,7 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.10.7`  
-**Firmware Version:** `v0.10.7`  
+**Document Version:** `v1.11.0`  
+**Firmware Version:** `v0.11.0` (`Field_Instrument_Core >= v1.0.1`)  
 **Last Updated:** November 24, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S, DFRobot SEN0696 10-DOF Beam IMU (`CAD v2.2.4`)  
 

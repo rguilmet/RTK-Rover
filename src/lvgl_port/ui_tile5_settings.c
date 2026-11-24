@@ -4,7 +4,6 @@
 #include "../storage/route_logger.h"
 #include "../storage/nmea_logger.h"
 #include "../storage/rtcm_logger.h"
-#include "../web_server/web_server.h"
 #include "../e220_driver/e220_driver.h"
 
 // =========================================================================
@@ -193,9 +192,9 @@ void update_all_control_buttons(void)
 
     // Row 4, Col 0: WIFI (Multi-State: 0=OFF, 1=Connecting, 2=Router STA, 3=Access Point)
     int cur_wifi = 0;
-    if (is_wifi_active()) {
-        cur_wifi = is_wifi_softap() ? 3 : 2;
-    } else if (is_wifi_starting()) {
+    if (fic_web_portal_is_active()) {
+        cur_wifi = fic_web_portal_is_softap() ? 3 : 2;
+    } else if (fic_web_portal_is_starting()) {
         cur_wifi = 1;
     }
     if (cur_wifi != s_last_wifi) {
@@ -453,12 +452,12 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
 static void wifi_toggle_btn_cb(lv_event_t *e)
 {
     (void)e;
-    bool was_running = (is_wifi_active() || is_wifi_starting());
+    bool was_running = (fic_web_portal_is_active() || fic_web_portal_is_starting());
     if (was_running) {
-        stop_wifi();
+        fic_web_portal_stop();
         play_rover_beep(1200, 30);
     } else {
-        start_wifi();
+        fic_web_portal_start();
         play_rover_beep(1800, 40);
     }
     update_all_control_buttons();

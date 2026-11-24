@@ -1,11 +1,6 @@
 #include "rover_sensors.h"
 #include "../../user_config.h"
-#include "../i2c_bsp/i2c_bsp.h"
-#include "../imu_bsp/imu_bsp.h"
-#include "../mag_bsp/mmc5983ma_driver.h"
-#include "../beam_imu_bsp/sen0696_driver.h"
-#include "../matrix_math/matrix_math.h"
-#include "../sensor_fusion/ahrs_9dof.h"
+#include <Field_Instrument_Core.h>
 #include "../settings_manager/settings_manager.h"
 #include "../nav_engine/nav_engine.h"
 #include "../rover_audio/rover_audio.h"
@@ -44,7 +39,7 @@ static float             s_snapshot_bubble_x    = 0.0f;
 static float             s_snapshot_bubble_y    = 0.0f;
 static float             s_snapshot_pole_tilt   = 0.0f;
 
-static Mmc5983maState_t  s_cached_mag           = {};
+static FicMmc5983maData_t s_cached_mag           = {};
 static sen0696_state_t   s_beam_state           = {};
 static Ahrs9DofOutput_t  s_beam_ahrs_out        = {};
 static bool              s_beam_ahrs_has_sample = false;
@@ -352,9 +347,11 @@ static void run_beam_10dof_boot_check(sen0696_state_t *out_report)
 
 extern "C" void rover_sensors_hw_init(void)
 {
-    imu_set_log_callback(rover_printf);
-    imu_init();
-    mmc5983ma_init();
+    fic_qmi8658_set_log_callback(rover_printf);
+    fic_qmi8658_init();
+    fic_mmc5983ma_set_log_callback(rover_printf);
+    (void)fic_mmc5983ma_init_default();
+    fic_sen0696_set_log_callback(rover_printf);
     run_beam_10dof_boot_check(&s_boot_10dof);
 }
 
@@ -422,16 +419,18 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
     if (now_ms - s_last_imu_poll_ms >= imu_poll_period_ms || s_last_imu_poll_ms == 0) {
         s_last_imu_poll_ms = (now_ms == 0) ? 1 : now_ms;
         int16_t imu_temp = 0;
-        imu_set_debug_logging(current_settings.enable_imu_logging);
-        imu_read(s_cached_acc, s_cached_gyr, &imu_temp);
-        imu_compute_pose_and_bubble(s_cached_acc,
-                                    current_settings.pole_tilt_tare_pitch_deg,
-                                    current_settings.pole_tilt_tare_roll_deg,
-                                    &s_cached_imu_pitch,
-                                    &s_cached_imu_roll,
-                                    &s_cached_bubble_x,
-                                    &s_cached_bubble_y,
-                                    &s_cached_pose);
+        fic_qmi8658_set_debug_logging(current_settings.enable_imu_logging);
+        fic_qmi8658_read(s_cached_acc, s_cached_gyr, &imu_temp);
+        FicDisplayPose_t fic_pose = FIC_DISPLAY_POSE_FLAT;
+        fic_qmi8658_compute_pose_and_bubble(s_cached_acc,
+                                            current_settings.pole_tilt_tare_pitch_deg,
+                                            current_settings.pole_tilt_tare_roll_deg,
+                                            &s_cached_imu_pitch,
+                                            &s_cached_imu_roll,
+                                            &s_cached_bubble_x,
+                                            &s_cached_bubble_y,
+                                            &fic_pose);
+        s_cached_pose = (DisplayPose_t)fic_pose;
 
         const bool beam_online_now = fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.valid &&
                                      s_beam_ahrs_has_sample && (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U);
@@ -445,7 +444,7 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
             portEXIT_CRITICAL(&s_imu_snapshot_mux);
 
             // Poll outboard MMC5983MA 3-Axis 18-bit AMR Compass as Tier-B fallback when SEN0696 is absent
-            mmc5983ma_poll(s_cached_bubble_y, s_cached_bubble_x, &s_cached_mag);
+            (void)fic_mmc5983ma_poll(s_cached_bubble_y, s_cached_bubble_x, &s_cached_mag);
         }
 
         float gyr_mag = sqrtf(s_cached_gyr[0] * s_cached_gyr[0] +
@@ -692,8 +691,8 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
     ui_state->mag_cal_progress_pct = s_mag_cal_wiz.progress_pct;
     ui_state->mag_cal_samples      = s_mag_cal_wiz.samples;
     ui_state->mag_cal_rms_pct      = s_mag_cal_wiz.rms_pct;
-    ui_state->i2c0_err_count       = i2c_bsp_get_bus_err_count(0U);
-    ui_state->i2c1_err_count       = i2c_bsp_get_bus_err_count(1U);
+    ui_state->i2c0_err_count       = fic_i2c_get_bus_err_count(0U);
+    ui_state->i2c1_err_count       = fic_i2c_get_bus_err_count(1U);
 
     if (s_beam_10dof_active && ((now_ms - s_last_10dof_log_ms) >= 1000U)) {
         s_last_10dof_log_ms = now_ms;

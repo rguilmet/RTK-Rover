@@ -1,7 +1,6 @@
 #include "rover_power.h"
 #include "../rover_audio/rover_audio.h"
 #include "../lvgl_port/lvgl_port.h"
-#include "../web_server/web_server.h"
 #include "../settings_manager/settings_manager.h"
 #include "../storage/route_logger.h"
 #include "../storage/nmea_logger.h"
@@ -12,20 +11,20 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-static portMUX_TYPE    s_pwr_snapshot_mux     = portMUX_INITIALIZER_UNLOCKED;
-static Axp2101Status_t s_pwr_snapshot         = {};
-static Axp2101Status_t s_pwr_cached           = {};
-static uint32_t        s_last_pwr_poll_ms     = 0;
-static uint32_t        s_auto_off_idle_s      = 0;
-static uint8_t         s_auto_off_countdown_s = 0;
-static bool            s_auto_off_inhibited   = false;
-static char            s_auto_off_reason[16]  = "";
+static portMUX_TYPE       s_pwr_snapshot_mux     = portMUX_INITIALIZER_UNLOCKED;
+static FicAxp2101Status_t s_pwr_snapshot         = {};
+static FicAxp2101Status_t s_pwr_cached           = {};
+static uint32_t           s_last_pwr_poll_ms     = 0;
+static uint32_t           s_auto_off_idle_s      = 0;
+static uint8_t            s_auto_off_countdown_s = 0;
+static bool               s_auto_off_inhibited   = false;
+static char               s_auto_off_reason[16]  = "";
 
 extern "C" void rover_power_poll(uint32_t now_ms)
 {
     if (now_ms - s_last_pwr_poll_ms >= 2000 || s_last_pwr_poll_ms == 0) {
         s_last_pwr_poll_ms = (now_ms == 0) ? 1 : now_ms;
-        axp2101_bsp_read(&s_pwr_cached);
+        fic_axp2101_read(&s_pwr_cached);
 
         portENTER_CRITICAL(&s_pwr_snapshot_mux);
         s_pwr_snapshot = s_pwr_cached;
@@ -47,7 +46,7 @@ extern "C" void rover_power_poll(uint32_t now_ms)
     }
 }
 
-extern "C" void rover_power_get_snapshot(Axp2101Status_t *out)
+extern "C" void rover_power_get_snapshot(FicAxp2101Status_t *out)
 {
     if (!out) return;
     portENTER_CRITICAL(&s_pwr_snapshot_mux);
@@ -93,7 +92,7 @@ extern "C" void rover_power_update_auto_shutdown(uint32_t now_ms,
         inhibit_reason = "Disabled";
     } else if (s_pwr_cached.vbus_good) {
         inhibit_reason = "USB Power";
-    } else if (is_wifi_active() || is_wifi_starting()) {
+    } else if (fic_web_portal_is_active() || fic_web_portal_is_starting()) {
         inhibit_reason = "Wi-Fi ON";
     } else if (survey_in_progress) {
         inhibit_reason = "Survey";
@@ -136,7 +135,7 @@ extern "C" void rover_power_update_auto_shutdown(uint32_t now_ms,
             rover_power_flush_all_logs();
             play_rover_beep(800, 300);
             vTaskDelay(pdMS_TO_TICKS(350));
-            axp2101_bsp_power_off();
+            fic_axp2101_power_off();
             s_battery_since_ms = millis(); // Prevent repeated beep/flash loop if PMIC I2C power-off fails
             s_last_warn_sec = 0;
         } else if (idle_ms >= warn_start_ms) {

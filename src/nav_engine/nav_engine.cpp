@@ -664,7 +664,6 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
         s_last_disp_ms       = 0;
         s_innov_deg          = 0.0f;
         s_innov_bad_since_ms = 0;
-
         if (heading_valid_out) *heading_valid_out = true;
         if (true_heading_out)  *true_heading_out  = in->dual_heading_deg;
         if (heading_src_out)   *heading_src_out   = s_fused_src;
@@ -696,12 +695,10 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
         double az_rad = atan2(de, dn);
         double az_deg = az_rad * (180.0 / M_PI);
         if (az_deg < 0.0) az_deg += 360.0;
-
         s_fused_heading = (float)az_deg;
         s_fused_valid   = true;
         s_fused_src     = HDG_SRC_DISP;
         s_last_disp_ms  = in->now_ms;
-
         s_anchor_lat = in->tip_lat;
         s_anchor_lon = in->tip_lon;
         dist_m = 0.0;
@@ -709,7 +706,6 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
         bool in_walk_window = (s_fused_valid && s_last_disp_ms > 0 && (in->now_ms - s_last_disp_ms <= 3000U));
         float rot_thresh_dps = in->is_beam_10dof ? 1.0f : 1.5f;
         bool is_rotating = (fabsf(in->yaw_rate_cw_dps) >= rot_thresh_dps);
-
         if (in_walk_window) {
             s_fused_src = HDG_SRC_DISP;
         } else if (in->mag_present && in->mag_valid && !mag_anomaly) {
@@ -740,31 +736,19 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
             }
         }
     }
-
     if (heading_valid_out) *heading_valid_out = s_fused_valid;
     if (true_heading_out)  *true_heading_out  = s_fused_heading;
     if (heading_src_out)   *heading_src_out   = s_fused_src;
     if (disp_dist_out)     *disp_dist_out     = (float)dist_m;
 }
 
-extern "C" void nav_heading_9dof_update(double tip_lat,
-                                        double tip_lon,
-                                        float gyr_z_dps,
-                                        float pole_tilt_deg,
-                                        bool mag_present,
-                                        bool mag_valid,
-                                        float raw_mag_heading_deg,
-                                        float mag_total_uT,
-                                        uint32_t now_ms,
-                                        bool dual_antenna_valid,
-                                        bool dual_antenna_fixed,
-                                        float dual_heading_deg,
-                                        bool *heading_valid_out,
-                                        float *true_heading_out,
-                                        HeadingSource_t *heading_src_out,
-                                        float *disp_dist_out,
-                                        float *mag_true_heading_out,
-                                        bool *mag_anomaly_out)
+extern "C" void nav_heading_9dof_update(double tip_lat, double tip_lon, float gyr_z_dps, float pole_tilt_deg,
+                                        bool mag_present, bool mag_valid, float raw_mag_heading_deg,
+                                        float mag_total_uT, uint32_t now_ms, bool dual_antenna_valid,
+                                        bool dual_antenna_fixed, float dual_heading_deg,
+                                        bool *heading_valid_out, float *true_heading_out,
+                                        HeadingSource_t *heading_src_out, float *disp_dist_out,
+                                        float *mag_true_heading_out, bool *mag_anomaly_out)
 {
     NavHeadingSensorInput_t in = {};
     in.tip_lat             = tip_lat;
@@ -779,22 +763,15 @@ extern "C" void nav_heading_9dof_update(double tip_lat,
     in.dual_antenna_valid  = dual_antenna_valid;
     in.dual_antenna_fixed  = dual_antenna_fixed;
     in.dual_heading_deg    = dual_heading_deg;
-
     nav_heading_beam_update(&in, heading_valid_out, true_heading_out, heading_src_out,
                             disp_dist_out, mag_true_heading_out, mag_anomaly_out);
 }
 
-extern "C" void nav_heading_displacement_update(double tip_lat,
-                                               double tip_lon,
-                                               float gyr_z_dps,
-                                               uint32_t now_ms,
-                                               bool dual_antenna_valid,
-                                               bool dual_antenna_fixed,
-                                               float dual_heading_deg,
-                                               bool *heading_valid_out,
-                                               float *true_heading_out,
-                                               HeadingSource_t *heading_src_out,
-                                               float *disp_dist_out)
+extern "C" void nav_heading_displacement_update(double tip_lat, double tip_lon, float gyr_z_dps,
+                                                uint32_t now_ms, bool dual_antenna_valid,
+                                                bool dual_antenna_fixed, float dual_heading_deg,
+                                                bool *heading_valid_out, float *true_heading_out,
+                                                HeadingSource_t *heading_src_out, float *disp_dist_out)
 {
     nav_heading_9dof_update(tip_lat, tip_lon, gyr_z_dps, 0.0f,
                             false, false, 0.0f, 0.0f, now_ms,

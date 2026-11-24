@@ -1,5 +1,6 @@
 #include "settings_manager.h"
 #include "../../user_config.h"
+#include <Field_Instrument_Core.h>
 #include <ArduinoJson.h>
 #include <SD_MMC.h>
 #include <SD.h>
@@ -11,6 +12,18 @@ extern bool sd_card_use_spi;
 SemaphoreHandle_t fs_mux = NULL;
 // Leaf snapshot mutex; lock order invariant is always fs_mux -> s_settings_mux.
 static SemaphoreHandle_t s_settings_mux = NULL;
+
+static int settings_log_printf(const char *fmt, ...) {
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (len > 0) {
+        Serial.print(buf);
+    }
+    return len;
+}
 
 fs::FS& get_active_fs(void) {
     if (sd_card_mounted) {
@@ -178,6 +191,7 @@ extern "C" void init_settings_manager(void) {
     if (fs_mux == NULL) {
         fs_mux = xSemaphoreCreateMutex();
     }
+    fic_fs_set_mutex(fs_mux);
     if (s_settings_mux == NULL) {
         s_settings_mux = xSemaphoreCreateMutex();
     }
@@ -187,15 +201,6 @@ extern "C" void init_settings_manager(void) {
 // -----------------------------------------------------------------------------
 // Internal Safeguards & Helpers
 // -----------------------------------------------------------------------------
-
-static bool is_placeholder_ssid(const char *ssid) {
-    if (!ssid || ssid[0] == '\0') return true;
-    if (strcasecmp(ssid, "Your_SSID") == 0) return true;
-    if (strcasecmp(ssid, "Your-SSID-Here") == 0) return true;
-    if (strcasecmp(ssid, "Your-SSID") == 0) return true;
-    if (strcasecmp(ssid, "SSID") == 0) return true;
-    return false;
-}
 
 static bool is_placeholder_ntrip_value(const char *val) {
     if (!val || val[0] == '\0') return true;
@@ -251,122 +256,19 @@ static bool read_ntrip_config_from_file(fs::FS &fs, const char *path, SystemSett
     return true;
 }
 
-static void backup_file(fs::FS &fs, const char *src_path, const char *bak_path) {
-    if (!fs.exists(src_path)) return;
-    File src = fs.open(src_path, "r");
-    if (!src) return;
-    if (src.size() == 0) {
-        src.close();
-        return;
-    }
-    File dst = fs.open(bak_path, "w");
-    if (!dst) {
-        src.close();
-        return;
-    }
-    uint8_t buf[512];
-    while (src.available()) {
-        size_t n = src.read(buf, sizeof(buf));
-        if (n > 0) dst.write(buf, n);
-    }
-    dst.flush();
-    dst.close();
-    src.close();
-}
-
-// Atomic config persistence: write .tmp -> verify read-back length -> remove old target -> rename .tmp -> target.
-// Caller must already hold fs_mux.
-static bool write_json_atomic(fs::FS &fs, const char *path, const char *bak_path, const char *tmp_path, const String &payload) {
-    size_t expected_len = payload.length();
-    backup_file(fs, path, bak_path);
-    if (fs.exists(tmp_path)) {
-        fs.remove(tmp_path);
-    }
-
-    File tmp_file = fs.open(tmp_path, "w");
-    if (!tmp_file) {
-        Serial.printf("[SETTINGS ERR] Failed to open temp file %s\n", tmp_path);
-        return false;
-    }
-    size_t written = tmp_file.write((const uint8_t *)payload.c_str(), expected_len);
-    tmp_file.flush();
-    tmp_file.close();
-
-    File verify = fs.open(tmp_path, "r");
-    bool ok_verify = verify && (verify.size() == expected_len);
-    if (verify) verify.close();
-    if (written != expected_len || !ok_verify) {
-        fs.remove(tmp_path);
-        Serial.printf("[SETTINGS ERR] Atomic verify failed on %s (wrote %lu/%lu B); kept existing config\n",
-                      tmp_path, (unsigned long)written, (unsigned long)expected_len);
-        return false;
-    }
-
-    if (fs.exists(path)) {
-        fs.remove(path);
-    }
-    if (fs.rename(tmp_path, path)) {
-        return true;
-    }
-
-    // Fallback if VFS rename fails on an external driver
-    File direct = fs.open(path, "w");
-    if (!direct) {
-        fs.remove(tmp_path);
-        return false;
-    }
-    size_t dw = direct.write((const uint8_t *)payload.c_str(), expected_len);
-    direct.flush();
-    direct.close();
-    fs.remove(tmp_path);
-    return (dw == expected_len);
-}
-
-static bool try_parse_settings_file(fs::FS &fs, const char *path, JsonDocument &doc) {
-    if (!fs.exists(path)) return false;
-    File f = fs.open(path, "r");
-    if (!f || f.size() == 0) {
-        if (f) f.close();
-        return false;
-    }
-    DeserializationError err = deserializeJson(doc, f);
-    f.close();
-    if (err) {
-        Serial.printf("[SETTINGS] Deserialization error in %s: %s\n", path, err.c_str());
-        return false;
-    }
-    return true;
-}
-
-static const char *pick_first_str(const JsonDocument &doc, const char * const *keys, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-        if (!doc[keys[i]].isNull()) return doc[keys[i]];
-    }
-    return NULL;
-}
-
-static void clamp_float_doc(const JsonDocument &doc, const char *key, float *dst, float lo, float hi) {
-    if (doc[key].isNull()) return;
-    float v = doc[key];
-    if (!isfinite(v)) return;
-    if (v < lo) v = lo;
-    if (v > hi) v = hi;
-    *dst = v;
-}
-
 static const char * const kWifiSsidKeys[] = {"wifi_ssid", "ssid", "WIFI_SSID", "SSID"};
 static const char * const kWifiPassKeys[] = {"wifi_password", "password", "wifi_pass", "WIFI_PASSWORD", "PASSWORD"};
 
 static bool read_wifi_credentials_from_file(fs::FS &fs, const char *path, char *ssid_out, char *pass_out) {
     JsonDocument d;
-    if (!try_parse_settings_file(fs, path, d)) return false;
+    if (!fic_json_try_load(fs, path, d, settings_log_printf)) return false;
 
-    const char *raw_ssid = pick_first_str(d, kWifiSsidKeys, sizeof(kWifiSsidKeys) / sizeof(kWifiSsidKeys[0]));
+    const char *raw_ssid = fic_json_pick_first_str(d, kWifiSsidKeys, sizeof(kWifiSsidKeys) / sizeof(kWifiSsidKeys[0]));
     if (!raw_ssid) return false;
     trim_and_copy_str(raw_ssid, ssid_out, 33);
-    if (is_placeholder_ssid(ssid_out)) return false;
+    if (fic_json_is_placeholder_ssid(ssid_out)) return false;
 
-    const char *raw_pass = pick_first_str(d, kWifiPassKeys, sizeof(kWifiPassKeys) / sizeof(kWifiPassKeys[0]));
+    const char *raw_pass = fic_json_pick_first_str(d, kWifiPassKeys, sizeof(kWifiPassKeys) / sizeof(kWifiPassKeys[0]));
     if (raw_pass) trim_and_copy_str(raw_pass, pass_out, 65);
     else pass_out[0] = '\0';
 
@@ -382,37 +284,28 @@ extern "C" void load_settings(void) {
 
     fs::FS &active_fs = get_active_fs();
     JsonDocument doc;
-    bool loaded_ok = try_parse_settings_file(active_fs, "/settings.json", doc);
+    bool loaded_ok = fic_json_load_with_recovery(active_fs,
+                                                 "/settings.json",
+                                                 "/settings.json.bak",
+                                                 "/settings.json.tmp",
+                                                 doc,
+                                                 settings_log_printf);
     if (!loaded_ok && sd_card_mounted) {
-        // SD card might have just mounted; brief retry
+        // SD card might have just mounted; brief retry before FFat fallback
         delay(50);
-        loaded_ok = try_parse_settings_file(active_fs, "/settings.json", doc);
-    }
-
-    if (!loaded_ok) {
-        if (try_parse_settings_file(active_fs, "/settings.json.tmp", doc)) {
-            loaded_ok = true;
-            if (!active_fs.exists("/settings.json")) {
-                (void)active_fs.rename("/settings.json.tmp", "/settings.json");
-            }
-            Serial.println("[SETTINGS] Recovered /settings.json.tmp on active storage.");
-        } else if (try_parse_settings_file(active_fs, "/settings.json.bak", doc)) {
-            loaded_ok = true;
-            Serial.println("[SETTINGS] Recovered valid settings from /settings.json.bak on active storage.");
-        } else if (sd_card_mounted) {
-            if (try_parse_settings_file(FFat, "/settings.json", doc)) {
-                loaded_ok = true;
-                Serial.println("[SETTINGS] Loaded /settings.json from FFat internal mirror.");
-            } else if (try_parse_settings_file(FFat, "/settings.json.tmp", doc)) {
-                loaded_ok = true;
-                if (!FFat.exists("/settings.json")) {
-                    (void)FFat.rename("/settings.json.tmp", "/settings.json");
-                }
-                Serial.println("[SETTINGS] Recovered /settings.json.tmp from FFat internal mirror.");
-            } else if (try_parse_settings_file(FFat, "/settings.json.bak", doc)) {
-                loaded_ok = true;
-                Serial.println("[SETTINGS] Loaded /settings.json.bak from FFat internal mirror.");
-            }
+        loaded_ok = fic_json_load_with_recovery(active_fs,
+                                                "/settings.json",
+                                                "/settings.json.bak",
+                                                "/settings.json.tmp",
+                                                doc,
+                                                settings_log_printf);
+        if (!loaded_ok) {
+            loaded_ok = fic_json_load_with_recovery(FFat,
+                                                    "/settings.json",
+                                                    "/settings.json.bak",
+                                                    "/settings.json.tmp",
+                                                    doc,
+                                                    settings_log_printf);
         }
     }
 
@@ -476,20 +369,20 @@ extern "C" void load_settings(void) {
     if (!doc["audio_nav_mode"].isNull()) loaded.audio_nav_mode = doc["audio_nav_mode"];
 
     // Robust WiFi SSID & password loading with trim and key aliases
-    const char *raw_ssid = pick_first_str(doc, kWifiSsidKeys, sizeof(kWifiSsidKeys) / sizeof(kWifiSsidKeys[0]));
+    const char *raw_ssid = fic_json_pick_first_str(doc, kWifiSsidKeys, sizeof(kWifiSsidKeys) / sizeof(kWifiSsidKeys[0]));
     if (raw_ssid) trim_and_copy_str(raw_ssid, loaded.wifi_ssid, sizeof(loaded.wifi_ssid));
 
-    const char *raw_pass = pick_first_str(doc, kWifiPassKeys, sizeof(kWifiPassKeys) / sizeof(kWifiPassKeys[0]));
+    const char *raw_pass = fic_json_pick_first_str(doc, kWifiPassKeys, sizeof(kWifiPassKeys) / sizeof(kWifiPassKeys[0]));
     if (raw_pass) trim_and_copy_str(raw_pass, loaded.wifi_password, sizeof(loaded.wifi_password));
 
     // If loaded SSID is a placeholder, check if any backup has valid real credentials
-    if (is_placeholder_ssid(loaded.wifi_ssid)) {
+    if (fic_json_is_placeholder_ssid(loaded.wifi_ssid)) {
         char disk_ssid[33] = {0};
         char disk_pass[65] = {0};
         if (read_wifi_credentials_from_file(active_fs, "/settings.json.bak", disk_ssid, disk_pass) ||
             read_wifi_credentials_from_file(FFat, "/settings.json", disk_ssid, disk_pass) ||
             read_wifi_credentials_from_file(FFat, "/settings.json.bak", disk_ssid, disk_pass)) {
-            if (!is_placeholder_ssid(disk_ssid)) {
+            if (!fic_json_is_placeholder_ssid(disk_ssid)) {
                 strncpy(loaded.wifi_ssid, disk_ssid, sizeof(loaded.wifi_ssid) - 1);
                 loaded.wifi_ssid[sizeof(loaded.wifi_ssid) - 1] = '\0';
                 strncpy(loaded.wifi_password, disk_pass, sizeof(loaded.wifi_password) - 1);
@@ -568,11 +461,11 @@ extern "C" void load_settings(void) {
     if (!doc["settings_schema_version"].isNull()) {
         loaded_schema_ver = (uint16_t)doc["settings_schema_version"].as<uint16_t>();
     }
-    clamp_float_doc(doc, "line_log_max_m",       &loaded.line_log_max_m,       2.0f, 500.0f);
-    clamp_float_doc(doc, "line_audio_fade_m",    &loaded.line_audio_fade_m,    0.0f, 200.0f);
-    clamp_float_doc(doc, "line_arrow_green_deg", &loaded.line_arrow_green_deg, 1.0f, 15.0f);
-    clamp_float_doc(doc, "line_arrow_amber_deg", &loaded.line_arrow_amber_deg,
-                    fmaxf(loaded.line_arrow_green_deg + 1.0f, 3.0f), 45.0f);
+    fic_json_clamp_float(doc, "line_log_max_m",       &loaded.line_log_max_m,       2.0f, 500.0f);
+    fic_json_clamp_float(doc, "line_audio_fade_m",    &loaded.line_audio_fade_m,    0.0f, 200.0f);
+    fic_json_clamp_float(doc, "line_arrow_green_deg", &loaded.line_arrow_green_deg, 1.0f, 15.0f);
+    fic_json_clamp_float(doc, "line_arrow_amber_deg", &loaded.line_arrow_amber_deg,
+                         fmaxf(loaded.line_arrow_green_deg + 1.0f, 3.0f), 45.0f);
     if (!doc["map_zoom_m_per_px"].isNull()) {
         float v = doc["map_zoom_m_per_px"];
         if (isfinite(v)) {
@@ -617,7 +510,7 @@ extern "C" void load_settings(void) {
     if (sd_card_mounted && !migrate_e220_profile && !migrate_schema) {
         String mirror_out;
         serializeJsonPretty(doc, mirror_out);
-        if (write_json_atomic(FFat, "/settings.json", "/settings.json.bak", "/settings.json.tmp", mirror_out)) {
+        if (fic_json_write_atomic(FFat, "/settings.json", "/settings.json.bak", "/settings.json.tmp", mirror_out, settings_log_printf)) {
             s_last_ffat_mirrored = loaded;
             s_ffat_mirror_valid  = true;
             Serial.println("[SETTINGS] Mirrored SD Card settings.json atomically to internal FFat.");
@@ -646,14 +539,14 @@ extern "C" void save_settings(void) {
     settings_get_snapshot(&snap);
 
     // Safeguard 1: Never overwrite real disk Wi-Fi credentials with placeholder values
-    if (is_placeholder_ssid(snap.wifi_ssid)) {
+    if (fic_json_is_placeholder_ssid(snap.wifi_ssid)) {
         char disk_ssid[33] = {0};
         char disk_pass[65] = {0};
         if (read_wifi_credentials_from_file(active_fs, "/settings.json", disk_ssid, disk_pass) ||
             read_wifi_credentials_from_file(active_fs, "/settings.json.bak", disk_ssid, disk_pass) ||
             read_wifi_credentials_from_file(FFat, "/settings.json", disk_ssid, disk_pass) ||
             read_wifi_credentials_from_file(FFat, "/settings.json.bak", disk_ssid, disk_pass)) {
-            if (!is_placeholder_ssid(disk_ssid)) {
+            if (!fic_json_is_placeholder_ssid(disk_ssid)) {
                 strncpy(snap.wifi_ssid, disk_ssid, sizeof(snap.wifi_ssid) - 1);
                 snap.wifi_ssid[sizeof(snap.wifi_ssid) - 1] = '\0';
                 strncpy(snap.wifi_password, disk_pass, sizeof(snap.wifi_password) - 1);
@@ -761,14 +654,14 @@ extern "C" void save_settings(void) {
     serializeJsonPretty(doc, output);
 
     // Safeguard 2: Atomic .tmp + verified rename on active storage with .bak preservation
-    (void)write_json_atomic(active_fs, "/settings.json", "/settings.json.bak", "/settings.json.tmp", output);
+    (void)fic_json_write_atomic(active_fs, "/settings.json", "/settings.json.bak", "/settings.json.tmp", output, settings_log_printf);
 
     if (sd_card_mounted) {
         // Only rewrite internal SPI Flash FFat mirror when configuration fields (other than
         // active_waypoint_index) actually changed, avoiding 1.5-2.0s SPI Flash wear-leveling stalls
         // and flash wear when stepping through SD waypoints.
         if (!s_ffat_mirror_valid || !non_index_settings_equal(snap, s_last_ffat_mirrored)) {
-            if (write_json_atomic(FFat, "/settings.json", "/settings.json.bak", "/settings.json.tmp", output)) {
+            if (fic_json_write_atomic(FFat, "/settings.json", "/settings.json.bak", "/settings.json.tmp", output, settings_log_printf)) {
                 s_last_ffat_mirrored = snap;
                 s_ffat_mirror_valid  = true;
             }
