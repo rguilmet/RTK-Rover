@@ -15,6 +15,7 @@ bool route_logger_is_active(void);
 const char* route_logger_get_current_filename(void);
 uint32_t route_logger_get_point_count(void);
 void route_logger_log_point(const RoverUIData_t *state);
+void route_logger_flush(void);
 
 #ifdef __cplusplus
 }

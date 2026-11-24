@@ -3,6 +3,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "driver/i2c_master.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Default DFRobot Gravity SEN0696 (BMI323 + BMM350 + BMP581) I2C address range (A1/A0 DIP)
 #define SEN0696_I2C_ADDR_DEFAULT     0x4AU
@@ -40,6 +45,17 @@ typedef struct {
 } sen0696_state_t;
 
 /**
+ * @brief Instance context for an attached DFRobot SEN0696 10-DOF sensor.
+ */
+typedef struct {
+    sen0696_state_t          state;
+    i2c_master_dev_handle_t  owned_dev_handle;
+    i2c_master_dev_handle_t *dev_handle_ptr;
+    bool                     link_suppressed;
+    bool                     owns_global_beam_handle;
+} FicSen0696_t;
+
+/**
  * @brief Quietly probes [addr_min..addr_max] on a specific I2C port (0 or 1) without tripping recovery.
  * @return First responding 7-bit I2C address, or 0 if no SEN0696 responded.
  */
@@ -51,43 +67,22 @@ uint8_t sen0696_detect_i2c_addr_on_bus(uint8_t bus_port, uint8_t addr_min, uint8
  */
 uint8_t sen0696_detect_i2c_addr(uint8_t addr_min, uint8_t addr_max);
 
-/**
- * @brief Initializes DFRobot SEN0696 (prefers I2C1 IO47/48, falls back to I2C0 IO7/8).
- *
- * Configures Normal operating mode (+/-2g accel, +/-250dps gyro) and waits for first sensor
- * conversion settling. Note: DFRobot's SEN0696 onboard I2C bridge firmware (regs 0x0000..0x0021)
- * does not expose an external temperature register over I2C.
- */
-bool sen0696_init(uint8_t addr_min, uint8_t addr_max, sen0696_state_t *out_state);
+void fic_sen0696_reset(FicSen0696_t *ctx);
+bool fic_sen0696_init_with_device(FicSen0696_t *ctx,
+                                  uint8_t i2c_bus,
+                                  uint8_t i2c_addr,
+                                  i2c_master_dev_handle_t dev_handle,
+                                  sen0696_state_t *out_state);
+bool fic_sen0696_init(FicSen0696_t *ctx, uint8_t addr_min, uint8_t addr_max, sen0696_state_t *out_state);
+bool fic_sen0696_is_present(const FicSen0696_t *ctx);
+uint8_t fic_sen0696_get_i2c_bus(const FicSen0696_t *ctx);
+uint8_t fic_sen0696_get_consec_fails(const FicSen0696_t *ctx);
+bool fic_sen0696_poll_step(FicSen0696_t *ctx, uint8_t step, sen0696_state_t *out_state);
+bool fic_sen0696_poll_fast(FicSen0696_t *ctx, bool read_baro, sen0696_state_t *out_state);
+bool fic_sen0696_poll(FicSen0696_t *ctx, sen0696_state_t *out_state);
 
-/**
- * @brief Returns true if SEN0696 was detected and verified at boot.
- */
-bool sen0696_is_present(void);
-
-/**
- * @brief Returns active I2C bus port for SEN0696 (1 = I2C1, 0 = I2C0 fallback).
- */
-uint8_t sen0696_get_i2c_bus(void);
-
-/**
- * @brief Returns consecutive error count (useful for backing off poll cadence when disconnected).
- */
-uint8_t sen0696_get_consec_fails(void);
-
-/**
- * @brief Executes one staggered acquisition step (step 0=IMU, 1=Mag, 2=Baro/Finalize) for I2C0 fallback.
- */
-bool sen0696_poll_step(uint8_t step, sen0696_state_t *out_state);
-
-/**
- * @brief High-rate single-tick acquisition for isolated I2C1 (~25-30 Hz IMU + Mag, or Baro when read_baro=true).
- */
-bool sen0696_poll_fast(bool read_baro, sen0696_state_t *out_state);
-
-/**
- * @brief Convenience blocking call that executes steps 0, 1, and 2 sequentially.
- */
-bool sen0696_poll(sen0696_state_t *out_state);
+#ifdef __cplusplus
+}
+#endif
 
 #endif // SEN0696_DRIVER_H

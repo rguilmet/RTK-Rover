@@ -1,9 +1,9 @@
 # Plan 1: Unified Shared Core Library (`Field_Instrument_Core`), Codebase Modularization & Token Optimization
 
 > [!NOTE]
-> **Status:** Active Execution Roadmap -- **Phase 1.0, Phase 1.1A (`v0.10.8`) & Phase 1.1B (`v0.10.9`) COMPLETE (`2026-11-24`)**, Phase 1.1C Next  
-> **Document Version:** `1.2.3`  
-> **Baselines:** `RTK_Rover v0.10.9` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
+> **Status:** Active Execution Roadmap -- **Phase 1.0 & Phase 1.1 (`1.1A v0.10.8`, `1.1B v0.10.9`, `1.1C v0.10.10`) COMPLETE (`2026-11-24`)**, Phase 1.2 (`Field_Instrument_Core` Extraction) Next  
+> **Document Version:** `1.2.4`  
+> **Baselines:** `RTK_Rover v0.10.10` | `CAD v2.2.4` | `Magnetic_Field_Scanner v5.1.13`  
 > **Completed Prerequisite:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (`v0.8.19` - `v0.9.0`, refined through `v0.10.7` and archived `2026-11-24`: `lvgl_port.c` 11-file split, `I2C1` dual-bus `i2c_bsp`, `matrix_math`/`ahrs_9dof` port, `rtk-firmware-release`/`rtk-cad-pipeline` skills, and `build/`+`scratch/` purge completed).  
 > **Companion Roadmap:** [`plan_2_rover_enhancements_and_android_companion.md`](plan_2_rover_enhancements_and_android_companion.md) (`v1.3.0`)  
 > **Supersedes / Consolidates:** [`archive/plan_project_structure_and_token_optimization.md`](archive/plan_project_structure_and_token_optimization.md), Phase 1 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), residual F-19 `COM2` naming cleanup from [`archive/plan_phase9_gps_disciplined_tdma.md`](archive/plan_phase9_gps_disciplined_tdma.md), open Core-tier robustness findings (`F-12`, `F-13`, `F-14`, `F-17`) from archived `project_review_sonnet.md`, and Section 7 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md).
@@ -28,12 +28,12 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 | Tracked File | Bytes | Lines | Cap Overrun | Status / Disposition in Plan 1 |
 | :--- | :---: | :---: | :---: | :--- |
 | `CHANGELOG.md` | `29,879 B` (`248 KB` pre-split) | `137 L` (`1,663 L` pre-split) | **Compliant** | **Done in Ph 1.0 (`2026-11-24`)**: `< v0.9.0` -> `docs/changelog_archive_v0_1_to_v0_8.md` |
-| `src/lvgl_port/` (`11` files) | `max 34 KB` | `max 792 L` | **Compliant** | **Done in Plan 0 (`11` files <= 792 L)**; decouple `lvgl_port_core.c` in Ph 1.1 |
-| `RTK_Rover.ino` + `rover_*` (`7` files) | `max 34,453 B` (`80.7 KB` pre-split) | `max 754 L` (`1,675 L` pre-split) | **Compliant** | **Done in Ph 1.1B (`v0.10.9`)**: `.ino` (`575 L / 28,043 B`), `rover_audio` (`321 L`), `rover_power` (`175 L`), `rover_sensors` (`754 L`) |
+| `src/lvgl_port/` (`11` files) | `max 34 KB` | `max 792 L` | **Compliant** | **Done in Plan 0 & Ph 1.1C (`v0.10.10`)**: `lvgl_port_core.c` (`405 L / 16,262 B`) decoupled via `BoardDisplayCfg_t` |
+| `RTK_Rover.ino` + `rover_*` (`7` files) | `max 35,086 B` (`80.7 KB` pre-split) | `max 760 L` (`1,675 L` pre-split) | **Compliant** | **Done in Ph 1.1B/C (`v0.10.10`)**: `.ino` (`631 L / 30,278 B`), `rover_audio` (`321 L`), `rover_power` (`175 L`), `rover_sensors` (`760 L`) |
 | `src/e220_driver/` (`5` split files) | `max 25,759 B` (`68.4 KB` pre-split) | `max 626 L` (`1,596 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `config_mode3` (`626 L`), `gatekeeper` (`449 L`), `tdma` (`535 L`), `internal.h` (`104 L`) |
 | `src/waypoint_manager/` (`4` split files) | `max 28,195 B` (`45.6 KB` pre-split) | `max 748 L` (`1,181 L` pre-split) | **Compliant** | **Done in Ph 1.1B (`v0.10.9`)**: `csv_store` (`748 L`), `survey_log` (`471 L`), `internal.h` (`18 L`), injected FS/mutex hook |
 | `src/um982_driver/` (`4` split files) | `max 29,344 B` (`47.5 KB` pre-split) | `max 734 L` (`1,146 L` pre-split) | **Compliant** | **Done in Ph 1.1A (`v0.10.8`)**: `nmea_parser` (`734 L`), `config_audit` (`546 L`), `internal.h` (`53 L`) + F-19/F-13/F-14 |
-| `src/settings_manager/settings_manager.cpp` | `40,720 B` | `714 L` | Near byte cap | Phase 1.1: Monitor size + add F-12 atomic `.tmp` + `rename()` save |
+| `src/settings_manager/settings_manager.cpp` | `39,914 B` (`40,720 B` pre-F12) | `786 L` (`770 L` pre-F12) | **Compliant** | **Done in Ph 1.1C (`v0.10.10`)**: F-12 atomic `.tmp` + verify + `rename()` + `s_settings_mux` |
 | `scripts/e220_pacer.py` | `81,545 B` | `1,668 L` | `1.77x B / 2.09x L` | Optional split (`rover_protocol.py` + `update_e220_pacer.sh`) |
 | `scripts/generate_wiring_diagrams.py` | `87,745 B` | `1,319 L` | `1.90x B / 1.65x L` | Split lazily when diagrams change next |
 | `scripts/bench_e220_multirate.py` | `80,845 B` | `1,725 L` | `1.75x B / 2.16x L` | Keep self-contained CLI bench suite; inspect via offsets |
@@ -86,7 +86,7 @@ With the hardware locked on the **Waveshare ESP32-S3-Touch-LCD-3.5B** platform (
 5. **Reconcile `libraries/lv_conf.h` (`v8.4.0` -> `v9.6.0` Fallback, `DONE` `2026-11-24`):**
    * Verified `arduino-cli` resolves `RTK_Rover/lv_conf.h` and `Magnetic_Field_Scanner/lv_conf.h` locally via `-I<sketch_dir>` + `__has_include("lv_conf.h")`. Archived `libraries/lv_conf.h` (`v8.4.0`) to `libraries/lv_conf - v8.4.0.h` and installed an LVGL `v9.6.0`-compatible `libraries/lv_conf.h` fallback (`LV_USE_FLOAT 0`, preserving strict C `snprintf()` + `lv_label_set_text()` discipline). Deferred `Magnetic_Field_Scanner/lv_conf.h` deprecation cleanup to Phase 1.3 Stage 2 (`MFS v5.1.x -> v6.0.0`) and verified zero warnings on `RTK_Rover`.
 
-### Phase 1.1 -- In-Place Modularization (`<= 800 L`), Core Decoupling & Robustness Hardening (Prerequisite for Plan 2)
+### Phase 1.1 -- In-Place Modularization (`<= 800 L`), Core Decoupling & Robustness Hardening -- `DONE (v0.10.8 - v0.10.10, 2026-11-24)`
 
 Every C/C++ split and new reusable module MUST enforce four dependency boundaries:
 1. **Strict Direction (`App Adapter` -> `Core Module`, Never Reverse):** Core modules receive pins, bus/device handles, display config, signed `3x3` axis-permutation matrices, `StorageFsHandle_t { fs::FS *fs; SemaphoreHandle_t fs_mux; }`, and log callbacks via `*Config_t` / `*Hooks_t` structs -- **zero** `#include "../../user_config.h"`, **zero** `current_settings`, **zero** `RoverUIData_t`, and **zero** `get_active_fs()` globals.
@@ -95,8 +95,8 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
 4. **Display Core vs. App UI Separation:** `lvgl_port_core.c` owns QSPI/DMA/PSRAM wrapping (`heap_caps_malloc_extmem_enable(64)` -> `4096`), `rover_lvgl_capture_framebuffer()`, and generic locks; app tiles stay in `RTK_Rover`.
 
 **Exact File Splits, Decouplings & Hardening (`v0.10.7` Baseline):**
-1. **`src/lvgl_port/` (`11`-File Split COMPLETE in Plan 0 -> Core Decouple Here):**
-   * Remove `lvgl_ui_internal.h` include from `lvgl_port_core.c`; parameterize `lvgl_port_core.c` (`BoardDisplayCfg_t`, PSRAM `extmem_enable(64)` wrapper, mutex, lock-free FB capture) so `ui_header_nav.c` and `ui_tile0..tile5*.c` stay strictly sketch-local in `RTK_Rover`.
+1. **`src/lvgl_port/` (`11`-File Split COMPLETE in Plan 0 -> Core Decouple `DONE` `v0.10.10` `2026-11-24`):**
+   * Removed `lvgl_ui_internal.h` include from `lvgl_port_core.c` (`405 L / 16,262 B`); parameterized display/touch/EXIO/task config & callbacks via `BoardDisplayCfg_t` + `lvgl_port_init_with_cfg()`, keeping PSRAM `extmem_enable(64)` wrap, mutex, and lock-free FB capture cleanly separated from app UI tiles.
 2. **Split `src/e220_driver/e220_driver.cpp` (`1,596 L / 68.4 KB` -> `3` Units + `e220_driver_internal.h`, `DONE` `v0.10.8` `2026-11-24`):**
    * `e220_config_mode3.cpp` (`626 L / 23,981 B`), `e220_rtcm_gatekeeper.cpp` (`449 L / 18,564 B` -- exporting `e220_rtcm_crc24q_compute()` & `e220_rtcm_validate_frame()` for Plan 2's `rtcm_arbiter`), `e220_tdma_scheduler.cpp` (`535 L / 25,759 B`), and `e220_driver_internal.h` (`104 L / 3,944 B`).
 3. **Split `src/um982_driver/um982_driver.cpp` (`1,146 L / 47.5 KB` -> `2` Units + `um982_driver_internal.h` + F-13/F-14/F-19, `DONE` `v0.10.8` `2026-11-24`):**
@@ -110,9 +110,9 @@ Every C/C++ split and new reusable module MUST enforce four dependency boundarie
    * Extracted Priority-4 ES8311 `task_audio_beep` + `beepQueue` + `rover_audio_update_nav_guidance()` into `src/rover_audio/` (`rover_audio.cpp` `321 L / 13,111 B`).
    * Extracted AXP2101 polling, `rover_power_get_snapshot()`, `rover_power_flush_all_logs()` (staging Plan 2's `< 3.40 V` low-battery SD flush hook), and 30s auto-shutdown timer into `src/rover_power/` (`rover_power.cpp` `175 L / 7,559 B`).
    * Extracted Core 1 QMI8658/MMC5983MA/SEN0696 10-DOF polling, PSRAM `s_beam_ahrs` init + `|B|` collapse self-heal, `MagCalWizard_t`, and BMP581 baro elevation into `src/rover_sensors/` (`rover_sensors.cpp` `754 L / 34,453 B`), compiling with `0` warnings (`1,754,134 B` / `55%` flash, `69,184 B` / `21%` static `DRAM0`).
-6. **Decouple Core Candidates & Settings Integrity (`F-12`):**
-   * Strip `settings_manager.h` + `serial_logger.h` from `imu_bsp.c`; inject UTC offset & remove `um982_driver.h` from `rtc_bsp.cpp`; convert `sen0696_driver.cpp` to `FicSen0696_t *`; align `nmea_logger.cpp` and `route_logger.cpp` to `rtcm_logger`'s decoupled `s_buf_mux`/`s_file_mux`.
-   * **F-12 (`settings_manager` Atomicity):** Write settings to `/settings.json.tmp` on SD/`FFat` before atomic `rename()` over `/settings.json` (plus add a read/write snapshot mutex where multi-task reads occur) so brownout mid-save never leaves a 0-byte config.
+6. **Decouple Core Candidates & Settings Integrity (`F-12`, `DONE` `v0.10.10` `2026-11-24`):**
+   * Stripped `settings_manager.h` + `serial_logger.h` from `imu_bsp.c` (`253 L`, injected `imu_set_log_callback()`, `imu_set_debug_logging()`, tare args); stripped `settings_manager.h` + `um982_driver.h` + `Serial` from `rtc_bsp.cpp` (`221 L`, injected UTC offset & sys-clock sync guard callbacks); refactored `sen0696_driver.cpp` (`492 L`) onto `FicSen0696_t *`; aligned `nmea_logger.cpp` (`225 L`) and `route_logger.cpp` (`289 L`) to `rtcm_logger`'s decoupled `s_buf_mux`/`s_file_mux` + `fs_mux` PSRAM rings + `loop()` `route_logger_flush()`.
+   * **F-12 (`settings_manager` Atomicity, `DONE`):** Added `write_json_atomic()` (`/settings.json.tmp` + read-back length verify + `.bak` + `rename()` + `.tmp` recovery) and `s_settings_mux` snapshot locking (`settings_manager.cpp` `786 L / 39,914 B`), compiling with `0` warnings (`1,755,030 B` / `55%` flash, `69,368 B` / `21%` static `DRAM0`).
    * Keep `src/matrix_math/` (`698 L`) and `src/sensor_fusion/` (`469 L`) strictly zero-app-dependency for direct Phase 1.2 adoption.
    * *Optional Python split:* When modifying `scripts/e220_pacer.py` or `scripts/cogo_solver.py`, extract `rover_protocol.py` (updating `scripts/update_e220_pacer.sh` together!) and `cogo_math.py`.
 

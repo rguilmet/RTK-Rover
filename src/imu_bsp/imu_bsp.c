@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include "imu_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
-#include "../settings_manager/settings_manager.h"
-#include "../storage/serial_logger.h"
 #include <stdint.h>
 #include <math.h>
 #include <esp_err.h>
@@ -10,6 +8,28 @@
 #include "freertos/task.h"
 
 extern i2c_master_dev_handle_t imu_dev_handle;
+
+static imu_log_cb_t s_imu_log_cb = NULL;
+static bool         s_imu_debug_log = false;
+
+#define imu_log(...)                                \
+    do {                                            \
+        if (s_imu_log_cb != NULL) {                 \
+            s_imu_log_cb(__VA_ARGS__);              \
+        } else {                                    \
+            printf(__VA_ARGS__);                    \
+        }                                           \
+    } while (0)
+
+void imu_set_log_callback(imu_log_cb_t cb)
+{
+    s_imu_log_cb = cb;
+}
+
+void imu_set_debug_logging(bool enable)
+{
+    s_imu_debug_log = enable;
+}
 
 void imu_init(void)
 {
@@ -20,7 +40,7 @@ void imu_init(void)
     uint8_t ctrl_buf = 0xB0;
     uint8_t rst_err  = i2c_write_buff(imu_dev_handle, 0x60, &ctrl_buf, 1);
     if (err != 0 && rst_err != 0) {
-        rover_printf("[IMU] QMI8658 (0x6B) unreachable during init/recovery (err=%d) -- aborting config burst\n", (int)err);
+        imu_log("[IMU] QMI8658 (0x6B) unreachable during init/recovery (err=%d) -- aborting config burst\n", (int)err);
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(5));
@@ -68,9 +88,9 @@ void imu_init(void)
     vTaskDelay(pdMS_TO_TICKS(15));
 
     if (err == 0 && who_am_i == 0x05) {
-        rover_printf("[IMU] QMI8658 (0x6B) ONLINE -- WHO_AM_I: 0x%02X (4g/512dps @ 250Hz)\n", who_am_i);
+        imu_log("[IMU] QMI8658 (0x6B) ONLINE -- WHO_AM_I: 0x%02X (4g/512dps @ 250Hz)\n", who_am_i);
     } else {
-        rover_printf("[IMU] QMI8658 (0x6B) WARN -- WHO_AM_I: 0x%02X (err=%d)\n", who_am_i, (int)err);
+        imu_log("[IMU] QMI8658 (0x6B) WARN -- WHO_AM_I: 0x%02X (err=%d)\n", who_am_i, (int)err);
     }
 }
 
@@ -128,18 +148,18 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
     }
 
     uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    if (current_settings.enable_imu_logging && (now_ms - last_log_ms >= 1000)) {
+    if (s_imu_debug_log && (now_ms - last_log_ms >= 1000)) {
         last_log_ms = now_ms;
-        rover_printf("[IMU] err=%d | Acc(g): %+.2f %+.2f %+.2f | Gyr(dps): %+.1f %+.1f %+.1f | fails=%u\n",
-                     (int)err,
-                     last_acc[0], last_acc[1], last_acc[2],
-                     last_gyr[0], last_gyr[1], last_gyr[2],
-                     (unsigned int)fail_count);
+        imu_log("[IMU] err=%d | Acc(g): %+.2f %+.2f %+.2f | Gyr(dps): %+.1f %+.1f %+.1f | fails=%u\n",
+                (int)err,
+                last_acc[0], last_acc[1], last_acc[2],
+                last_gyr[0], last_gyr[1], last_gyr[2],
+                (unsigned int)fail_count);
     }
 
     // Auto-recovery: only reinitialize if 50 consecutive polls fail (5 continuous seconds of silence)
     if (fail_count >= 50) {
-        rover_printf("[IMU] 50 consecutive failed reads -> attempting auto-recovery\n");
+        imu_log("[IMU] 50 consecutive failed reads -> attempting auto-recovery\n");
         fail_count = 0;
         imu_init();
     }
@@ -160,6 +180,8 @@ void imu_read(float *acc, float *gyr, int16_t *temp)
 }
 
 void imu_compute_pose_and_bubble(const float *acc,
+                                 float tare_pitch_deg,
+                                 float tare_roll_deg,
                                  float *pitch_deg_out,
                                  float *roll_deg_out,
                                  float *bubble_x_deg_out,
@@ -215,8 +237,8 @@ void imu_compute_pose_and_bubble(const float *acc,
     if (roll_deg_out)  *roll_deg_out  = ema_roll;
 
     // Subtract user-tared bracket angles so the bubble level works whether clipped vertically or held flat
-    if (bubble_x_deg_out) *bubble_x_deg_out = ema_roll  - current_settings.pole_tilt_tare_roll_deg;
-    if (bubble_y_deg_out) *bubble_y_deg_out = ema_pitch - current_settings.pole_tilt_tare_pitch_deg;
+    if (bubble_x_deg_out) *bubble_x_deg_out = ema_roll  - tare_roll_deg;
+    if (bubble_y_deg_out) *bubble_y_deg_out = ema_pitch - tare_pitch_deg;
 
     if (pose_out) {
         float abs_p = fabsf(ema_pitch);

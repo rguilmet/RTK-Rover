@@ -87,6 +87,9 @@ void init_settings_manager(void);
 void load_settings(void);
 void save_settings(void);
 void mark_settings_dirty(void);
+bool settings_lock(uint32_t timeout_ms);
+void settings_unlock(void);
+void settings_get_snapshot(struct SystemSettings *out);
 
 #ifdef __cplusplus
 }

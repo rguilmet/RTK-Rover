@@ -9,6 +9,7 @@
 #include "../settings_manager/settings_manager.h"
 #include "../nav_engine/nav_engine.h"
 #include "../rover_audio/rover_audio.h"
+#include "../storage/serial_logger.h"
 #include <Arduino.h>
 #include <math.h>
 #include <string.h>
@@ -36,6 +37,7 @@ static volatile bool     pending_tare_level     = false;
 static volatile bool     pending_mag_cal_toggle = false;
 static volatile bool     pending_mag_cal_cancel = false;
 static Ahrs9DofState_t  *s_beam_ahrs            = NULL;
+static FicSen0696_t      s_beam_ctx             = {};
 static sen0696_state_t   s_boot_10dof           = {};
 static portMUX_TYPE      s_imu_snapshot_mux     = portMUX_INITIALIZER_UNLOCKED;
 static float             s_snapshot_bubble_x    = 0.0f;
@@ -291,7 +293,7 @@ static void mag_cal_update_wizard(MagCalWizard_t *w, const float raw_mag[3], boo
 static void run_beam_10dof_boot_check(sen0696_state_t *out_report)
 {
     sen0696_state_t report;
-    (void)sen0696_init(ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX, &report);
+    (void)fic_sen0696_init(&s_beam_ctx, ROVER_I2C_ADDR_BEAM_IMU, ROVER_I2C_ADDR_BEAM_IMU_MAX, &report);
     if (out_report) {
         *out_report = report;
     }
@@ -350,6 +352,7 @@ static void run_beam_10dof_boot_check(sen0696_state_t *out_report)
 
 extern "C" void rover_sensors_hw_init(void)
 {
+    imu_set_log_callback(rover_printf);
     imu_init();
     mmc5983ma_init();
     run_beam_10dof_boot_check(&s_boot_10dof);
@@ -413,22 +416,25 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
 {
     // Hardware bus thread-safety across tasks is guaranteed by i2c_bus_mutex in i2c_bsp.
     // No dependency on the LVGL graphics mutex so sensor polling is never starved.
-    const bool beam_online_fast = sen0696_is_present() && s_beam_state.valid &&
-                                  s_beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+    const bool beam_online_fast = fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.valid &&
+                                  s_beam_ahrs_has_sample && (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U);
     const uint32_t imu_poll_period_ms = beam_online_fast ? 500U : 100U;
     if (now_ms - s_last_imu_poll_ms >= imu_poll_period_ms || s_last_imu_poll_ms == 0) {
         s_last_imu_poll_ms = (now_ms == 0) ? 1 : now_ms;
         int16_t imu_temp = 0;
+        imu_set_debug_logging(current_settings.enable_imu_logging);
         imu_read(s_cached_acc, s_cached_gyr, &imu_temp);
         imu_compute_pose_and_bubble(s_cached_acc,
+                                    current_settings.pole_tilt_tare_pitch_deg,
+                                    current_settings.pole_tilt_tare_roll_deg,
                                     &s_cached_imu_pitch,
                                     &s_cached_imu_roll,
                                     &s_cached_bubble_x,
                                     &s_cached_bubble_y,
                                     &s_cached_pose);
 
-        const bool beam_online_now = sen0696_is_present() && s_beam_state.valid &&
-                                     s_beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+        const bool beam_online_now = fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.valid &&
+                                     s_beam_ahrs_has_sample && (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U);
         if (!beam_online_now) {
             float imu_pole_tilt = sqrtf(s_cached_bubble_x * s_cached_bubble_x +
                                         s_cached_bubble_y * s_cached_bubble_y);
@@ -471,26 +477,26 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
     // High-rate SEN0696 10DOF polling: 25-30 Hz on isolated I2C1 (IO47/48), or staggered ~5 Hz fallback on I2C0
     static uint8_t s_10dof_step     = 0;
     static bool    s_10dof_in_cycle = false;
-    if (sen0696_is_present()) {
+    if (fic_sen0696_is_present(&s_beam_ctx)) {
         bool cycle_done = false;
         bool ok = false;
-        if (sen0696_get_i2c_bus() == 1U) {
-            if (sen0696_get_consec_fails() < 15U || (now_ms - s_last_10dof_poll_ms >= 5000U)) {
+        if (fic_sen0696_get_i2c_bus(&s_beam_ctx) == 1U) {
+            if (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U || (now_ms - s_last_10dof_poll_ms >= 5000U)) {
                 s_last_10dof_poll_ms = (now_ms == 0) ? 1U : now_ms;
                 s_beam_poll_ticks++;
                 const bool read_baro = ((s_beam_poll_ticks % 10U) == 0U);
-                ok = sen0696_poll_fast(read_baro, &s_beam_state);
+                ok = fic_sen0696_poll_fast(&s_beam_ctx, read_baro, &s_beam_state);
                 cycle_done = true;
             }
         } else {
-            const uint32_t period_ms = (sen0696_get_consec_fails() >= 15U) ? 5000U : 200U;
+            const uint32_t period_ms = (fic_sen0696_get_consec_fails(&s_beam_ctx) >= 15U) ? 5000U : 200U;
             if (!s_10dof_in_cycle && (now_ms - s_last_10dof_poll_ms >= period_ms)) {
                 s_last_10dof_poll_ms = (now_ms == 0) ? 1U : now_ms;
                 s_10dof_in_cycle     = true;
                 s_10dof_step         = 0;
             }
             if (s_10dof_in_cycle) {
-                ok = sen0696_poll_step(s_10dof_step, &s_beam_state);
+                ok = fic_sen0696_poll_step(&s_beam_ctx, s_10dof_step, &s_beam_state);
                 s_10dof_step++;
                 if (s_10dof_step >= 3U) {
                     s_10dof_in_cycle = false;
@@ -549,7 +555,7 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
             } else if (!ok && ((now_ms - s_last_10dof_log_ms) >= 2000U)) {
                 s_last_10dof_log_ms = now_ms;
                 Serial.printf("[10DOF I2C%u] READ ERR (acc:%s mag:%s press:%s fails:%u)\n",
-                              (unsigned)sen0696_get_i2c_bus(),
+                              (unsigned)fic_sen0696_get_i2c_bus(&s_beam_ctx),
                               s_beam_state.accel_gyro_valid ? "OK" : "ERR",
                               s_beam_state.mag_valid        ? "OK" : "ERR",
                               s_beam_state.press_valid      ? "OK" : "ERR",
@@ -558,8 +564,8 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
         }
     }
 
-    s_beam_10dof_active = sen0696_is_present() && s_beam_state.present && s_beam_state.valid &&
-                          s_beam_ahrs_has_sample && (sen0696_get_consec_fails() < 15U);
+    s_beam_10dof_active = fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.present && s_beam_state.valid &&
+                          s_beam_ahrs_has_sample && (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U);
 
     if (pending_tare_level) {
         pending_tare_level = false;
@@ -675,9 +681,9 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
     ui_state->mag_ellipsoid_cal_valid = current_settings.mag_ellipsoid_cal_valid;
 
     // Populate SEN0696 / BMP581 / CAL MAG / I2C Diagnostics
-    ui_state->beam_10dof_present   = sen0696_is_present();
+    ui_state->beam_10dof_present   = fic_sen0696_is_present(&s_beam_ctx);
     ui_state->beam_10dof_valid     = s_beam_10dof_active;
-    ui_state->beam_10dof_bus       = sen0696_get_i2c_bus();
+    ui_state->beam_10dof_bus       = fic_sen0696_get_i2c_bus(&s_beam_ctx);
     ui_state->beam_10dof_addr      = s_beam_state.i2c_addr;
     ui_state->beam_gyro_foc_locked = s_beam_ahrs_has_sample && s_beam_ahrs_out.gyro_foc_locked;
     ui_state->beam_pitch_deg       = s_beam_ahrs_out.pitch_deg;
@@ -700,7 +706,7 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
             (ui_state->heading_source == HDG_SRC_COG)      ? "COG" :
             (ui_state->heading_source == HDG_SRC_HOLD)     ? "HLD" : "---";
         Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | Hdg:%.1f[%s] Mag:%.1f%s | FOC:%s | P:%.2fhPa\n",
-                      (unsigned)sen0696_get_i2c_bus(),
+                      (unsigned)fic_sen0696_get_i2c_bus(&s_beam_ctx),
                       s_beam_ahrs_out.pitch_deg,
                       s_beam_ahrs_out.roll_deg,
                       s_beam_ahrs_out.mag_cal_valid ? s_beam_ahrs_out.mag_norm_uT : s_beam_state.mag_norm_ut,
@@ -712,7 +718,7 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
                       s_beam_state.pressure_hpa);
     }
 
-    if (sen0696_is_present() && s_beam_state.press_valid) {
+    if (fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.press_valid) {
         ui_state->beam_pressure_hpa = s_beam_state.pressure_hpa;
         if (ui_state->fix_type == GNSS_FIX_RTK_FIXED && isfinite(ui_state->tip_height_m)) {
             float raw_diff = (float)ui_state->tip_height_m - s_beam_state.altitude_m;

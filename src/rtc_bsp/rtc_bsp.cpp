@@ -1,20 +1,26 @@
 #include <Arduino.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <Wire.h>
 #include <sys/time.h>
 #include <time.h>
 #include "RtcDrv.hpp"
 #include "rtc_bsp.h"
 #include "../i2c_bsp/i2c_bsp.h"
-#include "../settings_manager/settings_manager.h"
-#include "../um982_driver/um982_driver.h"
 #include "esp_log.h"
 #include "driver/i2c_master.h"
+
+static const char *TAG = "rtc_bsp";
 
 static SensorPCF85063 rtc;
 static const uint8_t daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 static RtcDateTime_t cached_rtc_time = {2026, 1, 1, 0, 0, 0, 0};
 static uint32_t      last_rtc_read_ms = 0;
+
+static int16_t                       s_utc_offset_min    = -300;
+static rtc_utc_offset_cb_t           s_utc_offset_cb     = NULL;
+static rtc_allow_sys_clock_sync_cb_t s_allow_sys_sync_cb = NULL;
 
 static bool isLeapYear(int y) {
     return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
@@ -31,17 +37,40 @@ static bool rtc_i2c_custom_cb(uint8_t addr, uint8_t reg, uint8_t *buf, size_t le
     }
 }
 
+extern "C" void rtc_bsp_set_utc_offset_minutes(int16_t offset_min)
+{
+    s_utc_offset_min = offset_min;
+}
+
+extern "C" int16_t rtc_bsp_get_utc_offset_minutes(void)
+{
+    if (s_utc_offset_cb != NULL) {
+        return s_utc_offset_cb();
+    }
+    return s_utc_offset_min;
+}
+
+extern "C" void rtc_bsp_set_utc_offset_provider(rtc_utc_offset_cb_t provider_cb)
+{
+    s_utc_offset_cb = provider_cb;
+}
+
+extern "C" void rtc_bsp_set_sys_clock_sync_guard(rtc_allow_sys_clock_sync_cb_t allow_cb)
+{
+    s_allow_sys_sync_cb = allow_cb;
+}
+
 extern "C" void rtc_bsp_init(void)
 {
     if (rtc_dev_handle == NULL) {
-        Serial.println("RTC I2C Handle not initialized yet!");
+        ESP_LOGW(TAG, "RTC I2C Handle not initialized yet!");
         return;
     }
 
     if (!rtc.begin(rtc_i2c_custom_cb)) {
-        Serial.println("Failed to find PCF85063 - check your wiring!");
+        ESP_LOGW(TAG, "Failed to find PCF85063 - check your wiring!");
     } else {
-        Serial.println("PCF85063 RTC initialized successfully.");
+        ESP_LOGI(TAG, "PCF85063 RTC initialized successfully.");
     }
 }
 
@@ -64,7 +93,9 @@ static void sync_system_clock(uint16_t year, uint8_t month, uint8_t day, uint8_t
     }
 }
 
-extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
+extern "C" void i2c_rtc_setTime_ex(uint16_t year, uint8_t month, uint8_t day,
+                                   uint8_t hour, uint8_t minute, uint8_t second,
+                                   bool sync_sys_clock)
 {
     rtc.setDateTime(year, month, day, hour, minute, second);
     cached_rtc_time.year   = year;
@@ -74,9 +105,15 @@ extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8
     cached_rtc_time.minute = minute;
     cached_rtc_time.second = second;
     last_rtc_read_ms       = millis();
-    if (!gps_time_sync.time_synced) {
+    if (sync_sys_clock) {
         sync_system_clock(year, month, day, hour, minute, second);
     }
+}
+
+extern "C" void i2c_rtc_setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
+{
+    bool sync_sys = (s_allow_sys_sync_cb != NULL) ? s_allow_sys_sync_cb() : true;
+    i2c_rtc_setTime_ex(year, month, day, hour, minute, second, sync_sys);
 }
 
 extern "C" RtcDateTime_t i2c_rtc_get(void)
@@ -112,8 +149,9 @@ extern "C" void get_local_datetime(RtcDateTime_t *local_dt)
 {
     if (!local_dt) return;
     RtcDateTime_t t = i2c_rtc_get();
+    int16_t utc_off = rtc_bsp_get_utc_offset_minutes();
 
-    int total_minutes = (int)t.hour * 60 + (int)t.minute + (int)current_settings.minutesOffsetToUTC;
+    int total_minutes = (int)t.hour * 60 + (int)t.minute + (int)utc_off;
     int day_offset = 0;
 
     if (total_minutes < 0) {
@@ -171,8 +209,9 @@ extern "C" void get_formatted_timestamp(char *buffer, size_t max_len, bool filen
     get_local_datetime(&lt);
 
     if (filename_safe) {
-        char sign = (current_settings.minutesOffsetToUTC >= 0) ? '+' : '-';
-        int abs_offset = abs(current_settings.minutesOffsetToUTC);
+        int16_t utc_off = rtc_bsp_get_utc_offset_minutes();
+        char sign = (utc_off >= 0) ? '+' : '-';
+        int abs_offset = abs((int)utc_off);
         snprintf(buffer, max_len, "%04u-%02u-%02u_%02u-%02u-%02u%c%d",
                  lt.year, lt.month, lt.day, lt.hour, lt.minute, lt.second, sign, abs_offset);
     } else {

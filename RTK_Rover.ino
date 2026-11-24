@@ -5,6 +5,7 @@
 #include <FFat.h>
 #include <SPI.h>
 #include <driver/gpio.h>
+#include <driver/spi_master.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
@@ -59,6 +60,54 @@ extern "C" void set_rover_brightness(uint8_t brightness_pct)
     if (brightness_pct > 100) brightness_pct = 100;
     current_settings.brightness = brightness_pct;
     set_backlight_pwm(brightness_pct);
+}
+
+static bool rover_touch_log_enabled_cb(void)
+{
+    return current_settings.enable_touch_logging;
+}
+
+static int16_t rover_rtc_utc_offset_cb(void)
+{
+    return current_settings.minutesOffsetToUTC;
+}
+
+static bool rover_rtc_allow_sys_sync_cb(void)
+{
+    return !gps_time_sync.time_synced;
+}
+
+static void rover_init_display(void)
+{
+    BoardDisplayCfg_t cfg = {};
+    cfg.h_res                = ROVER_LCD_H_RES;
+    cfg.v_res                = ROVER_LCD_V_RES;
+    cfg.dma_buf_bytes        = LVGL_DMA_BUFF_LEN;
+    cfg.spiram_buf_bytes     = LVGL_SPIRAM_BUFF_LEN;
+    cfg.spi_host             = LCD_HOST;
+    cfg.pin_cs               = ROVER_PIN_LCD_CS;
+    cfg.pin_pclk             = ROVER_PIN_LCD_PCLK;
+    cfg.pin_data0            = ROVER_PIN_LCD_DATA0;
+    cfg.pin_data1            = ROVER_PIN_LCD_DATA1;
+    cfg.pin_data2            = ROVER_PIN_LCD_DATA2;
+    cfg.pin_data3            = ROVER_PIN_LCD_DATA3;
+    cfg.pin_bk_light         = ROVER_PIN_BK_LIGHT;
+    cfg.pclk_hz              = 40U * 1000U * 1000U;
+    cfg.tca9554_addr         = ROVER_I2C_ADDR_TCA9554;
+    cfg.exio_input_mask      = (uint32_t)(ROVER_EXIO_TP_INT | ROVER_EXIO_RTC_INT | ROVER_EXIO_AXP_IRQ | ROVER_EXIO_SYS_OUT);
+    cfg.exio_output_mask     = (uint32_t)(ROVER_EXIO_LCD_RST | ROVER_EXIO_PA_CTRL | ROVER_EXIO_CAM_PWDN);
+    cfg.exio_lcd_rst_mask    = (uint32_t)ROVER_EXIO_LCD_RST;
+    cfg.exio_cam_pwdn_mask   = (uint32_t)ROVER_EXIO_CAM_PWDN;
+    cfg.tick_period_ms       = LVGL_TICK_PERIOD_MS;
+    cfg.task_max_delay_ms    = LVGL_TASK_MAX_DELAY_MS;
+    cfg.task_min_delay_ms    = LVGL_TASK_MIN_DELAY_MS;
+    cfg.task_stack_size      = LVGL_TASK_STACK_SIZE;
+    cfg.task_priority        = LVGL_TASK_PRIORITY;
+    cfg.init_backlight_cb    = init_backlight_pwm;
+    cfg.create_ui_cb         = create_rover_ui;
+    cfg.touch_log_enabled_cb = rover_touch_log_enabled_cb;
+    cfg.log_printf_cb        = rover_printf;
+    lvgl_port_init_with_cfg(&cfg);
 }
 
 // =========================================================================
@@ -400,6 +449,8 @@ void setup()
                   i2c1_beam_addr                                     ? "OK" : "--");
 
     axp2101_bsp_init();
+    rtc_bsp_set_utc_offset_provider(rover_rtc_utc_offset_cb);
+    rtc_bsp_set_sys_clock_sync_guard(rover_rtc_allow_sys_sync_cb);
     rtc_bsp_init();
     rover_sensors_hw_init();
 
@@ -486,7 +537,7 @@ void setup()
     waypoint_manager_init();
 
     // 5. Initialize Display & LVGL 9 UI (320x480 Portrait)
-    lvgl_port_init();
+    rover_init_display();
     rover_audio_init();
 
     // 6. Initialize & Self-Test E220 LoRa (UART0) and UM982 Dual-Antenna GNSS (Single-UART COM1)
@@ -515,6 +566,11 @@ void loop()
 {
     // Process active Web Portal requests (File manager, downloads, uploads)
     handle_wifi_server();
+
+    // Flush pending buffered route CSV points to active storage medium
+    if (route_logger_is_active()) {
+        route_logger_flush();
+    }
 
     // Flush pending raw NMEA sentences to active storage medium
     if (nmea_logger_is_active()) {
