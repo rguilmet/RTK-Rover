@@ -158,22 +158,22 @@ Documents/Arduino/libraries/Field_Instrument_Core/
 1. **Stage 1 (`RTK_Rover` Migration) -- `DONE (v0.11.0, 2026-11-24)`:**
    * Tagged final standalone self-contained `RTK_Rover` release at `v0.10.10` (`337ad35`), then migrated `RTK_Rover` (`v0.11.0`) onto `<Field_Instrument_Core.h>` (`waveshare_s3_35b.h`), removing `14` duplicated BSP/codec/driver/portal directories (`~90` files) and `lvgl_port_core.c`, while keeping `um982_driver`, `e220_driver`, `nav_engine`, `waypoint_manager`, `rover_sensors`, UI tiles, and [Plan 2](plan_2_rover_enhancements_and_android_companion.md) features sketch-local.
    * **Host C/C++ Unit Tests (`F-17`, `DONE`):** Added [`Field_Instrument_Core/extras/unit_tests/run_tests.py`](../../../libraries/Field_Instrument_Core/extras/unit_tests/run_tests.py) (`2/2` + `xtensa-esp32s3-elf-g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only`) and [`scripts/test_rover_core_math.py`](../../scripts/test_rover_core_math.py) (`5/5` + syntax gate).
-   * **Verified (`v0.11.0`):** `ci_compile_all.ps1 -Target Rover` passed with **`0` warnings**, `1,760,414 B` (`55%`) flash, **`68,712 B` (`20%`)** static `DRAM0`, `test_rover_core_math.py` (`5/5`), `test_line_stakeout.py`, `test_rover_telemetry.py`, and `check_secrets.py` (`[PASS] 100% CLEAN`). (*Live USB flash check on `COM3` optional prior to Stage 2.*)
-2. **Stage 2 (`Magnetic_Field_Scanner` Migration, `v5.1.x -> v6.0.0`) -- `PENDING`:**
-   * Migrate `Magnetic_Field_Scanner` onto `Field_Instrument_Core` (`waveshare_s3_349_v3.h`), replacing `MFS`'s unguarded `i2c_bsp`, `QMI8658`, `tca9554`, `esp_codec_dev`, `screenshot`, `web_server`, and global `MadgwickAHRS.c` with the hardened Core implementations.
-   * Preserve `MFS`'s dual-I2C topology (`I2C0` @ `200 kHz` sensors + `I2C1` Touch), TDM `ES8311+ES7210` streaming, dual `RM3100` DRDY interrupts, and existing magnetometer survey workflows (`0` functional regression).
-3. **Dual-Compile CI Gate (`extras/ci_compile_all.ps1`):**
-   * Every Core release must compile **both** `RTK_Rover` (`3.5B` FQBN) and `Magnetic_Field_Scanner` (`3.49 v3` FQBN) with `--warnings default` (`0` warnings) before tagging SemVer in `Field-Instrument-Core`.
+   * **Verified (`v0.11.0`):** `ci_compile_all.ps1 -Target Rover` passed with **`0` warnings**, `1,760,414 B` (`55%`) flash, **`68,712 B` (`20%`)** static `DRAM0`, `test_rover_core_math.py` (`5/5`), `test_line_stakeout.py`, `test_rover_telemetry.py`, and `check_secrets.py` (`[PASS] 100% CLEAN`), plus live Waveshare 3.5B flash & serial smoke capture (`COM3`).
+2. **Stage 2 (`Magnetic_Field_Scanner` Migration) -- `DONE (v6.0.0, 2026-11-24)`:**
+   * Tagged final standalone self-contained `Magnetic_Field_Scanner` release at `v5.1.15` (`efaa4cd`, `no branch`), upgraded `Field_Instrument_Core` to **`v1.1.0`** (`f82543c` -- adding `EXIO6` `SYS_EN` battery latch, `EXIO1` `BL_EN` sequencing, `I2C1` `0x3B` touch attach/reattach, swap/Y-invert touch mapping, and `v_res`-aligned flush strip sizing), and migrated `Magnetic_Field_Scanner v6.0.0` onto `<Field_Instrument_Core.h>` (`waveshare_s3_349_v3.h`).
+   * Removed `11` duplicated BSP/driver/portal directories (`PCF85063`, `axs15231b`, `codec_board`, `esp_codec_dev`, `i2c_bsp`, `imu_bsp`, `matrix_math`, `screenshot`, `tca9554`, `touch`, `web_server`), split UI into `mfs_ui_create.c` / `mfs_ui_update.c` with deadlock-free Wi-Fi status buffering, rewired `SensorFusion` onto instance-safe `Ahrs9DofState_t`, and upgraded `settings_manager.cpp` onto atomic JSON (`fic_json_write_atomic` / `fic_json_load_with_recovery`).
+3. **Dual-Compile CI Gate (`extras/ci_compile_all.ps1 -Target All`) -- `DONE (2026-11-24)`:**
+   * Passed with **`0` warnings** and `0` errors across all three targets: `CoreSmoke_35B` (`45%` flash, `16%` `DRAM0`), `RTK_Rover` (`55%` flash, `20%` `DRAM0`), and `Magnetic_Field_Scanner` (`51%` flash, `16%` / `55,320 B` `DRAM0`).
 
 ---
 
 ## 5. Target Token & Maintainability Outcomes
 
-| Metric | Prior Baseline (`v0.10.7`) | Current (`v0.11.0`, Phase 1.3 Stage 1) |
+| Metric | Prior Baseline (`v0.10.7`) | Current (`v0.11.0` / `MFS v6.0.0`, Plan 1 Complete) |
 | :--- | :---: | :--- |
 | C/C++ files exceeding `800 L / 46 KB` | `4` app files (`nav_engine.cpp` at `804 L`) | **`0` source files in `RTK_Rover` & `Core`** |
-| Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` in `RTK_Rover`** (Stage 2 remaining for `MFS`) |
+| Duplicated BSP/codec/driver files (`RTK_Rover` vs. `MFS`) | `~65+` files across `2` repos | **`0` across `RTK_Rover` and `Magnetic_Field_Scanner`** |
 | In-tree `build/` & `scratch/` clutter | `202+ MB` (`build/`, `scratch/`) | **`0 B` (permanent)** |
 | Active `CHANGELOG.md` size | `137 L` / `29.9 KB` (`DONE Ph 1.0`) | **`< 450 L` / `< 40 KB`** |
 | Active `docs/plans/` documents | `2` active (`Plan 1`, `Plan 2`) + `8` in `archive/` | **`2` sequenced plans + `archive/`** |
-| Shared math/fusion & dual-bus I2C readiness | Seeded in `src/` | **`Field_Instrument_Core v1.0.1` + `F-17` tests** |
+| Shared math/fusion & dual-bus I2C readiness | Seeded in `src/` | **`Field_Instrument_Core v1.1.0` + `F-17` tests (`-Target All` PASS)** |
