@@ -4,10 +4,11 @@ High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pi
 
 **Firmware Version:** `v0.11.0`  
 **Shared Core Dependency:** [`Field_Instrument_Core`](https://github.com/rguilmet/field-instrument-core) (`>= v1.0.1`, install into `Arduino/libraries/Field_Instrument_Core`; standalone self-contained snapshot preserved at Git tag `v0.10.10`)  
+**Hardware Reference Library:** [`Field_Instrument_Reference`](https://github.com/rguilmet/field-instrument-reference) (centralized vendor datasheets & technical articles)  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
 **User Documentation:** [Field User Manual](docs/user_manual.md)  
-**Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
-**Architecture & Plans:** [Plan 1: Shared Core Library & Token Optimization](docs/plans/plan_1_shared_core_library_and_token_optimization.md) | [Plan 2: Rover Enhancements & Android Companion](docs/plans/plan_2_rover_enhancements_and_android_companion.md) | [Archived Plans (incl. Plan 0)](docs/plans/archive/README.md)
+**Engineering Review:** [Critical Design Review (CDR)](docs/critical_design_review.md) | [Project Retrospective](docs/project_retrospective.md) | [System Wiring Schematics](docs/schematics/system_wiring_schematics.md) | [Mechanical Enclosure CAD (Option A)](docs/mechanical/cad/README.md) | [E220-900T30S Reference (v3.2)](https://github.com/rguilmet/field-instrument-core/blob/main/docs/e220-reference.md) | [E220 Stage 1 Benchmarks (21 & 30 dBm)](docs/benchmarks/e220_stage1_20261116/README.md)  
+**Architecture & Plans:** [Plan 1 (Archived)](docs/plans/archive/plan_1_shared_core_library_and_token_optimization.md) | [Plan 2: Rover Enhancements & Android Companion](docs/plans/plan_2_rover_enhancements_and_android_companion.md) | [Archived Plans (incl. Plan 0)](docs/plans/archive/README.md)
 
 ---
 
