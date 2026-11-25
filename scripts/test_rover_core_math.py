@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.3.0"
+__version__ = "v1.4.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -425,6 +425,41 @@ class RoverCoreMathTests(unittest.TestCase):
         self.assertIn("waypoint_flush_pending_survey_csv()", pwr_cpp)
         self.assertIn("rover_power_service_deferred_flush()", ino_txt)
         self.assertIn("low_batt_modal", hdr_txt)
+
+    def test_phase23b_ble_bridge_and_f11_portal_guards(self):
+        import json
+        # F-11: zero hardcoded "12345678" fallback password in Core portal or RTK_Rover
+        web_cpp = os.path.join(CORE_ROOT, "src", "net", "fic_web_portal.cpp")
+        with open(web_cpp, "r", encoding="utf-8") as fh:
+            wtext = fh.read()
+        self.assertNotIn('"12345678"', wtext)
+        self.assertIn("get_ap_creds_cb", wtext)
+        self.assertIn("is_write_locked_cb", wtext)
+
+        # Schema defaults in settings.json (public repo: ble_enabled=true, empty ap_password)
+        with open(os.path.join(ROVER_ROOT, "settings.json"), "r", encoding="utf-8") as fh:
+            sjson = json.load(fh)
+        self.assertTrue(sjson["ble_enabled"])
+        self.assertEqual(sjson["ap_ssid"], "RTK_Rover_AP")
+        self.assertEqual(sjson["ap_password"], "")
+
+        # BLE companion profile & lock guard bindings in ble_bridge.cpp and RTK_Rover.ino
+        bridge_cpp = os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.cpp")
+        with open(bridge_cpp, "r", encoding="utf-8") as fh:
+            btext = fh.read()
+        self.assertIn('"rtk_rover"', btext)
+        self.assertIn('"RTK-Rover"', btext)
+        self.assertIn("kTelemLen = 83U", btext)
+        self.assertIn("rover_is_storage_write_locked", btext)
+
+        with open(os.path.join(ROVER_ROOT, "RTK_Rover.ino"), "r", encoding="utf-8") as fh:
+            ino_txt = fh.read()
+        self.assertNotIn('"12345678"', ino_txt)
+        self.assertIn("<ble/fic_ble_enable.h>", ino_txt)
+        self.assertIn("rover_get_ap_creds_cb", ino_txt)
+        self.assertIn("rover_is_storage_write_locked", ino_txt)
+        self.assertIn("ble_bridge_init()", ino_txt)
+        self.assertIn("ble_bridge_loop()", ino_txt)
 
 
 def run_xtensa_syntax_checks():

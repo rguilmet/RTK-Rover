@@ -72,6 +72,9 @@ struct SystemSettings {
     float    line_arrow_amber_deg;      // Heading lock orange threshold (deg, default 15.0)
     float    map_zoom_m_per_px;         // Sticky Map View zoom (m/px, 0.0 = Auto-Fit)
     float    survey_max_tilt_deg;       // Max pole tilt gate for survey averaging (deg, 0 = warn-only)
+    bool     ble_enabled;               // Field default true: FICP BLE 5.0 ON, Wi-Fi OFF
+    char     ap_ssid[33];               // SoftAP SSID (persisted in /settings.json)
+    char     ap_password[65];           // SoftAP WPA2 passphrase (>= 8 chars; empty -> per-unit MAC fallback)
 };
 
 extern struct SystemSettings current_settings;

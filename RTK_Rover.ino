@@ -12,6 +12,7 @@
 
 #include "user_config.h"
 #include <Field_Instrument_Core.h>
+#include <ble/fic_ble_enable.h>
 #include <boards/waveshare_s3_35b.h>
 #include "src/rover_api.h"
 #include "src/settings_manager/settings_manager.h"
@@ -27,6 +28,7 @@
 #include "src/rover_audio/rover_audio.h"
 #include "src/rover_power/rover_power.h"
 #include "src/rover_sensors/rover_sensors.h"
+#include "src/ble_bridge/ble_bridge.h"
 
 extern SemaphoreHandle_t fs_mux;
 extern "C" void update_wifi_ip_label(const char *ip);
@@ -87,7 +89,26 @@ static bool rover_get_wifi_creds_cb(char *ssid_out, size_t ssid_sz, char *pass_o
     return true;
 }
 
-static void rover_web_file_uploaded_cb(const char *filename, const char *fs_key)
+static bool rover_get_ap_creds_cb(char *ssid_out, size_t ssid_sz, char *pass_out, size_t pass_sz)
+{
+    SystemSettings snap;
+    settings_get_snapshot(&snap);
+    const char *ssid = (snap.ap_ssid[0] != '\0') ? snap.ap_ssid : "RTK_Rover_AP";
+    snprintf(ssid_out, ssid_sz, "%s", ssid);
+    if (strlen(snap.ap_password) >= 8U) {
+        snprintf(pass_out, pass_sz, "%s", snap.ap_password);
+    } else {
+        uint64_t mac = ESP.getEfuseMac();
+        snprintf(pass_out, pass_sz, "RTK-%02X%02X%02X",
+                 (unsigned)((mac >> 24) & 0xFFU),
+                 (unsigned)((mac >> 32) & 0xFFU),
+                 (unsigned)((mac >> 40) & 0xFFU));
+        Serial.println("[WIFI] SoftAP using per-unit MAC WPA2 passphrase (set ap_password in /settings.json to customize).");
+    }
+    return true;
+}
+
+extern "C" void rover_on_storage_file_updated(const char *filename, const char *fs_key)
 {
     (void)fs_key;
     if (!filename) return;
@@ -101,10 +122,10 @@ static void rover_web_file_uploaded_cb(const char *filename, const char *fs_key)
             refresh_waypoint_table_ui();
             fic_lvgl_unlock();
         }
-        Serial.printf("[WEB] Refreshed waypoint list after CSV upload (%s)\n", filename);
+        Serial.printf("[STORAGE] Refreshed waypoint list after CSV upload (%s)\n", filename);
     } else if (fn.endsWith("settings.json")) {
         load_settings();
-        Serial.println("[WEB] Reloaded settings.json after dual-FS sync upload!");
+        Serial.println("[STORAGE] Reloaded settings.json after upload!");
     }
 }
 
@@ -129,7 +150,7 @@ static uint64_t rover_screenshot_free_kb_cb(fs::FS *fs)
     return 0ULL;
 }
 
-static bool rover_take_screenshot(void)
+extern "C" bool rover_take_screenshot_to(char *out_path, size_t out_path_sz)
 {
     FicScreenshotCfg_t scfg = {};
     fs::FS *sd_fs      = sd_card_mounted ? (sd_card_use_spi ? (fs::FS *)&SD : (fs::FS *)&SD_MMC) : nullptr;
@@ -144,7 +165,12 @@ static bool rover_take_screenshot(void)
     scfg.timestamp_cb  = rover_filename_ts_cb;
     scfg.free_kb_cb    = rover_screenshot_free_kb_cb;
     scfg.log_cb        = rover_printf;
-    return fic_screenshot_save_bmp(&scfg, NULL, 0);
+    return fic_screenshot_save_bmp(&scfg, out_path, out_path_sz);
+}
+
+static bool rover_take_screenshot(void)
+{
+    return rover_take_screenshot_to(NULL, 0);
 }
 
 static void rover_init_display(void)
@@ -461,8 +487,9 @@ void task_display_and_audio(void *pvParameters)
             }
             ui_state.mode1_bullseye_active = s_mode1_bullseye;
 
-            // Feed fully augmented & fused state (including Battery, IMU, and Woods Fallback Heading) to E220 Uplink Telemetry
+            // Feed fully augmented & fused state (including Battery, IMU, and Woods Fallback Heading) to E220 & BLE Uplink Telemetry
             e220_feed_telemetry_state(&ui_state);
+            ble_bridge_feed_state(&ui_state);
 
             update_rover_ui(&ui_state);
             route_logger_log_point(&ui_state);
@@ -645,8 +672,8 @@ void setup()
         FicWebPortalCfg_t wcfg = {};
         wcfg.portal_title        = "RTK Rover";
         wcfg.version_str         = ROVER_FIRMWARE_VERSION;
-        wcfg.ap_ssid             = "RTK_Rover_AP";
-        wcfg.ap_password         = "";
+        wcfg.ap_ssid             = current_settings.ap_ssid;
+        wcfg.ap_password         = current_settings.ap_password;
         wcfg.ntp_server          = "pool.ntp.org";
         wcfg.http_port           = 80U;
         wcfg.primary_fs          = sd_card_mounted ? (sd_card_use_spi ? (fs::FS *)&SD : (fs::FS *)&SD_MMC) : nullptr;
@@ -660,8 +687,10 @@ void setup()
         wcfg.get_wifi_creds_cb   = rover_get_wifi_creds_cb;
         wcfg.on_status_cb        = update_wifi_ip_label;
         wcfg.on_set_time_cb      = fic_rtc_set_time;
-        wcfg.on_file_uploaded_cb = rover_web_file_uploaded_cb;
+        wcfg.on_file_uploaded_cb = rover_on_storage_file_updated;
         wcfg.log_cb              = rover_printf;
+        wcfg.get_ap_creds_cb     = rover_get_ap_creds_cb;
+        wcfg.is_write_locked_cb  = rover_is_storage_write_locked;
         fic_web_portal_configure(&wcfg);
     }
     rover_sensors_ahrs_init();
@@ -684,6 +713,7 @@ void setup()
     e220_driver_init();
     e220_run_powerup_selftest();
     um982_driver_init();
+    ble_bridge_init();
 
     Serial.println("====================================================");
     Serial.println("   Setup Complete -- Launching FreeRTOS Tasks");
@@ -704,8 +734,9 @@ void setup()
 
 void loop()
 {
-    // Process active Web Portal requests (File manager, downloads, uploads)
+    // Process active Web Portal & FICP BLE Companion requests
     fic_web_portal_handle();
+    ble_bridge_loop();
 
     // Flush pending buffered route CSV points to active storage medium
     if (route_logger_is_active()) {

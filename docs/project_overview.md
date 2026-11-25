@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.10.7`  
-**Last Updated:** November 24, 2026  
-**Firmware Target:** `v0.11.0` (depends on `Field_Instrument_Core >= v1.0.1`; standalone snapshot at Git tag `v0.10.10`)  
+**Document Version:** `v2.11.0`  
+**Last Updated:** November 25, 2026  
+**Firmware Target:** `v0.12.0` (depends on `Field_Instrument_Core >= v1.2.1`; standalone snapshot at Git tag `v0.10.10`)  
 **Python Ecosystem Target:** `e220_pacer.py v3.7.1` | `stage2_bench_verify.py v1.0.3` | `cogo_solver.py v1.2.0`  
 **Mechanical CAD Baseline:** `v2.2.4`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
@@ -116,7 +116,7 @@ In dense forest canopy when secondary (`ANT2`) carrier lock drops, `nav_heading_
 ## 6. UI Tile Structure (`320x480` Portrait, `v0.10.7`)
 
 ### Persistent Top Header Bar (`320x74`)
-* **Row 1:** Date, 24-hr Time (`TZ`), Units (`SI`/`IMP`), Wi-Fi icon (`STA`/`AP`/`CONN`/`OFF`), and Power (`[USB] 4.85V+` / `[Bat] 85% 3.92V`).
+* **Row 1:** Date, 24-hr Time (`TZ`), Units (`SI`/`IMP`), `BLE` icon (`CONN`/`SLAVE`/`ADV`/`OFF`), Wi-Fi icon (`STA`/`AP`/`CONN`/`OFF`), and Power (`[USB] 4.85V+` / `[Bat] 85% 3.92V`).
 * **Row 2 (`ANT1`):** Fix badge (`RTK FIX`/`FLT`/`DGPS`/`SINGLE`/`OFF`), `SV: used/view`, `+/- h_acc`, RTCM diff age (`RTCM: X.Xs`), and `LoRa: -XXdB`.
 * **Row 3 (`ANT2` / Heading):** Heading badge (`SLV FIX`/`FLT`, `HDG CMP`, `HDG WLK`, `HDG GYR`, `HDG HLD`), Slave SVs, Baseline length (`BL: 55.4cm`), and `Hdg: XXX.X SRC`.
 * **Row 4:** Ground-tip Lat, Lon, Height (`14pt` Montserrat).
@@ -134,7 +134,7 @@ In dense forest canopy when secondary (`ANT2`) carrier lock drops, `nav_heading_
 * **Tile 2 (Waypoints) -- Multi-File CSV Browser:** Instant `< 25 ms` RAM stem-cached file/waypoint selector with `poly_order` boundary/tie rendering (`[SWAP]` auto-clear on target step).
 * **Tile 3 (Compass) -- Dual-Antenna + Beam 9-DOF Compass & `CAL MAG`:** `224 px` Course-Up bubble level, `TARE`, left-side `CAL MAG` 360-deg spin wizard, heading provenance badges, `[IRON ANOMALY]` warning, `[BEAM 10DOF I2C1]`, and `Baro Rel Elev`.
 * **Tile 4 (Diag) -- Dual-Bus `I2C0/I2C1` Observers:** Fixed header (`RTK ROVER v0.10.7`), LoRa RF survey card, Storage, `ANT1/ANT2`, Base Station (`BASEINFOA`), `SEN0696` (`Orient`, `FOC`, `3D-Cal`, `BMP581`) + `QMI8658` pose, dual `I2C0/I2C1` error counters, Auto-Off countdown, `UM982 COM1`, and `E220` pin self-test.
-* **Tile 5 (Settings) -- Dedicated `5x3` (`94 x 44 px`) Quick Settings & Status Footer:** `VOL/AUD/BRI`, `SERIAL/NMEA/RTCM`, `TELEM/IMU/TOUCH`, `WIFI/UNITS/LORA`, `AUTO-OFF` (`5m/15m/30m/OFF`), `CAL MAG`, reserved `BLE: PLAN2`, and Wi-Fi / Auto-Off / LoRa footer, backed by the motion/`REC`/logger-safe `lv_layer_top()` 30s Auto-Off modal.
+* **Tile 5 (Settings) -- Dedicated `5x3` (`94 x 44 px`) Quick Settings & Status Footer:** `VOL/AUD/BRI`, `SERIAL/NMEA/RTCM`, `TELEM/IMU/TOUCH`, `WIFI/UNITS/LORA`, `AUTO-OFF` (`5m/15m/30m/OFF`), `CAL MAG`, `BLE` (`ADV/CONN/SLAVE/HOLD/OFF` w/ Wi-Fi mutual exclusion & `[LOCAL CONTROL]` slave reclaim), and Wi-Fi / BLE / Auto-Off / LoRa footer, backed by the motion/`REC`/logger/`BLE Link`-safe `lv_layer_top()` 30s Auto-Off modal.
 
 ---
 

@@ -93,7 +93,10 @@ struct SystemSettings current_settings = {
     4.0f,             // line_arrow_green_deg (heading lock green threshold in deg)
     15.0f,            // line_arrow_amber_deg (heading lock orange threshold in deg)
     0.0f,             // map_zoom_m_per_px (0.0 = Auto-Fit until manually zoomed)
-    2.5f              // survey_max_tilt_deg (max pole tilt gate for survey averaging, deg)
+    2.5f,             // survey_max_tilt_deg (max pole tilt gate for survey averaging, deg)
+    true,             // ble_enabled (Field default true: FICP BLE 5.0 ON, Wi-Fi OFF)
+    "RTK_Rover_AP",   // ap_ssid
+    ""                // ap_password (>= 8 chars in /settings.json; empty -> per-chip MAC fallback)
 };
 
 volatile bool settings_dirty = false;
@@ -158,7 +161,10 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.line_audio_fade_m         == b.line_audio_fade_m &&
            a.line_arrow_green_deg      == b.line_arrow_green_deg &&
            a.line_arrow_amber_deg      == b.line_arrow_amber_deg &&
-           a.survey_max_tilt_deg       == b.survey_max_tilt_deg;
+           a.survey_max_tilt_deg       == b.survey_max_tilt_deg &&
+           a.ble_enabled               == b.ble_enabled &&
+           strcmp(a.ap_ssid,     b.ap_ssid)     == 0 &&
+           strcmp(a.ap_password, b.ap_password) == 0;
 }
 
 extern "C" bool settings_lock(uint32_t timeout_ms) {
@@ -502,6 +508,10 @@ extern "C" void load_settings(void) {
         }
     }
 
+    if (!doc["ble_enabled"].isNull()) loaded.ble_enabled = doc["ble_enabled"];
+    if (!doc["ap_ssid"].isNull())     trim_and_copy_str(doc["ap_ssid"],     loaded.ap_ssid,     sizeof(loaded.ap_ssid));
+    if (!doc["ap_password"].isNull()) trim_and_copy_str(doc["ap_password"], loaded.ap_password, sizeof(loaded.ap_password));
+
     if (settings_lock(0U)) {
         current_settings = loaded;
         settings_unlock();
@@ -614,6 +624,9 @@ extern "C" void save_settings(void) {
     doc["audio_nav_mode"]            = snap.audio_nav_mode;
     doc["wifi_ssid"]                 = snap.wifi_ssid;
     doc["wifi_password"]             = snap.wifi_password;
+    doc["ble_enabled"]               = snap.ble_enabled;
+    doc["ap_ssid"]                   = snap.ap_ssid;
+    doc["ap_password"]               = snap.ap_password;
     doc["enable_serial_logging"]     = snap.enable_serial_logging;
     doc["enable_nmea_logging"]       = snap.enable_nmea_logging;
     doc["enable_rtcm_logging"]       = snap.enable_rtcm_logging;

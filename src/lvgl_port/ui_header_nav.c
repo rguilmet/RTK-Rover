@@ -2,6 +2,8 @@
 #include "esp_timer.h"
 #include "../e220_driver/e220_driver.h"
 #include "../rover_power/rover_power.h"
+#include "../ble_bridge/ble_bridge.h"
+#include "../storage/route_logger.h"
 
 // =========================================================================
 // Persistent Top Header Bar Widgets (Visible on ALL Screens)
@@ -9,6 +11,7 @@
 // Row 1: System & Radios
 static lv_obj_t *hdr_datetime_lbl = NULL;
 lv_obj_t        *hdr_units_lbl    = NULL;
+static lv_obj_t *hdr_ble_lbl      = NULL;
 static lv_obj_t *hdr_wifi_lbl     = NULL;
 static lv_obj_t *hdr_batt_lbl     = NULL;
 
@@ -44,6 +47,8 @@ static lv_obj_t *auto_off_modal     = NULL;
 static lv_obj_t *auto_off_modal_lbl = NULL;
 static lv_obj_t *low_batt_modal     = NULL;
 static lv_obj_t *low_batt_modal_lbl = NULL;
+static lv_obj_t *slave_hud_modal    = NULL;
+static lv_obj_t *slave_hud_lbl      = NULL;
 volatile uint8_t active_tile_col = 0;
 
 RoverUIData_t s_last_ui_data = {0};
@@ -145,6 +150,20 @@ static void low_batt_dismiss_cb(lv_event_t *e)
     }
 }
 
+static void slave_reclaim_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    rover_note_user_activity();
+    ble_bridge_reclaim_local();
+    play_rover_beep(1800, 40);
+    if (slave_hud_modal) {
+        lv_obj_set_hidden(slave_hud_modal, true);
+    }
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[BLE] Local control reclaimed via HUD button.\n");
+    }
+}
+
 static const char *get_heading_source_tag(const RoverUIData_t *d)
 {
     if (d->heading_source == HDG_SRC_DUAL_FIX) return "FIX";
@@ -182,7 +201,7 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_datetime_lbl, "2026-10-26 00:00:00");
     lv_obj_set_style_text_color(hdr_datetime_lbl, lv_color_hex(0xE0E6ED), 0);
     lv_obj_set_style_text_font(hdr_datetime_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_set_width(hdr_datetime_lbl, 165);
+    lv_obj_set_width(hdr_datetime_lbl, 148);
     lv_label_set_long_mode(hdr_datetime_lbl, LV_LABEL_LONG_CLIP);
     lv_obj_align(hdr_datetime_lbl, LV_ALIGN_TOP_LEFT, 4, 2);
 
@@ -190,13 +209,19 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
     lv_obj_set_style_text_color(hdr_units_lbl, current_settings.use_imperial_units ? COLOR_UNIT_IMP_AMBER : COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -145, 2);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -148, 2);
+
+    hdr_ble_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_ble_lbl, LV_SYMBOL_BLUETOOTH);
+    lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x475569), 0);
+    lv_obj_set_style_text_font(hdr_ble_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_ble_lbl, LV_ALIGN_TOP_RIGHT, -126, 2);
 
     hdr_wifi_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);
     lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -118, 2);
+    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -108, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");
@@ -418,6 +443,48 @@ void create_rover_ui(void)
     lv_obj_center(low_batt_modal_lbl);
 
     lv_obj_set_hidden(low_batt_modal, true);
+
+    // 6. Top-Layer Companion Slave Mode Overlay w/ Instant [LOCAL CONTROL] Reclaim
+    slave_hud_modal = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(slave_hud_modal, ROVER_LCD_H_RES, ROVER_LCD_V_RES);
+    lv_obj_align(slave_hud_modal, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(slave_hud_modal, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(slave_hud_modal, LV_OPA_80, 0);
+    lv_obj_set_style_border_width(slave_hud_modal, 0, 0);
+    lv_obj_set_style_radius(slave_hud_modal, 0, 0);
+    lv_obj_set_scrollbar_mode(slave_hud_modal, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scrollable(slave_hud_modal, false);
+
+    lv_obj_t *sh_card = lv_obj_create(slave_hud_modal);
+    lv_obj_set_size(sh_card, 288, 210);
+    lv_obj_center(sh_card);
+    lv_obj_set_style_bg_color(sh_card, lv_color_hex(0x0F172A), 0);
+    lv_obj_set_style_border_color(sh_card, lv_color_hex(0x22D3EE), 0);
+    lv_obj_set_style_border_width(sh_card, 2, 0);
+    lv_obj_set_style_radius(sh_card, 12, 0);
+    lv_obj_set_scrollbar_mode(sh_card, LV_SCROLLBAR_MODE_OFF);
+
+    slave_hud_lbl = lv_label_create(sh_card);
+    lv_obj_set_width(slave_hud_lbl, 260);
+    lv_label_set_long_mode(slave_hud_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(slave_hud_lbl, "COMPANION SLAVE MODE\nControlled by Phone\nWait...");
+    lv_obj_set_style_text_color(slave_hud_lbl, lv_color_hex(0xE2E8F0), 0);
+    lv_obj_set_style_text_font(slave_hud_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(slave_hud_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(slave_hud_lbl, LV_ALIGN_TOP_MID, 0, 12);
+
+    lv_obj_t *sh_btn = lv_button_create(sh_card);
+    lv_obj_set_size(sh_btn, 224, 52);
+    lv_obj_align(sh_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(sh_btn, lv_color_hex(0x107C41), 0);
+    lv_obj_set_style_radius(sh_btn, 8, 0);
+    lv_obj_add_event_cb(sh_btn, slave_reclaim_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *sh_btn_lbl = lv_label_create(sh_btn);
+    lv_label_set_text(sh_btn_lbl, "LOCAL CONTROL");
+    lv_obj_set_style_text_font(sh_btn_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_center(sh_btn_lbl);
+
+    lv_obj_set_hidden(slave_hud_modal, true);
 }
 
 void update_rover_ui(const RoverUIData_t *d)
@@ -466,6 +533,21 @@ void update_rover_ui(const RoverUIData_t *d)
                                  (d->battery_percent <= 40) ? lv_palette_main(LV_PALETTE_AMBER) :
                                                               lv_palette_main(LV_PALETTE_GREEN);
             lv_obj_set_style_text_color(hdr_batt_lbl, bat_col, 0);
+        }
+    }
+
+    // BLE Status Badge in Row 1 (Icon only: Slate=OFF/Hold, Amber=Adv/Init, Cyan=Connected, Green=Slave)
+    if (hdr_ble_lbl) {
+        RoverBleUiState_t b_st = ble_bridge_get_ui_state();
+        lv_label_set_text(hdr_ble_lbl, LV_SYMBOL_BLUETOOTH);
+        if (b_st == ROVER_BLE_UI_CONN) {
+            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x22D3EE), 0);
+        } else if (b_st == ROVER_BLE_UI_SLAVE) {
+            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x10B981), 0);
+        } else if (b_st == ROVER_BLE_UI_ADV || b_st == ROVER_BLE_UI_STARTING) {
+            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0xF59E0B), 0);
+        } else {
+            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x475569), 0);
         }
     }
 
@@ -629,6 +711,7 @@ void update_rover_ui(const RoverUIData_t *d)
 
     // Push position into breadcrumb buffer
     nav_breadcrumb_push(d->tip_lat, d->tip_lon);
+    (void)ble_bridge_consume_ui_dirty();
 
     // Update all control buttons (Colors & Labels)
     update_all_control_buttons();
@@ -646,20 +729,38 @@ void update_rover_ui(const RoverUIData_t *d)
                      (unsigned int)d->auto_off_countdown_s);
             lv_label_set_text(auto_off_modal_lbl, buf);
             lv_obj_set_hidden(auto_off_modal, false);
-            if (low_batt_modal) lv_obj_set_hidden(low_batt_modal, true);
+            if (low_batt_modal)  lv_obj_set_hidden(low_batt_modal, true);
+            if (slave_hud_modal) lv_obj_set_hidden(slave_hud_modal, true);
         } else {
             lv_obj_set_hidden(auto_off_modal, true);
-            if (low_batt_modal && low_batt_modal_lbl) {
-                if (d->low_batt_warning && rover_power_should_show_low_batt_modal()) {
-                    snprintf(buf, sizeof(buf),
-                             "LOW BATTERY (%.2fV / %u%%)\n%s\nPLUG USB OR SWAP BATTERY\nTAP TO DISMISS",
-                             d->battery_voltage,
-                             (unsigned int)d->battery_percent,
-                             d->low_batt_logs_flushed ? "SD LOGS & SETTINGS SAVED" : "FLUSHING SD LOGS...");
-                    lv_label_set_text(low_batt_modal_lbl, buf);
-                    lv_obj_set_hidden(low_batt_modal, false);
-                } else {
-                    lv_obj_set_hidden(low_batt_modal, true);
+            const bool show_low_batt = (low_batt_modal && low_batt_modal_lbl &&
+                                        d->low_batt_warning && rover_power_should_show_low_batt_modal());
+            if (show_low_batt) {
+                snprintf(buf, sizeof(buf),
+                         "LOW BATTERY (%.2fV / %u%%)\n%s\nPLUG USB OR SWAP BATTERY\nTAP TO DISMISS",
+                         d->battery_voltage,
+                         (unsigned int)d->battery_percent,
+                         d->low_batt_logs_flushed ? "SD LOGS & SETTINGS SAVED" : "FLUSHING SD LOGS...");
+                lv_label_set_text(low_batt_modal_lbl, buf);
+                lv_obj_set_hidden(low_batt_modal, false);
+                if (slave_hud_modal) lv_obj_set_hidden(slave_hud_modal, true);
+            } else {
+                if (low_batt_modal) lv_obj_set_hidden(low_batt_modal, true);
+                if (slave_hud_modal && slave_hud_lbl) {
+                    if (ble_bridge_is_slave_dimmed()) {
+                        const char *fx = (d->fix_type == GNSS_FIX_RTK_FIXED) ? "RTK FIX" :
+                                         (d->fix_type == GNSS_FIX_RTK_FLOAT) ? "RTK FLT" :
+                                         (d->fix_type == GNSS_FIX_DGPS)      ? "DGPS" :
+                                         (d->fix_type == GNSS_FIX_SINGLE)    ? "SINGLE" : "NO FIX";
+                        snprintf(buf, sizeof(buf),
+                                 "COMPANION SLAVE MODE\n%s | SV:%u\n%s\nTap button to reclaim control",
+                                 fx, (unsigned)d->num_sats,
+                                 route_logger_is_active() ? "REC: ON" : "REC: OFF");
+                        rover_label_set_text_if_changed(slave_hud_lbl, buf);
+                        lv_obj_set_hidden(slave_hud_modal, false);
+                    } else {
+                        lv_obj_set_hidden(slave_hud_modal, true);
+                    }
                 }
             }
         }

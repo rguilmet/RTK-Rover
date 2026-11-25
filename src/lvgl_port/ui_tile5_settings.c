@@ -5,6 +5,7 @@
 #include "../storage/nmea_logger.h"
 #include "../storage/rtcm_logger.h"
 #include "../e220_driver/e220_driver.h"
+#include "../ble_bridge/ble_bridge.h"
 
 // =========================================================================
 // Tile 5: Dedicated Quick Settings Deck (5x3 Grid - 15 Slots, 94x44 px)
@@ -70,6 +71,7 @@ void update_all_control_buttons(void)
     static int s_last_tare = -1;
     static int s_last_autooff = -1;
     static int s_last_calmag = -1;
+    static int s_last_ble = -1;
 
     // Row 1, Col 0: VOL: 80% / VOL: MUTE
     int cur_vol = (int)current_settings.volume;
@@ -281,6 +283,33 @@ void update_all_control_buttons(void)
             } else {
                 lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
                 lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
+            }
+        }
+    }
+
+    // Row 5, Col 2: BLE Companion Radio Toggle
+    int cur_ble = (int)ble_bridge_get_ui_state();
+    if (cur_ble != s_last_ble) {
+        s_last_ble = cur_ble;
+        if (t5_ble_btn && t5_ble_btn_lbl) {
+            if (cur_ble == ROVER_BLE_UI_SLAVE) {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: SLAVE");
+                lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else if (cur_ble == ROVER_BLE_UI_CONN) {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: CONN");
+                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0x0891B2), 0);
+            } else if (cur_ble == ROVER_BLE_UI_ADV) {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: ADV");
+                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0x0284C7), 0);
+            } else if (cur_ble == ROVER_BLE_UI_WIFI_HOLD) {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: HOLD");
+                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0xD97706), 0);
+            } else if (cur_ble == ROVER_BLE_UI_STARTING) {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: INIT");
+                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0xD97706), 0);
+            } else {
+                lv_label_set_text(t5_ble_btn_lbl, "BLE: OFF");
+                lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_INACTIVE_BLUE, 0);
             }
         }
     }
@@ -566,6 +595,18 @@ static void cal_mag_shortcut_btn_cb(lv_event_t *e)
     }
 }
 
+static void ble_toggle_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    ble_bridge_request_toggle();
+    play_rover_beep(current_settings.ble_enabled ? 1800 : 1200, 35);
+    update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] BLE clicked -> %s\n",
+                     current_settings.ble_enabled ? "Enabling" : "Disabling");
+    }
+}
+
 static lv_obj_t* create_grid_button(lv_obj_t *parent, int col, int row, lv_event_cb_t cb, lv_obj_t **out_lbl)
 {
     int x = (col == 0) ? 10 : (col == 1 ? 113 : 216);
@@ -610,19 +651,16 @@ void ui_tile5_settings_create(lv_obj_t *parent)
     t1_unit_btn    = create_grid_button(parent, 1, 3, unit_toggle_btn_cb,       &t1_unit_btn_lbl);
     t1_lora_btn    = create_grid_button(parent, 2, 3, lora_rate_btn_cb,         &t1_lora_btn_lbl);
 
-    // Row 4 (y=226): AUTO-OFF, CAL MAG, BLE: PLAN2 (reserved Plan 2 slot)
+    // Row 4 (y=226): AUTO-OFF, CAL MAG, BLE
     t5_autooff_btn = create_grid_button(parent, 0, 4, autooff_toggle_btn_cb,    &t5_autooff_btn_lbl);
 
     t5_calmag_btn  = create_grid_button(parent, 1, 4, cal_mag_shortcut_btn_cb,  &t5_calmag_btn_lbl);
     lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
     lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
 
-    t5_ble_btn     = create_grid_button(parent, 2, 4, NULL,                     &t5_ble_btn_lbl);
-    lv_label_set_text(t5_ble_btn_lbl, "BLE:\nPLAN 2");
-    lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0x1E293B), 0);
-    lv_obj_set_style_text_color(t5_ble_btn_lbl, lv_color_hex(0x64748B), 0);
-    lv_obj_set_clickable(t5_ble_btn, false);
-    lv_obj_add_state(t5_ble_btn, LV_STATE_DISABLED);
+    t5_ble_btn     = create_grid_button(parent, 2, 4, ble_toggle_btn_cb,        &t5_ble_btn_lbl);
+    lv_label_set_text(t5_ble_btn_lbl, "BLE: OFF");
+    lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_INACTIVE_BLUE, 0);
 
     // Horizontal divider below 5x3 grid (y=278)
     lv_obj_t *t5_sep = lv_obj_create(parent);
@@ -696,6 +734,15 @@ void ui_tile5_settings_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
                  (unsigned long)d->e220_stats.rtcm_frames_ok,
                  current_settings.rtcm_source_mode);
         lv_label_set_text(t5_lora_status_lbl, buf);
+    }
+
+    if (t1_wifi_status_lbl && !fic_web_portal_is_active() && !fic_web_portal_is_starting()) {
+        ble_bridge_format_status(buf, buf_sz);
+        rover_label_set_text_if_changed(t1_wifi_status_lbl, buf);
+        lv_color_t c = ble_bridge_is_connected() ? lv_color_hex(0x22D3EE) :
+                       ble_bridge_is_active()    ? lv_color_hex(0x38BDF8) :
+                                                   lv_color_hex(0x94A3B8);
+        lv_obj_set_style_text_color(t1_wifi_status_lbl, c, 0);
     }
 }
 

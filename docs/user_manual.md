@@ -1,8 +1,8 @@
 # RTK Rover - Field Operator's User Manual
 
-**Document Version:** `v1.11.0`  
-**Firmware Version:** `v0.11.0` (`Field_Instrument_Core >= v1.0.1`)  
-**Last Updated:** November 24, 2026  
+**Document Version:** `v1.12.0`  
+**Firmware Version:** `v0.12.0` (`Field_Instrument_Core >= v1.2.1`)  
+**Last Updated:** November 25, 2026  
 **Hardware Platform:** Waveshare ESP32-S3-Touch-LCD-3.5B, Holybro H-RTK Unicore UM982, Ebyte E220-900T30S, DFRobot SEN0696 10-DOF Beam IMU (`CAD v2.2.4`)  
 
 ---
@@ -200,10 +200,11 @@ One tap `< Prev` from Tile 0 opens **Tile 5 (`ui_tile5_settings.c`)** with `15` 
 | **Row 2:** `SERIAL: ON/OFF` | **Row 2:** `NMEA: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
 | **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
 | **Row 4:** `WIFI: CONN/STA/AP/OFF` | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `LORA: 4.8k / 9.6k / 19.2k` |
-| **Row 5:** `AUTO-OFF: 5m/15m/30m/OFF` | **Row 5:** `CAL MAG` (`OK` Green / Ready) | **Row 5:** `BLE: PLAN2` (Reserved) |
+| **Row 5:** `AUTO-OFF: 5m/15m/30m/OFF` | **Row 5:** `CAL MAG` (`OK` Green / Ready) | **Row 5:** `BLE: ADV/CONN/SLAVE/HOLD/OFF` |
 
-* **`WIFI`:** Amber `CONN` (tap again `<= 100 ms` to cancel) -> Emerald `STA` (`http://<local-ip>/`) -> Violet `AP` (`http://192.168.4.1/`, SSID `RTK-Rover`) -> Navy `OFF`.
-* **Motion/REC-Safe `AUTO-OFF` Guard:** Automatically inhibited by external USB power, Wi-Fi, active Survey or `CAL MAG`, `REC ON` route track logging, `NMEA`/`RTCM` logging, GNSS/IMU motion, or touch/`BOOT` input. When an idle timer expires, a full-screen `lv_layer_top()` **`30 s` countdown modal (`TAP ANYWHERE TO CANCEL`)** alerts with beeps before stopping/flushing all SD logs cleanly and cutting `AXP2101` power.
+* **`WIFI` & `BLE` Mutual Exclusion (`FICP v1.0.0`):** Field default starts **`BLE: ADV`** (`"RTK-Rover"`, `MTU 517`) with Wi-Fi OFF to conserve internal `DRAM0`. Tapping `WIFI` automatically suspends BLE while the HTTP portal runs (`BLE: HOLD`) and restores BLE when Wi-Fi stops; tapping `BLE` cleanly stops active Wi-Fi before restarting BLE. When an Android phone enters `slave_dimmed` mode, a dimmed overlay renders `[LOCAL CONTROL]` for instant one-tap reclaim (with a `5 s` heartbeat watchdog fail-safe).
+* **`WIFI`:** Amber `CONN` (tap again `<= 100 ms` to cancel) -> Emerald `STA` (`http://<local-ip>/`) -> Violet `AP` (`http://192.168.4.1/`, SoftAP creds from `/settings.json`) -> Navy `OFF`.
+* **Motion/REC-Safe `AUTO-OFF` Guard:** Automatically inhibited by external USB power, Wi-Fi, active `BLE Link`, active Survey or `CAL MAG`, `REC ON` route track logging, `NMEA`/`RTCM` logging, GNSS/IMU motion, or touch/`BOOT` input. When an idle timer expires, a full-screen `lv_layer_top()` **`30 s` countdown modal (`TAP ANYWHERE TO CANCEL`)** alerts with beeps before stopping/flushing all SD logs cleanly and cutting `AXP2101` power.
 
 ---
 
@@ -218,8 +219,8 @@ One tap `< Prev` from Tile 0 opens **Tile 5 (`ui_tile5_settings.c`)** with `15` 
 
 ## 11. Wireless Web File Portal & Field Maintenance
 
-1. Tap `WIFI` on Tile 5 (Row 4). Connect your phone or laptop to the local STA network (or SoftAP `RTK-Rover`, `http://192.168.4.1/`).
-2. Download `/survey_logged_pins.csv`, `/routes/route_*.csv`, `/nmea/*.log`, `/serial_logs/*.txt`, or `/screenshots/*.bmp`, upload new `waypoints*.csv` files, view `settings.json`, or sync the rover RTC clock in one tap.
+1. Tap `WIFI` on Tile 5 (Row 4). Connect your phone or laptop to the local STA network (or SoftAP configured by `ap_ssid`/`ap_password` in `/settings.json`, `http://192.168.4.1/`; when `ap_password` is blank, a per-unit `RTK-<MAC>` WPA2 passphrase is logged to serial).
+2. Download `/survey_logged_pins.csv`, `/routes/route_*.csv`, `/nmea/*.log`, `/serial_logs/*.txt`, or `/screenshots/*.bmp`, upload new `waypoints*.csv` files, view `settings.json`, or sync the rover RTC clock in one tap. *(Destructive uploads/deletes return HTTP `423` whenever `REC ON`, active Survey averaging, or `CAL MAG` is running.)*
 
 ---
 
@@ -241,6 +242,7 @@ Settings live in `/settings.json` on MicroSD with automatic internal `FFat` mirr
 | `survey_avg_seconds` / `default_label_prefix` | Int / Str | `5` / `"PIN"` | Multi-epoch averaging (`1/5/10/30 s`) and default pin prefix. |
 | `active_waypoint_file` / `active_waypoint_index` | Str / Int | `"/waypoints.csv"` / `0` | Persisted active CSV path and selected waypoint index. |
 | `brightness` / `volume` / `auto_shutdown_battery_min` | Integer | `80` / `40` / `5` | LCD brightness (`%`), ES8311 gain (`%`), battery Auto-Off (`0/5/15/30 min`). |
+| `ble_enabled` / `ap_ssid` / `ap_password` | Bool / Str | `true` / `"RTK_Rover_AP"` / `""` | Field BLE companion default (`ON`), SoftAP SSID, and custom `>= 8`-char WPA2 key. |
 | `beam_imu_orient_mode` | Integer | `4` | Beam `SEN0696` axis alignment index (`0..7`, `4` = Face-Down). |
 | `mag_hard_iron_uT` / `mag_soft_iron` | Float[3/9] | `[0,0,0]` / `I` | `CAL MAG` 360-deg ellipsoid fit parameters (`uT` and `3x3` matrix). |
 | `mag_ellipsoid_cal_valid` / `mag_true_north_offset_deg` | Bool / Flt | `false` / `0.0` | Ellipsoid lock flag and `HDG FIX`-learned True-North tare (`deg`). |

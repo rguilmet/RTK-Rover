@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.0] - 2026-11-25
+### Added & Hardened
+- **Plan 2 Phase 2.3b -- FICP BLE 5.0 Companion Bridge, Tile 5 Radio Toggle & `F-11` Portal Hardening ([`ble_bridge.h`](src/ble_bridge/ble_bridge.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp), [`RTK_Rover.ino`](RTK_Rover.ino), [`settings_manager.h`](src/settings_manager/settings_manager.h), [`settings_manager.cpp`](src/settings_manager/settings_manager.cpp), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**
+  - **Rover FICP Companion Profile (`Field_Instrument_Core >= v1.2.1`):** Added `ble_bridge` registering `"rtk_rover"` (`"RTK-Rover"`, `MTU 517`, `STREAM_RX` enabled, `5 Hz` `0x81` `MSG_ROVER_TELEM` 83-byte LE binary packet w/ 64-bit `double` Ground-Tip & Base coords, bidirectional `CONFIG_UPDATE`/`STATE_EVENT` sync, `AXP2101`/`I2C0/1` health, RTC sync, screenshot trigger, and chunked SD/FFat file sync).
+  - **Field Default BLE ON / Wi-Fi OFF & Mutual Exclusion:** Opted into BLE controller retention via `<ble/fic_ble_enable.h>`, persisted `ble_enabled` (`true` default) in `/settings.json`, enabled Tile 5 Row 5 Col 2 `BLE` toggle (`BLE: ADV`/`CONN`/`SLAVE`/`HOLD`/`OFF`), added Header Row 1 `BLE` Bluetooth icon, and added the `lv_layer_top()` `[LOCAL CONTROL]` companion slave HUD reclaim overlay (with `AUTO-OFF` `"BLE Link"` inhibit).
+  - **`F-11` SoftAP Credentials & Field-Op Write Lock:** Persisted `ap_ssid` & `ap_password` in `/settings.json` (deriving a per-chip MAC WPA2 passphrase when blank, zero hardcoded fallback strings), and blocked destructive Wi-Fi portal uploads/deletes (`HTTP 423`) and FICP file writes (`ERR_BUSY_LOCKED`) whenever `REC ON`, `Survey`, or `CAL MAG` is active.
+
 ## [v0.11.3] - 2026-11-25
 ### Added & Hardened
 - **Plan 2 Phase 2.2 -- Proactive `AXP2101` Low-Battery (`< 3.40 V`) Data-Loss Protection ([`rover_power.h`](src/rover_power/rover_power.h), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`rover_api.h`](src/rover_api.h), [`RTK_Rover.ino`](RTK_Rover.ino), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`ui_tile4_diagnostics.c`](src/lvgl_port/ui_tile4_diagnostics.c), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**

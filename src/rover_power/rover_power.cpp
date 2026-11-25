@@ -7,6 +7,7 @@
 #include "../storage/nmea_logger.h"
 #include "../storage/rtcm_logger.h"
 #include "../storage/serial_logger.h"
+#include "../ble_bridge/ble_bridge.h"
 #include <Arduino.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
@@ -210,6 +211,8 @@ extern "C" void rover_power_update_auto_shutdown(uint32_t now_ms,
         inhibit_reason = "USB Power";
     } else if (fic_web_portal_is_active() || fic_web_portal_is_starting()) {
         inhibit_reason = "Wi-Fi ON";
+    } else if (ble_bridge_is_connected()) {
+        inhibit_reason = "BLE Link";
     } else if (survey_in_progress) {
         inhibit_reason = "Survey";
     } else if (mag_cal_collecting) {
