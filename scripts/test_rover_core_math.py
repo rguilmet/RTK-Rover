@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.1.0"
+__version__ = "v1.2.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -319,6 +319,33 @@ class RoverCoreMathTests(unittest.TestCase):
             itext = fh.read()
         self.assertIn("apply_lever_arm_on_calibrated_beam", itext)
         self.assertIn("waypoint_flush_pending_survey_csv()", itext)
+
+        nav_cpp = os.path.join(ROVER_ROOT, "src", "nav_engine", "nav_engine.cpp")
+        with open(nav_cpp, "r", encoding="utf-8") as fh:
+            nav_text = fh.read()
+        self.assertIn("beam_comp_preferred", nav_text)
+
+        sensors_cpp = os.path.join(ROVER_ROOT, "src", "rover_sensors", "rover_sensors.cpp")
+        with open(sensors_cpp, "r", encoding="utf-8") as fh:
+            st_text = fh.read()
+        self.assertIn("2500U", st_text)
+
+    def test_beam_heading_priority_over_slv_flt(self):
+        def select_source(dual_valid, dual_fixed, bl_ok, beam_10dof, mag_ok, mag_anom, mag_cal_valid):
+            compass_healthy = mag_ok and not mag_anom
+            beam_comp_preferred = compass_healthy and beam_10dof and mag_cal_valid
+            dual_flt_ok = (not beam_comp_preferred) and bl_ok
+            if dual_valid and (dual_fixed or dual_flt_ok):
+                return "DUAL_FIX" if dual_fixed else "DUAL_FLT"
+            if compass_healthy:
+                return "COMP"
+            return "FALLBACK"
+
+        self.assertEqual(select_source(True, True, True, True, True, False, True), "DUAL_FIX")
+        self.assertEqual(select_source(True, False, True, True, True, False, True), "COMP")
+        self.assertEqual(select_source(True, False, True, True, True, True, True), "DUAL_FLT")
+        self.assertEqual(select_source(True, False, True, True, True, False, False), "DUAL_FLT")
+        self.assertEqual(select_source(True, False, False, True, True, True, True), "FALLBACK")
 
 
 def run_xtensa_syntax_checks():

@@ -415,7 +415,7 @@ extern "C" void rover_sensors_poll_core1(uint32_t now_ms)
     // No dependency on the LVGL graphics mutex so sensor polling is never starved.
     const bool beam_online_fast = fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.valid &&
                                   s_beam_ahrs_has_sample && (fic_sen0696_get_consec_fails(&s_beam_ctx) < 15U);
-    const uint32_t imu_poll_period_ms = beam_online_fast ? 500U : 100U;
+    const uint32_t imu_poll_period_ms = beam_online_fast ? 2500U : 100U;
     if (now_ms - s_last_imu_poll_ms >= imu_poll_period_ms || s_last_imu_poll_ms == 0) {
         s_last_imu_poll_ms = (now_ms == 0) ? 1 : now_ms;
         int16_t imu_temp = 0;

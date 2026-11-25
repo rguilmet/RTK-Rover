@@ -19,10 +19,10 @@ This directory houses `RTK_Rover`-specific Python and shell utilities for the RT
 | Script | Version | Purpose |
 | :--- | :---: | :--- |
 | [`stage2_bench_verify.py`](stage2_bench_verify.py) | `v1.0.3` | Architecture 2B split-desk verifier: `--self-test` (`7/7` offline suite), `--mode pi-bench`, `--mode pi-feeder`, `--mode rover-monitor`, and `--from-log` scorecard. |
-| [`verify_g1_outdoor_soak.py`](verify_g1_outdoor_soak.py) | `v1.0.0` | Plan 2 Gate G1 outdoor `I2C1` & beam compass soak scorer (`0` `I2C0` errors, `< 2 deg` heading RMS, `<= 1.0 deg` pitch RMS, `< 2 deg` `FIX -> CMP` jump, `--self-test`). |
+| [`verify_g1_outdoor_soak.py`](verify_g1_outdoor_soak.py) | `v1.1.0` | Plan 2 Gate G1 outdoor `I2C1` & beam compass soak scorer (`0` `I2C0` delta errors, `< 2 deg` static heading RMS, `<= 1.0 deg` static pitch RMS, `< 2 deg` `FIX -> CMP` jump, `--self-test`). |
 | [`test_rover_telemetry.py`](test_rover_telemetry.py) | `--` | Unit test verifying `48 B` V3 telemetry packing, CRC16-CCITT, atomic JSON output, rolling CSV pruning, and rate-switch control frames. |
 | [`test_line_stakeout.py`](test_line_stakeout.py) | `--` | Offline test harness verifying WGS84 line-stakeout stationing, signed cross-track offset (`L/R`), and quadrant bearing formatting. |
-| [`test_rover_core_math.py`](test_rover_core_math.py) | `v1.1.0` | Offline unit test covering `RTK_Rover` geodesic/navigation math, `F-03` Welford/gating logic, and source/ASCII caps. |
+| [`test_rover_core_math.py`](test_rover_core_math.py) | `v1.2.0` | Offline unit test covering `RTK_Rover` geodesic/navigation math, `F-03` Welford/gating logic, heading-priority rules, and source/ASCII caps. |
 
 ### Shared Hardware Utilities (`Field_Instrument_Core/extras/tools/`)
 | Script | Version | Location | Purpose |

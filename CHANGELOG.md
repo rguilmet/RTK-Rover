@@ -5,6 +5,13 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.11.2] - 2026-11-25
+### Fixed & Refined
+- **Gate G1 Soak Findings -- Calibrated Beam Compass Priority & `I2C0` Contention Reduction ([`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`rover_sensors.cpp`](src/rover_sensors/rover_sensors.cpp), [`verify_g1_outdoor_soak.py`](scripts/verify_g1_outdoor_soak.py), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**
+  - **Rank Calibrated Beam `[CMP]` Above Canopy `SLV FLT`:** In `nav_heading_beam_update()`, added `beam_comp_preferred` so a healthy, calibrated rigid-beam `SEN0696` `[CMP]` takes precedence over noisy canopy `HDG_SRC_DUAL_FLT` (`SLV FLT`), preventing transient float glitches (`> 80-105 deg` observed in `_058_Gate_G1`) from hijacking Rover heading while keeping `HDG_SRC_DUAL_FIX` as Tier 1 and `DUAL_FLT` as fallback when the compass is uncalibrated or in iron anomaly.
+  - **5x Lower `I2C0` `QMI8658` Contention When `I2C1` `SEN0696` Is Active:** Increased `imu_poll_period_ms` from `500 ms` (`2 Hz`) to `2500 ms` (`0.4 Hz`) in `rover_sensors_poll_core1()` when `SEN0696` is healthy on isolated `I2C1`, cutting shared `I2C0` bus contention with `AXS15231B` touch.
+  - **Refined Gate G1 Soak Scorer & Unit Tests (`v1.1.0` / `v1.2.0`):** Updated `verify_g1_outdoor_soak.py` to slice post-`CAL MAG` samples, separate static `FIX` (`< 1.5 deg/s`) from dynamic `30 deg/s` turns, compute delta `I2C0`/`I2C1` errors and `[I2C0 RECOVER]` counts, and separate `FIX -> CMP` vs. `FLT -> CMP` transitions; added heading-priority tests to `test_rover_core_math.py`.
+
 ## [v0.11.1] - 2026-11-25
 ### Hardened & Added
 - **Plan 2 Phase 2.1 -- `F-03` Survey Averaging Quality Hardening, Calibrated-Beam Lever-Arm Wiring & Gate G1 Soak Verifier ([`waypoint_survey_log.cpp`](src/waypoint_manager/waypoint_survey_log.cpp), [`um982_nmea_parser.cpp`](src/um982_driver/um982_nmea_parser.cpp), [`um982_config_audit.cpp`](src/um982_driver/um982_config_audit.cpp), [`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`rover_sensors.cpp`](src/rover_sensors/rover_sensors.cpp), [`settings_manager.cpp`](src/settings_manager/settings_manager.cpp), [`RTK_Rover.ino`](RTK_Rover.ino), [`ui_tile1_survey.c`](src/lvgl_port/ui_tile1_survey.c), [`ui_tile4_diagnostics.c`](src/lvgl_port/ui_tile4_diagnostics.c), [`verify_g1_outdoor_soak.py`](scripts/verify_g1_outdoor_soak.py), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**

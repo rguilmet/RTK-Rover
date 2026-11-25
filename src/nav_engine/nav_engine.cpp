@@ -646,18 +646,19 @@ extern "C" void nav_heading_beam_update(const NavHeadingSensorInput_t *in,
     if (mag_true_heading_out) *mag_true_heading_out = mag_true_hdg;
     if (mag_anomaly_out)      *mag_anomaly_out      = mag_anomaly;
 
-    // 2. Tier 1: Dual-Antenna Primary Source Available (HDG_SRC_DUAL_FIX / HDG_SRC_DUAL_FLT)
+    // 2. Tier 1: Dual-Antenna FIX (NARROW_INT) -> Tier 2: Calibrated Beam [CMP] -> Tier 2b: Dual-Antenna FLT
     // Clear s_last_disp_ms = 0 so SLV dropouts switch instantaneously (0.0 s) to [CMP] instead of stale WALK hold.
     bool compass_healthy = (in->mag_present && in->mag_valid && !mag_anomaly);
-    bool dual_flt_bl_ok = true;
-    if (!in->dual_antenna_fixed && compass_healthy && in->is_beam_10dof &&
+    bool beam_comp_preferred = compass_healthy && in->is_beam_10dof && current_settings.mag_cal_valid;
+    bool dual_flt_ok = !beam_comp_preferred;
+    if (!in->dual_antenna_fixed && dual_flt_ok && compass_healthy && in->is_beam_10dof &&
         current_settings.antenna_spacing_m > 0.05f) {
         if (in->dual_baseline_length_m <= 0.01f ||
             fabsf(in->dual_baseline_length_m - current_settings.antenna_spacing_m) > 0.10f) {
-            dual_flt_bl_ok = false;
+            dual_flt_ok = false;
         }
     }
-    if (in->dual_antenna_valid && dual_flt_bl_ok) {
+    if (in->dual_antenna_valid && (in->dual_antenna_fixed || dual_flt_ok)) {
         s_anchor_lat         = in->tip_lat;
         s_anchor_lon         = in->tip_lon;
         s_has_anchor         = true;
