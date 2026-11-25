@@ -2,9 +2,9 @@
 
 > [!NOTE]
 > **Status:** Active Execution Roadmap (Updated November 24, 2026)  
-> **Document Version:** `1.3.0`  
-> **Baselines:** `RTK_Rover v0.10.7` | `CAD v2.2.4` | `e220_pacer.py v3.7.1`  
-> **Prerequisite Plans:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (**COMPLETE & ARCHIVED `2026-11-24`**: 6-tile/11-file UI, Unified Tile 0 Log-Scale Guidance + Auto-Bullseye + Map `BS`, `SEN0696` `I2C1` 9-DOF fusion, lock-free screenshots, `settings.json` Schema v2) -> [`plan_1_shared_core_library_and_token_optimization.md`](plan_1_shared_core_library_and_token_optimization.md) (Phase 1.1 splits & `Field_Instrument_Core`)  
+> **Document Version:** `1.3.1`  
+> **Baselines:** `RTK_Rover v0.11.0` | `Field_Instrument_Core v1.1.1` | `CAD v2.2.4` | `e220_pacer.py v3.7.1`  
+> **Prerequisite Plans:** [`archive/plan_0_field_survey_refinements.md`](archive/plan_0_field_survey_refinements.md) (**COMPLETE & ARCHIVED**) -> [`archive/plan_1_shared_core_library_and_token_optimization.md`](archive/plan_1_shared_core_library_and_token_optimization.md) (**COMPLETE & ARCHIVED `2026-11-24`**: `Field_Instrument_Core v1.1.1`, `RTK_Rover v0.11.0`, `Magnetic_Field_Scanner v6.0.1`, `-Target All` CI gate)  
 > **Consolidates:** Phases 3-5 of [`archive/plan_beam_10dof_and_modularization.md`](archive/plan_beam_10dof_and_modularization.md), Phases 7.1-7.5 of [`archive/plan_phase7_cellular_ntrip_bridge.md`](archive/plan_phase7_cellular_ntrip_bridge.md), open Rover field/portal findings (`F-03`, `F-11`) from archived `project_review_sonnet.md`, residual Plan 0 outdoor verification (`G1`/`G5`), and Sections 4-6 of [`archive/plan_smart_pole_and_android_app.md`](archive/plan_smart_pole_and_android_app.md) (retiring the `3.49B-v2` hardware migration).
 
 ---
@@ -18,12 +18,12 @@ Per project direction, the Rover keeps its proven **`Waveshare ESP32-S3-Touch-LC
 * **Beam Orientation Sensors (`GX-12` Bulkhead):** DFRobot Gravity `SEN0696` (`BMI323 + BMM350 + BMP581`, `0x4A..0x4D`), isolated on **`I2C1` (`GPIO 47/48` @ `400 kHz`)** polling at `25-30 Hz` (`~3 Hz` baro) with `ahrs_9dof` (`v0.9.0..v0.9.2`) + automatic `I2C0` bench fallback; legacy `MMC5983MA` (`0x30`) retained as Tier-B fallback.
 
 ### 1.2 100% Standalone Guarantee + Bidirectional Android "Slave Mode"
-All `6` standalone LVGL tiles (`v0.10.7`: 2-mode Unified Tile 0 `GUIDANCE <-> MAP VIEW`, Dedicated Tile 1 Survey Logger, Tile 2 Waypoint Browser, Tile 3 Compass/`CAL MAG`, Tile 4 Diagnostics, and Tile 5 `5x3` Quick Settings), tactile L/R acoustic fade-out & Geiger guidance, LoRa RTK, `1 Hz` route logging, and multi-epoch survey logging MUST remain **100% functional without a phone**. When linked over **BLE 5.0 NUS**, the `3.5B` Rover operates as a smart sensor head (**Slave Mode**) alongside `RTK-Rover-Mobile` (`5-10 Hz` telemetry, filtered cellular NTRIP RTCM3 alongside LoRa, live stakeout targets, remote survey/route triggers, LoRa rate switches, waypoint syncs) with one-tap `[LOCAL CONTROL]` instant reclaim on the `3.5B` screen.
+All `6` standalone LVGL tiles (`v0.11.0`: 2-mode Unified Tile 0 `GUIDANCE <-> MAP VIEW`, Dedicated Tile 1 Survey Logger, Tile 2 Waypoint Browser, Tile 3 Compass/`CAL MAG`, Tile 4 Diagnostics, and Tile 5 `5x3` Quick Settings), tactile L/R acoustic fade-out & Geiger guidance, LoRa RTK, `1 Hz` route logging, and multi-epoch survey logging MUST remain **100% functional without a phone**. When linked over **BLE 5.0 NUS**, the `3.5B` Rover operates as a smart sensor head (**Slave Mode**) alongside `RTK-Rover-Mobile` (`5-10 Hz` telemetry, filtered cellular NTRIP RTCM3 alongside LoRa, live stakeout targets, remote survey/route triggers, LoRa rate switches, waypoint syncs) with one-tap `[LOCAL CONTROL]` instant reclaim on the `3.5B` screen.
 
-### 1.3 Verified `v0.10.7` Resource & Coexistence Envelope
-* **Flash (`app3M_fat9M_16MB`):** `1,753,634 B` used (`55%` of `3,145,728 B` -> `~1.39 MB` free).
-* **Static `DRAM0`:** `68,672 B` (`20%` of `327,680 B` -> well below the `25% / 80 KB` gate).
-* **Runtime Internal `DRAM0` (Wi-Fi OFF):** `~154-158 KB` free (`~106-114 KB` largest contiguous block, `~147-150 KB` DMA) + `~7.38 MB` free Octal PSRAM.
+### 1.3 Verified `v0.11.0` Resource & Coexistence Envelope
+* **Flash (`app3M_fat9M_16MB`):** `1,760,822 B` used (`55%` of `3,145,728 B` -> `~1.38 MB` free).
+* **Static `DRAM0`:** `68,728 B` (`20%` of `327,680 B` -> well below the `25% / 80 KB` gate).
+* **Runtime Internal `DRAM0` (Wi-Fi OFF):** `~155 KB` free (`~110 KB` largest contiguous block, `~147 KB` DMA) + `~7.38 MB` free Octal PSRAM.
 * **NimBLE vs. Wi-Fi Allocation Reality:** Arduino-ESP32 `3.3.12` prebuilds NimBLE (`CONFIG_BT_NIMBLE_ENABLED = 1`, `CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_INTERNAL = 1`, consuming `~35-55 KB` internal `DRAM0`), whereas active Wi-Fi STA/HTTP consumes `~41 KB` at mode init and `~65-80 KB` peak. Running both concurrently leaves thin fragmented SRAM (`~30-45 KB`), so **Plan 2 enforces strict BLE vs. Wi-Fi Web Portal mutual exclusion**.
 
 ---
