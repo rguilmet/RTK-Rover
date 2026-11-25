@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.2.0"
+__version__ = "v1.3.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -346,6 +346,85 @@ class RoverCoreMathTests(unittest.TestCase):
         self.assertEqual(select_source(True, False, True, True, True, True, True), "DUAL_FLT")
         self.assertEqual(select_source(True, False, True, True, True, False, False), "DUAL_FLT")
         self.assertEqual(select_source(True, False, False, True, True, True, True), "FALLBACK")
+
+    def test_low_battery_debounce_and_hysteresis(self):
+        # Reference state machine mirroring rover_power.cpp (< 3.40 V for >= 5 s, clear >= 3.55 V / USB)
+        class LowBattSim:
+            def __init__(self):
+                self.since_ms = 0
+                self.debounce_s = 0
+                self.active = False
+                self.flushed = False
+                self.flush_count = 0
+
+            def step(self, now_ms, online, vbus, charging, vbat):
+                on_batt_low = online and (not vbus) and (not charging) and (2.0 <= vbat < 3.40)
+                recovered = online and (vbus or charging or (vbat >= 3.55))
+                if not self.active:
+                    if on_batt_low:
+                        if self.since_ms == 0:
+                            self.since_ms = now_ms if now_ms != 0 else 1
+                        elapsed = now_ms - self.since_ms
+                        self.debounce_s = max(1, min(5, (elapsed + 999) // 1000))
+                        if elapsed >= 5000:
+                            self.active = True
+                            self.flushed = True
+                            self.flush_count += 1
+                    else:
+                        self.since_ms = 0
+                        self.debounce_s = 0
+                elif recovered:
+                    self.active = False
+                    self.flushed = False
+                    self.since_ms = 0
+                    self.debounce_s = 0
+
+        sim = LowBattSim()
+        # Reject 0.00 V / offline & transient < 3.40 V dip < 5 s
+        sim.step(1000, False, False, False, 0.0)
+        self.assertFalse(sim.active)
+        sim.step(2000, True, False, False, 3.35)
+        sim.step(5000, True, False, False, 3.38)
+        self.assertEqual(sim.debounce_s, 3)
+        self.assertFalse(sim.active)
+        sim.step(6000, True, False, False, 3.42)
+        self.assertEqual(sim.debounce_s, 0)
+
+        # USB / charging inhibits trigger
+        sim.step(7000, True, True, False, 3.30)
+        sim.step(13000, True, True, False, 3.30)
+        self.assertFalse(sim.active)
+
+        # Sustained >= 5 s on battery triggers single-shot flush and holds across 3.48 V hysteresis band
+        sim.step(20000, True, False, False, 3.38)
+        sim.step(23000, True, False, False, 3.36)
+        self.assertFalse(sim.active)
+        sim.step(25000, True, False, False, 3.34)
+        self.assertTrue(sim.active)
+        self.assertEqual(sim.flush_count, 1)
+        sim.step(28000, True, False, False, 3.48)
+        self.assertTrue(sim.active)
+        self.assertEqual(sim.flush_count, 1)
+
+        # Clears at >= 3.55 V (or USB plug-in)
+        sim.step(30000, True, False, False, 3.56)
+        self.assertFalse(sim.active)
+        self.assertFalse(sim.flushed)
+
+        # Source guards across Phase 2.2 files
+        with open(os.path.join(ROVER_ROOT, "src", "rover_power", "rover_power.h"), "r", encoding="utf-8") as fh:
+            pwr_h = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "rover_power", "rover_power.cpp"), "r", encoding="utf-8") as fh:
+            pwr_cpp = fh.read()
+        with open(os.path.join(ROVER_ROOT, "RTK_Rover.ino"), "r", encoding="utf-8") as fh:
+            ino_txt = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_header_nav.c"), "r", encoding="utf-8") as fh:
+            hdr_txt = fh.read()
+        self.assertIn("ROVER_LOW_BATT_THRESH_V", pwr_h)
+        self.assertIn("rover_power_service_deferred_flush", pwr_cpp)
+        self.assertIn("waypoint_flush_pending_survey_csv()", pwr_cpp)
+        self.assertIn("rover_power_service_deferred_flush()", ino_txt)
+        self.assertIn("low_batt_modal", hdr_txt)
 
 
 def run_xtensa_syntax_checks():

@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.11.3] - 2026-11-25
+### Added & Hardened
+- **Plan 2 Phase 2.2 -- Proactive `AXP2101` Low-Battery (`< 3.40 V`) Data-Loss Protection ([`rover_power.h`](src/rover_power/rover_power.h), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`rover_api.h`](src/rover_api.h), [`RTK_Rover.ino`](RTK_Rover.ino), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`ui_tile4_diagnostics.c`](src/lvgl_port/ui_tile4_diagnostics.c), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**
+  - **5 s Debounced Low-Battery Flush & Hysteresis Recovery:** `rover_power_poll()` monitors `AXP2101` on battery (`!vbus_good && !is_charging && VBAT >= 2.00 V`); if `VBAT < 3.40 V` (`ROVER_LOW_BATT_THRESH_V`) continuously for `>= 5 s`, it triggers a dual-tone alert and sets a deferred flush flag serviced on Priority-1 `loop()` via `rover_power_service_deferred_flush()` -> `rover_power_flush_all_logs()` (flushing pending survey CSV records, closing `route_*.csv` / `nema-log` / `rtcm-base` / `serial-log` SD handles cleanly, and committing dirty `settings.json` atomically before PMIC UVLO). Hysteresis clears at `VBAT >= 3.55 V` (`ROVER_LOW_BATT_CLEAR_V`) or USB/charging connection.
+  - **Low-Battery Warning Modal & Status Alerts:** Added dismissible `lv_layer_top()` `low_batt_modal` (yielding cleanly to the `30 s` `auto_off_modal`), red `LOW x.xxV` header badge, `LOW-BATT PROTECT` status on Tile 4, and `LOW BATT` status on Tile 5; added `test_low_battery_debounce_and_hysteresis` in `test_rover_core_math.py` (`v1.3.0`).
+
 ## [v0.11.2] - 2026-11-25
 ### Fixed & Refined
 - **Gate G1 Soak Findings -- Calibrated Beam Compass Priority & `I2C0` Contention Reduction ([`nav_engine.cpp`](src/nav_engine/nav_engine.cpp), [`rover_sensors.cpp`](src/rover_sensors/rover_sensors.cpp), [`verify_g1_outdoor_soak.py`](scripts/verify_g1_outdoor_soak.py), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**

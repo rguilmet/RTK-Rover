@@ -553,7 +553,13 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
                      d->e220_stats.radio_online ? "ON" : "OFF");
         } else {
             char ao_str[48];
-            if (current_settings.auto_shutdown_battery_min == 0) {
+            if (d->low_batt_warning) {
+                snprintf(ao_str, sizeof(ao_str), "%s",
+                         d->low_batt_logs_flushed ? "LOW-BATT PROTECT: LOGS SAVED" : "LOW-BATT PROTECT: FLUSHING...");
+            } else if (d->low_batt_debounce_s > 0) {
+                snprintf(ao_str, sizeof(ao_str), "LOW-BATT CHECK: %us / 5s",
+                         (unsigned int)d->low_batt_debounce_s);
+            } else if (current_settings.auto_shutdown_battery_min == 0) {
                 snprintf(ao_str, sizeof(ao_str), "Auto-Off: Disabled");
             } else if (d->auto_off_inhibited) {
                 snprintf(ao_str, sizeof(ao_str), "Auto-Off: %um | Hold (%s)",

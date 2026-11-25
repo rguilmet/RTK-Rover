@@ -273,6 +273,9 @@ typedef struct {
     uint8_t          auto_off_countdown_s; // 30..1 during active shutdown warning modal, 0 otherwise
     bool             auto_off_inhibited;   // True when USB, Wi-Fi, REC, NMEA/RTCM, Survey, Motion, or Disabled holds timer
     char             auto_off_reason[16];  // Short ASCII inhibit reason ("USB Power", "Wi-Fi ON", "REC ON", "Motion", "Disabled", etc.)
+    bool             low_batt_warning;     // True once VBAT < 3.40V sustained >= 5s while discharging
+    bool             low_batt_logs_flushed;// True once Priority-1 loop() closed SD loggers & saved settings
+    uint8_t          low_batt_debounce_s;  // 0..5s active low-battery debounce counter
 
     // Survey Logging State (Tile 1 / BOOT)
     bool             survey_in_progress;

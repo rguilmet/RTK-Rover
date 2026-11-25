@@ -668,6 +668,11 @@ void ui_tile5_settings_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
         if (d->auto_off_countdown_s > 0) {
             snprintf(buf, buf_sz, "Auto-Off: SHUTDOWN IN %us!", (unsigned int)d->auto_off_countdown_s);
             lv_obj_set_style_text_color(t5_power_status_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+        } else if (d->low_batt_warning) {
+            snprintf(buf, buf_sz, "LOW BATT %.2fV! LOGS %s",
+                     d->battery_voltage,
+                     d->low_batt_logs_flushed ? "SAVED" : "FLUSHING");
+            lv_obj_set_style_text_color(t5_power_status_lbl, lv_palette_main(LV_PALETTE_RED), 0);
         } else if (d->auto_off_inhibited) {
             snprintf(buf, buf_sz, "Auto-Off: Hold (%s)",
                      d->auto_off_reason[0] ? d->auto_off_reason : "Active");

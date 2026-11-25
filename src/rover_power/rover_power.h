@@ -3,16 +3,24 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <Field_Instrument_Core.h>
 #include "../rover_api.h"
 
 #ifdef __cplusplus
+#include <Field_Instrument_Core.h>
 extern "C" {
 #endif
 
+#define ROVER_LOW_BATT_THRESH_V    3.40f
+#define ROVER_LOW_BATT_CLEAR_V     3.55f
+#define ROVER_LOW_BATT_VALID_MIN_V 2.00f
+#define ROVER_LOW_BATT_DEBOUNCE_MS 5000UL
+
 void rover_power_poll(uint32_t now_ms);
-void rover_power_get_snapshot(FicAxp2101Status_t *out);
 void rover_power_flush_all_logs(void);
+void rover_power_service_deferred_flush(void);
+bool rover_power_is_low_batt_active(void);
+bool rover_power_should_show_low_batt_modal(void);
+void rover_power_dismiss_low_batt_modal(void);
 void rover_power_update_auto_shutdown(uint32_t now_ms,
                                       float speed_m_s,
                                       bool survey_in_progress,
@@ -23,6 +31,7 @@ void rover_power_apply_to_ui_state(RoverUIData_t *ui_state);
 
 #ifdef __cplusplus
 }
+extern "C" void rover_power_get_snapshot(FicAxp2101Status_t *out);
 #endif
 
 #endif // ROVER_POWER_H

@@ -730,6 +730,9 @@ void loop()
     // Flush completed multi-epoch survey pin record atomically on Priority-1 loop()
     waypoint_flush_pending_survey_csv();
 
+    // Service proactive low-battery (< 3.40 V sustained 5s) SD/settings flush on Priority-1 loop()
+    rover_power_service_deferred_flush();
+
     // Persist dirty settings in Priority-1 background task after 5s quiet debounce
     if (settings_dirty) {
         uint32_t dirty_ts = last_settings_change_ms;

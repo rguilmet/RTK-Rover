@@ -1,6 +1,7 @@
 #include "lvgl_ui_internal.h"
 #include "esp_timer.h"
 #include "../e220_driver/e220_driver.h"
+#include "../rover_power/rover_power.h"
 
 // =========================================================================
 // Persistent Top Header Bar Widgets (Visible on ALL Screens)
@@ -41,6 +42,8 @@ static lv_obj_t *tile_settings  = NULL;
 static lv_obj_t *nav_screen_lbl = NULL;
 static lv_obj_t *auto_off_modal     = NULL;
 static lv_obj_t *auto_off_modal_lbl = NULL;
+static lv_obj_t *low_batt_modal     = NULL;
+static lv_obj_t *low_batt_modal_lbl = NULL;
 volatile uint8_t active_tile_col = 0;
 
 RoverUIData_t s_last_ui_data = {0};
@@ -126,6 +129,19 @@ static void auto_off_cancel_cb(lv_event_t *e)
     }
     if (current_settings.enable_touch_logging) {
         rover_printf("[POWER] Auto Power-Off countdown cancelled by user tap.\n");
+    }
+}
+
+static void low_batt_dismiss_cb(lv_event_t *e)
+{
+    (void)e;
+    rover_power_dismiss_low_batt_modal();
+    play_rover_beep(1200, 30);
+    if (low_batt_modal) {
+        lv_obj_set_hidden(low_batt_modal, true);
+    }
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[POWER] Low-battery warning modal dismissed by user tap.\n");
     }
 }
 
@@ -364,6 +380,44 @@ void create_rover_ui(void)
     lv_obj_center(auto_off_modal_lbl);
 
     lv_obj_set_hidden(auto_off_modal, true);
+
+    // 5. Top-Layer Proactive Low-Battery (< 3.40V) Data-Loss Protection Modal
+    low_batt_modal = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(low_batt_modal, ROVER_LCD_H_RES, ROVER_LCD_V_RES);
+    lv_obj_align(low_batt_modal, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(low_batt_modal, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(low_batt_modal, LV_OPA_70, 0);
+    lv_obj_set_style_border_width(low_batt_modal, 0, 0);
+    lv_obj_set_style_radius(low_batt_modal, 0, 0);
+    lv_obj_set_style_pad_all(low_batt_modal, 0, 0);
+    lv_obj_set_scrollbar_mode(low_batt_modal, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scrollable(low_batt_modal, false);
+    lv_obj_set_clickable(low_batt_modal, true);
+    lv_obj_add_event_cb(low_batt_modal, low_batt_dismiss_cb, LV_EVENT_PRESSED, NULL);
+
+    lv_obj_t *lb_card = lv_obj_create(low_batt_modal);
+    lv_obj_set_size(lb_card, 296, 144);
+    lv_obj_center(lb_card);
+    lv_obj_set_style_bg_color(lb_card, lv_color_hex(0x7F1D1D), 0);
+    lv_obj_set_style_border_color(lb_card, lv_color_hex(0xEF4444), 0);
+    lv_obj_set_style_border_width(lb_card, 3, 0);
+    lv_obj_set_style_radius(lb_card, 10, 0);
+    lv_obj_set_style_pad_all(lb_card, 10, 0);
+    lv_obj_set_scrollbar_mode(lb_card, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scrollable(lb_card, false);
+    lv_obj_set_clickable(lb_card, true);
+    lv_obj_add_event_cb(lb_card, low_batt_dismiss_cb, LV_EVENT_PRESSED, NULL);
+
+    low_batt_modal_lbl = lv_label_create(lb_card);
+    lv_obj_set_width(low_batt_modal_lbl, 272);
+    lv_label_set_long_mode(low_batt_modal_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(low_batt_modal_lbl, "LOW BATTERY (<3.40V)\nSD LOGS & SETTINGS SAVED\nPLUG USB OR SWAP BATTERY\nTAP TO DISMISS");
+    lv_obj_set_style_text_color(low_batt_modal_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(low_batt_modal_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(low_batt_modal_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(low_batt_modal_lbl);
+
+    lv_obj_set_hidden(low_batt_modal, true);
 }
 
 void update_rover_ui(const RoverUIData_t *d)
@@ -398,15 +452,21 @@ void update_rover_ui(const RoverUIData_t *d)
                               (d->battery_percent >= 30) ? LV_SYMBOL_BATTERY_2 :
                               (d->battery_percent >= 15) ? LV_SYMBOL_BATTERY_1 :
                                                            LV_SYMBOL_BATTERY_EMPTY;
-        snprintf(buf, sizeof(buf), "%s %u%% %.2fV",
-                 bat_sym,
-                 d->battery_percent,
-                 d->battery_voltage);
-        lv_label_set_text(hdr_batt_lbl, buf);
-        lv_color_t bat_col = (d->battery_percent <= 20) ? lv_palette_main(LV_PALETTE_RED) :
-                             (d->battery_percent <= 40) ? lv_palette_main(LV_PALETTE_AMBER) :
-                                                          lv_palette_main(LV_PALETTE_GREEN);
-        lv_obj_set_style_text_color(hdr_batt_lbl, bat_col, 0);
+        if (d->low_batt_warning) {
+            snprintf(buf, sizeof(buf), "%s LOW %.2fV", bat_sym, d->battery_voltage);
+            lv_label_set_text(hdr_batt_lbl, buf);
+            lv_obj_set_style_text_color(hdr_batt_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+        } else {
+            snprintf(buf, sizeof(buf), "%s %u%% %.2fV",
+                     bat_sym,
+                     d->battery_percent,
+                     d->battery_voltage);
+            lv_label_set_text(hdr_batt_lbl, buf);
+            lv_color_t bat_col = (d->battery_percent <= 20) ? lv_palette_main(LV_PALETTE_RED) :
+                                 (d->battery_percent <= 40) ? lv_palette_main(LV_PALETTE_AMBER) :
+                                                              lv_palette_main(LV_PALETTE_GREEN);
+            lv_obj_set_style_text_color(hdr_batt_lbl, bat_col, 0);
+        }
     }
 
     // Wi-Fi Status Badge in Row 1 (Icon only: Slate=OFF, Amber=Connecting, Cyan=Router STA, Purple=AP)
@@ -586,8 +646,22 @@ void update_rover_ui(const RoverUIData_t *d)
                      (unsigned int)d->auto_off_countdown_s);
             lv_label_set_text(auto_off_modal_lbl, buf);
             lv_obj_set_hidden(auto_off_modal, false);
+            if (low_batt_modal) lv_obj_set_hidden(low_batt_modal, true);
         } else {
             lv_obj_set_hidden(auto_off_modal, true);
+            if (low_batt_modal && low_batt_modal_lbl) {
+                if (d->low_batt_warning && rover_power_should_show_low_batt_modal()) {
+                    snprintf(buf, sizeof(buf),
+                             "LOW BATTERY (%.2fV / %u%%)\n%s\nPLUG USB OR SWAP BATTERY\nTAP TO DISMISS",
+                             d->battery_voltage,
+                             (unsigned int)d->battery_percent,
+                             d->low_batt_logs_flushed ? "SD LOGS & SETTINGS SAVED" : "FLUSHING SD LOGS...");
+                    lv_label_set_text(low_batt_modal_lbl, buf);
+                    lv_obj_set_hidden(low_batt_modal, false);
+                } else {
+                    lv_obj_set_hidden(low_batt_modal, true);
+                }
+            }
         }
     }
 
