@@ -590,6 +590,8 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
             } else {
                 snprintf(rel_elev_str, sizeof(rel_elev_str), "--");
             }
+            const char *lev_tag = !current_settings.apply_lever_arm ? "OFF" :
+                                  (d->lever_arm_applied ? ((d->heading_source == HDG_SRC_COMP) ? "BEAM" : "DUAL") : "WAIT");
             snprintf(buf, buf_sz,
                      "[BEAM 10DOF & IMU] SEN0696@0x%02X [%s:%s]\n"
                      "Beam P:%+.1f R:%+.1f deg | M%u FOC:%s\n"
@@ -613,7 +615,7 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
                      d->imu_pitch_deg,
                      d->imu_roll_deg,
                      current_settings.antenna_height_m,
-                     current_settings.apply_lever_arm ? "ON" : "OFF");
+                     lev_tag);
         } else {
             char mag_line[128];
             if (d->mag_present) {

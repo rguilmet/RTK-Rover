@@ -30,6 +30,8 @@ static uint32_t gsv_last_gb_ms = 0;
 static uint32_t gsv_last_gq_ms = 0;
 static uint32_t s_last_offline_probe_ms = 0;
 static bool     s_was_com1_online       = false;
+static uint32_t s_gga_seq               = 0;
+static uint32_t s_last_gst_ms           = 0;
 
 static int parse_hex_nibble(char c)
 {
@@ -106,6 +108,8 @@ static void handle_gga_sentence(char *line)
 
     uint32_t now_ms = millis();
     gps_time_sync.last_gga_ms = now_ms;
+    s_gga_seq++;
+    gnss_state.gga_seq = s_gga_seq;
 
     int qual = f[6] ? atoi(f[6]) : 0;
     if (qual > 0 && f[1] && f[1][0] && !s_com1_rx_backlog_active && Serial1.available() < 180) {
@@ -130,7 +134,9 @@ static void handle_gga_sentence(char *line)
         gnss_state.base_station_id = (uint16_t)atoi(f[14]);
     }
 
-    if (gnss_state.h_acc_m <= 0.0001f || qual != GNSS_FIX_RTK_FIXED) {
+    bool gst_fresh = (s_last_gst_ms != 0U) && ((now_ms - s_last_gst_ms) <= 2500U);
+    if (qual == GNSS_FIX_NONE || !gst_fresh || gnss_state.h_acc_m <= 0.0001f) {
+        gnss_state.h_acc_from_gst = false;
         if (qual == GNSS_FIX_RTK_FIXED)      gnss_state.h_acc_m = 0.014f;
         else if (qual == GNSS_FIX_RTK_FLOAT) gnss_state.h_acc_m = 0.180f;
         else if (qual == GNSS_FIX_DGPS)      gnss_state.h_acc_m = 0.650f;
@@ -302,7 +308,12 @@ static void handle_gst_sentence(char *line)
         float lon_e = (float)atof(f[7]);
         float alt_e = (float)atof(f[8]);
         float h_err = sqrtf(lat_e * lat_e + lon_e * lon_e);
-        if (h_err > 0.001f) gnss_state.h_acc_m = h_err;
+        if (h_err > 0.001f) {
+            gnss_state.h_acc_m = h_err;
+            gnss_state.h_acc_from_gst = true;
+            uint32_t gst_ms = millis();
+            s_last_gst_ms = (gst_ms == 0U) ? 1U : gst_ms;
+        }
         if (alt_e > 0.001f) gnss_state.v_acc_m = alt_e;
     }
 }

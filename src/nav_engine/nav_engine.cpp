@@ -21,7 +21,7 @@ static void wgs84_radii(double lat_rad, double *r_meridian, double *r_prime_vert
     *r_prime_vertical = WGS84_A / denom;
 }
 
-extern "C" void nav_compute_pole_tip_position(double master_lat,
+extern "C" bool nav_compute_pole_tip_position(double master_lat,
                                               double master_lon,
                                               double master_alt_m,
                                               bool heading_valid,
@@ -35,6 +35,7 @@ extern "C" void nav_compute_pole_tip_position(double master_lat,
     double tip_lat = master_lat;
     double tip_lon = master_lon;
     double tip_alt = master_alt_m - (double)current_settings.antenna_height_m;
+    bool   applied = false;
 
     // Apply Master->Pole-Center lever-arm correction when dual-antenna carrier phase heading is active,
     // or when opt-in calibrated rigid-beam 9-DOF compass lock is explicitly qualified.
@@ -66,11 +67,13 @@ extern "C" void nav_compute_pole_tip_position(double master_lat,
             tip_lon = master_lon + (d_east / ((r_n + master_alt_m) * cos_lat)) * RAD_TO_DEG;
         }
         tip_alt += d_up;
+        applied = true;
     }
 
     if (tip_lat_out)      *tip_lat_out      = tip_lat;
     if (tip_lon_out)      *tip_lon_out      = tip_lon;
     if (tip_height_m_out) *tip_height_m_out = tip_alt;
+    return applied;
 }
 
 extern "C" void nav_compute_target_guidance(double tip_lat,

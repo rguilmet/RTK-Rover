@@ -71,6 +71,7 @@ struct SystemSettings {
     float    line_arrow_green_deg;      // Heading lock green threshold (deg, default 4.0)
     float    line_arrow_amber_deg;      // Heading lock orange threshold (deg, default 15.0)
     float    map_zoom_m_per_px;         // Sticky Map View zoom (m/px, 0.0 = Auto-Fit)
+    float    survey_max_tilt_deg;       // Max pole tilt gate for survey averaging (deg, 0 = warn-only)
 };
 
 extern struct SystemSettings current_settings;

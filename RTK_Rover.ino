@@ -201,16 +201,16 @@ void task_rover_core0(void *pvParameters)
             e220_get_stats(&state.e220_stats);
 
             // Compute Pole Centerline Ground Tip Position (compensating Master->Slave 555mm spacing & pole height)
-            nav_compute_pole_tip_position(state.raw_lat,
-                                          state.raw_lon,
-                                          state.raw_alt_m,
-                                          state.heading_valid,
-                                          state.heading_source,
-                                          state.true_heading_deg,
-                                          state.baseline_pitch_deg,
-                                          &state.tip_lat,
-                                          &state.tip_lon,
-                                          &state.tip_height_m);
+            state.lever_arm_applied = nav_compute_pole_tip_position(state.raw_lat,
+                                                                    state.raw_lon,
+                                                                    state.raw_alt_m,
+                                                                    state.heading_valid,
+                                                                    state.heading_source,
+                                                                    state.true_heading_deg,
+                                                                    state.baseline_pitch_deg,
+                                                                    &state.tip_lat,
+                                                                    &state.tip_lon,
+                                                                    &state.tip_height_m);
 
             // Compute Geodesic Guidance to Active CSV Waypoint
             WaypointRecord_t active_wp;
@@ -234,17 +234,10 @@ void task_rover_core0(void *pvParameters)
                 state.has_active_target = false;
             }
 
-            // Attach Core 1 calibrated pole tilt snapshot so survey CSV averaging logs actual tilt
+            // Attach Core 1 calibrated pole tilt snapshot so telemetry & downstream consumers stay aligned
             rover_sensors_get_pole_tilt_snapshot(&state.pole_bubble_x_deg,
                                                  &state.pole_bubble_y_deg,
                                                  &state.pole_tilt_deg);
-
-            // Update Multi-Epoch Survey Logger State
-            waypoint_update_survey_averaging(&state,
-                                             &state.survey_in_progress,
-                                             &state.survey_progress_pct,
-                                             &state.survey_epochs_collected,
-                                             state.last_logged_label);
 
             if (roverStateQueue) {
                 xQueueOverwrite(roverStateQueue, &state);
@@ -351,7 +344,7 @@ void task_display_and_audio(void *pvParameters)
         bool gnss_motion_active = (last_gnss_motion_ms != 0 && (now - last_gnss_motion_ms) < 5000U);
         rover_power_update_auto_shutdown(now,
                                          ui_state.speed_m_s,
-                                         ui_state.survey_in_progress,
+                                         waypoint_is_survey_in_progress(),
                                          rover_sensors_is_mag_cal_collecting(),
                                          imu_motion_active,
                                          gnss_motion_active);
@@ -380,7 +373,53 @@ void task_display_and_audio(void *pvParameters)
             }
 
             rover_sensors_apply_to_ui_state(now, &ui_state);
+            if (!ui_state.lever_arm_applied &&
+                current_settings.apply_lever_arm &&
+                current_settings.apply_lever_arm_on_calibrated_beam &&
+                ui_state.heading_valid &&
+                ui_state.heading_source == HDG_SRC_COMP &&
+                ui_state.beam_10dof_valid &&
+                !ui_state.mag_anomaly) {
+                float bp_tare = (isfinite(current_settings.beam_pitch_tare_deg) &&
+                                 fabsf(current_settings.beam_pitch_tare_deg) < 45.0f)
+                                ? current_settings.beam_pitch_tare_deg : 0.0f;
+                float beam_pitch_tared = ui_state.beam_pitch_deg - bp_tare;
+                ui_state.lever_arm_applied = nav_compute_pole_tip_position(ui_state.raw_lat,
+                                                                           ui_state.raw_lon,
+                                                                           ui_state.raw_alt_m,
+                                                                           ui_state.heading_valid,
+                                                                           ui_state.heading_source,
+                                                                           ui_state.true_heading_deg,
+                                                                           beam_pitch_tared,
+                                                                           &ui_state.tip_lat,
+                                                                           &ui_state.tip_lon,
+                                                                           &ui_state.tip_height_m);
+                WaypointRecord_t active_wp;
+                if (ui_state.lever_arm_applied && waypoint_get_active(&active_wp)) {
+                    nav_compute_target_guidance(ui_state.tip_lat,
+                                                ui_state.tip_lon,
+                                                ui_state.true_heading_deg,
+                                                active_wp.latitude,
+                                                active_wp.longitude,
+                                                &ui_state.distance_to_target_m,
+                                                &ui_state.bearing_to_target_deg,
+                                                &ui_state.rel_bearing_deg,
+                                                &ui_state.d_north_m,
+                                                &ui_state.d_east_m);
+                }
+            }
             rover_power_apply_to_ui_state(&ui_state);
+
+            waypoint_update_survey_averaging(&ui_state,
+                                             &ui_state.survey_in_progress,
+                                             &ui_state.survey_progress_pct,
+                                             &ui_state.survey_epochs_collected,
+                                             ui_state.last_logged_label);
+            waypoint_get_survey_quality_snapshot(&ui_state.survey_skipped_epochs,
+                                                 ui_state.survey_gate_reason,
+                                                 sizeof(ui_state.survey_gate_reason),
+                                                 &ui_state.last_survey_h_sigma_m,
+                                                 &ui_state.last_survey_max_tilt_deg);
 
             if (ui_state.has_active_target && ui_state.heading_valid) {
                 float rel = ui_state.bearing_to_target_deg - ui_state.true_heading_deg;
@@ -687,6 +726,9 @@ void loop()
     if (serial_logger_is_active()) {
         serial_logger_flush();
     }
+
+    // Flush completed multi-epoch survey pin record atomically on Priority-1 loop()
+    waypoint_flush_pending_survey_csv();
 
     // Persist dirty settings in Priority-1 background task after 5s quiet debounce
     if (settings_dirty) {

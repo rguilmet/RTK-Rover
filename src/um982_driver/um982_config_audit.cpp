@@ -461,14 +461,16 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
         gnss_state.sats_in_view      = 0;
         gnss_state.h_acc_m           = 99.9f;
         gnss_state.v_acc_m           = 99.9f;
+        gnss_state.h_acc_from_gst    = false;
         gnss_state.slave_fix_type    = GNSS_FIX_NONE;
         gnss_state.slave_num_sats    = 0;
         gnss_state.baseline_length_m = 0.0f;
     }
     if (gps_time_sync.last_gga_ms == 0 || (now_ms - gps_time_sync.last_gga_ms > 2000U)) {
-        gnss_state.fix_type = GNSS_FIX_NONE;
-        gnss_state.h_acc_m  = 99.9f;
-        gnss_state.v_acc_m  = 99.9f;
+        gnss_state.fix_type       = GNSS_FIX_NONE;
+        gnss_state.h_acc_m        = 99.9f;
+        gnss_state.v_acc_m        = 99.9f;
+        gnss_state.h_acc_from_gst = false;
     }
     if (gps_time_sync.time_synced &&
         (now_ms - gps_time_sync.last_gga_ms > 15000U) &&
@@ -487,11 +489,13 @@ extern "C" void um982_get_latest_state(RoverUIData_t *state_out)
     state_out->raw_lon            = gnss_state.raw_lon;
     state_out->raw_alt_m          = gnss_state.raw_alt_m;
     state_out->fix_type           = gnss_state.fix_type;
+    state_out->gga_seq            = gnss_state.gga_seq;
     state_out->num_sats           = gnss_state.num_sats;
     state_out->sats_in_view       = gnss_state.sats_in_view;
     state_out->hdop               = gnss_state.hdop;
     state_out->h_acc_m            = gnss_state.h_acc_m;
     state_out->v_acc_m            = gnss_state.v_acc_m;
+    state_out->h_acc_from_gst     = gnss_state.h_acc_from_gst;
     state_out->diff_age_s         = gnss_state.diff_age_s;
     state_out->heading_valid      = gnss_state.heading_valid;
     state_out->heading_is_fixed   = gnss_state.heading_is_fixed;

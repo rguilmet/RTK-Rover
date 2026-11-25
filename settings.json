@@ -45,5 +45,6 @@
   "line_audio_fade_m": 20.0,
   "line_arrow_green_deg": 4.0,
   "line_arrow_amber_deg": 15.0,
-  "map_zoom_m_per_px": 0.0
+  "map_zoom_m_per_px": 0.0,
+  "survey_max_tilt_deg": 2.5
 }

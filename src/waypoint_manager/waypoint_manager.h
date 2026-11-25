@@ -75,6 +75,13 @@ const char* waypoint_get_note_tag_options(void);
 const char* waypoint_get_note_tag_label(uint8_t idx);
 void        waypoint_format_next_survey_label(char *buf, size_t max_len);
 void        waypoint_invalidate_survey_cache(void);
+bool        waypoint_is_survey_in_progress(void);
+void        waypoint_flush_pending_survey_csv(void);
+void        waypoint_get_survey_quality_snapshot(uint16_t *skipped_out,
+                                                 char *gate_reason_out,
+                                                 size_t gate_reason_sz,
+                                                 float *last_h_sigma_out,
+                                                 float *last_max_tilt_out);
 void        waypoint_update_survey_averaging(const RoverUIData_t *live_state,
                                               bool *in_progress_out,
                                               uint8_t *progress_pct_out,

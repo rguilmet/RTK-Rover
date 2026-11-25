@@ -704,7 +704,22 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
             (ui_state->heading_source == HDG_SRC_GYRO)     ? "GYR" :
             (ui_state->heading_source == HDG_SRC_COG)      ? "COG" :
             (ui_state->heading_source == HDG_SRC_HOLD)     ? "HLD" : "---";
-        Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | Hdg:%.1f[%s] Mag:%.1f%s | FOC:%s | P:%.2fhPa\n",
+        char g1_extra[56];
+        if (ui_state->heading_source == HDG_SRC_DUAL_FIX || ui_state->heading_source == HDG_SRC_DUAL_FLT) {
+            float dh = ui_state->mag_heading_deg - ui_state->true_heading_deg;
+            while (dh > 180.0f)  dh -= 360.0f;
+            while (dh < -180.0f) dh += 360.0f;
+            float bp_tare = (isfinite(current_settings.beam_pitch_tare_deg) &&
+                             fabsf(current_settings.beam_pitch_tare_deg) < 45.0f)
+                            ? current_settings.beam_pitch_tare_deg : 0.0f;
+            float dp = (s_beam_ahrs_out.pitch_deg - bp_tare) - ui_state->baseline_pitch_deg;
+            snprintf(g1_extra, sizeof(g1_extra), " | dH:%+.1f dP:%+.1f | I2C:%lu/%lu",
+                     dh, dp, (unsigned long)ui_state->i2c0_err_count, (unsigned long)ui_state->i2c1_err_count);
+        } else {
+            snprintf(g1_extra, sizeof(g1_extra), " | I2C:%lu/%lu",
+                     (unsigned long)ui_state->i2c0_err_count, (unsigned long)ui_state->i2c1_err_count);
+        }
+        Serial.printf("[10DOF I2C%u] P/R:%+.1f/%+.1f deg | |B|:%.1fuT | Hdg:%.1f[%s] Mag:%.1f%s | FOC:%s | P:%.2fhPa%s\n",
                       (unsigned)fic_sen0696_get_i2c_bus(&s_beam_ctx),
                       s_beam_ahrs_out.pitch_deg,
                       s_beam_ahrs_out.roll_deg,
@@ -714,7 +729,8 @@ extern "C" void rover_sensors_apply_to_ui_state(uint32_t now_ms, RoverUIData_t *
                       ui_state->mag_heading_deg,
                       ui_state->mag_anomaly ? " ANOM" : "",
                       s_beam_ahrs_out.gyro_foc_locked ? "OK" : "WAIT",
-                      s_beam_state.pressure_hpa);
+                      s_beam_state.pressure_hpa,
+                      g1_extra);
     }
 
     if (fic_sen0696_is_present(&s_beam_ctx) && s_beam_state.press_valid) {

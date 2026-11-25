@@ -219,15 +219,35 @@ void ui_tile1_survey_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
 
         lv_bar_set_value(t1_prog_bar, d->survey_progress_pct, LV_ANIM_OFF);
         if (d->survey_in_progress) {
-            snprintf(buf, buf_sz, "AVERAGING RTK... %u%% (%u pts)",
-                     d->survey_progress_pct, d->survey_epochs_collected);
+            if (d->survey_gate_reason[0] != '\0') {
+                snprintf(buf, buf_sz, "HOLD: %s (%u ep)",
+                         d->survey_gate_reason, d->survey_epochs_collected);
+                lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_RED), 0);
+            } else {
+                const char *fix_tag = (d->fix_type == GNSS_FIX_RTK_FIXED) ? "FIX" :
+                                      (d->fix_type == GNSS_FIX_RTK_FLOAT) ? "FLT" : "GNSS";
+                snprintf(buf, buf_sz, "AVG %s %u%% (%u ep)",
+                         fix_tag, d->survey_progress_pct, d->survey_epochs_collected);
+                lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
+            }
             lv_label_set_text(t1_log_btn_lbl, buf);
-            lv_obj_set_style_bg_color(t1_log_btn, lv_palette_main(LV_PALETTE_ORANGE), 0);
         } else {
             update_t1_log_btn_idle_style();
         }
-        snprintf(buf, buf_sz, "Logged: %s  |  /survey_logged_pins.csv",
-                 d->last_logged_label);
+        if (!d->survey_in_progress && strncmp(d->survey_gate_reason, "ABORT:", 6) == 0) {
+            snprintf(buf, buf_sz, "%s (%s)", d->survey_gate_reason, d->last_logged_label);
+            lv_obj_set_style_text_color(t1_status_lbl, lv_palette_main(LV_PALETTE_RED), 0);
+        } else if (strcmp(d->last_logged_label, "None") != 0 && d->last_survey_max_tilt_deg >= 0.0f) {
+            snprintf(buf, buf_sz, "%s | sig:%.1fcm | tilt:%.1fd",
+                     d->last_logged_label,
+                     d->last_survey_h_sigma_m * 100.0f,
+                     d->last_survey_max_tilt_deg);
+            lv_obj_set_style_text_color(t1_status_lbl, lv_color_hex(0x00FF88), 0);
+        } else {
+            snprintf(buf, buf_sz, "Logged: %s  |  /survey_logged_pins.csv",
+                     d->last_logged_label);
+            lv_obj_set_style_text_color(t1_status_lbl, lv_color_hex(0x99A3B0), 0);
+        }
         const char *cur_stat = lv_label_get_text(t1_status_lbl);
         if (!cur_stat || strcmp(cur_stat, buf) != 0) {
             lv_label_set_text(t1_status_lbl, buf);
@@ -260,6 +280,10 @@ void ui_tile1_survey_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
             snprintf(buf, buf_sz, "Pole Tilt: %.1f deg (dX:%+.1f dY:%+.1f)",
                      d->pole_tilt_deg, d->pole_bubble_x_deg, d->pole_bubble_y_deg);
             lv_label_set_text(t1_qual_tilt_lbl, buf);
+            float max_t = (current_settings.survey_max_tilt_deg > 0.05f) ? current_settings.survey_max_tilt_deg : 2.5f;
+            lv_color_t tcol = (d->pole_tilt_deg <= 1.5f) ? lv_color_hex(0x00FF88) :
+                              ((d->pole_tilt_deg <= max_t) ? lv_color_hex(0xFFCC00) : lv_palette_main(LV_PALETTE_RED));
+            lv_obj_set_style_text_color(t1_qual_tilt_lbl, tcol, 0);
         }
         if (t1_qual_tgt_lbl) {
             if (d->has_active_target) {

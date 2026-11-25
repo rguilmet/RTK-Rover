@@ -92,7 +92,8 @@ struct SystemSettings current_settings = {
     20.0f,            // line_audio_fade_m (off-line audio silence threshold in m)
     4.0f,             // line_arrow_green_deg (heading lock green threshold in deg)
     15.0f,            // line_arrow_amber_deg (heading lock orange threshold in deg)
-    0.0f              // map_zoom_m_per_px (0.0 = Auto-Fit until manually zoomed)
+    0.0f,             // map_zoom_m_per_px (0.0 = Auto-Fit until manually zoomed)
+    2.5f              // survey_max_tilt_deg (max pole tilt gate for survey averaging, deg)
 };
 
 volatile bool settings_dirty = false;
@@ -156,7 +157,8 @@ static bool non_index_settings_equal(const SystemSettings &a, const SystemSettin
            a.line_log_max_m            == b.line_log_max_m &&
            a.line_audio_fade_m         == b.line_audio_fade_m &&
            a.line_arrow_green_deg      == b.line_arrow_green_deg &&
-           a.line_arrow_amber_deg      == b.line_arrow_amber_deg;
+           a.line_arrow_amber_deg      == b.line_arrow_amber_deg &&
+           a.survey_max_tilt_deg       == b.survey_max_tilt_deg;
 }
 
 extern "C" bool settings_lock(uint32_t timeout_ms) {
@@ -478,6 +480,7 @@ extern "C" void load_settings(void) {
             }
         }
     }
+    fic_json_clamp_float(doc, "survey_max_tilt_deg", &loaded.survey_max_tilt_deg, 0.0f, 15.0f);
     bool migrate_schema = (loaded_schema_ver < ROVER_SETTINGS_SCHEMA_VERSION);
     if (migrate_schema) {
         Serial.printf("[SETTINGS] Migrating settings.json schema v%u -> v%u (writing new guidance/map keys while preserving user config)\n",
@@ -649,6 +652,7 @@ extern "C" void save_settings(void) {
     doc["line_arrow_green_deg"]      = snap.line_arrow_green_deg;
     doc["line_arrow_amber_deg"]      = snap.line_arrow_amber_deg;
     doc["map_zoom_m_per_px"]         = snap.map_zoom_m_per_px;
+    doc["survey_max_tilt_deg"]       = snap.survey_max_tilt_deg;
 
     String output;
     serializeJsonPretty(doc, output);

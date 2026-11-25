@@ -171,11 +171,14 @@ typedef struct {
 
     // GNSS Solution Quality
     GnssFixType_t    fix_type;
+    uint32_t         gga_seq;         // Monotonic counter incremented per valid GGA epoch
     uint8_t          num_sats;        // Satellites used in position solution (GGA)
     uint8_t          sats_in_view;    // Total satellites in view across constellations (GSV)
     float            hdop;
     float            h_acc_m;         // Horizontal accuracy estimate (m)
     float            v_acc_m;         // Vertical accuracy estimate (m)
+    bool             h_acc_from_gst;  // True if h_acc_m is measured from fresh $GNGST
+    bool             lever_arm_applied; // True if half-baseline lever-arm was applied to tip
     float            diff_age_s;      // Age of RTCM differential corrections (s)
 
     // Dual-Antenna Heading & Pitch (from UNIHEADINGA / GPHDT)
@@ -271,10 +274,14 @@ typedef struct {
     bool             auto_off_inhibited;   // True when USB, Wi-Fi, REC, NMEA/RTCM, Survey, Motion, or Disabled holds timer
     char             auto_off_reason[16];  // Short ASCII inhibit reason ("USB Power", "Wi-Fi ON", "REC ON", "Motion", "Disabled", etc.)
 
-    // Survey Logging State (Tile 2 BOOT button)
+    // Survey Logging State (Tile 1 / BOOT)
     bool             survey_in_progress;
     uint8_t          survey_progress_pct;
     uint16_t         survey_epochs_collected;
+    uint16_t         survey_skipped_epochs;
+    char             survey_gate_reason[24];
+    float            last_survey_h_sigma_m;
+    float            last_survey_max_tilt_deg;
     char             last_logged_label[WAYPOINT_LABEL_LEN];
 
     // Hardware Link Diagnostics

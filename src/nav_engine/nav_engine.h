@@ -12,7 +12,8 @@ extern "C" {
 
 // Project Master antenna WGS84 position along Master->Slave baseline to Pole Centerline
 // and subtract pole height to obtain exact Ground Tip coordinates.
-void nav_compute_pole_tip_position(double master_lat,
+// Returns true if the half-baseline horizontal/vertical lever-arm correction was applied.
+bool nav_compute_pole_tip_position(double master_lat,
                                    double master_lon,
                                    double master_alt_m,
                                    bool heading_valid,

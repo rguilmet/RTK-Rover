@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.0.0"
+__version__ = "v1.1.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -225,6 +225,100 @@ class RoverCoreMathTests(unittest.TestCase):
                 data = fh.read()
             bad = [b for b in data if b > 127]
             self.assertFalse(bad, f"{fp} contains non-ASCII byte(s)")
+
+    def test_f03_welford_dedup_fix_stratification_and_tilt_gate(self):
+        # Reference implementation mirroring waypoint_survey_log.cpp F-03 logic
+        rank_map = {0: 0, 1: 1, 2: 2, 3: 2, 4: 4, 5: 3}
+        lat0, lon0 = 44.0, -70.0
+        r_m, r_n = wgs84_radii(math.radians(lat0))
+        cos_lat = math.cos(math.radians(lat0))
+        dlat_1cm = math.degrees(0.01 / r_m)
+        dlon_1cm = math.degrees(0.01 / (r_n * cos_lat))
+
+        # 30 Hz queue ticks across 4 GGA epochs:
+        # seq 1: FLT (warm-up), seq 2: FIX (+1cm N), seq 2 duplicate (must be ignored!),
+        # seq 3: FLT dip (must be skipped!), seq 4: FIX with 4.0 deg tilt (skipped!),
+        # seq 5: FIX (-1cm N)
+        ticks = [
+            {"gga_seq": 1, "fix": 5, "lat": lat0 + 50 * dlat_1cm, "lon": lon0, "alt": 100.0, "tilt": 0.5},
+            {"gga_seq": 2, "fix": 4, "lat": lat0 + dlat_1cm, "lon": lon0, "alt": 100.0, "tilt": 0.6},
+            {"gga_seq": 2, "fix": 4, "lat": lat0 + 99 * dlat_1cm, "lon": lon0, "alt": 100.0, "tilt": 0.6},
+            {"gga_seq": 3, "fix": 5, "lat": lat0 + 20 * dlat_1cm, "lon": lon0 + dlon_1cm, "alt": 100.5, "tilt": 0.5},
+            {"gga_seq": 4, "fix": 4, "lat": lat0 + 30 * dlat_1cm, "lon": lon0, "alt": 101.0, "tilt": 4.0},
+            {"gga_seq": 5, "fix": 4, "lat": lat0 - dlat_1cm, "lon": lon0, "alt": 100.2, "tilt": 0.8},
+        ]
+
+        best_fix = 0
+        last_seq = 0
+        skip_fix = 0
+        skip_tilt = 0
+        n = 0
+        mean_n = mean_e = mean_u = 0.0
+        m2_n = m2_e = m2_u = 0.0
+        ref = None
+
+        for t in ticks:
+            if t["gga_seq"] == last_seq:
+                continue
+            last_seq = t["gga_seq"]
+            r = rank_map[t["fix"]]
+            if r > rank_map[best_fix]:
+                best_fix = t["fix"]
+                n = 0
+                mean_n = mean_e = mean_u = m2_n = m2_e = m2_u = 0.0
+                ref = None
+            if r < rank_map[best_fix]:
+                skip_fix += 1
+                continue
+            if t["tilt"] > 2.5:
+                skip_tilt += 1
+                continue
+            if ref is None:
+                ref = (t["lat"], t["lon"], t["alt"])
+            dn = (t["lat"] - ref[0]) * math.pi / 180.0 * r_m
+            de = (t["lon"] - ref[1]) * math.pi / 180.0 * r_n * cos_lat
+            du = t["alt"] - ref[2]
+            n += 1
+            d1 = dn - mean_n
+            mean_n += d1 / n
+            m2_n += d1 * (dn - mean_n)
+            d2 = de - mean_e
+            mean_e += d2 / n
+            m2_e += d2 * (de - mean_e)
+            d3 = du - mean_u
+            mean_u += d3 / n
+            m2_u += d3 * (du - mean_u)
+
+        self.assertEqual(best_fix, 4)
+        self.assertEqual(n, 2)
+        self.assertEqual(skip_fix, 1)
+        self.assertEqual(skip_tilt, 1)
+        avg_lat = ref[0] + math.degrees(mean_n / r_m)
+        self.assertAlmostEqual(avg_lat, lat0, places=9)
+        h_sigma = math.sqrt((m2_n + m2_e) / (n - 1))
+        # Points at +1cm and -1cm have sample std dev = sqrt(2) * 1cm ~= 0.01414 m
+        self.assertAlmostEqual(h_sigma, math.sqrt(2.0) * 0.01, places=4)
+
+    def test_survey_and_lever_arm_source_guards(self):
+        survey_cpp = os.path.join(ROVER_ROOT, "src", "waypoint_manager", "waypoint_survey_log.cpp")
+        with open(survey_cpp, "r", encoding="utf-8") as fh:
+            stext = fh.read()
+        self.assertIn("s_last_survey_gga_seq", stext)
+        self.assertIn("fix_quality_rank", stext)
+        self.assertIn("survey_max_tilt_deg", stext)
+        self.assertIn("waypoint_flush_pending_survey_csv", stext)
+
+        nmea_cpp = os.path.join(ROVER_ROOT, "src", "um982_driver", "um982_nmea_parser.cpp")
+        with open(nmea_cpp, "r", encoding="utf-8") as fh:
+            ntext = fh.read()
+        self.assertIn("s_gga_seq", ntext)
+        self.assertIn("h_acc_from_gst", ntext)
+
+        ino_path = os.path.join(ROVER_ROOT, "RTK_Rover.ino")
+        with open(ino_path, "r", encoding="utf-8") as fh:
+            itext = fh.read()
+        self.assertIn("apply_lever_arm_on_calibrated_beam", itext)
+        self.assertIn("waypoint_flush_pending_survey_csv()", itext)
 
 
 def run_xtensa_syntax_checks():
