@@ -1,9 +1,9 @@
 # Ebyte E220-900T30S Multi-Rate Stage 1 Bench Characterization (2026-11-16)
 
-**Harness:** [`scripts/bench_e220_multirate.py`](../../scripts/bench_e220_multirate.py) (`v1.0.2`, Stage 1 Pi GPIO `<->` USB-FTDI `1 ms` latency timer)  
+**Harness:** [`bench_e220_multirate.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/bench_e220_multirate.py) (`v1.0.2` archived in `Field_Instrument_Core/extras/tools/e220/`, Stage 1 Pi GPIO `<->` USB-FTDI `1 ms` latency timer)  
 **Channels / Rates:** `CH 75` (`925.125 MHz`), `115200 8N1` operational UART, `200 B` LoRa subpacket, `4.8 / 9.6 / 19.2 kbps`  
 **Power Profiles Tested:** `21 dBm` (`125 mW`) and `30 dBm` (`1.0 W`, full unattended runs)  
-**Companion Engineering Specs:** [`docs/e220-reference.md`](../../e220-reference.md) | [`docs/plans/archive/plan_async_mailbox_lora_transport_analysis.md`](../../plans/archive/plan_async_mailbox_lora_transport_analysis.md)
+**Companion Engineering Specs:** [`Field_Instrument_Core/docs/e220-reference.md`](https://github.com/rguilmet/field-instrument-core/blob/main/docs/e220-reference.md) | [`docs/plans/archive/plan_async_mailbox_lora_transport_analysis.md`](../../plans/archive/plan_async_mailbox_lora_transport_analysis.md)
 
 ---
 
@@ -46,7 +46,7 @@ Measured end-to-end (`TX UART write` to `RX CRC24Q complete` at `1 ms` USB polli
    - Confirms Base Pi `5 V` rail sustains `650-850 mA` burst loads and passive `32 MHz` XTAL self-heating induces zero packet loss at narrow `4.8k`/`9.6k` modulation.
 2. **Mode 3 -> Mode 0 Post-Switch Liveness Lesson (`21 dBm` `Test 6 @ 9.6k` & `Test 5 Cycle 13`):**
    - In `21 dBm` `Test 6 @ 9.6k`, `/dev/ttyUSB0` passed Mode 3 register write & readback (`9600` baud), then failed both RF RX (`0/764`) and all `5` local Mode 0 `C0 C1 C2 C3 00 02` UART queries (`Noise = None`) until restored via Mode 3 in `finally:`.
-   - **Fix applied in [`bench_e220_multirate.py`](../../scripts/bench_e220_multirate.py) (`v1.0.3`):** Probe local Mode 0 responsiveness (`C0 C1 C2 C3 00 02`, `~5 ms`) immediately upon exiting Mode 3 and bounce `(1,1)->(0,0)` + baud once if silent.
+   - **Fix applied in [`bench_e220_multirate.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/bench_e220_multirate.py) (`v1.0.3`):** Probe local Mode 0 responsiveness (`C0 C1 C2 C3 00 02`, `~5 ms`) immediately upon exiting Mode 3 and bounce `(1,1)->(0,0)` + baud once if silent.
 
 ---
 

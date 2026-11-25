@@ -1,32 +1,36 @@
 # RTK Rover Utilities & Deployment Scripts
 
-This directory houses Python and shell utilities for the RTKBase Pi LoRa pacer, Stage 1/2 RF & telemetry verification, Unicore GNSS setup, cadastral COGO solving, field log analysis, schematic generation, and pre-push security scanning.
+This directory houses `RTK_Rover`-specific Python and shell utilities for the RTKBase Pi LoRa pacer, Stage 2 split-desk telemetry verification, cadastral COGO solving, field log analysis, schematic generation, and pre-push security scanning.
 
-## 1. Script Index (`22` Active Files)
+> [!NOTE]
+> Generic, reusable hardware setup and bench utilities (`setup_e220.py`, `scan_e220_channels.py`, `bench_e220_multirate.py`, `test_e220_link.py`, `setup_um98x.py`) live in [`Field_Instrument_Core/extras/tools/`](https://github.com/rguilmet/field-instrument-core/tree/main/extras/tools).
+
+## 1. Local `RTK_Rover` Script Index (`18` Active Files)
 
 ### Base Station LoRa Pacer & Deployment
 | Script | Version | Purpose |
 | :--- | :---: | :--- |
 | [`e220_pacer.py`](e220_pacer.py) | `v3.7.1` | Architecture 2B asynchronous ping-pong mailbox Ebyte `E220-900T30S` LoRa daemon (`<= 200 B` coalescing, Stage-1 calibrated ToA + guard pacing, consolidated `Second 0` macro-cycle, `48 B` V3 telemetry uplink, and 4-ACK 3-rate switching). |
 | [`e220-pacer.service`](e220-pacer.service) | `--` | `systemd` unit definition running `/usr/local/bin/e220_pacer.py` against `/etc/default/e220-pacer`. |
-| [`update_e220_pacer.sh`](update_e220_pacer.sh) | `--` | Raspberry Pi deployment script that strips CRLF line endings, installs pacer/bench utilities to `/usr/local/bin/` and `e220-pacer.service`, reloads `systemd`, and tails journal logs (`--no-follow` supported). |
+| [`update_e220_pacer.sh`](update_e220_pacer.sh) | `--` | Raspberry Pi deployment script that strips CRLF line endings, installs pacer/verifier scripts to `/usr/local/bin/` and `e220-pacer.service`, reloads `systemd`, and tails journal logs (`--no-follow` supported). |
 | [`set_e220_power.py`](set_e220_power.py) | `v1.1.0` | Runtime utility to switch E220 TX power (`21`/`24`/`27`/`30 dBm`) via EEPROM Mode 3 + readback, sync `/etc/default/e220-pacer`, and restart `e220-pacer.service`. |
-| [`scan_e220_channels.py`](scan_e220_channels.py) | `v1.1.0` | Passive `902-928 MHz` ambient RF noise scanner using temporary RAM register writes (`0xC2`, zero EEPROM wear) and CSV export. |
-| [`setup_e220.py`](setup_e220.py) | `v1.3.0` | Configuration and diagnostic utility for E220-900T modules supporting direct Raspberry Pi BCM GPIO or USB FTDI control lines. |
-| [`test_e220_link.py`](test_e220_link.py) | `v1.1.0` | Bidirectional RF link and burst throughput tester between two E220 transceivers. |
 
 ### Bench Verification & Unit Tests
 | Script | Version | Purpose |
 | :--- | :---: | :--- |
 | [`stage2_bench_verify.py`](stage2_bench_verify.py) | `v1.0.3` | Architecture 2B split-desk verifier: `--self-test` (`7/7` offline suite), `--mode pi-bench`, `--mode pi-feeder`, `--mode rover-monitor`, and `--from-log` scorecard. |
-| [`bench_e220_multirate.py`](bench_e220_multirate.py) | `v1.0.3` | Stage 1 hardware-in-the-loop multi-rate (`4.8k` / `9.6k` / `19.2k`) ToA, guard sweep, PER, and 4-ACK switch characterization suite (also supports `--self-test`). |
 | [`test_rover_telemetry.py`](test_rover_telemetry.py) | `--` | Unit test verifying `48 B` V3 telemetry packing, CRC16-CCITT, atomic JSON output, rolling CSV pruning, and rate-switch control frames. |
 | [`test_line_stakeout.py`](test_line_stakeout.py) | `--` | Offline test harness verifying WGS84 line-stakeout stationing, signed cross-track offset (`L/R`), and quadrant bearing formatting. |
+| [`test_rover_core_math.py`](test_rover_core_math.py) | `--` | Offline unit test covering `RTK_Rover` geodesic/navigation math utilities. |
 
-### GNSS Receiver Configuration
-| Script | Version | Purpose |
-| :--- | :---: | :--- |
-| [`setup_um98x.py`](setup_um98x.py) | `v1.3.0` | Unified configuration and diagnostic CLI for Unicore `UM980` (Base, `--device um980`) and `UM982` (Rover dual-antenna, `--device um982`) receivers (`--freset`, `--query`, signal-group sync). |
+### Shared Hardware Utilities (`Field_Instrument_Core/extras/tools/`)
+| Script | Version | Location | Purpose |
+| :--- | :---: | :--- | :--- |
+| `setup_e220.py` | `v1.3.0` | [`extras/tools/e220/setup_e220.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/setup_e220.py) | Mode 3 E220 register configurator (Pi BCM GPIO or USB-FTDI). |
+| `scan_e220_channels.py` | `v1.1.0` | [`extras/tools/e220/scan_e220_channels.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/scan_e220_channels.py) | Passive `902-928 MHz` RF noise scanner (`0xC2` RAM, zero EEPROM wear). |
+| `bench_e220_multirate.py` | `v1.0.3` | [`extras/tools/e220/bench_e220_multirate.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/bench_e220_multirate.py) | Stage 1 hardware-in-the-loop multi-rate ToA/guard/PER/switch suite. |
+| `test_e220_link.py` | `v1.1.0` | [`extras/tools/e220/test_e220_link.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/e220/test_e220_link.py) | Bidirectional RF link and burst throughput tester between two E220 units. |
+| `setup_um98x.py` | `v1.3.0` | [`extras/tools/um98x/setup_um98x.py`](https://github.com/rguilmet/field-instrument-core/blob/main/extras/tools/um98x/setup_um98x.py) | Unified configuration CLI for Unicore `UM980` and `UM982` receivers. |
 
 ### Cadastral COGO, Deed Conversion & Waypoints
 | Script | Version | Purpose |
