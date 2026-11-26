@@ -5,6 +5,11 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical] - 2026-11-26
+### Added
+- **Verified Snapmaker 2.0 A350T Luban `4.15.0` PETG Slicer Profiles ([`material.PETG-Blue-Tuned.def.json`](docs/mechanical/cad/snapmaker/material.PETG-Blue-Tuned.def.json), [`quality.normal.PETG-Blue-Tuned.def.json`](docs/mechanical/cad/snapmaker/quality.normal.PETG-Blue-Tuned.def.json), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Added exported field-tested Snapmaker Luban `4.15.0` material and normal-quality PETG profiles (`0.16 mm` layers / `0.28 mm` layer `0`, `240 deg C` nozzle / `75 deg C` bed, `95%` flow / `120%` layer `0`, `0.5 mm @ 35 mm/s` retraction, `0% -> 30%` cooling, `4` walls / `6` top & bottom / `30%` gyroid, `-0.015 mm` XY offset, supports OFF) and linked them from the CAD and print guides.
+
 ## [docs/mechanical/cad v2.2.7] - 2026-11-26
 ### Changed
 - **Unified Hollow Rectangular Plunger Housing ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.7`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.7`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.7`, [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step), [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**

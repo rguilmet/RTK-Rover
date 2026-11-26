@@ -54,6 +54,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 | `step/RTK_Rover_Assembly_10000mAh.step` | Complete SolidEdge B-Rep assembly (`Battery_Cradle` + `Pole_Lid` + `Pole_Tilt_Wedge_37_5` + `10000 mAh` hardware) | SolidEdge |
 | `step/*.step` (`9` part files) | `Back_Chassis_Frame`, `Top_Cover`, `Battery_Cradle`, `Pole_Lid`, `Battery_Adapter_5000`, `Pole_Tilt_Wedge_37_5`, `Slim_Sun_Shield`, `Button_Plungers`, `Plunger_Capture_Clip` | SolidEdge |
 | `stl/*_print.stl` (`9` files) | Pre-oriented flat-on-bed support-free meshes ready to slice | Snapmaker Luban / PrusaSlicer / OrcaSlicer |
+| `snapmaker/*.def.json` (`2` files) | Field-tested A350T PETG profiles ([`material.PETG-Blue-Tuned.def.json`](snapmaker/material.PETG-Blue-Tuned.def.json), [`quality.normal.PETG-Blue-Tuned.def.json`](snapmaker/quality.normal.PETG-Blue-Tuned.def.json)) | Snapmaker Luban `4.15.0` |
 | [`dxf/RTK_Rover_Interfaces_2D.dxf`](dxf/RTK_Rover_Interfaces_2D.dxf) | Layered 2D module footprints, U-groove, shared pod grid, crown & `37.5 deg` wedge (`R2010` DXF) | AutoCAD LT 2010 / SolidEdge |
 | `previews/*.png` (`6` files) | Rendered assembly, bench-open, tilted laser-mount, pod comparison, and print plate previews | Documentation |
 
@@ -88,6 +89,7 @@ Parametric 3D-printable PETG field controller enclosure for the RTK Rover (**`12
 
 * **Automated Real-Hardware Audit:** `python generate_rover_enclosure.py` verified single-solid manifold geometry on all `8` solid enclosure parts (`9` printed parts total, `3` solids on `Button_Plungers`), flush `[-60.00, 60.00] x [0.00, 180.00] mm` outer envelope, **`0.0000 mm^3` overlap across all `18` printed-part pairs**, **`0.0000 mm^3` overlap across all `26` enclosure-vs-real-`REF*.stp` hardware pairs + `REF_headphone` vs `REF_speaker`**, and **`0.0000 mm^3` overlap across all `24` tilted Rover vs real `REF-laser_pole_mount.stp` (`pole_left` inner/outer & `pole_right` inner) checks** (`69/69` total).
 * **Snapmaker 2 PETG Settings:**
+  * Ready-to-import verified Snapmaker Luban `4.15.0` A350T profiles are archived in [`snapmaker/`](snapmaker/) (`material.PETG-Blue-Tuned.def.json` + `quality.normal.PETG-Blue-Tuned.def.json`).
   * Apply a thin washable **PVA glue stick** release/barrier layer on smooth/matte sheets (or print on textured PEI) and wait until the bed cools **below `30 deg C`** before removing large flat parts.
   * **Nozzle:** `235-245 deg C` | **Bed:** `70-75 deg C` | **Z-Offset:** `+0.04 to +0.06 mm` above PLA | **First Layer:** `15-20 mm/s`, fan OFF layers `1-3`, `30-50%` afterwards.
   * **Walls & Infill:** `4` perimeters (`1.6 mm`), `25-35%` gyroid infill (`100%` infill on `Pole_Lid` spine; `5-6` walls / `40-60%` gyroid side-down on `Pole_Tilt_Wedge_37_5`), **zero supports (`stl/*_print.stl` already flat on `Z = 0`)**.

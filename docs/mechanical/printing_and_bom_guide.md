@@ -5,12 +5,15 @@ Complete 3D-printing profile, slicer overrides, heat-set insert reference, verif
 * **Enclosure Architecture & CAD Previews:** [`cad/README.md`](cad/README.md)
 * **Pre-Oriented Support-Free STL Files (`9` files):** [`cad/stl/`](cad/stl/)
 * **Parametric Source Datums:** [`cad/rover_specs.py`](cad/rover_specs.py)
+* **Snapmaker Luban `4.15.0` PETG Profiles (A350T, Verified):** [`cad/snapmaker/`](cad/snapmaker/)
 
 All `9` meshes in [`cad/stl/`](cad/stl/) (`*_print.stl`) are already rotated flat onto `Z = 0` and engineered to print **100% support-free** with a standard `0.4 mm` nozzle.
 
 ---
 
 ## 1. Snapmaker 2.0 PETG Baseline Profile (`0.4 mm` Nozzle)
+
+> **Verified Snapmaker Luban `4.15.0` Profiles (A350T):** Ready-to-import exported material and quality definitions are saved in [`cad/snapmaker/`](cad/snapmaker/) ([`material.PETG-Blue-Tuned.def.json`](cad/snapmaker/material.PETG-Blue-Tuned.def.json) + [`quality.normal.PETG-Blue-Tuned.def.json`](cad/snapmaker/quality.normal.PETG-Blue-Tuned.def.json)). Tested field defaults: `0.16 mm` layers (`0.28 mm` layer `0`), `240 deg C` nozzle / `75 deg C` bed, `95%` flow (`120%` layer `0`), `0.5 mm @ 35 mm/s` direct-drive retraction, `0%` fan layer `0` -> `30%` by layer `4`, `4` walls / `6` top & bottom / `30%` gyroid, `25 mm/s` outer wall & layer `0` / `40 mm/s` print, `-0.015 mm` XY offset, supports OFF, and `no_outer_surfaces` combing.
 
 Apply these baseline settings in **Snapmaker Luban**, **PrusaSlicer**, or **OrcaSlicer**:
 
