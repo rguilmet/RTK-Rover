@@ -1,12 +1,12 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.2.4 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.23 mirror of rover_specs.py v2.2.4
+// RTK Rover Option A Enclosure v2.2.5 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.26 mirror of rover_specs.py v2.2.5
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
 
 /* [View & Export Selector] */
-PART = "all"; // ["all", "back", "top", "cradle", "lid", "adapter5", "wedge", "shield", "plungers", "back_print", "top_print", "cradle_print", "lid_print", "adapter5_print", "wedge_print", "shield_print", "plungers_print"]
+PART = "all"; // ["all", "back", "top", "cradle", "lid", "adapter5", "wedge", "shield", "plungers", "clip", "back_print", "top_print", "cradle_print", "lid_print", "adapter5_print", "wedge_print", "shield_print", "plungers_print", "clip_print"]
 BATTERY_OPT = "10000"; // ["5000", "10000"]
 SHOW_MODULES = true;
 EXPLODE_MM = 0; // [0:1:60]
@@ -48,6 +48,9 @@ WS_GLASS_R = 6.00;
 WS_STANDOFF_DX = 48.50;
 WS_STANDOFF_DY = 72.00;
 WS_STANDOFF_Z_END = -11.50;
+WS_STANDOFF_OD = 6.0;
+WS_STANDOFF_BASE_OD = 9.6;
+WS_STANDOFF_CONE_H = 10.5;
 WS_CX = 18.50;
 WS_CY = 52.50;
 
@@ -68,28 +71,39 @@ PLUNGER_BLK_X1 = 57.00;
 PLUNGER_BLK_Y0 = 22.0;
 PLUNGER_BLK_Y1 = 50.0;
 PLUNGER_BLK_Z_TOP = -4.2;
-PLUNGER_RAIL_X0 = 49.90;
-PLUNGER_RAIL_Z_TOP = -11.70;
 PLUNGER_U_X0 = 49.90;
 PLUNGER_U_X1 = 51.60;
-PLUNGER_U_Z_BOT = -11.50;
 PLUNGER_NOSE_DIA = 3.20;
 PLUNGER_U_SLOT_W = 3.70;
+PLUNGER_CLIP_CLEAR = 0.12;
+PLUNGER_CLIP_Y0 = 21.55;
+PLUNGER_CLIP_Y1 = 50.45;
+PLUNGER_CLIP_Z_BOT = -11.55;
+PLUNGER_CLIP_Z_TOP = PLUNGER_BLK_Z_TOP;
+PLUNGER_TRACK_LIP = 1.20;
+PLUNGER_TRACK_BOT_Y1 = 23.80;
+PLUNGER_TRACK_TOP_Y0 = 48.20;
+PLUNGER_TRACK_END_WALL = 1.40;
+PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP;
+PLUNGER_RAIL_Z_TOP = -11.70;
 
 // --- RTC Coin Cell (Underneath Waveshare) ---
 RTC_CX = 18.50;
 RTC_CY = 64.00;
 
-// --- Power Board (20 x 80 x 20.57H, Back Plate mounted) ---
+// --- Power Board (20 x 80 x 20.57H, REF_power.stp 16x76 mm 2x2mm holes) ---
 PB_W = 20.0; PB_H = 80.0;
-PB_HOLE_DX = 15.0; PB_HOLE_DY = 75.0;
+PB_HOLE_DX = 16.0; PB_HOLE_DY = 76.0;
 PB_CX = -39.00; PB_CY = 91.00;
 PB_STANDOFF_H = 2.55;
+PB_STANDOFF_BASE_OD = 8.2;
+PB_STANDOFF_CONE_H = 1.00;
 
-// --- Speaker (28 x 30 x 10H, 4-Side Slotted Corner-Pillar Tower & Support Ridge) ---
+// --- Speaker (28 x 30 x 10H, 4-Side Slotted Corner Tower + 2 x M2 Corner Inserts) ---
 SPK_W = 28.0; SPK_H = 28.0; SPK_Z_THK = 10.0;
 SPK_CX = -33.20; SPK_CY = 21.00;
 SPK_PEDESTAL_H = 11.5; SPK_WALL = 1.6; SPK_RIDGE_W = 2.0; SPK_SLOT_W = 15.0;
+SPK_M2_POINTS = [[-45.20, 33.00], [-21.20, 9.00]];
 
 // --- 3.5mm Panel-Mount Headphone Jack (REF-headphone-jack.stp on Left L-Tab) ---
 HP_BODY_W = 12.00; HP_BODY_L = 14.00; HP_BODY_H = 6.30;
@@ -117,13 +131,18 @@ UM_LED_X_OFFS = [9.90, 14.90, 19.90, 24.90];
 UM_SW_X = UM_LEFT_X + 24.90;
 UM_SW_Y = UM_BOT_Y + 13.31;
 UM_CSK_RECESS = 1.60;                   // Rear counterbore depth (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2x12 CSK)
+UM_STANDOFF_OD = 5.4;
+UM_STANDOFF_BASE_OD = 9.0;
+UM_STANDOFF_CONE_H = 5.0;
 
 // --- E220 LoRa (40 x 60 x 16H) ---
 E220_W = 40.0; E220_H = 60.0;
 E220_HOLE_DX = 35.0; E220_HOLE_DY = 55.0;
 E220_CX = 29.00; E220_CY = 134.00;
 E220_STANDOFF_H = 8.50;
-E220_SMA_X = 29.00; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
+E220_STANDOFF_BASE_OD = 9.2;
+E220_STANDOFF_CONE_H = 5.0;
+E220_SMA_X = UM_SMA_MASTER_X + 20.30; E220_SMA_Z = UM_SMA_Z; E220_SMA_DIA = 6.6; E220_SMA_FLAT = 5.98; E220_SMA_WALL = 2.6;
 
 // --- GX-12 Compass Bulkhead & 50/50 Split Top-Corner Crown Span ---
 TOP_CORNER_SPLIT_Y = 173.2;
@@ -240,6 +259,18 @@ module arch_x_cut(xs, xlen, cy, wy, zmin, zmax, gable=1.5, peak_plus_z=true) {
                     polygon([[cy-wy/2, zmax], [cy+wy/2, zmax], [cy+wy/2, zmin], [cy, zmin-gable], [cy-wy/2, zmin]]);
 }
 
+module tapered_boss(cx, cy, z_base, z_floor, z_top, top_od, base_od, cone_h) {
+    translate([cx, cy, z_base])
+        cylinder(d=top_od, h=z_top - z_base);
+    if (cone_h > 0.05 && base_od > top_od + 0.05) {
+        if (z_base < z_floor)
+            translate([cx, cy, z_base])
+                cylinder(d=base_od, h=z_floor - z_base);
+        translate([cx, cy, z_floor])
+            cylinder(d1=base_od, d2=top_od, h=cone_h);
+    }
+}
+
 // =============================================================================
 // Parts
 // =============================================================================
@@ -271,7 +302,7 @@ module back_chassis_frame() {
                             cube([wrap_w, wrap_h, 26.35], center=true);
                 }
             }
-            // Right Button-Plunger Flange + outer stop block + low bottom support rail (open to -X)
+            // Right Button-Plunger Flange + outer stop block + low rail + twin guide towers
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
             translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1) + 0.25, 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
@@ -282,6 +313,12 @@ module back_chassis_frame() {
                        0.5*(Z_PLATE_INNER + PLUNGER_RAIL_Z_TOP) - 0.25])
                 cube([(PLUNGER_BLK_X0 + 0.5) - PLUNGER_RAIL_X0, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
                       PLUNGER_RAIL_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
+            for (ty = [[FLANGE_Y0, PLUNGER_TRACK_BOT_Y1], [PLUNGER_TRACK_TOP_Y0, FLANGE_Y1]]) {
+                trk_x0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP;
+                trk_x1 = PLUNGER_U_X1 + PLUNGER_CLIP_CLEAR + PLUNGER_TRACK_LIP;
+                translate([0.5*(trk_x0 + trk_x1), 0.5*(ty[0] + ty[1]), 0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CLIP_Z_TOP)])
+                    cube([trk_x1 - trk_x0, ty[1] - ty[0], PLUNGER_CLIP_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
+            }
             // Partial-height Left Headphone L-Tab (X = -60..-57, Y = 11.75..30.25, Z = -28.0..-13.50)
             translate([-CASE_W/2 + WALL_SIDE/2, HP_CY, 0.5*(Z_PLATE_OUTER + 0.5 + HP_TAB_Z_TOP)])
                 cube([WALL_SIDE, HP_TAB_W, HP_TAB_Z_TOP - (Z_PLATE_OUTER + 0.5)], center=true);
@@ -301,40 +338,58 @@ module back_chassis_frame() {
             for (p = POD_M3_POINTS)
                 translate([p[0], p[1], Z_PLATE_OUTER])
                     cylinder(d=RUTHEX_M3_BOSS, h=8.0);
-            // Waveshare pillars
+            // Waveshare pillars (conical base OD 9.6 -> shaft OD 6.0)
             for (sx = [-1, 1], sy = [-1, 1])
-                translate([WS_CX + sx*WS_STANDOFF_DX/2, WS_CY + sy*WS_STANDOFF_DY/2, Z_PLATE_INNER - 0.5])
-                    cylinder(d=5.0, h=(WS_STANDOFF_Z_END - Z_PLATE_INNER) + 0.5);
+                tapered_boss(WS_CX + sx*WS_STANDOFF_DX/2, WS_CY + sy*WS_STANDOFF_DY/2,
+                             Z_PLATE_INNER - 0.5, Z_PLATE_INNER, WS_STANDOFF_Z_END,
+                             WS_STANDOFF_OD, WS_STANDOFF_BASE_OD, WS_STANDOFF_CONE_H);
             // RTC Coin Cell cradle
             translate([RTC_CX, RTC_CY + 0.12, Z_PLATE_INNER - 0.4])
                 cylinder(d=26.5, h=4.4);
-            // Power Board & E220 M2 bosses
+            // Power Board & E220 M2 bosses w/ conical root reinforcement
             for (sx = [-1, 1], sy = [-1, 1]) {
-                translate([PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2, Z_PLATE_OUTER + 0.5])
-                    cylinder(d=RUTHEX_M2_BOSS, h=(Z_PLATE_INNER + PB_STANDOFF_H - Z_PLATE_OUTER - 0.5));
-                translate([E220_CX + sx*E220_HOLE_DX/2, E220_CY + sy*E220_HOLE_DY/2, Z_PLATE_OUTER + 0.5])
-                    cylinder(d=RUTHEX_M2_BOSS, h=(Z_PLATE_INNER + E220_STANDOFF_H - Z_PLATE_OUTER - 0.5));
+                tapered_boss(PB_CX + sx*PB_HOLE_DX/2, PB_CY + sy*PB_HOLE_DY/2,
+                             Z_PLATE_OUTER + 0.5, Z_PLATE_INNER, Z_PLATE_INNER + PB_STANDOFF_H,
+                             RUTHEX_M2_BOSS, PB_STANDOFF_BASE_OD, PB_STANDOFF_CONE_H);
+                tapered_boss(E220_CX + sx*E220_HOLE_DX/2, E220_CY + sy*E220_HOLE_DY/2,
+                             Z_PLATE_OUTER + 0.5, Z_PLATE_INNER, Z_PLATE_INNER + E220_STANDOFF_H,
+                             RUTHEX_M2_BOSS, E220_STANDOFF_BASE_OD, E220_STANDOFF_CONE_H);
             }
-            // UM982 pillars
+            // UM982 pillars (conical base OD 9.0 -> shaft OD 5.4)
             for (dx = UM_M2_X_OFFS, dy = UM_M2_Y_OFFS)
-                translate([UM_LEFT_X + dx, UM_BOT_Y + dy, Z_PLATE_INNER - 0.5])
-                    cylinder(d=5.4, h=(UM_BACK_Z - Z_PLATE_INNER) + 0.5);
-            // Speaker open-center pocket frame (31.6 x 31.6 mm)
-            rrect(SPK_W + 0.4 + 2*SPK_WALL, SPK_H + 0.4 + 2*SPK_WALL, SPK_PEDESTAL_H + 4.5, 2.5,
-                  SPK_CX, SPK_CY, Z_PLATE_INNER - 0.5);
+                tapered_boss(UM_LEFT_X + dx, UM_BOT_Y + dy,
+                             Z_PLATE_INNER - 0.5, Z_PLATE_INNER, UM_BACK_Z,
+                             UM_STANDOFF_OD, UM_STANDOFF_BASE_OD, UM_STANDOFF_CONE_H);
+            // Speaker open-center corner-pillar tower + 2 x M2 diagonal corner bosses
+            difference() {
+                rrect(SPK_W + 0.4 + 2*SPK_WALL, SPK_H + 0.4 + 2*SPK_WALL, SPK_PEDESTAL_H + 4.5, 2.5,
+                      SPK_CX, SPK_CY, Z_PLATE_INNER - 0.5);
+                translate([SPK_CX, SPK_CY, Z_PLATE_INNER + SPK_PEDESTAL_H + 2.5])
+                    cube([SPK_W + 0.4, SPK_H + 0.4, 5.0], center=true);
+                translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H + 5.5)/2])
+                    cube([SPK_SLOT_W, SPK_H + 0.4 + 2*SPK_WALL + 2.0, SPK_PEDESTAL_H + 5.5], center=true);
+                translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H + 5.5)/2])
+                    cube([SPK_W + 0.4 + 2*SPK_WALL + 2.0, SPK_SLOT_W, SPK_PEDESTAL_H + 5.5], center=true);
+                rrect(SPK_W + 0.4 - 2*SPK_RIDGE_W, SPK_H + 0.4 - 2*SPK_RIDGE_W, SPK_PEDESTAL_H + 5.0, 2.0,
+                      SPK_CX, SPK_CY, Z_PLATE_INNER);
+            }
+            for (sp_p = SPK_M2_POINTS)
+                translate([sp_p[0], sp_p[1], Z_PLATE_INNER - 0.5])
+                    cylinder(d=RUTHEX_M2_BOSS, h=(Z_PLATE_INNER + SPK_PEDESTAL_H) - (Z_PLATE_INNER - 0.5));
         }
+        // Cut vertical guide-slot channel for slide-in Plunger_Capture_Clip
+        translate([0.5*(PLUNGER_U_X0 + PLUNGER_U_X1), 0.5*(FLANGE_Y0 + FLANGE_Y1),
+                   0.5*(PLUNGER_RAIL_Z_TOP + PLUNGER_CLIP_Z_TOP + 0.5)])
+            cube([(PLUNGER_U_X1 - PLUNGER_U_X0) + 2*PLUNGER_CLIP_CLEAR,
+                  (FLANGE_Y1 - FLANGE_Y0) - 2*PLUNGER_TRACK_END_WALL,
+                  (PLUNGER_CLIP_Z_TOP + 0.5) - PLUNGER_RAIL_Z_TOP], center=true);
         // Cut RTC cradle ID + opening
         translate([RTC_CX, RTC_CY + 0.12, Z_PLATE_INNER - 0.6]) cylinder(d=22.5, h=4.8);
         translate([RTC_CX, RTC_CY - 10.2, Z_PLATE_INNER + 1.8]) cube([22.0, 9.6, 4.8], center=true);
-        // Cut Speaker upper seat pocket, 4-side top-to-bottom slots (corner L-pillars), & hollow acoustic center
-        translate([SPK_CX, SPK_CY, Z_PLATE_INNER + SPK_PEDESTAL_H + 2.5])
-            cube([SPK_W + 0.4, SPK_H + 0.4, 5.0], center=true);
-        translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H + 5.5)/2])
-            cube([SPK_SLOT_W, SPK_H + 0.4 + 2*SPK_WALL + 2.0, SPK_PEDESTAL_H + 5.5], center=true);
-        translate([SPK_CX, SPK_CY, Z_PLATE_INNER + (SPK_PEDESTAL_H + 5.5)/2])
-            cube([SPK_W + 0.4 + 2*SPK_WALL + 2.0, SPK_SLOT_W, SPK_PEDESTAL_H + 5.5], center=true);
-        rrect(SPK_W + 0.4 - 2*SPK_RIDGE_W, SPK_H + 0.4 - 2*SPK_RIDGE_W, SPK_PEDESTAL_H + 5.0, 2.0,
-              SPK_CX, SPK_CY, Z_PLATE_INNER);
+        // Cut 2 x M2 Ruthex bores in Speaker diagonal corner bosses
+        for (sp_p = SPK_M2_POINTS)
+            translate([sp_p[0], sp_p[1], Z_PLATE_INNER + SPK_PEDESTAL_H - RUTHEX_M2_DEPTH])
+                cylinder(d=RUTHEX_M2_OD, h=RUTHEX_M2_DEPTH + 0.3);
         // Symmetric 6 x M3 Ruthex insert bores in full-height Cover M3 bosses
         for (p = COVER_M3_POINTS)
             translate([p[0], p[1], COVER_BOSS_Z_TOP - (RUTHEX_M3_DEPTH + 1.3)])
@@ -366,19 +421,11 @@ module back_chassis_frame() {
         round_y_bore(E220_SMA_X, 174.0, 180.0 - E220_SMA_WALL - 174.0, E220_SMA_Z, 11.5);
         round_y_bore(UM_SMA_SLAVE_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
         round_y_bore(UM_SMA_MASTER_X, 175.0, 6.0, UM_SMA_Z, UM_SMA_ACCESS_DIA);
-        // Headphone jack M6 bore + inner 1.50 mm anti-rotation recess w/ 45-deg top bevel (Left L-Tab)
+        // Headphone jack M6 bore + full-height inner 1.50 mm anti-rotation recess (Left L-Tab)
         translate([-CASE_W/2 - 0.5, HP_CY, HP_Z_CTR])
             rotate([0, 90, 0]) cylinder(d=HP_BORE_DIA, h=WALL_SIDE + 1.0);
-        translate([0, HP_CY + HP_RECESS_W/2, 0])
-            rotate([90, 0, 0])
-                linear_extrude(height=HP_RECESS_W)
-                    polygon([
-                        [-CASE_W/2 + WALL_SIDE + 0.5, Z_PLATE_INNER],
-                        [-CASE_W/2 + HP_WALL, Z_PLATE_INNER],
-                        [-CASE_W/2 + HP_WALL, HP_Z_CTR + HP_RECESS_H/2],
-                        [-CASE_W/2 + WALL_SIDE, HP_Z_CTR + HP_RECESS_H/2 + (WALL_SIDE - HP_WALL)],
-                        [-CASE_W/2 + WALL_SIDE + 0.5, HP_Z_CTR + HP_RECESS_H/2 + (WALL_SIDE - HP_WALL)]
-                    ]);
+        translate([-CASE_W/2 + 0.5*(HP_WALL + WALL_SIDE + 0.5), HP_CY, 0.5*(Z_PLATE_INNER + HP_TAB_Z_TOP + 0.5)])
+            cube([WALL_SIDE + 0.5 - HP_WALL, HP_RECESS_W, (HP_TAB_Z_TOP + 0.5) - Z_PLATE_INNER], center=true);
         // Pure round outer plunger bearing bores (Dia 4.60 mm, open to -X)
         for (by = WS_BTN_Y_LIST)
             translate([55.5, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.60, h=5.3);
@@ -394,10 +441,6 @@ module top_cover() {
     u_w = SHIELD_U_X_RIGHT - SHIELD_U_X_LEFT;
     u_cy = 0.5 * (SHIELD_U_Y_BOT + SHIELD_U_Y_TOP);
     u_h = SHIELD_U_Y_TOP - SHIELD_U_Y_BOT;
-    comb_cx = 0.5 * (PLUNGER_U_X0 + PLUNGER_U_X1);
-    comb_w = PLUNGER_U_X1 - PLUNGER_U_X0;
-    comb_cy = 0.5 * (PLUNGER_BLK_Y0 + PLUNGER_BLK_Y1);
-    comb_h = PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0;
 
     difference() {
         union() {
@@ -420,20 +463,10 @@ module top_cover() {
             translate([SHIELD_U_X_LEFT, u_cy, -2.7]) cube([4.0, u_h + 2.5, 1.4], center=true);
             translate([SHIELD_U_X_RIGHT, u_cy, -2.7]) cube([4.0, u_h + 2.5, 1.4], center=true);
             translate([u_cx, SHIELD_U_Y_TOP, -2.7]) cube([u_w + 4.0, 4.0, 1.4], center=true);
-            // Downward inverted-U plunger capture comb (slots open UP when printing face-down)
-            translate([comb_cx, comb_cy, 0.5*(PLUNGER_U_Z_BOT - 2.0)])
-                cube([comb_w, comb_h, -2.0 - PLUNGER_U_Z_BOT], center=true);
         }
         // Full-height boss relief pockets (Z = -24.85..Z_FRONT_INNER = -2.40) around all 6 Back_Chassis_Frame M3 bosses
         for (p = COVER_M3_POINTS)
             translate([p[0], p[1], z_bot - 0.5]) cylinder(d=8.2, h=cover_depth - WALL_FRONT + 0.5);
-        // Downward-open U-slots in capture comb
-        for (by = WS_BTN_Y_LIST) {
-            translate([PLUNGER_U_X0 - 0.5, by, WS_BTN_Z_CTR])
-                rotate([0, 90, 0]) cylinder(d=PLUNGER_U_SLOT_W, h=comb_w + 1.0);
-            translate([comb_cx, by, 0.5*(PLUNGER_U_Z_BOT - 0.5 + WS_BTN_Z_CTR)])
-                cube([comb_w + 1.0, PLUNGER_U_SLOT_W, WS_BTN_Z_CTR - (PLUNGER_U_Z_BOT - 0.5)], center=true);
-        }
         // Front CSK M3 thru holes through 2.40 mm faceplate
         for (p = COVER_M3_POINTS)
             csk_through(p[0], p[1], Z_FRONT_INNER, WALL_FRONT, HOLE_CLEAR_M3, 6.2, false);
@@ -467,6 +500,36 @@ module top_cover() {
         for (lx = UM_LED_X_OFFS)
             translate([UM_LEFT_X + lx, UM_LED_Y, -3.0]) cylinder(d=1.95, h=3.5);
         translate([UM_SW_X, UM_SW_Y, -3.0]) cylinder(d=3.4, h=3.5);
+    }
+}
+
+module plunger_capture_clip() {
+    clip_cx = 0.5 * (PLUNGER_U_X0 + PLUNGER_U_X1);
+    clip_w = PLUNGER_U_X1 - PLUNGER_U_X0;
+    clip_cy = 0.5 * (PLUNGER_CLIP_Y0 + PLUNGER_CLIP_Y1);
+    clip_h = PLUNGER_CLIP_Y1 - PLUNGER_CLIP_Y0;
+    clip_d = PLUNGER_CLIP_Z_TOP - PLUNGER_CLIP_Z_BOT;
+    c_ch = 0.40;
+    difference() {
+        translate([clip_cx, clip_cy, 0.5*(PLUNGER_CLIP_Z_BOT + PLUNGER_CLIP_Z_TOP)])
+            cube([clip_w, clip_h, clip_d], center=true);
+        for (by = WS_BTN_Y_LIST) {
+            translate([PLUNGER_U_X0 - 0.5, by, WS_BTN_Z_CTR])
+                rotate([0, 90, 0]) cylinder(d=PLUNGER_U_SLOT_W, h=clip_w + 1.0);
+            translate([clip_cx, by, 0.5*(PLUNGER_CLIP_Z_BOT - 0.5 + WS_BTN_Z_CTR)])
+                cube([clip_w + 1.0, PLUNGER_U_SLOT_W, WS_BTN_Z_CTR - (PLUNGER_CLIP_Z_BOT - 0.5)], center=true);
+        }
+        for (y_e = [[PLUNGER_CLIP_Y0, c_ch], [PLUNGER_CLIP_Y1, -c_ch]])
+            translate([PLUNGER_U_X0 - 0.5, 0, 0])
+                rotate([90, 0, 90])
+                    linear_extrude(height=clip_w + 1.0)
+                        polygon([
+                            [y_e[0] - 0.2*(y_e[1] > 0 ? 1 : -1), PLUNGER_CLIP_Z_BOT - 0.2],
+                            [y_e[0] + y_e[1], PLUNGER_CLIP_Z_BOT - 0.2],
+                            [y_e[0] + y_e[1], PLUNGER_CLIP_Z_BOT],
+                            [y_e[0], PLUNGER_CLIP_Z_BOT + c_ch],
+                            [y_e[0] - 0.2*(y_e[1] > 0 ? 1 : -1), PLUNGER_CLIP_Z_BOT + c_ch]
+                        ]);
     }
 }
 
@@ -787,6 +850,7 @@ else if (PART == "adapter5") battery_adapter_5000();
 else if (PART == "wedge") pole_tilt_wedge();
 else if (PART == "shield") slim_sun_shield();
 else if (PART == "plungers") button_plungers();
+else if (PART == "clip") plunger_capture_clip();
 else if (PART == "back_print") translate([0, 0, -Z_PLATE_OUTER]) back_chassis_frame();
 else if (PART == "top_print") rotate([180, 0, 0]) top_cover();
 else if (PART == "cradle_print") rotate([180, 0, 0]) translate([0, 0, -Z_PLATE_OUTER]) battery_cradle();
@@ -801,6 +865,7 @@ else if (PART == "wedge_print")
                         pole_tilt_wedge();
 else if (PART == "shield_print") translate([0, 0, SHIELD_GROOVE_D - 0.10]) slim_sun_shield();
 else if (PART == "plungers_print") rotate([0, -90, 0]) translate([-61.6, 0, 0]) button_plungers();
+else if (PART == "clip_print") translate([0, 0, PLUNGER_U_X1]) rotate([0, 90, 0]) plunger_capture_clip();
 else {
     color("SlateGray") translate([0, 0, EXPLODE_MM]) top_cover();
     color("SteelBlue") back_chassis_frame();
@@ -811,6 +876,7 @@ else {
     color("SlateBlue") translate([0, 0, -3*EXPLODE_MM]) pole_tilt_wedge();
     color("Orange") translate([0, 0, 2*EXPLODE_MM]) slim_sun_shield();
     color("Gold") translate([EXPLODE_MM * 0.4, 0, 0]) button_plungers();
+    color("Amber") translate([0, 0, EXPLODE_MM * 0.3]) plunger_capture_clip();
     if (SHOW_MODULES) {
         %rrect(WS_GLASS_W, WS_GLASS_H, 11.5, WS_GLASS_R, WS_CX, WS_CY, -11.5);
         %cylinder(d=21.5, h=4.0);

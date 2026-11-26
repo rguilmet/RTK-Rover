@@ -1,21 +1,21 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.4.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.5.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
     underneath RTC Coin Cell + holder at Y = 64.0, Holybro UM982, E220 LoRa, Power
-    Board w/ 5.0 mm M2 Ruthex blind pockets, 4-side slotted Speaker corner pillars),
+    Board w/ 2x2 mm holes & 5.0 mm M2 Ruthex pockets, 4-side slotted Speaker tower
+    w/ 2 diagonal M2 Ruthex corner inserts, conical-base reinforced standoffs),
     full-width R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0
-    (Z-centered GX-12 w/ downward D-flat, E220 SMA w/ downward D-flat, UM982 SMAs),
-    partial-height Left Headphone L-Tab (Y = 21.00, inner 1.50 mm anti-rotation
-    recess w/ 45-deg top bevel), Right Button-Plunger Flange + low support rail,
-    split-Left/continuous-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top
-    full-height M3 bosses (Z = -2.65 mm), and relocated horizontal under-Waveshare
-    BAT_SLOT (25.0, 35.5).
-  - Top_Cover: Clean lift-off cover with ZERO modules/connectors mounted on it;
+    (Z-centered GX-12 w/ downward D-flat, equispaced E220 SMA w/ downward D-flat,
+    UM982 SMAs), partial-height Left Headphone L-Tab (Y = 21.00, full-height inner
+    1.50 mm pocket for 1.50 mm Ground-pin solder clearance), Right Button-Plunger
+    Flange + low support rail + twin slide-in guide towers, split-Left/continuous-
+    Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top full-height M3 bosses
+    (Z = -2.65 mm), and relocated horizontal under-Waveshare BAT_SLOT (25.0, 35.5).
+  - Top_Cover: Clean lift-off cover with ZERO modules/connectors/plunger-combs;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
-    downward inverted-U plunger capture comb, and matching lower-half top-corner
-    wrap (Y <= 173.0) with continuous front faceplate.
+    left-wall headphone L-tab notch, and matching lower-half top-corner wrap.
   - Standardized Option B2 Pod (10000 mAh Footprint + Capture Corner + 5000 mAh Adapter):
     One skeletonized Battery_Cradle (w/ integral Bottom-Left Capture Corner opposite
     the Bottom-Right cable exit) + solid Pole_Lid (twin 1/4"-20 Ruthex inserts @ 38.1 mm),
@@ -25,6 +25,8 @@ Architecture:
     REF-laser_pole_mount.stp shelf (6.0 mm skirts, bottom 1/4"-20 Ruthex bore,
     45-deg lofted spine pocket, and pure round twin 1/4"-20 SHCS holes/tunnels).
   - Slim_Sun_Shield (Option H1): Ultra-thin 1.6 mm PETG slot-in tapered hood.
+  - Plunger_Capture_Clip: Slide-in vertical capture bar dropping into Back_Chassis_Frame
+    right-flange guide tracks (buttons remain functional w/ Top_Cover removed).
   - Button_Plungers: 3 captive round tactile button plungers (PWR, RESET, BOOT).
 """
 
@@ -38,7 +40,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.4"
+__version__ = "v2.2.5"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -50,7 +52,7 @@ REF_FILES = {
     "waveshare": STEP_DIR / "REF-ASM-Waveshare-esp32-s3-touch-lcd-v3.5B-with-right-facing-header.stp",
     "um982": STEP_DIR / "REF-holybro-um982.stp",
     "e220": STEP_DIR / "REF-e220-module.stp",
-    "power": STEP_DIR / "REF-power-module.stp",
+    "power": STEP_DIR / "REF_power.stp",
     "speaker": STEP_DIR / "REF-speaker.stp",
     "headphone": STEP_DIR / "REF-headphone-jack.stp",
     "coin_cell": STEP_DIR / "REF-coin-cell.stp",
@@ -231,6 +233,40 @@ def make_ruthex_boss(cx: float, cy: float, z_base: float, boss_h: float,
     return boss, bore
 
 
+def make_stepped_cone_boss(cx: float, cy: float, z_base: float, z_floor: float,
+                           z_top: float, top_od: float, base_od: float,
+                           cone_h: float) -> cq.Workplane:
+    """Build cylindrical boss up to z_top with a lower conical buttress above z_floor."""
+    cyl = (
+        cq.Workplane("XY")
+        .workplane(offset=z_base)
+        .center(cx, cy)
+        .circle(top_od / 2.0)
+        .extrude(z_top - z_base)
+    )
+    if cone_h <= 0.05 or base_od <= top_od + 0.05:
+        return cyl
+    if z_base < z_floor:
+        skirt = (
+            cq.Workplane("XY")
+            .workplane(offset=z_base)
+            .center(cx, cy)
+            .circle(base_od / 2.0)
+            .extrude(z_floor - z_base)
+        )
+        cyl = cyl.union(skirt)
+    cone = (
+        cq.Workplane("XY")
+        .workplane(offset=z_floor)
+        .center(cx, cy)
+        .circle(base_od / 2.0)
+        .workplane(offset=cone_h)
+        .circle(top_od / 2.0)
+        .loft(combine=True)
+    )
+    return cyl.union(cone)
+
+
 # ==============================================================================
 # Part 1: Back_Chassis_Frame (Prints flat on Z_PLATE_OUTER = -28.0 mm, Support-Free)
 # ==============================================================================
@@ -284,7 +320,7 @@ def build_back_chassis_frame() -> cq.Workplane:
     )
     plate = plate.union(right_flange)
 
-    # Plunger outer stop block (X=56.0..57.0) + low bottom support rail (X=49.9..56.5, Z=-25.0..-11.7)
+    # Plunger outer stop block (X=56.0..57.0) + low rail (X=48.58..56.5, Z=-25.0..-11.7) + twin guide towers
     blk_cx = 0.5 * (S.PLUNGER_BLK_X0 + S.PLUNGER_BLK_X1)
     blk_w = S.PLUNGER_BLK_X1 - S.PLUNGER_BLK_X0
     blk_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
@@ -306,6 +342,30 @@ def build_back_chassis_frame() -> cq.Workplane:
         .extrude(S.PLUNGER_RAIL_Z_TOP - S.Z_PLATE_INNER + 0.5)
     )
     plate = plate.union(plunger_blk).union(plunger_rail)
+
+    trk_x0 = S.PLUNGER_U_X0 - S.PLUNGER_CLIP_CLEAR - S.PLUNGER_TRACK_LIP
+    trk_x1 = S.PLUNGER_U_X1 + S.PLUNGER_CLIP_CLEAR + S.PLUNGER_TRACK_LIP
+    for y0, y1 in ((S.FLANGE_Y0, S.PLUNGER_TRACK_BOT_Y1), (S.PLUNGER_TRACK_TOP_Y0, S.FLANGE_Y1)):
+        tower = (
+            cq.Workplane("XY")
+            .workplane(offset=S.Z_PLATE_INNER - 0.5)
+            .center(0.5 * (trk_x0 + trk_x1), 0.5 * (y0 + y1))
+            .rect(trk_x1 - trk_x0, y1 - y0)
+            .extrude(S.PLUNGER_CLIP_Z_TOP - S.Z_PLATE_INNER + 0.5)
+        )
+        plate = plate.union(tower)
+    slot_x0 = S.PLUNGER_U_X0 - S.PLUNGER_CLIP_CLEAR
+    slot_x1 = S.PLUNGER_U_X1 + S.PLUNGER_CLIP_CLEAR
+    slot_y0 = S.FLANGE_Y0 + S.PLUNGER_TRACK_END_WALL
+    slot_y1 = S.FLANGE_Y1 - S.PLUNGER_TRACK_END_WALL
+    clip_slot = (
+        cq.Workplane("XY")
+        .workplane(offset=S.PLUNGER_RAIL_Z_TOP)
+        .center(0.5 * (slot_x0 + slot_x1), 0.5 * (slot_y0 + slot_y1))
+        .rect(slot_x1 - slot_x0, slot_y1 - slot_y0)
+        .extrude(S.PLUNGER_CLIP_Z_TOP - S.PLUNGER_RAIL_Z_TOP + 0.5)
+    )
+    plate = plate.cut(clip_slot)
 
     # 3b. Partial-Height Left Headphone L-Tab (X=[-60.00, -57.00], Y=[11.75, 30.25], Z=[-28.0, -13.50])
     # Mounts REF-headphone-jack.stp on Back_Chassis_Frame so all connectors remain bench-serviceable.
@@ -374,18 +434,15 @@ def build_back_chassis_frame() -> cq.Workplane:
     for bore in pod_bores:
         plate = plate.cut(bore)
 
-    # 7. Waveshare 3.5B Pillars (4 x Dia 5.0 mm standoffs up to -11.50, rear M2 CSK pass-throughs)
-    ws_pillar_h = (S.WS_STANDOFF_Z_END - S.Z_PLATE_INNER) + 0.5
+    # 7. Waveshare 3.5B Pillars (Conical base OD 9.6 -> shaft OD 6.0 up to -11.50, rear M2 CSK pass-throughs)
     ws_bores = []
     for sx in (-S.WS_STANDOFF_DX / 2.0, S.WS_STANDOFF_DX / 2.0):
         for sy in (-S.WS_STANDOFF_DY / 2.0, S.WS_STANDOFF_DY / 2.0):
             px, py = S.WS_CX + sx, S.WS_CY + sy
-            pil = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_PLATE_INNER - 0.5)
-                .center(px, py)
-                .circle(2.5)
-                .extrude(ws_pillar_h)
+            pil = make_stepped_cone_boss(
+                px, py, z_base=S.Z_PLATE_INNER - 0.5, z_floor=S.Z_PLATE_INNER,
+                z_top=S.WS_STANDOFF_Z_END, top_od=S.WS_STANDOFF_OD,
+                base_od=S.WS_STANDOFF_BASE_OD, cone_h=S.WS_STANDOFF_CONE_H,
             )
             plate = plate.union(pil)
             ws_bores.append(make_csk_cone_through(
@@ -421,53 +478,62 @@ def build_back_chassis_frame() -> cq.Workplane:
     rtc_holder = rtc_ring.cut(rtc_inner).cut(rtc_wire_slot)
     plate = plate.union(rtc_holder)
 
-    # 9. Power Board Standoffs (4 x M2 Ruthex bosses, top at Z = -22.45, full 5.0 mm Ruthex blind pocket)
+    # 9. Power Board Standoffs (4 x M2 Ruthex 16x76 mm w/ OD 8.2->6.2 mm root flare, full 5.0 mm pocket)
     pb_top_z = S.Z_PLATE_INNER + S.PB_STANDOFF_H  # -22.45
     pb_bores = []
     for dx in (-S.PB_HOLE_DX / 2.0, S.PB_HOLE_DX / 2.0):
         for dy in (-S.PB_HOLE_DY / 2.0, S.PB_HOLE_DY / 2.0):
             px, py = S.PB_CX + dx, S.PB_CY + dy
-            b, bore = make_ruthex_boss(
-                px, py, z_base=S.Z_PLATE_OUTER + 0.5,
-                boss_h=(pb_top_z - S.Z_PLATE_OUTER - 0.5),
-                boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
-                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
+            b = make_stepped_cone_boss(
+                px, py, z_base=S.Z_PLATE_OUTER + 0.5, z_floor=S.Z_PLATE_INNER,
+                z_top=pb_top_z, top_od=S.RUTHEX_M2_BOSS_OD,
+                base_od=S.PB_STANDOFF_BASE_OD, cone_h=S.PB_STANDOFF_CONE_H,
+            )
+            bore = (
+                cq.Workplane("XY")
+                .workplane(offset=pb_top_z - S.RUTHEX_M2_DEPTH)
+                .center(px, py)
+                .circle(S.RUTHEX_M2_OD / 2.0)
+                .extrude(S.RUTHEX_M2_DEPTH + 0.3)
             )
             plate = plate.union(b)
             pb_bores.append(bore)
     for bore in pb_bores:
         plate = plate.cut(bore)
 
-    # 10. E220 LoRa Standoffs (4 x M2 Ruthex bosses, top at Z = -16.50, clears POD M3 -20.0 by 0.50 mm)
+    # 10. E220 LoRa Standoffs (4 x M2 Ruthex w/ OD 9.2->6.2 mm cone flare, top -16.50, clears POD M3 by 0.50 mm)
     e2_top_z = S.Z_PLATE_INNER + S.E220_STANDOFF_H  # -16.50
     e2_bores = []
     for dx in (-S.E220_HOLE_DX / 2.0, S.E220_HOLE_DX / 2.0):
         for dy in (-S.E220_HOLE_DY / 2.0, S.E220_HOLE_DY / 2.0):
             px, py = S.E220_CX + dx, S.E220_CY + dy
-            b, bore = make_ruthex_boss(
-                px, py, z_base=S.Z_PLATE_OUTER + 0.5,
-                boss_h=(e2_top_z - S.Z_PLATE_OUTER - 0.5),
-                boss_od=S.RUTHEX_M2_BOSS_OD, hole_od=S.RUTHEX_M2_OD,
-                hole_depth=S.RUTHEX_M2_DEPTH, open_at_top=True,
+            b = make_stepped_cone_boss(
+                px, py, z_base=S.Z_PLATE_OUTER + 0.5, z_floor=S.Z_PLATE_INNER,
+                z_top=e2_top_z, top_od=S.RUTHEX_M2_BOSS_OD,
+                base_od=S.E220_STANDOFF_BASE_OD, cone_h=S.E220_STANDOFF_CONE_H,
+            )
+            bore = (
+                cq.Workplane("XY")
+                .workplane(offset=e2_top_z - S.RUTHEX_M2_DEPTH)
+                .center(px, py)
+                .circle(S.RUTHEX_M2_OD / 2.0)
+                .extrude(S.RUTHEX_M2_DEPTH + 0.3)
             )
             plate = plate.union(b)
             e2_bores.append(bore)
     for bore in e2_bores:
         plate = plate.cut(bore)
 
-    # 11. Holybro UM982 Standoffs (4 x Dia 5.4 mm up to Z = -17.20, recessed rear M2 CSK for M2x12)
-    um_pillar_h = (S.UM_BACK_Z - S.Z_PLATE_INNER) + 0.5
+    # 11. Holybro UM982 Standoffs (OD 9.0->5.4 mm conical flare up to Z = -17.20, recessed rear M2 CSK)
     z_um_csk = S.Z_PLATE_OUTER + S.UM_CSK_RECESS
     um_bores = []
     for dx in S.UM_M2_X_OFFS:
         for dy in S.UM_M2_Y_OFFS:
             px, py = S.UM_LEFT_X + dx, S.UM_BOT_Y + dy
-            pil = (
-                cq.Workplane("XY")
-                .workplane(offset=S.Z_PLATE_INNER - 0.5)
-                .center(px, py)
-                .circle(2.7)
-                .extrude(um_pillar_h)
+            pil = make_stepped_cone_boss(
+                px, py, z_base=S.Z_PLATE_INNER - 0.5, z_floor=S.Z_PLATE_INNER,
+                z_top=S.UM_BACK_Z, top_od=S.UM_STANDOFF_OD,
+                base_od=S.UM_STANDOFF_BASE_OD, cone_h=S.UM_STANDOFF_CONE_H,
             )
             plate = plate.union(pil)
             cbore = (
@@ -485,9 +551,9 @@ def build_back_chassis_frame() -> cq.Workplane:
     for bore in um_bores:
         plate = plate.cut(bore)
 
-    # 12. 4-Side Slotted Speaker Corner-Pillar Tower + 2.0 mm Inner Support Ridge (Z = -13.50)
+    # 12. 4-Side Slotted Speaker Corner-Pillar Tower + 2 x Diagonal M2 Ruthex Inserts (Z = -13.50)
     # 15.0 mm wide top-to-bottom slots on all 4 walls leave 4 rigid 8.3 mm L-pillars, saving material
-    # while opening the -Y side for the under-speaker headphone jack and +Y side for speaker wires.
+    # while opening the -X side for the headphone jack and +Y side for speaker wires.
     spk_ped_top = S.Z_PLATE_INNER + S.SPK_PEDESTAL_H  # -13.50
     spk_seat_w = S.SPK_W + 0.4
     spk_seat_h = S.SPK_H + 0.4
@@ -533,7 +599,26 @@ def build_back_chassis_frame() -> cq.Workplane:
         .cut(spk_slot_ew)
         .cut(spk_center_open)
     )
+    spk_m2_bores = []
+    for sx_m2, sy_m2 in S.SPK_M2_POINTS:
+        m2_boss = (
+            cq.Workplane("XY")
+            .workplane(offset=S.Z_PLATE_INNER - 0.5)
+            .center(sx_m2, sy_m2)
+            .circle(S.RUTHEX_M2_BOSS_OD / 2.0)
+            .extrude(spk_ped_top - (S.Z_PLATE_INNER - 0.5))
+        )
+        spk_cradle = spk_cradle.union(m2_boss)
+        spk_m2_bores.append(
+            cq.Workplane("XY")
+            .workplane(offset=spk_ped_top - S.RUTHEX_M2_DEPTH)
+            .center(sx_m2, sy_m2)
+            .circle(S.RUTHEX_M2_OD / 2.0)
+            .extrude(S.RUTHEX_M2_DEPTH + 0.3)
+        )
     plate = plate.union(spk_cradle)
+    for bore in spk_m2_bores:
+        plate = plate.cut(bore)
 
     # 13. Cutouts on Back Plate & Integral L-Wall & Right Flange
     # 13a. Battery JST-PH wire pass-through slot
@@ -591,7 +676,8 @@ def build_back_chassis_frame() -> cq.Workplane:
         )
         plate = plate.cut(um_bore).cut(um_pocket)
 
-    # 13c. Headphone Jack M6 Bore + Inner 1.50 mm Anti-Rotation Recess w/ 45-deg Top Bevel (Left L-Tab)
+    # 13c. Headphone Jack M6 Bore + Full-Height Inner 1.50 mm Anti-Rotation Recess (Left L-Tab)
+    # Cuts straight to Z=HP_TAB_Z_TOP (-13.50) w/ zero overhang, opening 1.50 mm behind Ground solder pin.
     hp_bore = (
         cq.Workplane("YZ")
         .workplane(offset=-S.CASE_W / 2.0 - 0.5)
@@ -600,23 +686,13 @@ def build_back_chassis_frame() -> cq.Workplane:
         .extrude(S.WALL_SIDE + 1.0)
     )
     x_in = -S.CASE_W / 2.0 + S.HP_WALL
-    x_wall = -S.CASE_W / 2.0 + S.WALL_SIDE
-    x_back = x_wall + 0.5
-    z_lo = S.Z_PLATE_INNER
-    z_hi = S.HP_Z_CTR + S.HP_RECESS_H / 2.0
-    bevel_dz = S.WALL_SIDE - S.HP_WALL
+    x_back = -S.CASE_W / 2.0 + S.WALL_SIDE + 0.5
     hp_recess = (
-        cq.Workplane("XZ")
-        .workplane(offset=-(S.HP_CY - S.HP_RECESS_W / 2.0))
-        .polyline([
-            (x_back, z_lo),
-            (x_in, z_lo),
-            (x_in, z_hi),
-            (x_wall, z_hi + bevel_dz),
-            (x_back, z_hi + bevel_dz),
-        ])
-        .close()
-        .extrude(-S.HP_RECESS_W)
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER)
+        .center(0.5 * (x_in + x_back), S.HP_CY)
+        .rect(x_back - x_in, S.HP_RECESS_W)
+        .extrude((S.HP_TAB_Z_TOP + 0.5) - S.Z_PLATE_INNER)
     )
     plate = plate.cut(hp_bore).cut(hp_recess)
 
@@ -705,37 +781,6 @@ def build_top_cover() -> cq.Workplane:
             .extrude(1.4)
         )
         cover = cover.union(rib)
-
-    # Downward inverted-U plunger capture comb (X = 49.90..51.60, Y = 22.0..50.0, Z = -11.50..-2.00)
-    # Prints face-down with slots opening UP (+Z_print) cleanly without supports.
-    comb_cx = 0.5 * (S.PLUNGER_U_X0 + S.PLUNGER_U_X1)
-    comb_w = S.PLUNGER_U_X1 - S.PLUNGER_U_X0
-    comb_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
-    comb_h = S.PLUNGER_BLK_Y1 - S.PLUNGER_BLK_Y0
-    u_comb = (
-        cq.Workplane("XY")
-        .workplane(offset=S.PLUNGER_U_Z_BOT)
-        .center(comb_cx, comb_cy)
-        .rect(comb_w, comb_h)
-        .extrude(-2.0 - S.PLUNGER_U_Z_BOT)
-    )
-    cover = cover.union(u_comb)
-    for by in S.WS_BTN_Y_LIST:
-        u_round = (
-            cq.Workplane("YZ")
-            .workplane(offset=S.PLUNGER_U_X0 - 0.5)
-            .center(by, S.WS_BTN_Z_CTR)
-            .circle(S.PLUNGER_U_SLOT_W / 2.0)
-            .extrude(comb_w + 1.0)
-        )
-        u_open = (
-            cq.Workplane("XY")
-            .workplane(offset=S.PLUNGER_U_Z_BOT - 0.5)
-            .center(comb_cx, by)
-            .rect(comb_w + 1.0, S.PLUNGER_U_SLOT_W)
-            .extrude(S.WS_BTN_Z_CTR - (S.PLUNGER_U_Z_BOT - 0.5))
-        )
-        cover = cover.cut(u_round).cut(u_open)
 
     # Cut Option H1 Recessed U-Groove (1.90 mm wide x 1.80 mm deep from Z = 0.0)
     gw = S.SHIELD_GROOVE_W
@@ -1195,6 +1240,59 @@ def build_button_plungers() -> cq.Workplane:
 
 
 # ==============================================================================
+# Part 9: Plunger_Capture_Clip (Slide-In Back_Chassis_Frame Button Capture Bar)
+# ==============================================================================
+def build_plunger_capture_clip() -> cq.Workplane:
+    """Build flat-printed slide-in clip capturing all 3 plungers on Back_Chassis_Frame."""
+    clip_cx = 0.5 * (S.PLUNGER_U_X0 + S.PLUNGER_U_X1)
+    clip_w = S.PLUNGER_U_X1 - S.PLUNGER_U_X0
+    clip_cy = 0.5 * (S.PLUNGER_CLIP_Y0 + S.PLUNGER_CLIP_Y1)
+    clip_h = S.PLUNGER_CLIP_Y1 - S.PLUNGER_CLIP_Y0
+    clip_d = S.PLUNGER_CLIP_Z_TOP - S.PLUNGER_CLIP_Z_BOT
+    clip = (
+        cq.Workplane("XY")
+        .workplane(offset=S.PLUNGER_CLIP_Z_BOT)
+        .center(clip_cx, clip_cy)
+        .rect(clip_w, clip_h)
+        .extrude(clip_d)
+    )
+    for by in S.WS_BTN_Y_LIST:
+        u_round = (
+            cq.Workplane("YZ")
+            .workplane(offset=S.PLUNGER_U_X0 - 0.5)
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(S.PLUNGER_U_SLOT_W / 2.0)
+            .extrude(clip_w + 1.0)
+        )
+        u_open = (
+            cq.Workplane("XY")
+            .workplane(offset=S.PLUNGER_CLIP_Z_BOT - 0.5)
+            .center(clip_cx, by)
+            .rect(clip_w + 1.0, S.PLUNGER_U_SLOT_W)
+            .extrude(S.WS_BTN_Z_CTR - (S.PLUNGER_CLIP_Z_BOT - 0.5))
+        )
+        clip = clip.cut(u_round).cut(u_open)
+    # 0.40 mm 45-deg lead-in chamfers on bottom Y ends for effortless track drop-in
+    c_ch = 0.40
+    for y_end, dy in ((S.PLUNGER_CLIP_Y0, c_ch), (S.PLUNGER_CLIP_Y1, -c_ch)):
+        ch_cut = (
+            cq.Workplane("YZ")
+            .workplane(offset=S.PLUNGER_U_X0 - 0.5)
+            .polyline([
+                (y_end - 0.2 * (1 if dy > 0 else -1), S.PLUNGER_CLIP_Z_BOT - 0.2),
+                (y_end + dy, S.PLUNGER_CLIP_Z_BOT - 0.2),
+                (y_end + dy, S.PLUNGER_CLIP_Z_BOT),
+                (y_end, S.PLUNGER_CLIP_Z_BOT + c_ch),
+                (y_end - 0.2 * (1 if dy > 0 else -1), S.PLUNGER_CLIP_Z_BOT + c_ch),
+            ])
+            .close()
+            .extrude(clip_w + 1.0)
+        )
+        clip = clip.cut(ch_cut)
+    return clip
+
+
+# ==============================================================================
 # Part 9: Pole_Tilt_Wedge_37_5 (Support-Free 37.5-deg Laser Mount Adapter)
 # ==============================================================================
 def _wedge_spine_datums() -> tuple[float, float, float]:
@@ -1409,11 +1507,8 @@ def load_normalized_refs() -> dict[str, cq.Workplane]:
     refs["coin_cell"] = cc.translate((dx_rtc, dy_rtc, dz_rtc))
     refs["coin_holder"] = ch.translate((dx_rtc, dy_rtc, dz_rtc))
 
-    # 3. Power Board (PCB Z=0 -> Z_PLATE_INNER + PB_STANDOFF_H = -22.0)
-    pm = cq.importers.importStep(str(REF_FILES["power"]))
-    pbb = pm.val().BoundingBox()
-    pm_cx, pm_cy = 0.5 * (pbb.xmin + pbb.xmax), 0.5 * (pbb.ymin + pbb.ymax)
-    refs["power"] = pm.translate((S.PB_CX - pm_cx, S.PB_CY - pm_cy, S.Z_PLATE_INNER + S.PB_STANDOFF_H))
+    # 3. Power Board (REF_power.stp is pre-aligned in Rover assembly coords, 16x76 mm 2x2mm holes)
+    refs["power"] = cq.importers.importStep(str(REF_FILES["power"]))
 
     # 4. E220 Module (PCB Z=0 -> Z_PLATE_INNER + E220_STANDOFF_H = -16.50)
     e2 = cq.importers.importStep(str(REF_FILES["e220"]))
@@ -1485,7 +1580,7 @@ def to_print_bed(shape: cq.Workplane, mode: str) -> cq.Workplane:
     """Orient part flat onto Z = 0.0 build plate for support-free PETG printing."""
     if mode == "face_down":
         s = shape.rotate((0, 0, 0), (1, 0, 0), 180)
-    elif mode == "plunger_flat":
+    elif mode in ("plunger_flat", "clip_flat"):
         s = shape.rotate((0, 0, 0), (0, 1, 0), 90)
     elif mode == "wedge_side_down":
         z_mate, y_sp_bot, x_cx = _wedge_spine_datums()
@@ -1526,6 +1621,9 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         ("Back_Chassis_Frame", "Slim_Sun_Shield"),
         ("Back_Chassis_Frame", "Button_Plungers"),
         ("Top_Cover", "Button_Plungers"),
+        ("Back_Chassis_Frame", "Plunger_Capture_Clip"),
+        ("Top_Cover", "Plunger_Capture_Clip"),
+        ("Button_Plungers", "Plunger_Capture_Clip"),
         ("Back_Chassis_Frame", "Battery_Cradle"),
         ("Battery_Cradle", "Pole_Lid"),
         ("Back_Chassis_Frame", "Pole_Lid"),
@@ -1548,6 +1646,7 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         ("Back_Chassis_Frame",   "waveshare"),
         ("Top_Cover",            "waveshare"),
         ("Button_Plungers",      "waveshare"),
+        ("Plunger_Capture_Clip", "waveshare"),
         ("Back_Chassis_Frame",   "coin_cell"),
         ("Back_Chassis_Frame",   "power"),
         ("Top_Cover",            "power"),
@@ -1589,6 +1688,7 @@ def verify_assembly_and_refs(parts: dict[str, cq.Workplane], refs: dict[str, cq.
         "Top_Cover",
         "Slim_Sun_Shield",
         "Button_Plungers",
+        "Plunger_Capture_Clip",
     )
     lm_cases = (
         ("pole_left", S.WEDGE_REF_SLOT_INNER),
@@ -1738,6 +1838,7 @@ def main() -> None:
         "Pole_Tilt_Wedge_37_5": build_pole_tilt_wedge(),
         "Slim_Sun_Shield": build_slim_sun_shield(),
         "Button_Plungers": build_button_plungers(),
+        "Plunger_Capture_Clip": build_plunger_capture_clip(),
     }
 
     print("Importing all 14 REF*.stp hardware reference models...")
@@ -1758,8 +1859,9 @@ def main() -> None:
         ("Pole_Lid",             "pole_lid_print.stl",        "face_down"),
         ("Battery_Adapter_5000", "bat_adapter_5000_print.stl","face_down"),
         ("Pole_Tilt_Wedge_37_5", "pole_tilt_wedge_print.stl", "wedge_side_down"),
-        ("Slim_Sun_Shield",      "slim_sun_shield_print.stl", "back_down"),
-        ("Button_Plungers",      "button_plungers_print.stl", "plunger_flat"),
+        ("Slim_Sun_Shield",      "slim_sun_shield_print.stl",      "back_down"),
+        ("Button_Plungers",      "button_plungers_print.stl",      "plunger_flat"),
+        ("Plunger_Capture_Clip", "plunger_capture_clip_print.stl", "clip_flat"),
     ]
     for name, stl_name, orient in stl_map:
         stl_path = STL_DIR / stl_name
@@ -1779,8 +1881,9 @@ def main() -> None:
             ("Battery_Cradle",     cq.Color(0.18, 0.22, 0.27, 1.0)),
             ("Pole_Lid",           cq.Color(0.14, 0.17, 0.21, 1.0)),
             ("Pole_Tilt_Wedge_37_5", cq.Color(0.24, 0.30, 0.36, 1.0)),
-            ("Slim_Sun_Shield",    cq.Color(0.12, 0.14, 0.17, 1.0)),
-            ("Button_Plungers",    cq.Color(0.90, 0.45, 0.10, 1.0)),
+            ("Slim_Sun_Shield",      cq.Color(0.12, 0.14, 0.17, 1.0)),
+            ("Button_Plungers",      cq.Color(0.90, 0.45, 0.10, 1.0)),
+            ("Plunger_Capture_Clip", cq.Color(0.85, 0.68, 0.15, 1.0)),
         ]
         if include_adapter:
             assy_parts.insert(3, ("Battery_Adapter_5000", cq.Color(0.15, 0.55, 0.52, 1.0)))

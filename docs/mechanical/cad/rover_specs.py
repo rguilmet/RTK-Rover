@@ -1,6 +1,13 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.4 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.5 enclosure.
 
-Architecture (v2.2.4 - Left-Wall 3.5mm Audio Jack, GX-12 D-Flat & Slotted Speaker):
+Architecture (v2.2.5 - Back-Chassis Plunger Clip, Conical Standoffs & Audio/RF Polish):
+- v2.2.5: Updated Power Board holes to 16.0 x 76.0 mm (2x2 mm edge inset per
+  REF_power.stp), relocated tactile button-plunger capture from Top_Cover to a
+  slide-in Back_Chassis_Frame Plunger_Capture_Clip (9th printable part),
+  equispaced E220 SMA at X = +20.65 mm (20.30 mm pitch w/ UM982 SMAs), extended
+  left-wall headphone pocket full height (1.50 mm Ground-pin solder clearance),
+  added conical-base reinforced standoffs (Waveshare/UM982/E220/Power), and added
+  2 x M2 Ruthex bosses at diagonal speaker corners (-45.20, 33.00) & (-21.20, 9.00).
 - v2.2.4: Relocated the partial-height Headphone L-Tab and matching Top_Cover
   notch from the bottom wall to the left (-X) wall centered on the speaker's -X
   slot (HP_CY = SPK_CY = 21.00 mm), restoring a continuous bottom cover skirt.
@@ -48,7 +55,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.4"
+__version__ = "v2.2.5"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -108,6 +115,9 @@ WS_PCB_H = 78.00
 WS_STANDOFF_DX = 48.50      # 4 x M2.0 female brass pillars ending at Z = -11.50
 WS_STANDOFF_DY = 72.00
 WS_STANDOFF_Z_END = -11.50
+WS_STANDOFF_OD = 6.0        # Reinforced upper shaft OD (top 3.0 mm straight)
+WS_STANDOFF_BASE_OD = 9.6   # Flared conical base OD at Back Plate Z = -25.00
+WS_STANDOFF_CONE_H = 10.5   # Tapered cone height (top 3.0 mm kept at WS_STANDOFF_OD)
 
 WS_CX = 18.50               # Glass X: [-12.00, +49.00]
 WS_CY = 52.50               # Glass Y: [+6.28, +98.72]
@@ -129,7 +139,7 @@ WS_SD_Y0 = WS_CY + 16.80                # 69.30
 WS_SD_Y1 = WS_CY + 32.80                # 85.30
 WS_SD_Z_CTR = -8.25
 
-# Integrated Right Button-Plunger Flange (Back_Chassis_Frame) + U-Capture Comb (Top_Cover)
+# Integrated Right Button-Plunger Flange + Twin Guide Towers + Plunger_Capture_Clip (Back_Chassis_Frame)
 FLANGE_Y0 = 20.0                        # Clears Bottom-Right M3 boss (54.2, 6.8) with 2.0 mm below plunger block
 FLANGE_Y1 = 52.0                        # Button block flange only (MicroSD slot moved to Top_Cover right wall)
 PLUNGER_BLK_X0 = 56.00                  # Open to -X for tool-free plunger slide-in; 4.00 mm bearing wall (56..60)
@@ -137,13 +147,21 @@ PLUNGER_BLK_X1 = 57.00
 PLUNGER_BLK_Y0 = 22.0
 PLUNGER_BLK_Y1 = 50.0
 PLUNGER_BLK_Z_TOP = -4.2                # Clears Glass (-1.10) & Top_Cover front (-2.4) safely
-PLUNGER_RAIL_X0 = 49.90                 # Low support rail under collar/nose (clears Top_Cover U-comb -11.50 by 0.20)
-PLUNGER_RAIL_Z_TOP = -11.70
-PLUNGER_U_X0 = 49.90                    # Top_Cover downward inverted-U capture wall (clears glass opening 49.25 by 0.65)
-PLUNGER_U_X1 = 51.60                    # Allows 1.55 mm travel (0.30 mm rest gap + 1.25 mm active stroke) to collar 53.15
-PLUNGER_U_Z_BOT = -11.50
+PLUNGER_U_X0 = 49.90                    # Slide-in Plunger_Capture_Clip inner face (clears glass 49.25 by 0.65)
+PLUNGER_U_X1 = 51.60                    # 1.70 mm thick clip (1.55 mm travel to collar +53.15)
 PLUNGER_NOSE_DIA = 3.20
 PLUNGER_U_SLOT_W = 3.70                 # 0.25 mm radial slip clearance around Dia 3.20 mm nose
+PLUNGER_CLIP_CLEAR = 0.12               # Snug per-side slide clearance in vertical guide tracks
+PLUNGER_CLIP_Y0 = 21.55                 # 28.90 mm tall clip (2.25 mm engagement inside both end tracks)
+PLUNGER_CLIP_Y1 = 50.45
+PLUNGER_CLIP_Z_BOT = -11.55             # 0.15 mm clear above PLUNGER_RAIL_Z_TOP (-11.70)
+PLUNGER_CLIP_Z_TOP = PLUNGER_BLK_Z_TOP  # -4.20 (0.80 mm clear below Top_Cover sun-shield rib -3.40)
+PLUNGER_TRACK_LIP = 1.20                # 3 solid perimeters flanking the 1.94 mm vertical slot
+PLUNGER_TRACK_BOT_Y1 = 23.80            # Bot tower Y=[20.0, 23.8] (0.80 mm clear below PWR collar 24.6)
+PLUNGER_TRACK_TOP_Y0 = 48.20            # Top tower Y=[48.2, 52.0] (0.80 mm clear above BOOT collar 47.4)
+PLUNGER_TRACK_END_WALL = 1.40           # Closed outer end wall in Y (slots open to Y=21.40 & Y=50.60)
+PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP  # 48.58 flush under track towers
+PLUNGER_RAIL_Z_TOP = -11.70
 
 # ==============================================================================
 # 2. RTC Coin Cell + Holder (Underneath Waveshare! From REF-coin-cell*.stp)
@@ -152,15 +170,17 @@ RTC_CX = 18.50              # Centered cleanly under Waveshare PCB & between sta
 RTC_CY = 64.00              # Wires exit -Y (toward Y~46.4, Z=-25..-21); clears relocated BAT_SLOT Y_max=40.0 by 6.4 mm & top WS standoffs by 8.6 mm
 
 # ==============================================================================
-# 3. Power Board (from REF-power-module.stp: 20.0 x 80.0 x 20.57H mm)
+# 3. Power Board (from REF_power.stp: 20.0 x 80.0 x 20.57H mm, 2x2 mm holes)
 # ==============================================================================
 PB_W = 20.0
 PB_H = 80.0
-PB_HOLE_DX = 15.0
-PB_HOLE_DY = 75.0
+PB_HOLE_DX = 16.0           # 2.0 mm inset from +-X edges (X = -47.0, -31.0)
+PB_HOLE_DY = 76.0           # 2.0 mm inset from +-Y edges (Y = 53.0, 129.0)
 PB_CX = -39.00              # X: [-49.00, -29.00]; 1.5 mm clear of Mid-Left M3 (-50.5) & 21.73 mm clear of right-facing Header (-7.27)
 PB_CY = 91.00               # Y: [51.00, 131.00]; 5.1 mm above Bot-Left Pod M3 (45.9), 7.1 mm below Top-Left Pod M3 (138.1)
 PB_STANDOFF_H = 2.55        # +0.55 mm clear of -2.00 mm trace protrusion, full 5.00 mm Ruthex M2 pocket; peak -3.88 mm (1.48 mm below cover)
+PB_STANDOFF_BASE_OD = 8.2   # Lower root flare OD (top 1.55 mm kept at RUTHEX_M2_BOSS_OD 6.2)
+PB_STANDOFF_CONE_H = 1.00   # Tapered cone height (45-deg root reinforcement)
 
 # ==============================================================================
 # 4. Speaker (from REF-speaker.stp: 28.0 x 30.0 x 10.0H mm, Flat on Back Plate)
@@ -175,6 +195,7 @@ SPK_PEDESTAL_H = 11.5       # Seating ridge at Z = -13.50 -> speaker front cone 
 SPK_WALL = 1.6              # 4-perimeter pocket wall (31.6 x 31.6 outer)
 SPK_RIDGE_W = 2.0           # Continuous inner seating ledge width (24.4 x 24.4 open acoustic chamber)
 SPK_SLOT_W = 15.0           # Top-to-bottom open slot on all 4 sides (leaves 8.3 mm corner L-pillars; clears 12 mm headphone jack & +Y speaker wires)
+SPK_M2_POINTS = [(-45.20, 33.00), (-21.20, 9.00)]  # Diagonal M2 mounting ears on REF-speaker.stp; bosses flush at Z=-13.50
 
 # ==============================================================================
 # 4b. 3.5mm Panel-Mount Headphone Jack (from REF-headphone-jack.stp, Left Wall)
@@ -190,8 +211,8 @@ HP_CY = SPK_CY              # 21.00 (aligned dead-center with speaker tower -X s
 HP_Z_CTR = -21.50           # Body Z=[-24.65, -18.35], pins +Z=[-18.35, -15.35] (1.85 mm clear below speaker -13.50)
 HP_BORE_DIA = 6.20          # Pure round M6 bushing pass-through (+0.30 mm PETG clearance)
 HP_WALL = 1.50              # Outer bulkhead web X=[-60.0, -58.50] (exposes 2.00 mm M6 thread outside X=-60.0 for Dia 8 mm knurled nut)
-HP_RECESS_W = HP_BODY_W + 2.0 * FIT_CLEAR   # 12.50 mm inner anti-rotation key pocket
-HP_RECESS_H = HP_BODY_H + 2.0 * FIT_CLEAR   # 6.80 mm pocket height (Z_top = -18.10; 45-deg bevel up to -16.60)
+HP_RECESS_W = HP_BODY_W + 2.0 * FIT_CLEAR   # 12.50 mm inner anti-rotation key pocket (cuts straight up to HP_TAB_Z_TOP=-13.50 for 1.50 mm Ground-pin solder clearance)
+HP_RECESS_H = HP_BODY_H + 2.0 * FIT_CLEAR   # 6.80 mm body height reference (pocket opens full height -25.00..-13.50)
 HP_TAB_W = 18.5             # Left L-Tab outer Y span Y=[11.75, 30.25] (3.00 mm side piers; 1.75 mm clear of Bot-Left M3 relief Y=9.80)
 HP_TAB_Z_TOP = -13.50       # Partial-height Left L-Tab top (Z=-28.0..-13.50; Top_Cover keeps 13.3 mm front left skirt)
 
@@ -227,6 +248,9 @@ UM_LED_X_LIST = [UM_LEFT_X + dx for dx in (9.90, 14.90, 19.90, 24.90)]  # [-17.3
 UM_SW_X = UM_LEFT_X + 24.90             # -2.30
 UM_SW_Y = UM_BOT_Y + 13.31              # 138.11
 UM_CSK_RECESS = 1.60                    # Rear counterbore depth (9.20 mm effective span -> 2.80 mm engagement, 1.20 mm margin for M2 x 12 mm CSK)
+UM_STANDOFF_OD = 5.4                    # Upper shaft OD (top 2.8 mm straight)
+UM_STANDOFF_BASE_OD = 9.0               # Conical base OD at Back Plate Z = -25.00 (1.00 mm clear of Power Board)
+UM_STANDOFF_CONE_H = 5.0                # Tapered cone height (top 2.8 mm kept at UM_STANDOFF_OD)
 
 # ==============================================================================
 # 6. E220 LoRa Module (from REF-e220-module.stp: 40.0 x 60.0 x 16.0H mm)
@@ -238,6 +262,8 @@ E220_HOLE_DY = 55.0
 E220_CX = 29.00             # X: [+9.00, +49.00]; 38.0 mm clear of Power Board (-29.0), 1.4 mm right of UM982 (+7.6), 1.2 mm clear of Mid-Right M3 (+50.2)
 E220_CY = 134.00            # Y: [104.00, 164.00]; 5.28 mm above glass, 1.4+ mm clear below LoRa SMA tail (165.4)
 E220_STANDOFF_H = 8.50      # Underside trace (-3.0 mm) at Z=-19.50 (+0.50 mm clear above Top-Right POD M3 -20.0); top at -3.50 (1.10 mm below cover)
+E220_STANDOFF_BASE_OD = 9.2 # Conical base OD at Back Plate Z = -25.00 (0.80 mm clear of UM982)
+E220_STANDOFF_CONE_H = 5.0  # Tapered cone height (top 3.5 mm kept at RUTHEX_M2_BOSS_OD 6.2; 0.50 mm below -3.0 mm underside keepout)
 
 # ==============================================================================
 # 7. Bulkhead Connectors on Back_Chassis_Frame Top L-Wall
@@ -246,7 +272,7 @@ TOP_CORNER_SPLIT_Y = 173.2  # 50/50 split plane through top-corner M3 bosses (+-
 TOP_CORNER_WRAP_X_IN = 50.6 # Inner X edge of upper corner piers (0.30 mm inside Dia 7.8 boss for clean non-tangent union; 1.60 mm clear of E220, 2.35 mm clear of GX-12 relief)
 
 # LoRa Female SMA Pigtail (from REF-sma-female-lora-connector.stp, downward -Z_asm anti-rotation D-flat)
-E220_SMA_X = 29.00          # Centered over E220; 28.65 mm right of UM982 Master (+0.35), 15.85 mm wall to Top-Right pier (+50.6)
+E220_SMA_X = UM_SMA_MASTER_X + UM_SMA_PITCH  # +20.65 (equispaced 20.30 mm pitch w/ UM982 Slave -19.95 & Master +0.35; 2.24 mm clear of REF_e220)
 E220_SMA_Z = UM_SMA_Z       # -11.25
 E220_SMA_DIA = 6.6
 E220_SMA_FLAT = 5.98        # Across-flat height from +Z crown to -Z flat (flat at Z=-13.930, 0.125 mm clear of -13.805)

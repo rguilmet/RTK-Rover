@@ -5,6 +5,16 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.2.5] - 2026-11-26
+### Added & Changed
+- **Chassis Serviceability, Conical Standoffs, Speaker `M2` Inserts & Connector Clearances ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.5`, [`REF_power.stp`](docs/mechanical/cad/step/REF_power.stp), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Switched Power Board hardware reference to [`REF_power.stp`](docs/mechanical/cad/step/REF_power.stp) with `2 x 2 mm` edge-inset bores (`PB_HOLE_DX = 16.0 mm`, `PB_HOLE_DY = 76.0 mm`) matching `Back_Chassis_Frame` `2.55 mm` standoffs.
+  - Moved tactile button-plunger capture from `Top_Cover` onto `Back_Chassis_Frame` via twin vertical guide towers (`Y = 20..52 mm`) and a new 9th flat-printed part [`Plunger_Capture_Clip.step`](docs/mechanical/cad/step/Plunger_Capture_Clip.step) / [`plunger_capture_clip_print.stl`](docs/mechanical/cad/stl/plunger_capture_clip_print.stl) (`0.28 cm^3`, `0.12 mm/side` track slip, `1.55 mm` active stroke), keeping all `3` buttons functional with [`Top_Cover.step`](docs/mechanical/cad/step/Top_Cover.step) removed (`64.08 cm^3`).
+  - Relocated `E220` `SMA-Female` to `X = +20.65 mm` (equispaced at `20.30 mm` pitch alongside `UM982` Slave `-19.95` and Master `+0.35`).
+  - Extended the Left Headphone `12.50 mm` inner pocket straight up to `Z = -13.50 mm` on [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step) (`93.37 cm^3`), opening `1.50 mm` clearance behind the soldered Ground pin (`X = -57.00` to `X = -58.50`).
+  - Reinforced tall `Waveshare`, `UM982`, `E220`, and `Power Board` standoffs with tapered conical bases while preserving `>= 2-3 mm` straight upper shaft (`Waveshare` `OD 6.0 / base 9.6 / cone 10.5`, `UM982` `5.4 / 9.0 / 5.0`, `E220` `6.2 / 9.2 / 5.0`, `Power Board` `6.2 / 8.2 / 1.0`).
+  - Added `2 x M2` Ruthex corner insert bosses (`(-45.2, 33.0)` and `(-21.2, 9.0)`, flush at `Z = -13.50`) for `REF-speaker.stp` diagonal mounting ears, regenerated DXF/STEP/STL/assemblies/previews, and verified **`9/9`** manifold checks, **`69/69`** `0.0000 mm^3` boolean interference checks, and clean OpenSCAD `Manifold --hardwarnings` builds.
+
 ## [v0.12.2] - 2026-11-25
 ### Changed
 - **BLE Primary `ADV_IND` Identity & Location/Navigation Appearance ([`user_config.h`](user_config.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp)):**
