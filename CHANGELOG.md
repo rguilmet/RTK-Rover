@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.2.7] - 2026-11-26
+### Changed
+- **Unified Hollow Rectangular Plunger Housing ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.7`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.7`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.7`, [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step), [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Refactored the `6` separate `Back_Chassis_Frame` plunger blocks (`right_flange`, `plunger_blk`, `plunger_rail`, twin guide towers, `plunger_cradle`, `cradle_tie`) into one flush-sided hollow rectangular housing (`X = 46.00..60.00 mm`, `Y = 20.00..52.00 mm`): `4.00 mm` outer bearing wall, two continuous side walls with milled `Plunger_Capture_Clip` track slots (`Z = -11.70..-4.20 mm`), front centerline-split nose U-cradle (`X = 46.00..47.75 mm`, `Z <= -8.62 mm`), and open `8.25 mm` horizontal insertion bay down to `Z = -25.00 mm` (`-1.88 cm^3` in the plunger zone, bringing `Back_Chassis_Frame` down to `92.43 cm^3` while leaving `Plunger_Capture_Clip`, `Button_Plungers`, and `Top_Cover` unchanged).
+  - Verified `9/9` single-solid manifold checks, `69/69` `0.0000 mm^3` rest interference checks, `0.0000 mm^3` full-stroke (`-1.55 mm`) overlap, and clean OpenSCAD `Manifold --hardwarnings` checks (`back`, `back_print`).
+
 ## [docs/mechanical/cad v2.2.6] - 2026-11-26
 ### Added
 - **Integral Lower Plunger Support U-Cradle ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.6`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.6`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.6`, [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step), [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**

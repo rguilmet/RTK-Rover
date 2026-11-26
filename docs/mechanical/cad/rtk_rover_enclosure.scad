@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.2.6 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.26 mirror of rover_specs.py v2.2.6
+// RTK Rover Option A Enclosure v2.2.7 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.26 mirror of rover_specs.py v2.2.7
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -68,8 +68,6 @@ FLANGE_Y0 = 20.0;
 FLANGE_Y1 = 52.0;
 PLUNGER_BLK_X0 = 56.00;
 PLUNGER_BLK_X1 = 57.00;
-PLUNGER_BLK_Y0 = 22.0;
-PLUNGER_BLK_Y1 = 50.0;
 PLUNGER_BLK_Z_TOP = -4.2;
 PLUNGER_U_X0 = 49.90;
 PLUNGER_U_X1 = 51.60;
@@ -80,12 +78,10 @@ PLUNGER_CLIP_Y0 = 21.55;
 PLUNGER_CLIP_Y1 = 50.45;
 PLUNGER_CLIP_Z_BOT = -11.55;
 PLUNGER_CLIP_Z_TOP = PLUNGER_BLK_Z_TOP;
-PLUNGER_TRACK_LIP = 1.20;
 PLUNGER_TRACK_BOT_Y1 = 23.80;
 PLUNGER_TRACK_TOP_Y0 = 48.20;
 PLUNGER_TRACK_END_WALL = 1.40;
-PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP;
-PLUNGER_RAIL_Z_TOP = -11.70;
+PLUNGER_SLOT_Z_BOT = -11.70;
 PLUNGER_CRADLE_X0 = 46.00;
 PLUNGER_CRADLE_X1 = 47.75;
 PLUNGER_CRADLE_Y0 = PLUNGER_TRACK_BOT_Y1;
@@ -307,32 +303,23 @@ module back_chassis_frame() {
                             cube([wrap_w, wrap_h, 26.35], center=true);
                 }
             }
-            // Right Button-Plunger Flange + outer stop block + low rail + twin guide towers
+            // Unified Hollow Plunger Housing (X = 46.00..60.00, Y = 20.00..52.00)
             translate([CASE_W/2 - WALL_SIDE/2, 0.5*(FLANGE_Y0+FLANGE_Y1), Z_PLATE_OUTER + 25.35/2])
                 cube([WALL_SIDE, FLANGE_Y1 - FLANGE_Y0, 25.35], center=true);
-            translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1) + 0.25, 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
+            translate([0.5*(PLUNGER_BLK_X0+PLUNGER_BLK_X1) + 0.25, 0.5*(FLANGE_Y0+FLANGE_Y1),
                        0.5*(Z_PLATE_INNER + PLUNGER_BLK_Z_TOP) - 0.25])
-                cube([PLUNGER_BLK_X1 - PLUNGER_BLK_X0 + 0.5, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
+                cube([PLUNGER_BLK_X1 - PLUNGER_BLK_X0 + 0.5, FLANGE_Y1 - FLANGE_Y0,
                       PLUNGER_BLK_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
-            translate([0.5*(PLUNGER_RAIL_X0 + PLUNGER_BLK_X0 + 0.5), 0.5*(PLUNGER_BLK_Y0+PLUNGER_BLK_Y1),
-                       0.5*(Z_PLATE_INNER + PLUNGER_RAIL_Z_TOP) - 0.25])
-                cube([(PLUNGER_BLK_X0 + 0.5) - PLUNGER_RAIL_X0, PLUNGER_BLK_Y1 - PLUNGER_BLK_Y0,
-                      PLUNGER_RAIL_Z_TOP - Z_PLATE_INNER + 0.5], center=true);
             for (ty = [[FLANGE_Y0, PLUNGER_TRACK_BOT_Y1], [PLUNGER_TRACK_TOP_Y0, FLANGE_Y1]]) {
-                trk_x0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP;
-                trk_x1 = PLUNGER_U_X1 + PLUNGER_CLIP_CLEAR + PLUNGER_TRACK_LIP;
-                translate([0.5*(trk_x0 + trk_x1), 0.5*(ty[0] + ty[1]), 0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CLIP_Z_TOP)])
-                    cube([trk_x1 - trk_x0, ty[1] - ty[0], PLUNGER_CLIP_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
+                sw_x0 = PLUNGER_CRADLE_X0;
+                sw_x1 = PLUNGER_BLK_X0 + 0.5;
+                translate([0.5*(sw_x0 + sw_x1), 0.5*(ty[0] + ty[1]), 0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CLIP_Z_TOP)])
+                    cube([sw_x1 - sw_x0, ty[1] - ty[0], PLUNGER_CLIP_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
             }
-            // Integral lower plunger support cradle (X=46.00..47.75, Y=23.80..48.20, Z=-25.0..-8.62) + tie bridge
             translate([0.5*(PLUNGER_CRADLE_X0 + PLUNGER_CRADLE_X1), 0.5*(PLUNGER_CRADLE_Y0 + PLUNGER_CRADLE_Y1),
                        0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CRADLE_Z_TOP)])
                 cube([PLUNGER_CRADLE_X1 - PLUNGER_CRADLE_X0, PLUNGER_CRADLE_Y1 - PLUNGER_CRADLE_Y0,
                       PLUNGER_CRADLE_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
-            translate([0.5*(PLUNGER_CRADLE_X0 + PLUNGER_RAIL_X0 + 0.5), 0.5*(PLUNGER_CRADLE_Y0 + PLUNGER_CRADLE_Y1),
-                       0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_RAIL_Z_TOP)])
-                cube([(PLUNGER_RAIL_X0 + 0.5) - PLUNGER_CRADLE_X0, PLUNGER_CRADLE_Y1 - PLUNGER_CRADLE_Y0,
-                      PLUNGER_RAIL_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
             // Partial-height Left Headphone L-Tab (X = -60..-57, Y = 11.75..30.25, Z = -28.0..-13.50)
             translate([-CASE_W/2 + WALL_SIDE/2, HP_CY, 0.5*(Z_PLATE_OUTER + 0.5 + HP_TAB_Z_TOP)])
                 cube([WALL_SIDE, HP_TAB_W, HP_TAB_Z_TOP - (Z_PLATE_OUTER + 0.5)], center=true);
@@ -340,8 +327,8 @@ module back_chassis_frame() {
             for (t = [[-x_rim_ctr, 0.5*(y_bot_m3 + hp_rim_b), RIM_THK, hp_rim_b - y_bot_m3],
                       [-x_rim_ctr, 0.5*(hp_rim_t + y_top_m3), RIM_THK, y_top_m3 - hp_rim_t],
                       [ 0.0,       y_rim_ctr,                2*x_bot_m3, RIM_THK],
-                      [ x_rim_ctr, 0.5*(y_bot_m3 + PLUNGER_BLK_Y0 + 0.5), RIM_THK, (PLUNGER_BLK_Y0 + 0.5) - y_bot_m3],
-                      [ x_rim_ctr, 0.5*(PLUNGER_BLK_Y1 - 0.5 + y_top_m3), RIM_THK, y_top_m3 - (PLUNGER_BLK_Y1 - 0.5)]])
+                      [ x_rim_ctr, 0.5*(y_bot_m3 + FLANGE_Y0 + 0.5), RIM_THK, (FLANGE_Y0 + 0.5) - y_bot_m3],
+                      [ x_rim_ctr, 0.5*(FLANGE_Y1 - 0.5 + y_top_m3), RIM_THK, y_top_m3 - (FLANGE_Y1 - 0.5)]])
                 translate([t[0], t[1], Z_PLATE_INNER + (RIM_H - 0.5)/2])
                     cube([t[2], t[3], RIM_H + 0.5], center=true);
             // Symmetric 6 x Cover M3 bosses (full height up to COVER_BOSS_Z_TOP = -2.65)
@@ -393,10 +380,10 @@ module back_chassis_frame() {
         }
         // Cut vertical guide-slot channel for slide-in Plunger_Capture_Clip
         translate([0.5*(PLUNGER_U_X0 + PLUNGER_U_X1), 0.5*(FLANGE_Y0 + FLANGE_Y1),
-                   0.5*(PLUNGER_RAIL_Z_TOP + PLUNGER_CLIP_Z_TOP + 0.5)])
+                   0.5*(PLUNGER_SLOT_Z_BOT + PLUNGER_CLIP_Z_TOP + 0.5)])
             cube([(PLUNGER_U_X1 - PLUNGER_U_X0) + 2*PLUNGER_CLIP_CLEAR,
                   (FLANGE_Y1 - FLANGE_Y0) - 2*PLUNGER_TRACK_END_WALL,
-                  (PLUNGER_CLIP_Z_TOP + 0.5) - PLUNGER_RAIL_Z_TOP], center=true);
+                  (PLUNGER_CLIP_Z_TOP + 0.5) - PLUNGER_SLOT_Z_BOT], center=true);
         // Cut RTC cradle ID + opening
         translate([RTC_CX, RTC_CY + 0.12, Z_PLATE_INNER - 0.6]) cylinder(d=22.5, h=4.8);
         translate([RTC_CX, RTC_CY - 10.2, Z_PLATE_INNER + 1.8]) cube([22.0, 9.6, 4.8], center=true);

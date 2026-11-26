@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.6.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.7.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -8,12 +8,13 @@ Architecture:
     full-width R6.0 Top L-Bulkhead w/ 50/50 split corner piers at Y = 173.2..180.0
     (Z-centered GX-12 w/ downward D-flat, equispaced E220 SMA w/ downward D-flat,
     UM982 SMAs), partial-height Left Headphone L-Tab (Y = 21.00, full-height inner
-    1.50 mm pocket for 1.50 mm Ground-pin solder clearance), Right Button-Plunger
-    Flange + low support rail + twin slide-in guide towers + integral centerline-
-    split lower plunger U-cradle (X = 46.00..47.75, Z <= -8.62), split-Left/
-    continuous-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top full-height
-    M3 bosses (Z = -2.65 mm), and relocated horizontal under-Waveshare BAT_SLOT
-    (25.0, 35.5).
+    1.50 mm pocket for 1.50 mm Ground-pin solder clearance), unified hollow
+    rectangular Right Plunger Housing (X = 46.00..60.00, Y = 20.00..52.00; outer
+    4.00 mm bearing wall, continuous side walls w/ slide-in clip tracks, open
+    8.25 mm insertion bay, and front centerline-split lower U-cradle at Z <= -8.62),
+    split-Left/continuous-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top
+    full-height M3 bosses (Z = -2.65 mm), and relocated horizontal under-Waveshare
+    BAT_SLOT (25.0, 35.5).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors/plunger-combs;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
@@ -42,7 +43,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.6"
+__version__ = "v2.2.7"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -310,7 +311,9 @@ def build_back_chassis_frame() -> cq.Workplane:
     top_l_wall = full_wall_envelope.intersect(top_band)
     plate = plate.union(top_l_wall)
 
-    # 3. Integrated Right Button-Plunger Flange (X = 57.0..60.0, Y = 20.0..52.0)
+    # 3. Unified Hollow Rectangular Plunger Housing (X = 46.00..60.00, Y = 20.00..52.00)
+    # Outer 4.00 mm bearing wall + continuous side walls w/ clip track slots + front
+    # centerline-split nose cradle (Z <= -8.62), keeping an open 8.25 mm insertion bay.
     flange_cy = 0.5 * (S.FLANGE_Y0 + S.FLANGE_Y1)
     flange_h = S.FLANGE_Y1 - S.FLANGE_Y0
     right_flange = (
@@ -320,58 +323,29 @@ def build_back_chassis_frame() -> cq.Workplane:
         .rect(S.WALL_SIDE, flange_h)
         .extrude(25.35)
     )
-    plate = plate.union(right_flange)
-
-    # Plunger outer stop block (X=56.0..57.0) + low rail (X=48.58..56.5, Z=-25.0..-11.7) + twin guide towers
     blk_cx = 0.5 * (S.PLUNGER_BLK_X0 + S.PLUNGER_BLK_X1)
     blk_w = S.PLUNGER_BLK_X1 - S.PLUNGER_BLK_X0
-    blk_cy = 0.5 * (S.PLUNGER_BLK_Y0 + S.PLUNGER_BLK_Y1)
-    blk_h = S.PLUNGER_BLK_Y1 - S.PLUNGER_BLK_Y0
     plunger_blk = (
         cq.Workplane("XY")
         .workplane(offset=S.Z_PLATE_INNER - 0.5)
-        .center(blk_cx + 0.25, blk_cy)
-        .rect(blk_w + 0.5, blk_h)
+        .center(blk_cx + 0.25, flange_cy)
+        .rect(blk_w + 0.5, flange_h)
         .extrude(S.PLUNGER_BLK_Z_TOP - S.Z_PLATE_INNER + 0.5)
     )
-    rail_cx = 0.5 * (S.PLUNGER_RAIL_X0 + S.PLUNGER_BLK_X0 + 0.5)
-    rail_w = (S.PLUNGER_BLK_X0 + 0.5) - S.PLUNGER_RAIL_X0
-    plunger_rail = (
-        cq.Workplane("XY")
-        .workplane(offset=S.Z_PLATE_INNER - 0.5)
-        .center(rail_cx, blk_cy)
-        .rect(rail_w, blk_h)
-        .extrude(S.PLUNGER_RAIL_Z_TOP - S.Z_PLATE_INNER + 0.5)
-    )
-    plate = plate.union(plunger_blk).union(plunger_rail)
+    plate = plate.union(right_flange).union(plunger_blk)
 
-    trk_x0 = S.PLUNGER_U_X0 - S.PLUNGER_CLIP_CLEAR - S.PLUNGER_TRACK_LIP
-    trk_x1 = S.PLUNGER_U_X1 + S.PLUNGER_CLIP_CLEAR + S.PLUNGER_TRACK_LIP
+    sw_x0 = S.PLUNGER_CRADLE_X0
+    sw_x1 = S.PLUNGER_BLK_X0 + 0.5
     for y0, y1 in ((S.FLANGE_Y0, S.PLUNGER_TRACK_BOT_Y1), (S.PLUNGER_TRACK_TOP_Y0, S.FLANGE_Y1)):
-        tower = (
+        side_wall = (
             cq.Workplane("XY")
             .workplane(offset=S.Z_PLATE_INNER - 0.5)
-            .center(0.5 * (trk_x0 + trk_x1), 0.5 * (y0 + y1))
-            .rect(trk_x1 - trk_x0, y1 - y0)
-            .extrude(S.PLUNGER_CLIP_Z_TOP - S.Z_PLATE_INNER + 0.5)
+            .center(0.5 * (sw_x0 + sw_x1), 0.5 * (y0 + y1))
+            .rect(sw_x1 - sw_x0, y1 - y0)
+            .extrude(S.PLUNGER_CLIP_Z_TOP - (S.Z_PLATE_INNER - 0.5))
         )
-        plate = plate.union(tower)
-    slot_x0 = S.PLUNGER_U_X0 - S.PLUNGER_CLIP_CLEAR
-    slot_x1 = S.PLUNGER_U_X1 + S.PLUNGER_CLIP_CLEAR
-    slot_y0 = S.FLANGE_Y0 + S.PLUNGER_TRACK_END_WALL
-    slot_y1 = S.FLANGE_Y1 - S.PLUNGER_TRACK_END_WALL
-    clip_slot = (
-        cq.Workplane("XY")
-        .workplane(offset=S.PLUNGER_RAIL_Z_TOP)
-        .center(0.5 * (slot_x0 + slot_x1), 0.5 * (slot_y0 + slot_y1))
-        .rect(slot_x1 - slot_x0, slot_y1 - slot_y0)
-        .extrude(S.PLUNGER_CLIP_Z_TOP - S.PLUNGER_RAIL_Z_TOP + 0.5)
-    )
-    plate = plate.cut(clip_slot)
+        plate = plate.union(side_wall)
 
-    # 3a. Integral Lower Plunger Support Cradle (X=46.00..47.75, Y=23.80..48.20, Z=-25.0..-8.62)
-    # Mirrors Plunger_Capture_Clip below the plunger centerline right behind the Waveshare domes
-    # while clearing straight horizontal plunger stem+collar insertion into the X=56.00 flange.
     cradle_cx = 0.5 * (S.PLUNGER_CRADLE_X0 + S.PLUNGER_CRADLE_X1)
     cradle_w = S.PLUNGER_CRADLE_X1 - S.PLUNGER_CRADLE_X0
     cradle_cy = 0.5 * (S.PLUNGER_CRADLE_Y0 + S.PLUNGER_CRADLE_Y1)
@@ -383,14 +357,20 @@ def build_back_chassis_frame() -> cq.Workplane:
         .rect(cradle_w, cradle_h)
         .extrude(S.PLUNGER_CRADLE_Z_TOP - (S.Z_PLATE_INNER - 0.5))
     )
-    cradle_tie = (
+    plate = plate.union(plunger_cradle)
+
+    slot_x0 = S.PLUNGER_U_X0 - S.PLUNGER_CLIP_CLEAR
+    slot_x1 = S.PLUNGER_U_X1 + S.PLUNGER_CLIP_CLEAR
+    slot_y0 = S.FLANGE_Y0 + S.PLUNGER_TRACK_END_WALL
+    slot_y1 = S.FLANGE_Y1 - S.PLUNGER_TRACK_END_WALL
+    clip_slot = (
         cq.Workplane("XY")
-        .workplane(offset=S.Z_PLATE_INNER - 0.5)
-        .center(0.5 * (S.PLUNGER_CRADLE_X0 + S.PLUNGER_RAIL_X0 + 0.5), cradle_cy)
-        .rect((S.PLUNGER_RAIL_X0 + 0.5) - S.PLUNGER_CRADLE_X0, cradle_h)
-        .extrude(S.PLUNGER_RAIL_Z_TOP - (S.Z_PLATE_INNER - 0.5))
+        .workplane(offset=S.PLUNGER_SLOT_Z_BOT)
+        .center(0.5 * (slot_x0 + slot_x1), 0.5 * (slot_y0 + slot_y1))
+        .rect(slot_x1 - slot_x0, slot_y1 - slot_y0)
+        .extrude(S.PLUNGER_CLIP_Z_TOP - S.PLUNGER_SLOT_Z_BOT + 0.5)
     )
-    plate = plate.union(plunger_cradle).union(cradle_tie)
+    plate = plate.cut(clip_slot)
     for by in S.WS_BTN_Y_LIST:
         cradle_u = (
             cq.Workplane("YZ")
@@ -425,8 +405,8 @@ def build_back_chassis_frame() -> cq.Workplane:
         (-x_rim_ctr, 0.5 * (y_bot_m3 + hp_rim_b), S.RIM_THK, hp_rim_b - y_bot_m3),                               # Left below L-Tab (6.8..11.55)
         (-x_rim_ctr, 0.5 * (hp_rim_t + y_top_m3), S.RIM_THK, y_top_m3 - hp_rim_t),                               # Left above L-Tab (30.45..173.2)
         (0.0,        y_rim_ctr,                   2.0 * x_bot_m3, S.RIM_THK),                                    # Bottom continuous under USB-C (-54.2..+54.2)
-        ( x_rim_ctr, 0.5 * (y_bot_m3 + S.PLUNGER_BLK_Y0 + 0.5), S.RIM_THK, (S.PLUNGER_BLK_Y0 + 0.5) - y_bot_m3), # Right lower (6.8..22.5)
-        ( x_rim_ctr, 0.5 * (S.PLUNGER_BLK_Y1 - 0.5 + y_top_m3), S.RIM_THK, y_top_m3 - (S.PLUNGER_BLK_Y1 - 0.5)), # Right upper (49.5..173.2)
+        ( x_rim_ctr, 0.5 * (y_bot_m3 + S.FLANGE_Y0 + 0.5), S.RIM_THK, (S.FLANGE_Y0 + 0.5) - y_bot_m3), # Right lower (6.8..20.5)
+        ( x_rim_ctr, 0.5 * (S.FLANGE_Y1 - 0.5 + y_top_m3), S.RIM_THK, y_top_m3 - (S.FLANGE_Y1 - 0.5)), # Right upper (51.5..173.2)
     ]
     for rx, ry, rw, rh in rim_segs:
         rim = (

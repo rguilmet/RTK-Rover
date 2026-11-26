@@ -1,6 +1,11 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.6 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.7 enclosure.
 
-Architecture (v2.2.6 - Integral Lower Plunger Support Cradle):
+Architecture (v2.2.7 - Unified Hollow Plunger Housing):
+- v2.2.7: Refactored the 6 separate Back_Chassis_Frame plunger blocks into one
+  clean flush-sided hollow rectangular housing (X = 46.00..60.00 mm,
+  Y = 20.00..52.00 mm) with continuous side walls tying the outer flange wall to
+  the front centerline-split nose cradle (X = 46.00..47.75 mm), eliminating the
+  solid 13.3 mm rail brick while preserving the exact 8.25 mm insertion bay.
 - v2.2.6: Added integral centerline-split lower plunger U-cradle on
   Back_Chassis_Frame (X = 46.00..47.75 mm, Y = 23.80..48.20 mm, Z <= -8.62 mm)
   mirroring Plunger_Capture_Clip right behind the Waveshare domes so pressed
@@ -59,7 +64,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.6"
+__version__ = "v2.2.7"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -143,33 +148,29 @@ WS_SD_Y0 = WS_CY + 16.80                # 69.30
 WS_SD_Y1 = WS_CY + 32.80                # 85.30
 WS_SD_Z_CTR = -8.25
 
-# Integrated Right Button-Plunger Flange + Twin Guide Towers + Plunger_Capture_Clip (Back_Chassis_Frame)
-FLANGE_Y0 = 20.0                        # Clears Bottom-Right M3 boss (54.2, 6.8) with 2.0 mm below plunger block
-FLANGE_Y1 = 52.0                        # Button block flange only (MicroSD slot moved to Top_Cover right wall)
-PLUNGER_BLK_X0 = 56.00                  # Open to -X for tool-free plunger slide-in; 4.00 mm bearing wall (56..60)
+# Integrated Unified Hollow Plunger Housing + Slide-In Plunger_Capture_Clip (Back_Chassis_Frame)
+FLANGE_Y0 = 20.0                        # Clears Bottom-Right M3 boss (54.2, 6.8) with 2.0 mm below housing
+FLANGE_Y1 = 52.0                        # Housing spans [20.0, 52.0]; MicroSD slot on Top_Cover right wall
+PLUNGER_BLK_X0 = 56.00                  # Inner step wall (56..57) giving uniform 4.00 mm bearing wall (56..60)
 PLUNGER_BLK_X1 = 57.00
-PLUNGER_BLK_Y0 = 22.0
-PLUNGER_BLK_Y1 = 50.0
 PLUNGER_BLK_Z_TOP = -4.2                # Clears Glass (-1.10) & Top_Cover front (-2.4) safely
 PLUNGER_U_X0 = 49.90                    # Slide-in Plunger_Capture_Clip inner face (clears glass 49.25 by 0.65)
 PLUNGER_U_X1 = 51.60                    # 1.70 mm thick clip (1.55 mm travel to collar +53.15)
 PLUNGER_NOSE_DIA = 3.20
 PLUNGER_U_SLOT_W = 3.70                 # 0.25 mm radial slip clearance around Dia 3.20 mm nose
-PLUNGER_CLIP_CLEAR = 0.12               # Snug per-side slide clearance in vertical guide tracks
-PLUNGER_CLIP_Y0 = 21.55                 # 28.90 mm tall clip (2.25 mm engagement inside both end tracks)
+PLUNGER_CLIP_CLEAR = 0.12               # Snug per-side slide clearance in vertical side-wall tracks
+PLUNGER_CLIP_Y0 = 21.55                 # 28.90 mm tall clip (2.25 mm engagement inside both side-wall slots)
 PLUNGER_CLIP_Y1 = 50.45
-PLUNGER_CLIP_Z_BOT = -11.55             # 0.15 mm clear above PLUNGER_RAIL_Z_TOP (-11.70)
+PLUNGER_CLIP_Z_BOT = -11.55             # 0.15 mm clear above PLUNGER_SLOT_Z_BOT (-11.70)
 PLUNGER_CLIP_Z_TOP = PLUNGER_BLK_Z_TOP  # -4.20 (0.80 mm clear below Top_Cover sun-shield rib -3.40)
-PLUNGER_TRACK_LIP = 1.20                # 3 solid perimeters flanking the 1.94 mm vertical slot
-PLUNGER_TRACK_BOT_Y1 = 23.80            # Bot tower Y=[20.0, 23.8] (0.80 mm clear below PWR collar 24.6)
-PLUNGER_TRACK_TOP_Y0 = 48.20            # Top tower Y=[48.2, 52.0] (0.80 mm clear above BOOT collar 47.4)
+PLUNGER_TRACK_BOT_Y1 = 23.80            # Bot side wall Y=[20.0, 23.8] (0.80 mm clear below PWR collar 24.6)
+PLUNGER_TRACK_TOP_Y0 = 48.20            # Top side wall Y=[48.2, 52.0] (0.80 mm clear above BOOT collar 47.4)
 PLUNGER_TRACK_END_WALL = 1.40           # Closed outer end wall in Y (slots open to Y=21.40 & Y=50.60)
-PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP  # 48.58 flush under track towers
-PLUNGER_RAIL_Z_TOP = -11.70
+PLUNGER_SLOT_Z_BOT = -11.70             # Slot stop-floor Z inside side-wall clip tracks (0.15 mm below clip)
 PLUNGER_CRADLE_X0 = 46.00               # 0.65 mm clear of WS_BTN_X_DOME (+45.35); anti-tip nose cradle
-PLUNGER_CRADLE_X1 = 47.75               # 1.75 mm axial bearing; clears plunger stem+collar straight insertion
+PLUNGER_CRADLE_X1 = 47.75               # 1.75 mm axial bearing; clears 8.25 mm min insertion bay (47.75..56.00)
 PLUNGER_CRADLE_Y0 = PLUNGER_TRACK_BOT_Y1  # 23.80 (2.50 mm clear of bottom-right Waveshare cone)
-PLUNGER_CRADLE_Y1 = PLUNGER_TRACK_TOP_Y0  # 48.20 (fits cleanly between twin guide towers)
+PLUNGER_CRADLE_Y1 = PLUNGER_TRACK_TOP_Y0  # 48.20 (fits cleanly between unified side walls)
 PLUNGER_CRADLE_Z_TOP = WS_BTN_Z_CTR     # -8.62 (lower half-mirror split along plunger centerline)
 
 # ==============================================================================
