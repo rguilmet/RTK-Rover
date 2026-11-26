@@ -1,6 +1,6 @@
 // =============================================================================
-// RTK Rover Option A Enclosure v2.2.5 (PETG Support-Free, Snapmaker 2)
-// Parametric OpenSCAD 2026.11.26 mirror of rover_specs.py v2.2.5
+// RTK Rover Option A Enclosure v2.2.6 (PETG Support-Free, Snapmaker 2)
+// Parametric OpenSCAD 2026.11.26 mirror of rover_specs.py v2.2.6
 // Coordinate origin: X = centered [-60..+60], Y = [0..180], Z = 0 front glass
 // Units: millimeters (mm)
 // =============================================================================
@@ -86,6 +86,11 @@ PLUNGER_TRACK_TOP_Y0 = 48.20;
 PLUNGER_TRACK_END_WALL = 1.40;
 PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP;
 PLUNGER_RAIL_Z_TOP = -11.70;
+PLUNGER_CRADLE_X0 = 46.00;
+PLUNGER_CRADLE_X1 = 47.75;
+PLUNGER_CRADLE_Y0 = PLUNGER_TRACK_BOT_Y1;
+PLUNGER_CRADLE_Y1 = PLUNGER_TRACK_TOP_Y0;
+PLUNGER_CRADLE_Z_TOP = WS_BTN_Z_CTR;
 
 // --- RTC Coin Cell (Underneath Waveshare) ---
 RTC_CX = 18.50;
@@ -319,6 +324,15 @@ module back_chassis_frame() {
                 translate([0.5*(trk_x0 + trk_x1), 0.5*(ty[0] + ty[1]), 0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CLIP_Z_TOP)])
                     cube([trk_x1 - trk_x0, ty[1] - ty[0], PLUNGER_CLIP_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
             }
+            // Integral lower plunger support cradle (X=46.00..47.75, Y=23.80..48.20, Z=-25.0..-8.62) + tie bridge
+            translate([0.5*(PLUNGER_CRADLE_X0 + PLUNGER_CRADLE_X1), 0.5*(PLUNGER_CRADLE_Y0 + PLUNGER_CRADLE_Y1),
+                       0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_CRADLE_Z_TOP)])
+                cube([PLUNGER_CRADLE_X1 - PLUNGER_CRADLE_X0, PLUNGER_CRADLE_Y1 - PLUNGER_CRADLE_Y0,
+                      PLUNGER_CRADLE_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
+            translate([0.5*(PLUNGER_CRADLE_X0 + PLUNGER_RAIL_X0 + 0.5), 0.5*(PLUNGER_CRADLE_Y0 + PLUNGER_CRADLE_Y1),
+                       0.5*(Z_PLATE_INNER - 0.5 + PLUNGER_RAIL_Z_TOP)])
+                cube([(PLUNGER_RAIL_X0 + 0.5) - PLUNGER_CRADLE_X0, PLUNGER_CRADLE_Y1 - PLUNGER_CRADLE_Y0,
+                      PLUNGER_RAIL_Z_TOP - (Z_PLATE_INNER - 0.5)], center=true);
             // Partial-height Left Headphone L-Tab (X = -60..-57, Y = 11.75..30.25, Z = -28.0..-13.50)
             translate([-CASE_W/2 + WALL_SIDE/2, HP_CY, 0.5*(Z_PLATE_OUTER + 0.5 + HP_TAB_Z_TOP)])
                 cube([WALL_SIDE, HP_TAB_W, HP_TAB_Z_TOP - (Z_PLATE_OUTER + 0.5)], center=true);
@@ -426,9 +440,12 @@ module back_chassis_frame() {
             rotate([0, 90, 0]) cylinder(d=HP_BORE_DIA, h=WALL_SIDE + 1.0);
         translate([-CASE_W/2 + 0.5*(HP_WALL + WALL_SIDE + 0.5), HP_CY, 0.5*(Z_PLATE_INNER + HP_TAB_Z_TOP + 0.5)])
             cube([WALL_SIDE + 0.5 - HP_WALL, HP_RECESS_W, (HP_TAB_Z_TOP + 0.5) - Z_PLATE_INNER], center=true);
-        // Pure round outer plunger bearing bores (Dia 4.60 mm, open to -X)
-        for (by = WS_BTN_Y_LIST)
+        // Pure round outer plunger bearing bores (Dia 4.60 mm, open to -X) + lower cradle U-grooves
+        for (by = WS_BTN_Y_LIST) {
             translate([55.5, by, WS_BTN_Z_CTR]) rotate([0, 90, 0]) cylinder(d=4.60, h=5.3);
+            translate([PLUNGER_CRADLE_X0 - 0.5, by, WS_BTN_Z_CTR]) rotate([0, 90, 0])
+                cylinder(d=PLUNGER_U_SLOT_W, h=(PLUNGER_CRADLE_X1 - PLUNGER_CRADLE_X0) + 1.0);
+        }
     }
 }
 

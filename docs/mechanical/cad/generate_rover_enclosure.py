@@ -1,4 +1,4 @@
-"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.5.
+"""Generate parametric 3D STEP/STL CAD models and 2D DXF drawings for RTK Rover v2.2.6.
 
 Architecture:
   - Back_Chassis_Frame: Open-frame rear plate carrying ALL modules (Waveshare 3.5B,
@@ -9,9 +9,11 @@ Architecture:
     (Z-centered GX-12 w/ downward D-flat, equispaced E220 SMA w/ downward D-flat,
     UM982 SMAs), partial-height Left Headphone L-Tab (Y = 21.00, full-height inner
     1.50 mm pocket for 1.50 mm Ground-pin solder clearance), Right Button-Plunger
-    Flange + low support rail + twin slide-in guide towers, split-Left/continuous-
-    Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top full-height M3 bosses
-    (Z = -2.65 mm), and relocated horizontal under-Waveshare BAT_SLOT (25.0, 35.5).
+    Flange + low support rail + twin slide-in guide towers + integral centerline-
+    split lower plunger U-cradle (X = 46.00..47.75, Z <= -8.62), split-Left/
+    continuous-Bottom/Right 4.5 mm inner cover-capture rim, 6 open-top full-height
+    M3 bosses (Z = -2.65 mm), and relocated horizontal under-Waveshare BAT_SLOT
+    (25.0, 35.5).
   - Top_Cover: Clean lift-off cover with ZERO modules/connectors/plunger-combs;
     flush glass bezel, USB-C tunnel, MicroSD slot + scoop, speaker acoustic slots,
     4x UM982 LED light pipes + SWITCH pinhole, Option H1 Sun Shield U-groove,
@@ -40,7 +42,7 @@ import ezdxf
 import rover_specs as S
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.5"
+__version__ = "v2.2.6"
 
 CAD_DIR = Path(__file__).resolve().parent
 STEP_DIR = CAD_DIR / "step"
@@ -366,6 +368,38 @@ def build_back_chassis_frame() -> cq.Workplane:
         .extrude(S.PLUNGER_CLIP_Z_TOP - S.PLUNGER_RAIL_Z_TOP + 0.5)
     )
     plate = plate.cut(clip_slot)
+
+    # 3a. Integral Lower Plunger Support Cradle (X=46.00..47.75, Y=23.80..48.20, Z=-25.0..-8.62)
+    # Mirrors Plunger_Capture_Clip below the plunger centerline right behind the Waveshare domes
+    # while clearing straight horizontal plunger stem+collar insertion into the X=56.00 flange.
+    cradle_cx = 0.5 * (S.PLUNGER_CRADLE_X0 + S.PLUNGER_CRADLE_X1)
+    cradle_w = S.PLUNGER_CRADLE_X1 - S.PLUNGER_CRADLE_X0
+    cradle_cy = 0.5 * (S.PLUNGER_CRADLE_Y0 + S.PLUNGER_CRADLE_Y1)
+    cradle_h = S.PLUNGER_CRADLE_Y1 - S.PLUNGER_CRADLE_Y0
+    plunger_cradle = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.5)
+        .center(cradle_cx, cradle_cy)
+        .rect(cradle_w, cradle_h)
+        .extrude(S.PLUNGER_CRADLE_Z_TOP - (S.Z_PLATE_INNER - 0.5))
+    )
+    cradle_tie = (
+        cq.Workplane("XY")
+        .workplane(offset=S.Z_PLATE_INNER - 0.5)
+        .center(0.5 * (S.PLUNGER_CRADLE_X0 + S.PLUNGER_RAIL_X0 + 0.5), cradle_cy)
+        .rect((S.PLUNGER_RAIL_X0 + 0.5) - S.PLUNGER_CRADLE_X0, cradle_h)
+        .extrude(S.PLUNGER_RAIL_Z_TOP - (S.Z_PLATE_INNER - 0.5))
+    )
+    plate = plate.union(plunger_cradle).union(cradle_tie)
+    for by in S.WS_BTN_Y_LIST:
+        cradle_u = (
+            cq.Workplane("YZ")
+            .workplane(offset=S.PLUNGER_CRADLE_X0 - 0.5)
+            .center(by, S.WS_BTN_Z_CTR)
+            .circle(S.PLUNGER_U_SLOT_W / 2.0)
+            .extrude(cradle_w + 1.0)
+        )
+        plate = plate.cut(cradle_u)
 
     # 3b. Partial-Height Left Headphone L-Tab (X=[-60.00, -57.00], Y=[11.75, 30.25], Z=[-28.0, -13.50])
     # Mounts REF-headphone-jack.stp on Back_Chassis_Frame so all connectors remain bench-serviceable.

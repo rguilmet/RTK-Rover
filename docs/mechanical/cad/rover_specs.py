@@ -1,6 +1,10 @@
-"""Shared parametric mechanical dimensions for the RTK Rover v2.2.5 enclosure.
+"""Shared parametric mechanical dimensions for the RTK Rover v2.2.6 enclosure.
 
-Architecture (v2.2.5 - Back-Chassis Plunger Clip, Conical Standoffs & Audio/RF Polish):
+Architecture (v2.2.6 - Integral Lower Plunger Support Cradle):
+- v2.2.6: Added integral centerline-split lower plunger U-cradle on
+  Back_Chassis_Frame (X = 46.00..47.75 mm, Y = 23.80..48.20 mm, Z <= -8.62 mm)
+  mirroring Plunger_Capture_Clip right behind the Waveshare domes so pressed
+  plungers cannot tip downward away from the button domes.
 - v2.2.5: Updated Power Board holes to 16.0 x 76.0 mm (2x2 mm edge inset per
   REF_power.stp), relocated tactile button-plunger capture from Top_Cover to a
   slide-in Back_Chassis_Frame Plunger_Capture_Clip (9th printable part),
@@ -55,7 +59,7 @@ Coordinate convention (looking at the front touchscreen in portrait, USB-C down)
 import os
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v2.2.5"
+__version__ = "v2.2.6"
 
 # ==============================================================================
 # Overall Main Electronics Body (PETG on Snapmaker 2.0, 100% Support-Free)
@@ -162,6 +166,11 @@ PLUNGER_TRACK_TOP_Y0 = 48.20            # Top tower Y=[48.2, 52.0] (0.80 mm clea
 PLUNGER_TRACK_END_WALL = 1.40           # Closed outer end wall in Y (slots open to Y=21.40 & Y=50.60)
 PLUNGER_RAIL_X0 = PLUNGER_U_X0 - PLUNGER_CLIP_CLEAR - PLUNGER_TRACK_LIP  # 48.58 flush under track towers
 PLUNGER_RAIL_Z_TOP = -11.70
+PLUNGER_CRADLE_X0 = 46.00               # 0.65 mm clear of WS_BTN_X_DOME (+45.35); anti-tip nose cradle
+PLUNGER_CRADLE_X1 = 47.75               # 1.75 mm axial bearing; clears plunger stem+collar straight insertion
+PLUNGER_CRADLE_Y0 = PLUNGER_TRACK_BOT_Y1  # 23.80 (2.50 mm clear of bottom-right Waveshare cone)
+PLUNGER_CRADLE_Y1 = PLUNGER_TRACK_TOP_Y0  # 48.20 (fits cleanly between twin guide towers)
+PLUNGER_CRADLE_Z_TOP = WS_BTN_Z_CTR     # -8.62 (lower half-mirror split along plunger centerline)
 
 # ==============================================================================
 # 2. RTC Coin Cell + Holder (Underneath Waveshare! From REF-coin-cell*.stp)

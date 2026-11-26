@@ -5,6 +5,12 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [docs/mechanical/cad v2.2.6] - 2026-11-26
+### Added
+- **Integral Lower Plunger Support U-Cradle ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.6`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.6`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.6`, [`Back_Chassis_Frame.step`](docs/mechanical/cad/step/Back_Chassis_Frame.step), [`back_chassis_print.stl`](docs/mechanical/cad/stl/back_chassis_print.stl), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
+  - Added an integral centerline-split lower plunger U-cradle (`X = 46.00..47.75 mm`, `Y = 23.80..48.20 mm`, `Z = -25.00..-8.62 mm`, `Dia 3.70 mm` upright semicircular U-grooves, tie-bridged below `Z = -11.70 mm` to `PLUNGER_RAIL_X0`) on `Back_Chassis_Frame` (`94.31 cm^3`), cradling all `3` `Dia 3.20 mm` plunger noses from underneath `0.65 mm` behind the `Waveshare` domes so buttons cannot tip downward when pressed while still allowing straight horizontal (`0 deg`) plunger insertion.
+  - Verified `9/9` single-solid manifold checks, `69/69` `0.0000 mm^3` rest interference checks, `0.0000 mm^3` full-stroke (`-1.55 mm`) overlap, clean OpenSCAD `Manifold --hardwarnings` checks (`back`, `back_print`), and `100%` support-free printing (no changes to `Plunger_Capture_Clip`, `Top_Cover`, or `Button_Plungers`).
+
 ## [docs/mechanical/cad v2.2.5] - 2026-11-26
 ### Added & Changed
 - **Chassis Serviceability, Conical Standoffs, Speaker `M2` Inserts & Connector Clearances ([`rover_specs.py`](docs/mechanical/cad/rover_specs.py) `v2.2.5`, [`generate_rover_enclosure.py`](docs/mechanical/cad/generate_rover_enclosure.py) `v2.2.5`, [`rtk_rover_enclosure.scad`](docs/mechanical/cad/rtk_rover_enclosure.scad) `v2.2.5`, [`REF_power.stp`](docs/mechanical/cad/step/REF_power.stp), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**
