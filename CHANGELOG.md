@@ -5,6 +5,11 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.2] - 2026-11-25
+### Changed
+- **BLE Primary `ADV_IND` Identity & Location/Navigation Appearance ([`user_config.h`](user_config.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp)):**
+  - Set `cfg.gap_appearance = 0x1442U` (Location and Navigation Display Device) using `Field_Instrument_Core >= v1.2.3`, placing `"RTK-Rover"` Complete Local Name + GAP Appearance directly in primary `ADV_IND` packets (and 128-bit FICP service UUID + TX Power in `SCAN_RSP`) for immediate passive/active scanner visibility on Android.
+
 ## [v0.12.1] - 2026-11-25
 ### Changed & Improved
 - **Tile 5 `COMMS` Consolidation, Bottom-Row RF Ergonomics, Single Header Radio Icon & Flash-Safe `DRAM0` Headroom Recovery ([`user_config.h`](user_config.h), [`RTK_Rover.ino`](RTK_Rover.ino), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`ble_bridge.h`](src/ble_bridge/ble_bridge.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**

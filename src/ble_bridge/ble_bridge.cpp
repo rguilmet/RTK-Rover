@@ -518,6 +518,7 @@ extern "C" void ble_bridge_init(void)
                              FICP_FEAT_RTC_SYNC |
                              FICP_FEAT_SCREENSHOT;
     cfg.telem_hz_default   = 5U;
+    cfg.gap_appearance     = 0x1442U; // Location and Navigation Display Device
     cfg.enable_stream_rx   = true;
     cfg.enable_stream_tx   = false;
     cfg.ctrl_rx_ring_bytes = 4096U;
