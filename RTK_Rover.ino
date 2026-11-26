@@ -9,6 +9,9 @@
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
+#if defined(CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM)
+#include <freertos/idf_additions.h>
+#endif
 
 #include "user_config.h"
 #include <Field_Instrument_Core.h>
@@ -508,6 +511,30 @@ void task_display_and_audio(void *pvParameters)
 // =========================================================================
 // Arduino Setup & Loop
 // =========================================================================
+static BaseType_t create_psram_stack_task(TaskFunction_t fn,
+                                          const char *name,
+                                          uint32_t stack_bytes,
+                                          void *param,
+                                          UBaseType_t prio,
+                                          TaskHandle_t *handle,
+                                          BaseType_t core_id)
+{
+#if defined(CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM)
+    BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(fn,
+                                                    name,
+                                                    stack_bytes,
+                                                    param,
+                                                    prio,
+                                                    handle,
+                                                    core_id,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (ok == pdPASS) {
+        return ok;
+    }
+#endif
+    return xTaskCreatePinnedToCore(fn, name, stack_bytes, param, prio, handle, core_id);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -719,11 +746,11 @@ void setup()
     Serial.println("   Setup Complete -- Launching FreeRTOS Tasks");
     Serial.println("====================================================\n");
 
-    // 7. Launch FreeRTOS Tasks
+    // 7. Launch FreeRTOS Tasks (RoverCore0 & RoverUI touch zero SPI Flash/NVS -> PSRAM stacks safe)
     roverStateQueue = xQueueCreate(1, sizeof(RoverUIData_t));
     rover_audio_start_task();
-    xTaskCreatePinnedToCore(task_rover_core0,       "RoverCore0", 8192, NULL, 4, NULL, 0);
-    xTaskCreatePinnedToCore(task_display_and_audio, "RoverUI",    8192, NULL, 2, NULL, 1);
+    create_psram_stack_task(task_rover_core0,       "RoverCore0", 8192, NULL, 4, NULL, 0);
+    create_psram_stack_task(task_display_and_audio, "RoverUI",    8192, NULL, 2, NULL, 1);
 
     Serial.printf("[MEM] Post-Setup Heap -> Internal Free: %u B (Largest: %u B, DMA: %u B) | PSRAM Free: %u KB\n",
                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),

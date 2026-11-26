@@ -26,9 +26,10 @@ static uint32_t           s_low_batt_since_ms       = 0;
 static uint8_t            s_low_batt_debounce_s     = 0;
 static bool               s_low_batt_active         = false;
 static bool               s_low_batt_flushed        = false;
-static bool               s_low_batt_modal_dismissed= false;
-static uint32_t           s_last_low_batt_beep_ms   = 0;
-static volatile bool      s_low_batt_flush_pending  = false;
+static bool               s_low_batt_modal_dismissed = false;
+static uint32_t           s_last_low_batt_beep_ms    = 0;
+static volatile bool      s_low_batt_flush_pending   = false;
+static volatile bool      s_auto_off_poweroff_pending = false;
 
 extern "C" void rover_power_poll(uint32_t now_ms)
 {
@@ -143,14 +144,28 @@ extern "C" void rover_power_flush_all_logs(void)
 
 extern "C" void rover_power_service_deferred_flush(void)
 {
-    if (!s_low_batt_flush_pending) return;
+    bool do_auto_off = false;
+    bool do_low_batt = false;
     portENTER_CRITICAL(&s_pwr_snapshot_mux);
-    if (!s_low_batt_flush_pending) {
-        portEXIT_CRITICAL(&s_pwr_snapshot_mux);
+    if (s_auto_off_poweroff_pending) {
+        s_auto_off_poweroff_pending = false;
+        do_auto_off = true;
+    }
+    if (s_low_batt_flush_pending) {
+        s_low_batt_flush_pending = false;
+        do_low_batt = true;
+    }
+    portEXIT_CRITICAL(&s_pwr_snapshot_mux);
+
+    if (do_auto_off) {
+        Serial.println("[POWER] Servicing Auto Power-Off SD flush & PMIC shutdown on loop()...");
+        rover_power_flush_all_logs();
+        vTaskDelay(pdMS_TO_TICKS(350));
+        fic_axp2101_power_off();
         return;
     }
-    s_low_batt_flush_pending = false;
-    portEXIT_CRITICAL(&s_pwr_snapshot_mux);
+
+    if (!do_low_batt) return;
 
     rover_power_flush_all_logs();
 
@@ -249,12 +264,12 @@ extern "C" void rover_power_update_auto_shutdown(uint32_t now_ms,
             (s_last_poweroff_attempt_ms == 0 || (now_ms - s_last_poweroff_attempt_ms >= 30000U))) {
             s_last_poweroff_attempt_ms = (now_ms == 0) ? 1 : now_ms;
             s_auto_off_countdown_s = 0;
-            Serial.printf("[POWER] Battery inactivity timeout (%u min) expired -> Flushing loggers & shutting down.\n",
+            Serial.printf("[POWER] Battery inactivity timeout (%u min) expired -> Deferring log flush & shutdown to loop().\n",
                           current_settings.auto_shutdown_battery_min);
-            rover_power_flush_all_logs();
+            portENTER_CRITICAL(&s_pwr_snapshot_mux);
+            s_auto_off_poweroff_pending = true;
+            portEXIT_CRITICAL(&s_pwr_snapshot_mux);
             play_rover_beep(800, 300);
-            vTaskDelay(pdMS_TO_TICKS(350));
-            fic_axp2101_power_off();
             s_battery_since_ms = millis(); // Prevent repeated beep/flash loop if PMIC I2C power-off fails
             s_last_warn_sec = 0;
         } else if (idle_ms >= warn_start_ms) {

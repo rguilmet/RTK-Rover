@@ -31,19 +31,19 @@ static lv_obj_t *t1_imu_btn_lbl     = NULL;
 static lv_obj_t *t1_touch_btn       = NULL;
 static lv_obj_t *t1_touch_btn_lbl   = NULL;
 
-static lv_obj_t *t1_wifi_btn        = NULL;
-static lv_obj_t *t1_wifi_btn_lbl    = NULL;
-static lv_obj_t *t1_unit_btn        = NULL;
-static lv_obj_t *t1_unit_btn_lbl    = NULL;
-static lv_obj_t *t1_lora_btn        = NULL;
-static lv_obj_t *t1_lora_btn_lbl    = NULL;
-
-static lv_obj_t *t5_autooff_btn      = NULL;
-static lv_obj_t *t5_autooff_btn_lbl  = NULL;
 static lv_obj_t *t5_calmag_btn       = NULL;
 static lv_obj_t *t5_calmag_btn_lbl   = NULL;
-static lv_obj_t *t5_ble_btn          = NULL;
-static lv_obj_t *t5_ble_btn_lbl      = NULL;
+static lv_obj_t *t1_unit_btn         = NULL;
+static lv_obj_t *t1_unit_btn_lbl     = NULL;
+static lv_obj_t *t5_autooff_btn      = NULL;
+static lv_obj_t *t5_autooff_btn_lbl  = NULL;
+
+static lv_obj_t *t1_lora_btn         = NULL;
+static lv_obj_t *t1_lora_btn_lbl     = NULL;
+static lv_obj_t *t5_comms_btn        = NULL;
+static lv_obj_t *t5_comms_btn_lbl    = NULL;
+static lv_obj_t *t5_rtcm_src_btn     = NULL;
+static lv_obj_t *t5_rtcm_src_btn_lbl = NULL;
 
 static lv_obj_t *t1_wifi_status_lbl  = NULL;
 static lv_obj_t *t5_power_status_lbl = NULL;
@@ -66,12 +66,11 @@ void update_all_control_buttons(void)
     static int s_last_telem = -1;
     static int s_last_imu = -1;
     static int s_last_touch = -1;
-    static int s_last_wifi = -1;
-    static int s_last_units = -1;
-    static int s_last_tare = -1;
-    static int s_last_autooff = -1;
     static int s_last_calmag = -1;
-    static int s_last_ble = -1;
+    static int s_last_units = -1;
+    static int s_last_autooff = -1;
+    static int s_last_comms = -1;
+    static int s_last_tare = -1;
 
     // Row 1, Col 0: VOL: 80% / VOL: MUTE
     int cur_vol = (int)current_settings.volume;
@@ -192,28 +191,17 @@ void update_all_control_buttons(void)
         }
     }
 
-    // Row 4, Col 0: WIFI (Multi-State: 0=OFF, 1=Connecting, 2=Router STA, 3=Access Point)
-    int cur_wifi = 0;
-    if (fic_web_portal_is_active()) {
-        cur_wifi = fic_web_portal_is_softap() ? 3 : 2;
-    } else if (fic_web_portal_is_starting()) {
-        cur_wifi = 1;
-    }
-    if (cur_wifi != s_last_wifi) {
-        s_last_wifi = cur_wifi;
-        if (t1_wifi_btn && t1_wifi_btn_lbl) {
-            if (cur_wifi == 1) {
-                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: CONN");
-                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_CONN, 0); // Amber / Orange
-            } else if (cur_wifi == 2) {
-                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: STA");
-                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_STA, 0);  // Emerald Green
-            } else if (cur_wifi == 3) {
-                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: AP");
-                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_WIFI_AP, 0);   // Vivid Violet / Purple
+    // Row 4, Col 0: CAL MAG (Reflects 3D Ellipsoid Calibration Status, jumps to Tile 3)
+    int cur_calmag = current_settings.mag_ellipsoid_cal_valid ? 1 : 0;
+    if (cur_calmag != s_last_calmag) {
+        s_last_calmag = cur_calmag;
+        if (t5_calmag_btn && t5_calmag_btn_lbl) {
+            if (cur_calmag) {
+                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG:\nOK");
+                lv_obj_set_style_bg_color(t5_calmag_btn, COLOR_BTN_ACTIVE_GREEN, 0);
             } else {
-                lv_label_set_text(t1_wifi_btn_lbl, "WIFI: OFF");
-                lv_obj_set_style_bg_color(t1_wifi_btn, COLOR_BTN_INACTIVE_BLUE, 0); // Navy Blue
+                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
+                lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
             }
         }
     }
@@ -241,21 +229,7 @@ void update_all_control_buttons(void)
         }
     }
 
-    // Row 4, Col 2: LORA: 19.2k / REQ: 9.6k
-    if (t1_lora_btn && t1_lora_btn_lbl) {
-        char l_buf[32];
-        if (e220_is_rate_switch_pending()) {
-            snprintf(l_buf, sizeof(l_buf), "REQ: %.1fk", e220_get_requested_air_rate());
-            lv_label_set_text(t1_lora_btn_lbl, l_buf);
-            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0xD97706), 0); // Amber
-        } else {
-            snprintf(l_buf, sizeof(l_buf), "LORA: %.1fk", e220_get_active_air_rate());
-            lv_label_set_text(t1_lora_btn_lbl, l_buf);
-            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0x2F3B4C), 0);
-        }
-    }
-
-    // Row 5, Col 0: AUTO-OFF: 5 min / 15 min / 30 min / DISABLED
+    // Row 4, Col 2: AUTO-OFF: 5 min / 15 min / 30 min / DISABLED
     int cur_autooff = (int)current_settings.auto_shutdown_battery_min;
     if (cur_autooff != s_last_autooff) {
         s_last_autooff = cur_autooff;
@@ -272,44 +246,49 @@ void update_all_control_buttons(void)
         }
     }
 
-    // Row 5, Col 1: CAL MAG (Reflects 3D Ellipsoid Calibration Status, jumps to Tile 3)
-    int cur_calmag = current_settings.mag_ellipsoid_cal_valid ? 1 : 0;
-    if (cur_calmag != s_last_calmag) {
-        s_last_calmag = cur_calmag;
-        if (t5_calmag_btn && t5_calmag_btn_lbl) {
-            if (cur_calmag) {
-                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG:\nOK");
-                lv_obj_set_style_bg_color(t5_calmag_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-            } else {
-                lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
-                lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
-            }
+    // Row 5, Col 0: LORA: 19.2k / REQ: 9.6k
+    if (t1_lora_btn && t1_lora_btn_lbl) {
+        char l_buf[32];
+        if (e220_is_rate_switch_pending()) {
+            snprintf(l_buf, sizeof(l_buf), "REQ: %.1fk", e220_get_requested_air_rate());
+            lv_label_set_text(t1_lora_btn_lbl, l_buf);
+            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0xD97706), 0); // Amber
+        } else {
+            snprintf(l_buf, sizeof(l_buf), "LORA: %.1fk", e220_get_active_air_rate());
+            lv_label_set_text(t1_lora_btn_lbl, l_buf);
+            lv_obj_set_style_bg_color(t1_lora_btn, lv_color_hex(0x2F3B4C), 0);
         }
     }
 
-    // Row 5, Col 2: BLE Companion Radio Toggle
-    int cur_ble = (int)ble_bridge_get_ui_state();
-    if (cur_ble != s_last_ble) {
-        s_last_ble = cur_ble;
-        if (t5_ble_btn && t5_ble_btn_lbl) {
-            if (cur_ble == ROVER_BLE_UI_SLAVE) {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: SLAVE");
-                lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_ACTIVE_GREEN, 0);
-            } else if (cur_ble == ROVER_BLE_UI_CONN) {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: CONN");
-                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0x0891B2), 0);
-            } else if (cur_ble == ROVER_BLE_UI_ADV) {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: ADV");
-                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0x0284C7), 0);
-            } else if (cur_ble == ROVER_BLE_UI_WIFI_HOLD) {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: HOLD");
-                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0xD97706), 0);
-            } else if (cur_ble == ROVER_BLE_UI_STARTING) {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: INIT");
-                lv_obj_set_style_bg_color(t5_ble_btn, lv_color_hex(0xD97706), 0);
+    // Row 5, Col 1: Consolidated COMMS Radio Cycle (BLE -> WIFI -> OFF -> BLE)
+    int cur_comms = (int)ble_bridge_get_comms_ui_state();
+    if (cur_comms != s_last_comms) {
+        s_last_comms = cur_comms;
+        if (t5_comms_btn && t5_comms_btn_lbl) {
+            if (cur_comms == ROVER_COMMS_BLE_SLAVE) {
+                lv_label_set_text(t5_comms_btn_lbl, "BLE: SLAVE");
+                lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_ACTIVE_GREEN, 0);
+            } else if (cur_comms == ROVER_COMMS_BLE_CONN) {
+                lv_label_set_text(t5_comms_btn_lbl, "BLE: CONN");
+                lv_obj_set_style_bg_color(t5_comms_btn, lv_color_hex(0x0891B2), 0);
+            } else if (cur_comms == ROVER_COMMS_BLE_ADV) {
+                lv_label_set_text(t5_comms_btn_lbl, "BLE: ADV");
+                lv_obj_set_style_bg_color(t5_comms_btn, lv_color_hex(0x0284C7), 0);
+            } else if (cur_comms == ROVER_COMMS_BLE_INIT) {
+                lv_label_set_text(t5_comms_btn_lbl, "BLE: INIT");
+                lv_obj_set_style_bg_color(t5_comms_btn, lv_color_hex(0xD97706), 0);
+            } else if (cur_comms == ROVER_COMMS_WIFI_CONN) {
+                lv_label_set_text(t5_comms_btn_lbl, "WIFI: CONN");
+                lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_WIFI_CONN, 0);
+            } else if (cur_comms == ROVER_COMMS_WIFI_STA) {
+                lv_label_set_text(t5_comms_btn_lbl, "WIFI: STA");
+                lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_WIFI_STA, 0);
+            } else if (cur_comms == ROVER_COMMS_WIFI_AP) {
+                lv_label_set_text(t5_comms_btn_lbl, "WIFI: AP");
+                lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_WIFI_AP, 0);
             } else {
-                lv_label_set_text(t5_ble_btn_lbl, "BLE: OFF");
-                lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+                lv_label_set_text(t5_comms_btn_lbl, "COMMS: OFF");
+                lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_INACTIVE_BLUE, 0);
             }
         }
     }
@@ -478,21 +457,18 @@ static void nmea_toggle_btn_cb(lv_event_t *e)
     }
 }
 
-static void wifi_toggle_btn_cb(lv_event_t *e)
+static void comms_cycle_btn_cb(lv_event_t *e)
 {
     (void)e;
-    bool was_running = (fic_web_portal_is_active() || fic_web_portal_is_starting());
-    if (was_running) {
-        fic_web_portal_stop();
-        play_rover_beep(1200, 30);
-    } else {
-        fic_web_portal_start();
-        play_rover_beep(1800, 40);
-    }
+    ble_bridge_request_comms_cycle();
+    RoverCommsUiState_t next_st = ble_bridge_get_comms_ui_state();
+    play_rover_beep((next_st == ROVER_COMMS_OFF) ? 1100 : 1800,
+                    (next_st == ROVER_COMMS_OFF) ? 30 : 40);
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] Wi-Fi clicked -> %s\n",
-                     was_running ? "Stopping" : "Starting");
+        const char *tag = (next_st == ROVER_COMMS_OFF)       ? "OFF" :
+                          (next_st == ROVER_COMMS_WIFI_CONN) ? "WIFI" : "BLE";
+        rover_printf("[TOUCH BTN] COMMS clicked -> %s\n", tag);
     }
 }
 
@@ -595,18 +571,6 @@ static void cal_mag_shortcut_btn_cb(lv_event_t *e)
     }
 }
 
-static void ble_toggle_btn_cb(lv_event_t *e)
-{
-    (void)e;
-    ble_bridge_request_toggle();
-    play_rover_beep(current_settings.ble_enabled ? 1800 : 1200, 35);
-    update_all_control_buttons();
-    if (current_settings.enable_touch_logging) {
-        rover_printf("[TOUCH BTN] BLE clicked -> %s\n",
-                     current_settings.ble_enabled ? "Enabling" : "Disabling");
-    }
-}
-
 static lv_obj_t* create_grid_button(lv_obj_t *parent, int col, int row, lv_event_cb_t cb, lv_obj_t **out_lbl)
 {
     int x = (col == 0) ? 10 : (col == 1 ? 113 : 216);
@@ -646,21 +610,26 @@ void ui_tile5_settings_create(lv_obj_t *parent)
     t1_imu_btn     = create_grid_button(parent, 1, 2, diag_imu_btn_cb,          &t1_imu_btn_lbl);
     t1_touch_btn   = create_grid_button(parent, 2, 2, diag_touch_btn_cb,        &t1_touch_btn_lbl);
 
-    // Row 3 (y=172): WIFI, UNITS, LORA
-    t1_wifi_btn    = create_grid_button(parent, 0, 3, wifi_toggle_btn_cb,       &t1_wifi_btn_lbl);
-    t1_unit_btn    = create_grid_button(parent, 1, 3, unit_toggle_btn_cb,       &t1_unit_btn_lbl);
-    t1_lora_btn    = create_grid_button(parent, 2, 3, lora_rate_btn_cb,         &t1_lora_btn_lbl);
-
-    // Row 4 (y=226): AUTO-OFF, CAL MAG, BLE
-    t5_autooff_btn = create_grid_button(parent, 0, 4, autooff_toggle_btn_cb,    &t5_autooff_btn_lbl);
-
-    t5_calmag_btn  = create_grid_button(parent, 1, 4, cal_mag_shortcut_btn_cb,  &t5_calmag_btn_lbl);
+    // Row 3 (y=172): CAL MAG, UNITS, AUTO-OFF
+    t5_calmag_btn   = create_grid_button(parent, 0, 3, cal_mag_shortcut_btn_cb, &t5_calmag_btn_lbl);
     lv_label_set_text(t5_calmag_btn_lbl, "CAL MAG");
     lv_obj_set_style_bg_color(t5_calmag_btn, lv_color_hex(0x2563EB), 0);
 
-    t5_ble_btn     = create_grid_button(parent, 2, 4, ble_toggle_btn_cb,        &t5_ble_btn_lbl);
-    lv_label_set_text(t5_ble_btn_lbl, "BLE: OFF");
-    lv_obj_set_style_bg_color(t5_ble_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+    t1_unit_btn     = create_grid_button(parent, 1, 3, unit_toggle_btn_cb,      &t1_unit_btn_lbl);
+    t5_autooff_btn  = create_grid_button(parent, 2, 3, autooff_toggle_btn_cb,   &t5_autooff_btn_lbl);
+
+    // Row 4 (y=226): LORA, COMMS, RTCM SRC (Phase 2.4 placeholder)
+    t1_lora_btn     = create_grid_button(parent, 0, 4, lora_rate_btn_cb,        &t1_lora_btn_lbl);
+
+    t5_comms_btn    = create_grid_button(parent, 1, 4, comms_cycle_btn_cb,      &t5_comms_btn_lbl);
+    lv_label_set_text(t5_comms_btn_lbl, "COMMS: OFF");
+    lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_INACTIVE_BLUE, 0);
+
+    t5_rtcm_src_btn = create_grid_button(parent, 2, 4, NULL,                    &t5_rtcm_src_btn_lbl);
+    lv_label_set_text(t5_rtcm_src_btn_lbl, "RTCM SRC\nPHASE 2.4");
+    lv_obj_add_state(t5_rtcm_src_btn, LV_STATE_DISABLED);
+    lv_obj_set_style_bg_color(t5_rtcm_src_btn, lv_color_hex(0x1E293B), 0);
+    lv_obj_set_style_text_color(t5_rtcm_src_btn_lbl, lv_color_hex(0x64748B), 0);
 
     // Horizontal divider below 5x3 grid (y=278)
     lv_obj_t *t5_sep = lv_obj_create(parent);
@@ -673,7 +642,7 @@ void ui_tile5_settings_create(lv_obj_t *parent)
     // Status panel (y=286..350)
     t1_wifi_status_lbl = lv_label_create(parent);
     lv_obj_set_width(t1_wifi_status_lbl, 300);
-    lv_label_set_text(t1_wifi_status_lbl, "Wi-Fi: Inactive (Tap WIFI to start)");
+    lv_label_set_text(t1_wifi_status_lbl, "Comms: Initializing...");
     lv_obj_set_style_text_color(t1_wifi_status_lbl, lv_color_hex(0x94A3B8), 0);
     lv_obj_set_style_text_font(t1_wifi_status_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(t1_wifi_status_lbl, LV_TEXT_ALIGN_CENTER, 0);
@@ -739,9 +708,11 @@ void ui_tile5_settings_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     if (t1_wifi_status_lbl && !fic_web_portal_is_active() && !fic_web_portal_is_starting()) {
         ble_bridge_format_status(buf, buf_sz);
         rover_label_set_text_if_changed(t1_wifi_status_lbl, buf);
-        lv_color_t c = ble_bridge_is_connected() ? lv_color_hex(0x22D3EE) :
-                       ble_bridge_is_active()    ? lv_color_hex(0x38BDF8) :
-                                                   lv_color_hex(0x94A3B8);
+        RoverCommsUiState_t c_st = ble_bridge_get_comms_ui_state();
+        lv_color_t c = (c_st == ROVER_COMMS_BLE_CONN || c_st == ROVER_COMMS_BLE_SLAVE) ? lv_color_hex(0x22D3EE) :
+                       (c_st == ROVER_COMMS_BLE_INIT)  ? lv_color_hex(0xF59E0B) :
+                       (c_st == ROVER_COMMS_BLE_ADV)   ? lv_color_hex(0x38BDF8) :
+                                                         lv_color_hex(0x94A3B8);
         lv_obj_set_style_text_color(t1_wifi_status_lbl, c, 0);
     }
 }

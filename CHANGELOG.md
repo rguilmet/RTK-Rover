@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.1] - 2026-11-25
+### Changed & Improved
+- **Tile 5 `COMMS` Consolidation, Bottom-Row RF Ergonomics, Single Header Radio Icon & Flash-Safe `DRAM0` Headroom Recovery ([`user_config.h`](user_config.h), [`RTK_Rover.ino`](RTK_Rover.ino), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`ble_bridge.h`](src/ble_bridge/ble_bridge.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**
+  - **Consolidated `COMMS` Radio Button (`BLE -> WIFI -> OFF -> BLE`):** Merged separate Tile 5 `WIFI` and `BLE` buttons into one `COMMS` cycle (`BLE: ADV`/`CONN`/`SLAVE`/`INIT`, `WIFI: CONN`/`STA`/`AP`, `COMMS: OFF`, canceling `WIFI: CONN` cleanly straight to `OFF` via `Field_Instrument_Core >= v1.2.2` `fic_web_portal_set_ble_auto_resume(false)` + `fic_web_portal_is_busy()`).
+  - **Tile 5 Rows 4-5 Re-Layout:** Moved less frequently used utilities to Row 4 (`CAL MAG`, `UNITS`, `AUTO-OFF`) and grouped high-frequency RF controls on bottom Row 5 (`LORA`, `COMMS`, reserved disabled `RTCM SRC / PHASE 2.4`).
+  - **Single Header Row 1 Dynamic Radio Icon:** Merged `hdr_ble_lbl` + `hdr_wifi_lbl` back into one `hdr_radio_lbl` at `TOP_RIGHT, -118, 2` (dynamically swapping `LV_SYMBOL_BLUETOOTH` vs. `LV_SYMBOL_WIFI` by state), restoring full `165 px` datetime width (`hdr_units_lbl` at `-145`).
+  - **Flash-Safe `+21 KB` Internal `DRAM0` Recovery:** Moved `RoverCore0` (`8 KB`) and `RoverUI` (`8 KB`) stacks to Octal PSRAM via `xTaskCreatePinnedToCoreWithCaps` (after deferring `rover_power_update_auto_shutdown()` SD flushes onto Priority-1 `loop()` via `s_auto_off_poweroff_pending`), kept SPI-Flash tasks (`loopTask`, `wifi_connect`, `RoverAudio`) in internal SRAM, and trimmed `LVGL_DMA_BUFF_LEN` from `24` to `16` rows (`10,240 B`, saving `5.1 KB` DMA SRAM).
+
 ## [v0.12.0] - 2026-11-25
 ### Added & Hardened
 - **Plan 2 Phase 2.3b -- FICP BLE 5.0 Companion Bridge, Tile 5 Radio Toggle & `F-11` Portal Hardening ([`ble_bridge.h`](src/ble_bridge/ble_bridge.h), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp), [`RTK_Rover.ino`](RTK_Rover.ino), [`settings_manager.h`](src/settings_manager/settings_manager.h), [`settings_manager.cpp`](src/settings_manager/settings_manager.cpp), [`rover_power.cpp`](src/rover_power/rover_power.cpp), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**

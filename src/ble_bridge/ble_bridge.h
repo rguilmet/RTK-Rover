@@ -19,6 +19,17 @@ typedef enum {
     ROVER_BLE_UI_WIFI_HOLD = 5
 } RoverBleUiState_t;
 
+typedef enum {
+    ROVER_COMMS_OFF       = 0,
+    ROVER_COMMS_BLE_INIT  = 1,
+    ROVER_COMMS_BLE_ADV   = 2,
+    ROVER_COMMS_BLE_CONN  = 3,
+    ROVER_COMMS_BLE_SLAVE = 4,
+    ROVER_COMMS_WIFI_CONN = 5,
+    ROVER_COMMS_WIFI_STA  = 6,
+    ROVER_COMMS_WIFI_AP   = 7
+} RoverCommsUiState_t;
+
 typedef void (*ble_bridge_stream_sink_cb_t)(const uint8_t *data, size_t len);
 
 void ble_bridge_init(void);
@@ -26,9 +37,11 @@ void ble_bridge_loop(void);
 void ble_bridge_feed_state(const RoverUIData_t *state);
 
 void ble_bridge_request_toggle(void);
+void ble_bridge_request_comms_cycle(void);
 void ble_bridge_reclaim_local(void);
 
 RoverBleUiState_t ble_bridge_get_ui_state(void);
+RoverCommsUiState_t ble_bridge_get_comms_ui_state(void);
 bool ble_bridge_is_active(void);
 bool ble_bridge_is_connected(void);
 bool ble_bridge_is_slave_dimmed(void);

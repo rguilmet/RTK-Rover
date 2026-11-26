@@ -11,8 +11,7 @@
 // Row 1: System & Radios
 static lv_obj_t *hdr_datetime_lbl = NULL;
 lv_obj_t        *hdr_units_lbl    = NULL;
-static lv_obj_t *hdr_ble_lbl      = NULL;
-static lv_obj_t *hdr_wifi_lbl     = NULL;
+static lv_obj_t *hdr_radio_lbl    = NULL;
 static lv_obj_t *hdr_batt_lbl     = NULL;
 
 // Row 2: Master Antenna (ANT1)
@@ -201,7 +200,7 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_datetime_lbl, "2026-10-26 00:00:00");
     lv_obj_set_style_text_color(hdr_datetime_lbl, lv_color_hex(0xE0E6ED), 0);
     lv_obj_set_style_text_font(hdr_datetime_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_set_width(hdr_datetime_lbl, 148);
+    lv_obj_set_width(hdr_datetime_lbl, 165);
     lv_label_set_long_mode(hdr_datetime_lbl, LV_LABEL_LONG_CLIP);
     lv_obj_align(hdr_datetime_lbl, LV_ALIGN_TOP_LEFT, 4, 2);
 
@@ -209,19 +208,13 @@ void create_rover_ui(void)
     lv_label_set_text(hdr_units_lbl, current_settings.use_imperial_units ? "IMP" : "SI");
     lv_obj_set_style_text_color(hdr_units_lbl, current_settings.use_imperial_units ? COLOR_UNIT_IMP_AMBER : COLOR_UNIT_SI_TEAL, 0);
     lv_obj_set_style_text_font(hdr_units_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -148, 2);
+    lv_obj_align(hdr_units_lbl, LV_ALIGN_TOP_RIGHT, -145, 2);
 
-    hdr_ble_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_ble_lbl, LV_SYMBOL_BLUETOOTH);
-    lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x475569), 0);
-    lv_obj_set_style_text_font(hdr_ble_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_ble_lbl, LV_ALIGN_TOP_RIGHT, -126, 2);
-
-    hdr_wifi_lbl = lv_label_create(hdr);
-    lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
-    lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);
-    lv_obj_set_style_text_font(hdr_wifi_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(hdr_wifi_lbl, LV_ALIGN_TOP_RIGHT, -108, 2);
+    hdr_radio_lbl = lv_label_create(hdr);
+    lv_label_set_text(hdr_radio_lbl, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_color(hdr_radio_lbl, lv_color_hex(0x475569), 0);
+    lv_obj_set_style_text_font(hdr_radio_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(hdr_radio_lbl, LV_ALIGN_TOP_RIGHT, -118, 2);
 
     hdr_batt_lbl = lv_label_create(hdr);
     lv_label_set_text(hdr_batt_lbl, "100% 4.1V");
@@ -536,34 +529,38 @@ void update_rover_ui(const RoverUIData_t *d)
         }
     }
 
-    // BLE Status Badge in Row 1 (Icon only: Slate=OFF/Hold, Amber=Adv/Init, Cyan=Connected, Green=Slave)
-    if (hdr_ble_lbl) {
-        RoverBleUiState_t b_st = ble_bridge_get_ui_state();
-        lv_label_set_text(hdr_ble_lbl, LV_SYMBOL_BLUETOOTH);
-        if (b_st == ROVER_BLE_UI_CONN) {
-            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x22D3EE), 0);
-        } else if (b_st == ROVER_BLE_UI_SLAVE) {
-            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x10B981), 0);
-        } else if (b_st == ROVER_BLE_UI_ADV || b_st == ROVER_BLE_UI_STARTING) {
-            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0xF59E0B), 0);
-        } else {
-            lv_obj_set_style_text_color(hdr_ble_lbl, lv_color_hex(0x475569), 0);
-        }
-    }
-
-    // Wi-Fi Status Badge in Row 1 (Icon only: Slate=OFF, Amber=Connecting, Cyan=Router STA, Purple=AP)
-    if (hdr_wifi_lbl) {
-        lv_label_set_text(hdr_wifi_lbl, LV_SYMBOL_WIFI);
-        if (fic_web_portal_is_active()) {
-            if (fic_web_portal_is_softap()) {
-                lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xA855F7), 0); // Purple / Violet (AP)
-            } else {
-                lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x22D3EE), 0); // Cyan (Router STA)
+    // Unified Row 1 Radio Icon (dynamically swaps between Bluetooth & Wi-Fi symbols by COMMS state)
+    if (hdr_radio_lbl) {
+        static int s_last_hdr_comms = -1;
+        RoverCommsUiState_t c_st = ble_bridge_get_comms_ui_state();
+        if ((int)c_st != s_last_hdr_comms) {
+            s_last_hdr_comms = (int)c_st;
+            const char *sym = LV_SYMBOL_WIFI;
+            uint32_t col = 0x475569; // Dim slate (COMMS: OFF)
+            if (c_st == ROVER_COMMS_BLE_SLAVE) {
+                sym = LV_SYMBOL_BLUETOOTH;
+                col = 0x10B981; // Emerald (BLE Slave Dimmed)
+            } else if (c_st == ROVER_COMMS_BLE_CONN) {
+                sym = LV_SYMBOL_BLUETOOTH;
+                col = 0x22D3EE; // Cyan (BLE Connected)
+            } else if (c_st == ROVER_COMMS_BLE_ADV) {
+                sym = LV_SYMBOL_BLUETOOTH;
+                col = 0x38BDF8; // Sky Blue (BLE Advertising)
+            } else if (c_st == ROVER_COMMS_BLE_INIT) {
+                sym = LV_SYMBOL_BLUETOOTH;
+                col = 0xF59E0B; // Amber (BLE Init)
+            } else if (c_st == ROVER_COMMS_WIFI_CONN) {
+                sym = LV_SYMBOL_WIFI;
+                col = 0xF59E0B; // Amber (Wi-Fi Connecting)
+            } else if (c_st == ROVER_COMMS_WIFI_STA) {
+                sym = LV_SYMBOL_WIFI;
+                col = 0x22D3EE; // Cyan (Wi-Fi Router STA)
+            } else if (c_st == ROVER_COMMS_WIFI_AP) {
+                sym = LV_SYMBOL_WIFI;
+                col = 0xA855F7; // Violet (Wi-Fi SoftAP)
             }
-        } else if (fic_web_portal_is_starting()) {
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0xF59E0B), 0);     // Amber (Connecting)
-        } else {
-            lv_obj_set_style_text_color(hdr_wifi_lbl, lv_color_hex(0x475569), 0);     // Dim slate (OFF)
+            lv_label_set_text(hdr_radio_lbl, sym);
+            lv_obj_set_style_text_color(hdr_radio_lbl, lv_color_hex(col), 0);
         }
     }
 

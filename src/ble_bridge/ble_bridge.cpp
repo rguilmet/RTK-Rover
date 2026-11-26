@@ -539,6 +539,7 @@ extern "C" void ble_bridge_init(void)
     cfg.log_cb             = rover_printf;
 
     fic_ble_companion_configure(&cfg);
+    fic_web_portal_set_ble_auto_resume(false);
     if (current_settings.ble_enabled) {
         (void)fic_ble_companion_start();
     } else {
@@ -556,7 +557,7 @@ extern "C" void ble_bridge_loop(void)
             s_ui_dirty = true;
         }
     } else if (cmd > 0) {
-        if (!fic_web_portal_is_active() && !fic_web_portal_is_starting()) {
+        if (!fic_web_portal_is_busy()) {
             s_pending_cmd = 0;
             (void)fic_ble_companion_start();
             s_ui_dirty = true;
@@ -617,6 +618,48 @@ extern "C" void ble_bridge_request_toggle(void)
     }
     mark_settings_dirty();
     s_ui_dirty = true;
+}
+
+extern "C" void ble_bridge_request_comms_cycle(void)
+{
+    fic_web_portal_set_ble_auto_resume(false);
+    if (fic_web_portal_is_active() || fic_web_portal_is_starting()) {
+        // WIFI -> OFF (also cancels WIFI: CONN immediately without auto-resuming BLE)
+        s_pending_cmd = 0;
+        current_settings.ble_enabled = false;
+        mark_settings_dirty();
+        fic_web_portal_stop();
+    } else if (fic_ble_companion_is_active() || s_pending_cmd > 0) {
+        // BLE -> WIFI (portal suspends NimBLE cleanly; ble_enabled stays true for reboot default)
+        s_pending_cmd = 0;
+        fic_web_portal_start();
+    } else {
+        // OFF -> BLE
+        current_settings.ble_enabled = true;
+        mark_settings_dirty();
+        s_pending_cmd = 1;
+    }
+    s_ui_dirty = true;
+}
+
+extern "C" RoverCommsUiState_t ble_bridge_get_comms_ui_state(void)
+{
+    if (fic_web_portal_is_active()) {
+        return fic_web_portal_is_softap() ? ROVER_COMMS_WIFI_AP : ROVER_COMMS_WIFI_STA;
+    }
+    if (fic_web_portal_is_starting()) {
+        return ROVER_COMMS_WIFI_CONN;
+    }
+    if (s_pending_cmd > 0) {
+        return ROVER_COMMS_BLE_INIT;
+    }
+    if (fic_ble_companion_is_active()) {
+        if (fic_ble_companion_is_connected()) {
+            return s_slave_dimmed ? ROVER_COMMS_BLE_SLAVE : ROVER_COMMS_BLE_CONN;
+        }
+        return ROVER_COMMS_BLE_ADV;
+    }
+    return ROVER_COMMS_OFF;
 }
 
 extern "C" void ble_bridge_reclaim_local(void)
@@ -689,7 +732,7 @@ extern "C" void ble_bridge_format_status(char *buf, size_t buf_sz)
             snprintf(buf, buf_sz, "BLE: Held while Wi-Fi Active");
             break;
         default:
-            snprintf(buf, buf_sz, "Radios: Wi-Fi & BLE Off");
+            snprintf(buf, buf_sz, "Comms: OFF (Tap COMMS for BLE)");
             break;
     }
 }

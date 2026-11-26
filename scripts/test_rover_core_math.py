@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.4.0"
+__version__ = "v1.5.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -460,6 +460,53 @@ class RoverCoreMathTests(unittest.TestCase):
         self.assertIn("rover_is_storage_write_locked", ino_txt)
         self.assertIn("ble_bridge_init()", ino_txt)
         self.assertIn("ble_bridge_loop()", ino_txt)
+
+    def test_v0121_comms_consolidation_and_dram0_guards(self):
+        with open(os.path.join(CORE_ROOT, "src", "net", "fic_web_portal.h"), "r", encoding="utf-8") as fh:
+            wph = fh.read()
+        with open(os.path.join(CORE_ROOT, "src", "net", "fic_web_portal.cpp"), "r", encoding="utf-8") as fh:
+            wpc = fh.read()
+        self.assertIn("fic_web_portal_set_ble_auto_resume", wph)
+        self.assertIn("fic_web_portal_is_busy", wph)
+        self.assertIn("fic_web_portal_set_ble_auto_resume", wpc)
+        self.assertIn("fic_web_portal_is_busy", wpc)
+
+        with open(os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.h"), "r", encoding="utf-8") as fh:
+            bbh = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.cpp"), "r", encoding="utf-8") as fh:
+            bbc = fh.read()
+        self.assertIn("ble_bridge_request_comms_cycle", bbh)
+        self.assertIn("ble_bridge_get_comms_ui_state", bbh)
+        self.assertIn("fic_web_portal_set_ble_auto_resume(false)", bbc)
+        self.assertIn("fic_web_portal_is_busy()", bbc)
+
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_tile5_settings.c"), "r", encoding="utf-8") as fh:
+            t5c = fh.read()
+        self.assertIn("t5_calmag_btn   = create_grid_button(parent, 0, 3,", t5c)
+        self.assertIn("t1_unit_btn     = create_grid_button(parent, 1, 3,", t5c)
+        self.assertIn("t5_autooff_btn  = create_grid_button(parent, 2, 3,", t5c)
+        self.assertIn("t1_lora_btn     = create_grid_button(parent, 0, 4,", t5c)
+        self.assertIn("t5_comms_btn    = create_grid_button(parent, 1, 4,", t5c)
+        self.assertIn("t5_rtcm_src_btn = create_grid_button(parent, 2, 4,", t5c)
+
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_header_nav.c"), "r", encoding="utf-8") as fh:
+            hnc = fh.read()
+        self.assertIn("hdr_radio_lbl", hnc)
+        self.assertIn("lv_obj_align(hdr_radio_lbl, LV_ALIGN_TOP_RIGHT, -118, 2)", hnc)
+        self.assertIn("lv_obj_set_width(hdr_datetime_lbl, 165)", hnc)
+        self.assertNotIn("hdr_ble_lbl", hnc)
+        self.assertNotIn("hdr_wifi_lbl", hnc)
+
+        with open(os.path.join(ROVER_ROOT, "RTK_Rover.ino"), "r", encoding="utf-8") as fh:
+            ino_txt = fh.read()
+        self.assertIn("xTaskCreatePinnedToCoreWithCaps", ino_txt)
+        self.assertIn('create_psram_stack_task(task_rover_core0,       "RoverCore0"', ino_txt)
+        self.assertIn('create_psram_stack_task(task_display_and_audio, "RoverUI"', ino_txt)
+
+        with open(os.path.join(ROVER_ROOT, "src", "rover_power", "rover_power.cpp"), "r", encoding="utf-8") as fh:
+            pwc = fh.read()
+        self.assertIn("s_auto_off_poweroff_pending", pwc)
+        self.assertIn("do_auto_off", pwc)
 
 
 def run_xtensa_syntax_checks():
