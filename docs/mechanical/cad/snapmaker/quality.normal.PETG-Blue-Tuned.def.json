@@ -30,7 +30,7 @@
       "default_value": 0.16
     },
     "layer_height_0": {
-      "default_value": 0.28
+      "default_value": 0.24
     },
     "infill_sparse_thickness": {
       "default_value": 0.16
@@ -189,10 +189,10 @@
       "default_value": "[  ]"
     },
     "infill_sparse_density": {
-      "default_value": 30
+      "default_value": 20
     },
     "infill_line_distance": {
-      "default_value": 4
+      "default_value": 2
     },
     "infill_angles": {
       "default_value": "[  ]"
@@ -660,10 +660,10 @@
       "default_value": true
     },
     "retraction_combing": {
-      "default_value": "no_outer_surfaces"
+      "default_value": "noskin"
     },
     "retraction_combing_max_distance": {
-      "default_value": 10
+      "default_value": 5
     },
     "retraction_min_travel": {
       "default_value": 0.8
@@ -687,10 +687,10 @@
       "default_value": 0.2
     },
     "skin_overlap": {
-      "default_value": 5
+      "default_value": 15
     },
     "skin_overlap_mm": {
-      "default_value": 0.02
+      "default_value": 0.06
     },
     "infill_overlap": {
       "default_value": 10
@@ -1017,7 +1017,7 @@
       "default_value": 0.9
     },
     "raft_base_thickness": {
-      "default_value": 0.3
+      "default_value": 0.288
     },
     "raft_base_line_width": {
       "default_value": 0.8
@@ -1218,7 +1218,7 @@
       "default_value": 90
     },
     "cross_infill_pocket_size": {
-      "default_value": 4
+      "default_value": 2
     },
     "cross_infill_density_image": {
       "default_value": ""

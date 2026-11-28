@@ -5,6 +5,14 @@ All notable changes to the **RTK Rover** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.13.0] - 2026-11-28
+### Added & Integrated
+- **Plan 2 Phase 2.4 -- Core 0 Dual-Source RTCM3 Arbiter (`LoRa` + `BLE NTRIP`) & `RTCM SRC` Control ([`rover_api.h`](src/rover_api.h), [`rtcm_arbiter.h`](src/rtcm_arbiter/rtcm_arbiter.h), [`rtcm_arbiter.cpp`](src/rtcm_arbiter/rtcm_arbiter.cpp), [`e220_rtcm_gatekeeper.cpp`](src/e220_driver/e220_rtcm_gatekeeper.cpp), [`ble_bridge.cpp`](src/ble_bridge/ble_bridge.cpp), [`RTK_Rover.ino`](RTK_Rover.ino), [`ui_tile5_settings.c`](src/lvgl_port/ui_tile5_settings.c), [`ui_header_nav.c`](src/lvgl_port/ui_header_nav.c), [`ui_tile4_diagnostics.c`](src/lvgl_port/ui_tile4_diagnostics.c), [`test_rover_core_math.py`](scripts/test_rover_core_math.py)):**
+  - **PSRAM-Buffered `STREAM_RX` & Single-Gateway `CRC24Q` Arbiter (`src/rtcm_arbiter/`):** Allocated `4 KB` BLE NTRIP ingress ring buffer and `1.5 KB` `0xD3` staging buffer in Octal PSRAM; routed both E220 LoRa (`e220_rtcm_gatekeeper.cpp`) and FICP `STREAM_RX` NTRIP (`ble_bridge.cpp`) through Core 0 `rtcm_arbiter_submit_frame()` before forwarding validated frames to `UM982 COM1`.
+  - **Failover & Anti-Chatter Hysteresis (`AUTO` / `LORA` / `NTRIP`):** `AUTO` keeps LoRa primary, fails over to `BLE NTRIP` when `now - last_lora_ok_ms > 3000 ms`, and promotes back to LoRa only after `3` consecutive clean LoRa frames (`> 10 s` silence resets active source to `NONE`).
+  - **UI & FICP Control (`0x88` + `MSG_CONFIG_UPDATE`):** Activated Tile 5 Row 5 Col 2 `RTCM SRC` cycling button (`AUTO` / `LORA ONLY` / `NTRIP ONLY` + `MSG_STATE_EVENT` sync), updated Header Row 2 badge (`NTRIP BLE` / `NTRIP X.Xs` / `NO CORR` / `LoRa: -XXdB`) and `0x81` telemetry `rtcm_src` field, and added the `[BLE & NTRIP ARBITER]` diagnostics card on Tile 4.
+  - Added reference FSM simulation and wiring checks in `test_rover_core_math.py` (`v1.6.0`, `12/12` OK) and synchronized `project_overview.md` (`v2.12.0`), `user_manual.md`, `README.md`, and `scripts/README.md`.
+
 ## [docs/mechanical] - 2026-11-26
 ### Added
 - **Verified Snapmaker 2.0 A350T Luban `4.15.0` PETG Slicer Profiles ([`material.PETG-Blue-Tuned.def.json`](docs/mechanical/cad/snapmaker/material.PETG-Blue-Tuned.def.json), [`quality.normal.PETG-Blue-Tuned.def.json`](docs/mechanical/cad/snapmaker/quality.normal.PETG-Blue-Tuned.def.json), [`cad/README.md`](docs/mechanical/cad/README.md), [`printing_and_bom_guide.md`](docs/mechanical/printing_and_bom_guide.md)):**

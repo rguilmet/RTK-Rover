@@ -7,6 +7,7 @@
 #include "../rover_power/rover_power.h"
 #include "../rover_sensors/rover_sensors.h"
 #include "../rover_audio/rover_audio.h"
+#include "../rtcm_arbiter/rtcm_arbiter.h"
 #include "../lvgl_port/lvgl_port.h"
 #include "../storage/route_logger.h"
 #include "../storage/serial_logger.h"
@@ -55,6 +56,7 @@ typedef struct {
     int16_t       rssi_dbm;
     int16_t       noise_dbm;
     float         air_rate_kbps;
+    uint8_t       rtcm_active_src;
     int16_t       active_wp_idx;
     bool          survey_active;
     uint8_t       survey_pct;
@@ -285,8 +287,7 @@ static bool rover_ble_config_update_cb(JsonObjectConst settings_in,
     }
     if (settings_in["rtcm_source_mode"].is<const char *>()) {
         const char *m = settings_in["rtcm_source_mode"].as<const char *>();
-        if (strcmp(m, "AUTO") == 0 || strcmp(m, "LORA") == 0 || strcmp(m, "NTRIP") == 0) {
-            snprintf(current_settings.rtcm_source_mode, sizeof(current_settings.rtcm_source_mode), "%s", m);
+        if (rtcm_arbiter_set_mode_from_str(m)) {
             applied_out["rtcm_source_mode"] = current_settings.rtcm_source_mode;
             changed = true;
         }
@@ -428,7 +429,7 @@ static size_t rover_ble_telem_pack_cb(uint8_t *out, size_t max_len, uint8_t *msg
     write_u16_le(&out[64], (uint16_t)lroundf(fminf(fmaxf(t.h_acc_m * 1000.0f, 0.0f), 65535.0f)));
     write_u16_le(&out[66], (uint16_t)lroundf(fminf(fmaxf(t.v_acc_m * 1000.0f, 0.0f), 65535.0f)));
     write_u16_le(&out[68], (uint16_t)lroundf(fminf(fmaxf(t.diff_age_s * 10.0f, 0.0f), 65535.0f)));
-    out[70] = 1U; // 1 = LoRa active (Phase 2.4 rtcm_arbiter updates live source)
+    out[70] = t.rtcm_active_src;
     out[71] = rtcm_mode;
     out[72] = rate_code;
     out[73] = (uint8_t)clamp_i8_dbm(t.rssi_dbm);
@@ -474,10 +475,32 @@ static bool rover_ble_ext_rpc_cb(uint8_t msg_id,
 {
     (void)seq;
     (void)flags;
-    (void)payload;
-    (void)len;
-    (void)ack_json_out;
-    (void)ack_json_sz;
+    if (msg_id == 0x88U) {
+        bool ok = false;
+        if (payload != nullptr && len == 1U && payload[0] <= (uint8_t)RTCM_MODE_NTRIP_ONLY) {
+            rtcm_arbiter_set_mode((RtcmSourceMode_t)payload[0]);
+            ok = true;
+        } else if (payload != nullptr && len > 0U) {
+            JsonDocument doc;
+            if (deserializeJson(doc, payload, len) == DeserializationError::Ok &&
+                doc["mode"].is<const char *>()) {
+                ok = rtcm_arbiter_set_mode_from_str(doc["mode"].as<const char *>());
+            }
+        }
+        if (ok) {
+            mark_settings_dirty();
+            s_ui_dirty = true;
+            if (ack_json_out && ack_json_sz > 0U) {
+                snprintf(ack_json_out, ack_json_sz, "{\"mode\":\"%s\"}", current_settings.rtcm_source_mode);
+            }
+            return true;
+        }
+        if (err_code_out) *err_code_out = FICP_ERR_INVALID_PARAM;
+        if (err_reason_out && err_reason_sz > 0U) {
+            snprintf(err_reason_out, err_reason_sz, "Invalid RTCM source mode");
+        }
+        return false;
+    }
     if (err_code_out) *err_code_out = FICP_ERR_UNSUPPORTED_MSG;
     if (err_reason_out && err_reason_sz > 0U) {
         snprintf(err_reason_out, err_reason_sz, "Rover ext 0x%02X scheduled for Phase 2.5", (unsigned)msg_id);
@@ -541,6 +564,7 @@ extern "C" void ble_bridge_init(void)
 
     fic_ble_companion_configure(&cfg);
     fic_web_portal_set_ble_auto_resume(false);
+    ble_bridge_set_stream_rx_sink(rtcm_arbiter_submit_ble_stream);
     if (current_settings.ble_enabled) {
         (void)fic_ble_companion_start();
     } else {
@@ -599,6 +623,7 @@ extern "C" void ble_bridge_feed_state(const RoverUIData_t *state)
     s_telem.rssi_dbm          = state->e220_stats.last_pkt_rssi_dbm;
     s_telem.noise_dbm         = state->e220_stats.ambient_noise_dbm;
     s_telem.air_rate_kbps     = state->e220_stats.active_air_rate_kbps;
+    s_telem.rtcm_active_src   = (uint8_t)state->rtcm_arbiter.active_source;
     s_telem.active_wp_idx     = state->active_target_idx;
     s_telem.survey_active     = state->survey_in_progress;
     s_telem.survey_pct        = state->survey_progress_pct;

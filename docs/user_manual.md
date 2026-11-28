@@ -92,7 +92,7 @@ The top `74 px` remain visible across all `6` tiles (`[Tile 5: Settings] <-> [Ti
 
 ### Row 2: Master Antenna (ANT1) & LoRa Link
 * **Fix Badge:** `RTK FIX` (Green `< 2 cm`), `RTK FLT` (Yellow), `DGPS` (Orange), `SINGLE` (Red), or `OFF`.
-* **Satellites / Precision / RTCM Age / LoRa:** `SV: used/view`, `+/- h_acc`, `RTCM: X.Xs`, and `LoRa: -XXdB` (Green `>= -90 dBm`, Yellow `-91..-105`, Red `< -105`).
+* **Satellites / Precision / Corrections:** `SV: used/view`, `+/- h_acc`, and active RTCM3 source (`LoRa: -XXdB` Green/Yellow/Red, `NTRIP X.Xs` Cyan/Amber, or `NO CORR` Slate).
 
 ### Row 3: Slave Antenna (ANT2) & Woods Heading Fallback
 * **Heading Badge:** `SLV FIX` (dual-antenna fixed `0.2 deg`), `SLV FLT` (float), `HDG CMP` (`SEN0696` `I2C1` 9-DOF or `MMC5983MA`, `0.0 s` handoff), `HDG WALK` (`>= 0.70 m` steps), `HDG GYRO` (iron coast / turn), `HDG HLD` (stationary freeze), `NO HDG`, or `OFF`.
@@ -200,7 +200,9 @@ One tap `< Prev` from Tile 0 opens **Tile 5 (`ui_tile5_settings.c`)** with `15` 
 | **Row 2:** `SERIAL: ON/OFF` | **Row 2:** `NMEA: ON/OFF` | **Row 2:** `RTCM: ON/OFF` |
 | **Row 3:** `TELEM: ON/OFF` | **Row 3:** `IMU: ON/OFF` | **Row 3:** `TOUCH: ON/OFF` |
 | **Row 4:** `CAL MAG` (`OK` Green / Ready) | **Row 4:** `UNITS: IMP/SI` | **Row 4:** `AUTO-OFF: 5m/15m/30m/OFF` |
-| **Row 5:** `LORA: 4.8k / 9.6k / 19.2k` | **Row 5:** `COMMS: BLE / WIFI / OFF` | **Row 5:** `RTCM SRC: PHASE 2.4` *(Reserved)* |
+| **Row 5:** `LORA: 4.8k / 9.6k / 19.2k` | **Row 5:** `COMMS: BLE / WIFI / OFF` | **Row 5:** `RTCM: AUTO / LORA / NTRIP` |
+
+* **Dual-Source RTCM3 Arbiter (`RTCM: AUTO / LORA ONLY / NTRIP ONLY`):** Tap Row 5 Col 2 (`RTCM SRC`) to cycle arbitration modes cleanly (also mirrored bidirectionally over FICP `0x12`/`0x88`). In `AUTO` (default), LoRa remains primary; if LoRa is silent `> 3.0 s`, valid `CRC24Q` NTRIP `RTCM3` frames arriving over BLE `STREAM_RX` promote seamlessly (`NTRIP X.Xs` in Header Row 2), and LoRa reclaims control only after `3` consecutive valid frames.
 
 * **Unified `COMMS` 3-State Radio Cycle (`BLE -> WIFI -> OFF -> BLE`):** Field default starts **`BLE: ADV`** (`"RTK-Rover"`, `MTU 517`) with Wi-Fi OFF to conserve internal `DRAM0`. Tapping `COMMS` advances cleanly to **Wi-Fi Web Portal** (suspending NimBLE before `WiFi.mode()`): Amber `WIFI: CONN` (tap `COMMS` again `<= 100 ms` to cancel straight to `COMMS: OFF`) -> Emerald `WIFI: STA` (`http://<local-ip>/`) -> Violet `WIFI: AP` (`http://192.168.4.1/`, SoftAP creds from `/settings.json`). Tapping `COMMS` while Wi-Fi is active stops Wi-Fi cleanly into **`COMMS: OFF`**; tapping again restarts **`BLE: ADV`**. When an Android phone enters `slave_dimmed` mode, a dimmed overlay renders `[LOCAL CONTROL]` for instant one-tap reclaim (with a `5 s` heartbeat watchdog fail-safe).
 * **Motion/REC-Safe `AUTO-OFF` Guard:** Automatically inhibited by external USB power, Wi-Fi, active `BLE Link`, active Survey or `CAL MAG`, `REC ON` route track logging, `NMEA`/`RTCM` logging, GNSS/IMU motion, or touch/`BOOT` input. When an idle timer expires, a full-screen `lv_layer_top()` **`30 s` countdown modal (`TAP ANYWHERE TO CANCEL`)** alerts with beeps before stopping/flushing all SD logs cleanly and cutting `AXP2101` power.

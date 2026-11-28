@@ -1,4 +1,5 @@
 #include "e220_driver_internal.h"
+#include "../rtcm_arbiter/rtcm_arbiter.h"
 
 // =========================================================================
 // Sliding-Window Store-and-Verify RTCM3 Gatekeeper State
@@ -270,14 +271,15 @@ void e220_process_rx_stage(void)
         uint16_t msg_type = ((uint16_t)rx_stage[3] << 4) | ((rx_stage[4] >> 4) & 0x0F);
         uint32_t crc = e220_rtcm_crc24q_compute(rx_stage, total_len);
         if (crc == 0) {
-            // Verified intact RTCM3 frame -> forward atomically to UM982 COM1!
-            um982_forward_rtcm(rx_stage, total_len);
-
+            // Verified intact RTCM3 frame -> route through Core 0 Dual-Source RTCM Arbiter
             uint32_t ok_now = millis();
+            bool forwarded = rtcm_arbiter_submit_frame(RTCM_SRC_LORA, rx_stage, total_len, msg_type, ok_now);
             rtcm_in_resync = false;
             s_last_valid_rtcm_ms = ok_now;
             e220_stats.rtcm_frames_ok++;
-            e220_stats.rtcm_bytes_forwarded += (uint32_t)total_len;
+            if (forwarded) {
+                e220_stats.rtcm_bytes_forwarded += (uint32_t)total_len;
+            }
             e220_stats.last_msg_type = msg_type;
 
             if (msg_type == 1005 || msg_type == 1006) {

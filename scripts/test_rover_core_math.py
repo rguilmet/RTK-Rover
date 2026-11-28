@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.5.0"
+__version__ = "v1.6.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -508,6 +508,99 @@ class RoverCoreMathTests(unittest.TestCase):
         self.assertIn("s_auto_off_poweroff_pending", pwc)
         self.assertIn("do_auto_off", pwc)
 
+    def test_phase24_rtcm_arbiter_failover_and_hysteresis(self):
+        # Reference FSM simulation matching rtcm_arbiter.cpp
+        MODE_AUTO, MODE_LORA, MODE_NTRIP = 0, 1, 2
+        SRC_NONE, SRC_LORA, SRC_NTRIP = 0, 1, 2
+        st = {"mode": MODE_AUTO, "active": SRC_NONE, "last_lora": 0, "streak": 0, "failovers": 0}
+
+        def submit(src, now_ms):
+            if st["mode"] == MODE_LORA:
+                if src == SRC_LORA:
+                    st["last_lora"] = now_ms
+                    st["active"] = SRC_LORA
+                    return True
+                return False
+            if st["mode"] == MODE_NTRIP:
+                if src == SRC_NTRIP:
+                    st["active"] = SRC_NTRIP
+                    return True
+                return False
+            if src == SRC_LORA:
+                st["last_lora"] = now_ms
+                if st["active"] == SRC_NTRIP:
+                    st["streak"] += 1
+                    if st["streak"] >= 3:
+                        st["active"] = SRC_LORA
+                        st["streak"] = 0
+                        st["failovers"] += 1
+                        return True
+                    return False
+                st["active"] = SRC_LORA
+                st["streak"] = 0
+                return True
+            timed_out = (st["last_lora"] == 0) or ((now_ms - st["last_lora"]) > 3000)
+            if st["active"] == SRC_NTRIP:
+                if timed_out:
+                    st["streak"] = 0
+                return True
+            if timed_out:
+                if st["active"] == SRC_LORA:
+                    st["failovers"] += 1
+                st["active"] = SRC_NTRIP
+                st["streak"] = 0
+                return True
+            return False
+
+        self.assertTrue(submit(SRC_LORA, 1000))
+        self.assertEqual(st["active"], SRC_LORA)
+        self.assertFalse(submit(SRC_NTRIP, 2500))  # LoRa fresh (<= 3000ms) -> suppress NTRIP
+        self.assertTrue(submit(SRC_NTRIP, 4500))   # > 3000ms silence -> failover to BLE NTRIP
+        self.assertEqual(st["active"], SRC_NTRIP)
+        self.assertEqual(st["failovers"], 1)
+        self.assertFalse(submit(SRC_LORA, 5000))   # Recovery frame 1/3 held
+        self.assertFalse(submit(SRC_LORA, 5200))   # Recovery frame 2/3 held
+        self.assertTrue(submit(SRC_LORA, 5400))    # Recovery frame 3/3 promotes back to LoRa
+        self.assertEqual(st["active"], SRC_LORA)
+        self.assertEqual(st["failovers"], 2)
+
+        st["mode"] = MODE_LORA
+        self.assertFalse(submit(SRC_NTRIP, 99999))
+        st["mode"] = MODE_NTRIP
+        self.assertFalse(submit(SRC_LORA, 100000))
+        self.assertTrue(submit(SRC_NTRIP, 100100))
+
+        # Source wiring & PSRAM/gatekeeper assertions
+        arb_h = os.path.join(ROVER_ROOT, "src", "rtcm_arbiter", "rtcm_arbiter.h")
+        arb_cpp = os.path.join(ROVER_ROOT, "src", "rtcm_arbiter", "rtcm_arbiter.cpp")
+        gk_cpp = os.path.join(ROVER_ROOT, "src", "e220_driver", "e220_rtcm_gatekeeper.cpp")
+        with open(arb_h, "r", encoding="utf-8") as fh:
+            ah = fh.read()
+        with open(arb_cpp, "r", encoding="utf-8") as fh:
+            ac = fh.read()
+        with open(gk_cpp, "r", encoding="utf-8") as fh:
+            gk = fh.read()
+        self.assertIn("RTCM_ARBITER_LORA_FAILOVER_MS", ah)
+        self.assertIn("MALLOC_CAP_SPIRAM", ac)
+        self.assertIn("e220_rtcm_validate_frame", ac)
+        self.assertIn("rtcm_arbiter_submit_frame(RTCM_SRC_LORA", gk)
+        self.assertNotIn("um982_forward_rtcm(", gk)
+
+        with open(os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.cpp"), "r", encoding="utf-8") as fh:
+            bbc = fh.read()
+        self.assertIn("rtcm_arbiter_submit_ble_stream", bbc)
+        self.assertIn("0x88U", bbc)
+
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_tile5_settings.c"), "r", encoding="utf-8") as fh:
+            t5c = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_tile4_diagnostics.c"), "r", encoding="utf-8") as fh:
+            t4c = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_header_nav.c"), "r", encoding="utf-8") as fh:
+            hnc = fh.read()
+        self.assertIn("rtcm_src_toggle_btn_cb", t5c)
+        self.assertIn("t4_ble_ntrip_lbl", t4c)
+        self.assertIn("RTCM_SRC_BLE_NTRIP", hnc)
+
 
 def run_xtensa_syntax_checks():
     gpp = find_xtensa_gpp()
@@ -531,6 +624,7 @@ def run_xtensa_syntax_checks():
         '#include "nav_engine/nav_engine.h"',
         '#include "math/fic_matrix_math.h"',
         '#include "fusion/fic_ahrs_9dof.h"',
+        '#include "rtcm_arbiter/rtcm_arbiter.h"',
         "int rover_host_syntax_probe() { return (int)NAV_BREADCRUMB_CAPACITY; }",
         "",
     ])

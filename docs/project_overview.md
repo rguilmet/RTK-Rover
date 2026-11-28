@@ -1,8 +1,8 @@
 # RTK Rover - Project Overview
 
-**Document Version:** `v2.11.0`  
-**Last Updated:** November 25, 2026  
-**Firmware Target:** `v0.12.0` (depends on `Field_Instrument_Core >= v1.2.1`; standalone snapshot at Git tag `v0.10.10`)  
+**Document Version:** `v2.12.0`  
+**Last Updated:** November 28, 2026  
+**Firmware Target:** `v0.13.0` (depends on `Field_Instrument_Core >= v1.2.3`; standalone snapshot at Git tag `v0.10.10`)  
 **Python Ecosystem Target:** `e220_pacer.py v3.7.1` | `stage2_bench_verify.py v1.0.3` | `cogo_solver.py v1.2.0`  
 **Mechanical CAD Baseline:** `v2.2.4`  
 **License:** GNU General Public License v3.0 (`GPLv3`)  
@@ -28,8 +28,8 @@ This document serves as the master technical specification for the **RTK Rover**
 2. **RTK GNSS Receiver:** **Holybro H-RTK Unicore UM982** (Dual-Antenna Multi-Band RTK GNSS)
    * Mounted on the survey pole T-bar with Master (Position) and Slave (Heading) antennas separated by `0.555 m` (`55.5 cm`, configurable via `antenna_spacing_m` in `settings.json`).
    * The survey pole centerline sits at the **exact midpoint** (`27.75 cm`) between Master and Slave antennas, at height `antenna_height_m` (default `1.800 m`) above the ground tip.
-3. **RTCM Correction Radio:** **Ebyte E220-900T30S** (900MHz LoRa UART Transceiver)
-   * Streams RTCM3 differential corrections in transparent mode at `115200` baud to ESP32 Core 0, which validates `CRC24Q` and forwards intact frames to `UM982 COM1` at `115200` baud via `s_com1_tx_mutex`.
+3. **RTCM Correction Radio & Dual-Source Arbiter:** **Ebyte E220-900T30S** (`4.8k / 9.6k / 19.2k` LoRa) + **Core 0 `rtcm_arbiter` (`BLE STREAM_RX` NTRIP failover)**
+   * Streams RTCM3 differential corrections in transparent mode at `115200` baud to ESP32 Core 0, where both LoRa (`e220_rtcm_gatekeeper.cpp`) and FICP `BLE STREAM_RX` NTRIP (`rtcm_arbiter.cpp` PSRAM ring/staging buffers) pass strict `CRC24Q == 0` verification and single-source arbitration (`AUTO` `3.0 s` LoRa failover / `3`-frame recovery hysteresis, `LORA_ONLY`, `NTRIP_ONLY`) before atomic forwarding to `UM982 COM1` at `115200` baud via `s_com1_tx_mutex`.
    * **Radio Configuration (Verified on both Base and Rover, Profile Rev 3):**
      * **RF Channel (`e220_channel`):** `75` (`0x4B` -> `850.125 + 75 = 925.125 MHz`, cleanest US 902-928 MHz ISM channel in `test/e220-scan.csv` at `-96.23 dBm` avg, `+10.125 MHz` clear of `915.0 MHz`).
      * **UART Rate (`e220_uart_baud`):** `115200` bps, `8N1` (matching `UM982 COM1`).

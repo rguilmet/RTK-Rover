@@ -32,6 +32,7 @@
 #include "src/rover_power/rover_power.h"
 #include "src/rover_sensors/rover_sensors.h"
 #include "src/ble_bridge/ble_bridge.h"
+#include "src/rtcm_arbiter/rtcm_arbiter.h"
 
 extern SemaphoreHandle_t fs_mux;
 extern "C" void update_wifi_ip_label(const char *ip);
@@ -210,8 +211,9 @@ void task_rover_core0(void *pvParameters)
     uint32_t last_wp_seq       = g_waypoint_change_seq;
 
     for (;;) {
-        // 1. Poll E220 LoRa UART0 (IO41/42) and immediately forward RTCM3 to UM982 COM1 (IO17/18)
+        // 1. Poll E220 LoRa UART0 (IO41/42) & Core 0 Dual-Source RTCM3 Arbiter (LoRa + BLE NTRIP -> UM982 COM1)
         e220_poll_and_forward_rtcm();
+        rtcm_arbiter_poll();
 
         // 2. Poll UM982 COM1 (IO17/18) for NMEA GGA/RMC/GST/GSV, Heading, and Command Responses
         um982_poll_com1();
@@ -228,6 +230,7 @@ void task_rover_core0(void *pvParameters)
             um982_get_latest_state(&state);
             um982_get_port_stats(&state.um982_stats);
             e220_get_stats(&state.e220_stats);
+            rtcm_arbiter_get_stats(&state.rtcm_arbiter);
 
             // Compute Pole Centerline Ground Tip Position (compensating Master->Slave 555mm spacing & pole height)
             state.lever_arm_applied = nav_compute_pole_tip_position(state.raw_lat,
@@ -736,7 +739,8 @@ void setup()
     rover_init_display();
     rover_audio_init();
 
-    // 6. Initialize & Self-Test E220 LoRa (UART0) and UM982 Dual-Antenna GNSS (Single-UART COM1)
+    // 6. Initialize Dual-Source RTCM Arbiter, E220 LoRa (UART0), UM982 GNSS (Single-UART COM1), and BLE Companion
+    rtcm_arbiter_init();
     e220_driver_init();
     e220_run_powerup_selftest();
     um982_driver_init();

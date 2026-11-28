@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.12.2`  
+**Firmware Version:** `v0.13.0`  
 **Shared Core Dependency:** [`Field_Instrument_Core`](https://github.com/rguilmet/field-instrument-core) (`>= v1.2.3`, install into `Arduino/libraries/Field_Instrument_Core`; standalone self-contained snapshot preserved at Git tag `v0.10.10`)  
 **Hardware Reference Library:** [`Field_Instrument_Reference`](https://github.com/rguilmet/field-instrument-reference) (centralized vendor datasheets & technical articles)  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
@@ -37,7 +37,7 @@ The user interface is optimized for high-contrast sunlight readability on the Wa
 
 ### Persistent Top Header Bar (`74 px`)
 * **Row 1:** Local date/time, `SI`/`IMP` units badge, dynamic `COMMS` radio icon (`Bluetooth` Amber/Cyan/Sky/Emerald or `Wi-Fi` Amber/Cyan/Violet/Slate-OFF), and `[USB]` / `[Bat]` `AXP2101` power telemetry.
-* **Row 2:** `ANT1` fix badge (`RTK FIX` / `RTK FLT` / `DGPS` / `SINGLE`), `SV: used/view`, horizontal accuracy, `RTCM` age, and `LoRa` RSSI (`dBm`).
+* **Row 2:** `ANT1` fix badge (`RTK FIX` / `RTK FLT` / `DGPS` / `SINGLE`), `SV: used/view`, horizontal accuracy, and active correction source (`LoRa: -XXdB`, `NTRIP X.Xs`, or `NO CORR`).
 * **Row 3:** `ANT2` heading provenance (`SLV FIX`, `SLV FLT`, `HDG CMP`, `HDG WALK`, `HDG GYRO`, `HDG HLD`), baseline spacing (`BL: ~55.5cm`), and true heading.
 * **Row 4:** Live `14pt` pole ground-tip WGS84 Lat, Lon, and Height (`double` lever-arm compensated).
 
@@ -56,10 +56,10 @@ The user interface is optimized for high-contrast sunlight readability on the Wa
 * `24pt` True Heading readout with provenance and `[IRON ANOMALY]` warning, `224 px` spirit bubble level with 8-point compass ring, `300`-sample 360-deg ellipsoid `CAL MAG` wizard, plumb `TARE` button, `BEAM 10DOF I2C1` status, and `Baro Rel Elev`.
 
 ### Tile 4: Hardware Diagnostics & Live Observers
-* Pinned firmware header (`RTK ROVER v0.10.8`), calibrated LoRa RF survey card (`Noise`, `Pkt`, `AUX`, `RTCM3`, `Err/Trunc`), `Auto-Off` countdown/inhibit observer, MicroSD/`FFat` status, `ANT1`/`ANT2`/`Base Station` (`ECEF -> WGS84`), `SEN0696` (`Orient`/`FOC`/`3D-Cal`/`BMP581`) + `QMI8658` Pose, dual `I2C0/I2C1` error counters, and `E220` pin self-test (`M0`/`M1`).
+* Pinned firmware header, calibrated LoRa RF survey card (`Noise`, `Pkt`, `AUX`, `RTCM3`, `Err/Trunc`), `Auto-Off` countdown/inhibit observer, MicroSD/`FFat` status, `ANT1`/`ANT2`/`Base Station` (`ECEF -> WGS84`), `SEN0696` (`Orient`/`FOC`/`3D-Cal`/`BMP581`) + `QMI8658` Pose, `[BLE & NTRIP ARBITER]` (BLE state/MTU, arbiter mode/active source, failover/drop counters, caster), dual `I2C0/I2C1` error counters, and `E220` pin self-test (`M0`/`M1`).
 
 ### Tile 5: Dedicated `5x3` Quick Settings Deck
-* `15` enlarged `94 x 44 px` field controls (Row 1: `VOL`, `AUD`, `BRI`; Row 2: `SERIAL`, `NMEA`, `RTCM`; Row 3: `TELEM`, `IMU`, `TOUCH`; Row 4: `CAL MAG`, `UNITS`, `AUTO-OFF`; Row 5 RF deck: `LORA`, unified `COMMS` `BLE -> WIFI -> OFF`, reserved `RTCM SRC / PHASE 2.4`) above a dedicated Comms/Auto-Off/LoRa status footer.
+* `15` enlarged `94 x 44 px` field controls (Row 1: `VOL`, `AUD`, `BRI`; Row 2: `SERIAL`, `NMEA`, `RTCM`; Row 3: `TELEM`, `IMU`, `TOUCH`; Row 4: `CAL MAG`, `UNITS`, `AUTO-OFF`; Row 5 RF deck: `LORA`, unified `COMMS` `BLE -> WIFI -> OFF`, and `RTCM SRC` `AUTO / LORA ONLY / NTRIP ONLY`) above a dedicated Comms/Auto-Off/RTCM footer.
 * *Screenshots:* Capture screens cleanly in the field via `BOOT >= 1.5 s` (stored to `/screenshots/*.bmp`) and store converted UI reference PNGs under `docs/images/`.
 
 ---

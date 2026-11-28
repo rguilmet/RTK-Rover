@@ -607,9 +607,19 @@ void update_rover_ui(const RoverUIData_t *d)
     now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     uint32_t last_radio_rx_age = (d->e220_stats.last_rx_ms > 0) ? (now_ms - d->e220_stats.last_rx_ms) : 99999;
 
-    // Header Row 2: LoRa Signal Strength (Numeric "LoRa: -104dB", "LoRa: -- dB", or "LoRa: OFF")
-    if (!d->e220_stats.radio_online) {
-        lv_label_set_text(hdr_m_rtcm_lbl, "LoRa: OFF");
+    // Header Row 2: Correction Source & Strength ("NTRIP BLE"/"NTRIP X.Xs", "LoRa: -XXdB", or "NO CORR")
+    if (d->rtcm_arbiter.active_source == RTCM_SRC_BLE_NTRIP) {
+        if (d->diff_age_s < 99.0f) {
+            snprintf(buf, sizeof(buf), "NTRIP %.1fs", d->diff_age_s);
+        } else {
+            snprintf(buf, sizeof(buf), "NTRIP BLE");
+        }
+        lv_label_set_text(hdr_m_rtcm_lbl, buf);
+        lv_obj_set_style_text_color(hdr_m_rtcm_lbl,
+                                    (d->diff_age_s > 5.0f) ? lv_color_hex(0xF59E0B) : lv_color_hex(0x22D3EE),
+                                    0);
+    } else if (!d->e220_stats.radio_online) {
+        lv_label_set_text(hdr_m_rtcm_lbl, "NO CORR");
         lv_obj_set_style_text_color(hdr_m_rtcm_lbl, lv_color_hex(0x64748B), 0);
     } else if (d->e220_stats.rssi_valid && d->e220_stats.rx_bytes_total > 0) {
         bool is_stale = (last_radio_rx_age > 6000);

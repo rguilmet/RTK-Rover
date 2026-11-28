@@ -94,6 +94,39 @@ typedef struct {
 } E220LinkStats_t;
 
 // =========================================================================
+// Dual-Source RTCM3 Correction Arbiter (LoRa Primary + BLE NTRIP Failover)
+// =========================================================================
+typedef enum {
+    RTCM_SRC_NONE      = 0,
+    RTCM_SRC_LORA      = 1,
+    RTCM_SRC_BLE_NTRIP = 2
+} RtcmSourceId_t;
+
+typedef enum {
+    RTCM_MODE_AUTO       = 0,
+    RTCM_MODE_LORA_ONLY  = 1,
+    RTCM_MODE_NTRIP_ONLY = 2
+} RtcmSourceMode_t;
+
+typedef struct {
+    RtcmSourceMode_t mode;
+    RtcmSourceId_t   active_source;
+    uint32_t         lora_frames_ok;
+    uint32_t         lora_frames_dropped;
+    uint32_t         ntrip_frames_ok;
+    uint32_t         ntrip_bytes_rx;
+    uint32_t         ntrip_crc_errors;
+    uint32_t         ntrip_orphan_bytes;
+    uint32_t         ntrip_frames_dropped;
+    uint32_t         failover_count;
+    uint32_t         last_lora_ok_ms;
+    uint32_t         last_ntrip_ok_ms;
+    uint16_t         last_ntrip_msg_type;
+    float            ntrip_rx_kbps;
+    uint8_t          lora_recovery_streak;
+} RtcmArbiterStats_t;
+
+// =========================================================================
 // UM982 Single-UART (COM1) & Known-State Audit Telemetry
 // =========================================================================
 typedef struct {
@@ -288,8 +321,9 @@ typedef struct {
     char             last_logged_label[WAYPOINT_LABEL_LEN];
 
     // Hardware Link Diagnostics
-    E220LinkStats_t  e220_stats;
-    Um982PortStats_t um982_stats;
+    E220LinkStats_t    e220_stats;
+    Um982PortStats_t   um982_stats;
+    RtcmArbiterStats_t rtcm_arbiter;
 } RoverUIData_t;
 
 // =========================================================================

@@ -6,6 +6,7 @@
 #include "../storage/rtcm_logger.h"
 #include "../e220_driver/e220_driver.h"
 #include "../ble_bridge/ble_bridge.h"
+#include "../rtcm_arbiter/rtcm_arbiter.h"
 
 // =========================================================================
 // Tile 5: Dedicated Quick Settings Deck (5x3 Grid - 15 Slots, 94x44 px)
@@ -70,6 +71,7 @@ void update_all_control_buttons(void)
     static int s_last_units = -1;
     static int s_last_autooff = -1;
     static int s_last_comms = -1;
+    static int s_last_rtcm_src_key = -1;
     static int s_last_tare = -1;
 
     // Row 1, Col 0: VOL: 80% / VOL: MUTE
@@ -293,6 +295,32 @@ void update_all_control_buttons(void)
         }
     }
 
+    // Row 5, Col 2: RTCM Correction Source Arbiter Mode (AUTO / LORA / NTRIP)
+    RtcmSourceMode_t r_mode = rtcm_arbiter_get_mode();
+    RtcmSourceId_t   r_src  = rtcm_arbiter_get_active_source();
+    int cur_rtcm_key = (((int)r_mode) << 4) | (int)r_src;
+    if (cur_rtcm_key != s_last_rtcm_src_key) {
+        s_last_rtcm_src_key = cur_rtcm_key;
+        if (t5_rtcm_src_btn && t5_rtcm_src_btn_lbl) {
+            if (r_mode == RTCM_MODE_LORA_ONLY) {
+                lv_label_set_text(t5_rtcm_src_btn_lbl, "RTCM:\nLORA ONLY");
+                lv_obj_set_style_bg_color(t5_rtcm_src_btn, lv_color_hex(0xB45309), 0);
+            } else if (r_mode == RTCM_MODE_NTRIP_ONLY) {
+                lv_label_set_text(t5_rtcm_src_btn_lbl, "RTCM:\nNTRIP ONLY");
+                lv_obj_set_style_bg_color(t5_rtcm_src_btn, lv_color_hex(0x0891B2), 0);
+            } else {
+                const char *tag = (r_src == RTCM_SRC_BLE_NTRIP) ? "NTRIP" :
+                                  (r_src == RTCM_SRC_LORA)      ? "LORA" : "WAIT";
+                char r_buf[32];
+                snprintf(r_buf, sizeof(r_buf), "RTCM: AUTO\n[%s]", tag);
+                lv_label_set_text(t5_rtcm_src_btn_lbl, r_buf);
+                lv_obj_set_style_bg_color(t5_rtcm_src_btn,
+                                          (r_src == RTCM_SRC_BLE_NTRIP) ? lv_color_hex(0x0891B2) : lv_color_hex(0x2F3B4C),
+                                          0);
+            }
+        }
+    }
+
     // Compact Tare / Reset Tare Button on Tile 3
     bool has_tare = (fabsf(current_settings.pole_tilt_tare_pitch_deg) > 0.05f ||
                      fabsf(current_settings.pole_tilt_tare_roll_deg)  > 0.05f);
@@ -472,6 +500,25 @@ static void comms_cycle_btn_cb(lv_event_t *e)
     }
 }
 
+static void rtcm_src_toggle_btn_cb(lv_event_t *e)
+{
+    (void)e;
+    RtcmSourceMode_t cur = rtcm_arbiter_get_mode();
+    RtcmSourceMode_t nxt = (cur == RTCM_MODE_AUTO)      ? RTCM_MODE_LORA_ONLY :
+                           (cur == RTCM_MODE_LORA_ONLY) ? RTCM_MODE_NTRIP_ONLY :
+                                                          RTCM_MODE_AUTO;
+    rtcm_arbiter_set_mode(nxt);
+    mark_settings_dirty();
+    char jbuf[48];
+    snprintf(jbuf, sizeof(jbuf), "{\"rtcm_source_mode\":\"%s\"}", current_settings.rtcm_source_mode);
+    ble_bridge_notify_local_ui_change(jbuf, NULL);
+    play_rover_beep((nxt == RTCM_MODE_AUTO) ? 1500 : (nxt == RTCM_MODE_LORA_ONLY ? 1650 : 1800), 35);
+    update_all_control_buttons();
+    if (current_settings.enable_touch_logging) {
+        rover_printf("[TOUCH BTN] RTCM SRC clicked -> %s\n", current_settings.rtcm_source_mode);
+    }
+}
+
 void update_wifi_ip_label(const char* ip)
 {
     portENTER_CRITICAL(&s_wifi_lbl_mux);
@@ -618,18 +665,16 @@ void ui_tile5_settings_create(lv_obj_t *parent)
     t1_unit_btn     = create_grid_button(parent, 1, 3, unit_toggle_btn_cb,      &t1_unit_btn_lbl);
     t5_autooff_btn  = create_grid_button(parent, 2, 3, autooff_toggle_btn_cb,   &t5_autooff_btn_lbl);
 
-    // Row 4 (y=226): LORA, COMMS, RTCM SRC (Phase 2.4 placeholder)
+    // Row 4 (y=226): LORA, COMMS, RTCM SRC
     t1_lora_btn     = create_grid_button(parent, 0, 4, lora_rate_btn_cb,        &t1_lora_btn_lbl);
 
     t5_comms_btn    = create_grid_button(parent, 1, 4, comms_cycle_btn_cb,      &t5_comms_btn_lbl);
     lv_label_set_text(t5_comms_btn_lbl, "COMMS: OFF");
     lv_obj_set_style_bg_color(t5_comms_btn, COLOR_BTN_INACTIVE_BLUE, 0);
 
-    t5_rtcm_src_btn = create_grid_button(parent, 2, 4, NULL,                    &t5_rtcm_src_btn_lbl);
-    lv_label_set_text(t5_rtcm_src_btn_lbl, "RTCM SRC\nPHASE 2.4");
-    lv_obj_add_state(t5_rtcm_src_btn, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(t5_rtcm_src_btn, lv_color_hex(0x1E293B), 0);
-    lv_obj_set_style_text_color(t5_rtcm_src_btn_lbl, lv_color_hex(0x64748B), 0);
+    t5_rtcm_src_btn = create_grid_button(parent, 2, 4, rtcm_src_toggle_btn_cb,  &t5_rtcm_src_btn_lbl);
+    lv_label_set_text(t5_rtcm_src_btn_lbl, "RTCM: AUTO\n[WAIT]");
+    lv_obj_set_style_bg_color(t5_rtcm_src_btn, lv_color_hex(0x2F3B4C), 0);
 
     // Horizontal divider below 5x3 grid (y=278)
     lv_obj_t *t5_sep = lv_obj_create(parent);
@@ -696,12 +741,21 @@ void ui_tile5_settings_update(const RoverUIData_t *d, char *buf, size_t buf_sz)
     }
 
     if (t5_lora_status_lbl) {
-        uint8_t ch = (d->e220_stats.cfg_channel > 0) ? d->e220_stats.cfg_channel : current_settings.e220_channel;
-        snprintf(buf, buf_sz, "LoRa CH%u %.1fk | RTCM OK:%lu | SRC:%s",
-                 (unsigned int)ch,
-                 current_settings.e220_air_rate_kbps,
-                 (unsigned long)d->e220_stats.rtcm_frames_ok,
-                 current_settings.rtcm_source_mode);
+        if (d->rtcm_arbiter.active_source == RTCM_SRC_BLE_NTRIP) {
+            snprintf(buf, buf_sz, "NTRIP BLE %.1fkb/s | OK:%lu | M:%s",
+                     d->rtcm_arbiter.ntrip_rx_kbps,
+                     (unsigned long)d->rtcm_arbiter.ntrip_frames_ok,
+                     current_settings.rtcm_source_mode);
+            lv_obj_set_style_text_color(t5_lora_status_lbl, lv_color_hex(0x22D3EE), 0);
+        } else {
+            uint8_t ch = (d->e220_stats.cfg_channel > 0) ? d->e220_stats.cfg_channel : current_settings.e220_channel;
+            snprintf(buf, buf_sz, "LoRa CH%u %.1fk | OK:%lu | M:%s",
+                     (unsigned int)ch,
+                     current_settings.e220_air_rate_kbps,
+                     (unsigned long)d->e220_stats.rtcm_frames_ok,
+                     current_settings.rtcm_source_mode);
+            lv_obj_set_style_text_color(t5_lora_status_lbl, lv_color_hex(0x38BDF8), 0);
+        }
         lv_label_set_text(t5_lora_status_lbl, buf);
     }
 

@@ -1,5 +1,7 @@
 #include "lvgl_ui_internal.h"
 #include "../e220_driver/e220_driver.h"
+#include "../ble_bridge/ble_bridge.h"
+#include "../rtcm_arbiter/rtcm_arbiter.h"
 
 // =========================================================================
 // Tile 4: Hardware Diagnostics Widgets
@@ -22,6 +24,7 @@ static lv_obj_t *t4_e220_lbl            = NULL;
 static lv_obj_t *t4_e220_cfg_lbl        = NULL;
 static lv_obj_t *t4_power_lbl           = NULL;
 static lv_obj_t *t4_imu_lbl             = NULL;
+static lv_obj_t *t4_ble_ntrip_lbl       = NULL;
 static lv_obj_t *t4_wifi_lbl            = NULL;
 static lv_obj_t *t4_i2c_lbl             = NULL;
 
@@ -203,7 +206,15 @@ void ui_tile4_diagnostics_create(lv_obj_t *parent)
     lv_obj_set_style_text_color(t4_imu_lbl, lv_color_hex(0x10B981), 0);
     lv_obj_set_style_text_font(t4_imu_lbl, &lv_font_montserrat_12, 0);
 
-    // 11. Wi-Fi & Web Portal
+    // 11. BLE Companion & RTCM Arbiter
+    t4_ble_ntrip_lbl = lv_label_create(t4_scroll_cont);
+    lv_obj_set_width(t4_ble_ntrip_lbl, 300);
+    lv_label_set_long_mode(t4_ble_ntrip_lbl, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(t4_ble_ntrip_lbl, "[BLE & NTRIP ARBITER]\nBLE: INIT | Mode: AUTO | Active: NONE");
+    lv_obj_set_style_text_color(t4_ble_ntrip_lbl, lv_color_hex(0x38BDF8), 0);
+    lv_obj_set_style_text_font(t4_ble_ntrip_lbl, &lv_font_montserrat_12, 0);
+
+    // 12. Wi-Fi & Web Portal
     t4_wifi_lbl = lv_label_create(t4_scroll_cont);
     lv_obj_set_width(t4_wifi_lbl, 300);
     lv_label_set_long_mode(t4_wifi_lbl, LV_LABEL_LONG_WRAP);
@@ -661,7 +672,39 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
         lv_label_set_text(t4_imu_lbl, buf);
     }
 
-    // 10. Update Tile 4: Wi-Fi & Web Portal Diagnostics
+    // 10. Update Tile 4: BLE Companion & Dual-Source RTCM Arbiter
+    if (t4_ble_ntrip_lbl) {
+        FicBleStats_t b_st = {};
+        fic_ble_companion_get_stats(&b_st);
+        const char *ble_tag = !b_st.active ? "OFF" :
+                              b_st.connected ? (ble_bridge_is_slave_dimmed() ? "SLAVE" : "CONN") : "ADV";
+        const char *m_tag = rtcm_arbiter_mode_to_str(d->rtcm_arbiter.mode);
+        const char *a_tag = rtcm_arbiter_source_to_str(d->rtcm_arbiter.active_source);
+        const char *host  = current_settings.ntrip_host[0] ? current_settings.ntrip_host : "--";
+        const char *mnt   = current_settings.ntrip_mountpoint[0] ? current_settings.ntrip_mountpoint : "--";
+        snprintf(buf, buf_sz,
+                 "[BLE & NTRIP ARBITER] [%s] MTU:%u\n"
+                 "CTRL RX:%lu TX:%lu | Mode:%s -> Active:%s\n"
+                 "NTRIP:%.1fkb/s OK:%lu Err:%lu Drop:%lu Fail:%lu\n"
+                 "Caster: %s:%u/%s",
+                 ble_tag,
+                 (unsigned)b_st.peer_mtu,
+                 (unsigned long)b_st.frames_rx,
+                 (unsigned long)b_st.frames_tx,
+                 m_tag,
+                 a_tag,
+                 d->rtcm_arbiter.ntrip_rx_kbps,
+                 (unsigned long)d->rtcm_arbiter.ntrip_frames_ok,
+                 (unsigned long)d->rtcm_arbiter.ntrip_crc_errors,
+                 (unsigned long)d->rtcm_arbiter.ntrip_frames_dropped,
+                 (unsigned long)d->rtcm_arbiter.failover_count,
+                 host,
+                 (unsigned)current_settings.ntrip_port,
+                 mnt);
+        lv_label_set_text(t4_ble_ntrip_lbl, buf);
+    }
+
+    // 11. Update Tile 4: Wi-Fi & Web Portal Diagnostics
     if (t4_wifi_lbl) {
         bool active = fic_web_portal_is_active();
         bool softap = fic_web_portal_is_softap();
@@ -681,7 +724,7 @@ void ui_tile4_diagnostics_update(const RoverUIData_t *d, uint32_t now_ms, char *
         } else {
             snprintf(buf, buf_sz,
                      "[WIFI & WEB PORTAL]\n"
-                     "Wi-Fi: INACTIVE (Tap WIFI on Tile 6)");
+                     "Wi-Fi: INACTIVE (Tap COMMS on Tile 6)");
         }
         lv_label_set_text(t4_wifi_lbl, buf);
     }
