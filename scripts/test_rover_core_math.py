@@ -13,7 +13,7 @@ import sys
 import unittest
 
 __filename__ = os.path.basename(__file__)
-__version__ = "v1.6.0"
+__version__ = "v1.7.0"
 
 ROVER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CORE_ROOT = os.path.abspath(os.path.join(ROVER_ROOT, "..", "libraries", "Field_Instrument_Core"))
@@ -588,8 +588,11 @@ class RoverCoreMathTests(unittest.TestCase):
 
         with open(os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.cpp"), "r", encoding="utf-8") as fh:
             bbc = fh.read()
+        with open(os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge_rpc.cpp"), "r", encoding="utf-8") as fh:
+            rpc_c = fh.read()
         self.assertIn("rtcm_arbiter_submit_ble_stream", bbc)
-        self.assertIn("0x88U", bbc)
+        self.assertIn("FICP_MSG_ROVER_RTCM_SET_MODE", rpc_c)
+        self.assertIn("rtcm_arbiter_set_mode_from_str", rpc_c)
 
         with open(os.path.join(ROVER_ROOT, "src", "lvgl_port", "ui_tile5_settings.c"), "r", encoding="utf-8") as fh:
             t5c = fh.read()
@@ -600,6 +603,59 @@ class RoverCoreMathTests(unittest.TestCase):
         self.assertIn("rtcm_src_toggle_btn_cb", t5c)
         self.assertIn("t4_ble_ntrip_lbl", t4c)
         self.assertIn("RTCM_SRC_BLE_NTRIP", hnc)
+
+    def test_phase25_ficp_extension_rpcs_and_state_reflection(self):
+        rpc_cpp = os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge_rpc.cpp")
+        ble_cpp = os.path.join(ROVER_ROOT, "src", "ble_bridge", "ble_bridge.cpp")
+        rem_cpp = os.path.join(ROVER_ROOT, "src", "waypoint_manager", "waypoint_remote_ext.cpp")
+        csv_cpp = os.path.join(ROVER_ROOT, "src", "waypoint_manager", "waypoint_csv_store.cpp")
+        srv_cpp = os.path.join(ROVER_ROOT, "src", "waypoint_manager", "waypoint_survey_log.cpp")
+        with open(rpc_cpp, "r", encoding="utf-8") as fh:
+            rpc_txt = fh.read()
+        with open(ble_cpp, "r", encoding="utf-8") as fh:
+            ble_txt = fh.read()
+        with open(rem_cpp, "r", encoding="utf-8") as fh:
+            rem_txt = fh.read()
+        with open(csv_cpp, "r", encoding="utf-8") as fh:
+            csv_txt = fh.read()
+        with open(srv_cpp, "r", encoding="utf-8") as fh:
+            srv_txt = fh.read()
+
+        for sym in (
+            "FICP_MSG_ROVER_SET_TARGET_POINT",
+            "FICP_MSG_ROVER_SET_LINE_STAKEOUT",
+            "FICP_MSG_ROVER_SELECT_WAYPOINT",
+            "FICP_MSG_ROVER_SURVEY_LOG",
+            "FICP_MSG_ROVER_ROUTE_REC_SET",
+            "FICP_MSG_ROVER_RADIO_SET_RATE",
+            "FICP_MSG_ROVER_RTCM_SET_MODE",
+            "FICP_MSG_ROVER_SENSOR_CAL",
+            "FICP_MSG_ROVER_POLE_GEOM_SET",
+            "FICP_MSG_EVT_ROVER_SURVEY_RESULT",
+            "ble_bridge_ext_rpc_dispatch",
+            "ble_bridge_poll_local_reflection",
+            "ble_bridge_poll_survey_progress",
+            "ble_bridge_on_survey_result_event",
+            "fic_ble_companion_send_ext_packet",
+            "fic_ble_companion_notify_local_change",
+        ):
+            self.assertIn(sym, rpc_txt)
+
+        self.assertIn("ble_bridge_ext_rpc_dispatch", ble_txt)
+        self.assertIn("waypoint_survey_set_result_callback", ble_txt)
+        self.assertIn("ble_bridge_poll_local_reflection", ble_txt)
+        self.assertIn("ble_bridge_poll_survey_progress", ble_txt)
+        self.assertIn('runtime_out["guidance_mode"]', ble_txt)
+
+        self.assertIn("waypoint_remote_guidance_set_point", rem_txt)
+        self.assertIn("waypoint_remote_guidance_set_line", rem_txt)
+        self.assertIn("waypoint_select_by_filename", rem_txt)
+        self.assertIn("waypoint_file_sync_active_idx", rem_txt)
+        self.assertIn("waypoint_survey_ext_reset_overrides", rem_txt)
+        self.assertIn("waypoint_remote_guidance_get_segment", csv_txt)
+        self.assertIn("waypoint_remote_guidance_get_target", csv_txt)
+        self.assertIn("waypoint_survey_ext_emit_result", srv_txt)
+        self.assertIn("waypoint_survey_ext_reset_overrides", srv_txt)
 
 
 def run_xtensa_syntax_checks():
@@ -625,6 +681,7 @@ def run_xtensa_syntax_checks():
         '#include "math/fic_matrix_math.h"',
         '#include "fusion/fic_ahrs_9dof.h"',
         '#include "rtcm_arbiter/rtcm_arbiter.h"',
+        '#include "ble_bridge/ble_bridge.h"',
         "int rover_host_syntax_probe() { return (int)NAV_BREADCRUMB_CAPACITY; }",
         "",
     ])

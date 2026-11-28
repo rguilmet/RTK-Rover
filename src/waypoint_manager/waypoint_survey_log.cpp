@@ -295,6 +295,8 @@ static void save_survey_record_to_csv(const PendingSurveyRecord_t *rec)
     if (!f) {
         if (mux) xSemaphoreGive(mux);
         Serial.println("Failed to open /survey_logged_pins.csv");
+        waypoint_survey_ext_emit_result(false, "SD_OPEN_FAIL", label, rec->lat, rec->lon,
+                                        rec->h_sigma_m, rec->max_tilt_deg, rec->samples);
         return;
     }
 
@@ -317,6 +319,10 @@ static void save_survey_record_to_csv(const PendingSurveyRecord_t *rec)
     uint8_t tag_idx = (g_survey_note_tag_idx < kNoteTagCount) ? g_survey_note_tag_idx : 0;
     char base_note[96] = {0};
 
+    char remote_note[48] = "";
+    waypoint_survey_ext_consume_note(remote_note, sizeof(remote_note));
+    const char *tag_str = (remote_note[0] != '\0') ? remote_note : kNoteTags[tag_idx];
+
     WaypointRecord_t active_wp;
     bool is_derived = (g_survey_prefix_idx == 0);
     if (is_derived && waypoint_get_active(&active_wp)) {
@@ -324,13 +330,13 @@ static void save_survey_record_to_csv(const PendingSurveyRecord_t *rec)
         float brg = 0.0f, rel_brg = 0.0f, dn = 0.0f, de = 0.0f;
         nav_compute_target_guidance(rec->lat, rec->lon, 0.0f, active_wp.latitude, active_wp.longitude,
                                     &dist_m, &brg, &rel_brg, &dn, &de);
-        if (kNoteTags[tag_idx][0] != '\0') {
-            snprintf(base_note, sizeof(base_note), "%s (dN:%+.2fm dE:%+.2fm)", kNoteTags[tag_idx], -dn, -de);
+        if (tag_str[0] != '\0') {
+            snprintf(base_note, sizeof(base_note), "%s (dN:%+.2fm dE:%+.2fm)", tag_str, -dn, -de);
         } else {
             snprintf(base_note, sizeof(base_note), "dN:%+.2fm dE:%+.2fm from target", -dn, -de);
         }
     } else {
-        snprintf(base_note, sizeof(base_note), "%s", kNoteTags[tag_idx]);
+        snprintf(base_note, sizeof(base_note), "%s", tag_str);
     }
 
     char qual_note[88];
@@ -387,6 +393,8 @@ static void save_survey_record_to_csv(const PendingSurveyRecord_t *rec)
 
     waypoint_invalidate_survey_cache();
     Serial.printf("SURVEY LOGGED: %s\n", row);
+    waypoint_survey_ext_emit_result(true, "OK", label, rec->lat, rec->lon,
+                                    rec->h_sigma_m, rec->max_tilt_deg, rec->samples);
 }
 
 // Survey averaging Welford & quality accumulation variables
@@ -476,8 +484,34 @@ extern "C" bool waypoint_is_survey_in_progress(void)
     return survey_active || survey_requested;
 }
 
+bool waypoint_survey_is_busy_internal(void)
+{
+    return survey_active || survey_requested || s_pending_record_ready;
+}
+
+bool waypoint_survey_try_start_internal(int16_t prefix_idx)
+{
+    if (waypoint_survey_is_busy_internal()) return false;
+    if (prefix_idx >= 0 && (size_t)prefix_idx < (sizeof(kPrefixes) / sizeof(kPrefixes[0]))) {
+        g_survey_prefix_idx = (uint8_t)prefix_idx;
+        waypoint_invalidate_survey_cache();
+    }
+    survey_requested = true;
+    return true;
+}
+
+bool waypoint_survey_cancel_pending_internal(void)
+{
+    if (survey_requested && !survey_active) {
+        survey_requested = false;
+        return true;
+    }
+    return false;
+}
+
 extern "C" void waypoint_flush_pending_survey_csv(void)
 {
+    waypoint_survey_ext_flush_abort();
     if (!s_pending_record_ready) return;
     PendingSurveyRecord_t copy;
     portENTER_CRITICAL(&s_survey_mux);
@@ -519,6 +553,7 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
     if (survey_requested && !survey_active && !s_pending_record_ready) {
         uint32_t now_ms        = millis();
         survey_requested       = false;
+        waypoint_survey_ext_clear_cancel();
         survey_active          = true;
         survey_hard_start_ms   = now_ms;
         survey_window_start_ms = now_ms;
@@ -533,9 +568,17 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
         play_rover_beep(1200, 80);
     }
 
+    if (survey_active && waypoint_survey_ext_take_cancel()) {
+        survey_active = false;
+        portENTER_CRITICAL(&s_survey_mux);
+        snprintf(s_survey_gate_reason, sizeof(s_survey_gate_reason), "CANCELLED");
+        portEXIT_CRITICAL(&s_survey_mux);
+        play_rover_dual_beep(400, 100, 30, 300, 120);
+    }
+
     if (survey_active) {
         uint32_t now_ms          = millis();
-        uint32_t dur_ms          = (uint32_t)current_settings.survey_avg_seconds * 1000UL;
+        uint32_t dur_ms          = (uint32_t)waypoint_survey_ext_get_dur_s(current_settings.survey_avg_seconds) * 1000UL;
         if (dur_ms < 500UL) dur_ms = 500UL;
         uint32_t hard_timeout_ms = dur_ms + 15000UL;
         char     gate_reason[24];
@@ -717,12 +760,15 @@ extern "C" void waypoint_update_survey_averaging(const RoverUIData_t *live_state
             portEXIT_CRITICAL(&s_survey_mux);
 
             survey_active = false;
+            waypoint_survey_ext_reset_overrides();
             play_rover_beep(2200, 160);
         } else if (hard_elapsed >= hard_timeout_ms && survey_epoch_cnt == 0U) {
             survey_active = false;
+            waypoint_survey_ext_reset_overrides();
             portENTER_CRITICAL(&s_survey_mux);
             snprintf(s_survey_gate_reason, sizeof(s_survey_gate_reason), "%s",
                      (survey_skipped_tilt_cnt > 0U) ? "ABORT: TILT" : "ABORT: NO FIX");
+            waypoint_survey_ext_queue_abort(s_survey_gate_reason);
             portEXIT_CRITICAL(&s_survey_mux);
             play_rover_dual_beep(400, 120, 40, 300, 180);
             Serial.printf("[SURVEY ABORT] %s (skipFix=%u skipTilt=%u)\n",

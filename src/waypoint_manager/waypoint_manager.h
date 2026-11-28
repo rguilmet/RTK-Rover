@@ -88,6 +88,46 @@ void        waypoint_update_survey_averaging(const RoverUIData_t *live_state,
                                               uint16_t *epochs_out,
                                               char *last_logged_out);
 
+// Phase 2.5: Remote FICP Ad-Hoc Stakeout Guidance & Survey Event APIs
+typedef void (*waypoint_survey_result_cb_t)(bool ok,
+                                            const char *reason,
+                                            const char *label,
+                                            double lat,
+                                            double lon,
+                                            float h_sigma_m,
+                                            float max_tilt_deg,
+                                            uint16_t samples);
+
+void waypoint_remote_guidance_clear(void);
+void waypoint_remote_guidance_set_point(double lat, double lon, const char *label);
+void waypoint_remote_guidance_set_line(double lat_a,
+                                       double lon_a,
+                                       const char *label_a,
+                                       double lat_b,
+                                       double lon_b,
+                                       const char *label_b);
+bool waypoint_remote_guidance_is_active(void);
+bool waypoint_remote_guidance_is_line_mode(void);
+bool waypoint_remote_guidance_swap(void);
+bool waypoint_remote_guidance_reanchor_here(double cur_lat, double cur_lon);
+bool waypoint_remote_guidance_get_target(WaypointRecord_t *wp_out);
+bool waypoint_remote_guidance_get_segment(double cur_lat, double cur_lon, ActiveGuidanceSegment_t *seg_out);
+bool waypoint_remote_guidance_get_snapshot(bool *active_out,
+                                           bool *is_line_out,
+                                           double *lat_a_out,
+                                           double *lon_a_out,
+                                           char *label_a_out,
+                                           size_t label_a_sz,
+                                           double *lat_b_out,
+                                           double *lon_b_out,
+                                           char *label_b_out,
+                                           size_t label_b_sz);
+
+void waypoint_survey_set_result_callback(waypoint_survey_result_cb_t cb);
+bool waypoint_survey_start_remote(uint8_t duration_s, const char *prefix, const char *note);
+bool waypoint_survey_cancel(const char *reason);
+bool waypoint_select_by_filename(const char *filepath);
+
 #ifdef __cplusplus
 }
 #endif

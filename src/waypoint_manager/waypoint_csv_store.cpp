@@ -447,6 +447,7 @@ extern "C" void waypoint_manager_init(void)
 
 extern "C" void waypoint_select_next(void)
 {
+    waypoint_remote_guidance_clear();
     if (g_waypoint_count <= 0) return;
     g_stakeout_custom_pair = false;
     g_active_waypoint_idx = (g_active_waypoint_idx + 1) % g_waypoint_count;
@@ -458,6 +459,7 @@ extern "C" void waypoint_select_next(void)
 
 extern "C" void waypoint_select_prev(void)
 {
+    waypoint_remote_guidance_clear();
     if (g_waypoint_count <= 0) return;
     g_stakeout_custom_pair = false;
     g_active_waypoint_idx = (g_active_waypoint_idx - 1 + g_waypoint_count) % g_waypoint_count;
@@ -470,6 +472,7 @@ extern "C" void waypoint_select_prev(void)
 extern "C" void waypoint_select_index(int16_t idx)
 {
     if (idx >= 0 && idx < g_waypoint_count) {
+        waypoint_remote_guidance_clear();
         g_stakeout_custom_pair = false;
         g_active_waypoint_idx = idx;
         current_settings.active_waypoint_index = g_active_waypoint_idx;
@@ -481,6 +484,9 @@ extern "C" void waypoint_select_index(int16_t idx)
 
 extern "C" bool waypoint_get_active(WaypointRecord_t *wp_out)
 {
+    if (waypoint_remote_guidance_get_target(wp_out)) {
+        return true;
+    }
     if (g_waypoint_count <= 0 || g_active_waypoint_idx < 0 || g_active_waypoint_idx >= g_waypoint_count) {
         return false;
     }
@@ -557,6 +563,7 @@ extern "C" int16_t waypoint_find_by_poly_order(int16_t target_order)
 
 extern "C" void waypoint_line_stakeout_reset_auto(void)
 {
+    waypoint_remote_guidance_clear();
     g_stakeout_custom_pair = false;
     g_stakeout_pt_a_idx = -1;
     g_stakeout_pt_b_idx = -1;
@@ -590,6 +597,9 @@ extern "C" void waypoint_guidance_set_direct_mode(bool direct_here, double cur_l
 
 extern "C" void waypoint_guidance_reanchor_here(double cur_lat, double cur_lon)
 {
+    if (waypoint_remote_guidance_reanchor_here(cur_lat, cur_lon)) {
+        return;
+    }
     int16_t b_idx = g_active_waypoint_idx;
     if (b_idx < 0 || b_idx >= g_waypoint_count) b_idx = 0;
 
@@ -610,6 +620,9 @@ extern "C" void waypoint_guidance_reanchor_here(double cur_lat, double cur_lon)
 
 extern "C" bool waypoint_guidance_is_direct_mode(void)
 {
+    if (waypoint_remote_guidance_is_active()) {
+        return !waypoint_remote_guidance_is_line_mode();
+    }
     portENTER_CRITICAL(&s_guidance_mux);
     bool direct = s_guidance_direct_mode;
     portEXIT_CRITICAL(&s_guidance_mux);
@@ -622,6 +635,10 @@ extern "C" bool waypoint_guidance_get_segment(double cur_lat, double cur_lon, Ac
     memset(seg_out, 0, sizeof(*seg_out));
     seg_out->idx_a = -1;
     seg_out->idx_b = -1;
+
+    if (waypoint_remote_guidance_is_active()) {
+        return waypoint_remote_guidance_get_segment(cur_lat, cur_lon, seg_out);
+    }
 
     if (g_waypoint_count <= 0) {
         return false;
@@ -721,6 +738,7 @@ extern "C" void waypoint_line_stakeout_get_points(WaypointRecord_t *wp_a_out,
 
 extern "C" void waypoint_line_stakeout_swap(void)
 {
+    if (waypoint_remote_guidance_swap()) return;
     if (g_waypoint_count < 2) return;
     int16_t cur_a = 0, cur_b = 0;
     waypoint_line_stakeout_get_points(NULL, NULL, &cur_a, &cur_b);
@@ -737,6 +755,7 @@ extern "C" void waypoint_line_stakeout_swap(void)
 extern "C" void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b)
 {
     if (idx_a >= 0 && idx_a < g_waypoint_count && idx_b >= 0 && idx_b < g_waypoint_count) {
+        waypoint_remote_guidance_clear();
         g_stakeout_pt_a_idx = idx_a;
         g_stakeout_pt_b_idx = idx_b;
         g_stakeout_custom_pair = true;
@@ -744,5 +763,16 @@ extern "C" void waypoint_line_stakeout_set_points(int16_t idx_a, int16_t idx_b)
         current_settings.active_waypoint_index = g_active_waypoint_idx;
         g_waypoint_change_seq = g_waypoint_change_seq + 1;
         mark_settings_dirty();
+    }
+}
+
+void waypoint_file_sync_active_idx(const char *filepath)
+{
+    if (!filepath) return;
+    for (int i = 0; i < s_waypoint_file_cnt; i++) {
+        if (strcasecmp(s_waypoint_files[i], filepath) == 0) {
+            s_active_file_idx = i;
+            break;
+        }
     }
 }

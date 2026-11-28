@@ -509,9 +509,6 @@ static void rtcm_src_toggle_btn_cb(lv_event_t *e)
                                                           RTCM_MODE_AUTO;
     rtcm_arbiter_set_mode(nxt);
     mark_settings_dirty();
-    char jbuf[48];
-    snprintf(jbuf, sizeof(jbuf), "{\"rtcm_source_mode\":\"%s\"}", current_settings.rtcm_source_mode);
-    ble_bridge_notify_local_ui_change(jbuf, NULL);
     play_rover_beep((nxt == RTCM_MODE_AUTO) ? 1500 : (nxt == RTCM_MODE_LORA_ONLY ? 1650 : 1800), 35);
     update_all_control_buttons();
     if (current_settings.enable_touch_logging) {

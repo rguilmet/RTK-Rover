@@ -1,4 +1,4 @@
-#include "ble_bridge.h"
+#include "ble_bridge_internal.h"
 #include "../../user_config.h"
 #include <Field_Instrument_Core.h>
 #include "../settings_manager/settings_manager.h"
@@ -67,6 +67,7 @@ static RoverBleTelemCache_t      s_telem         = {};
 static volatile int8_t           s_pending_cmd   = 0;
 static volatile bool             s_slave_dimmed  = false;
 static volatile bool             s_ui_dirty      = false;
+static volatile bool             s_wp_ui_dirty   = false;
 static ble_bridge_stream_sink_cb_t s_stream_sink = nullptr;
 
 static void write_u16_le(uint8_t *p, uint16_t v)
@@ -172,6 +173,15 @@ static void rover_ble_snapshot_cb(JsonObject settings_out, JsonObject runtime_ou
         runtime_out["wp_count"]      = g_waypoint_count;
         runtime_out["wp_file"]       = snap.active_waypoint_file;
         runtime_out["sd_mounted"]    = sd_card_mounted;
+        bool r_act = false, r_line = false;
+        char lbl_b[WAYPOINT_LABEL_LEN] = "";
+        (void)waypoint_remote_guidance_get_snapshot(&r_act, &r_line,
+                                                    NULL, NULL, NULL, 0U,
+                                                    NULL, NULL, lbl_b, sizeof(lbl_b));
+        runtime_out["guidance_mode"] = r_act ? (r_line ? "remote_line" : "remote_point") : "csv";
+        if (r_act) {
+            runtime_out["target_label"] = lbl_b;
+        }
     }
 }
 
@@ -328,6 +338,7 @@ static bool rover_ble_config_update_cb(JsonObjectConst settings_in,
     if (persist) {
         mark_settings_dirty();
     }
+    ble_bridge_sync_reflected_snapshot();
     s_ui_dirty = true;
     return true;
 }
@@ -473,39 +484,9 @@ static bool rover_ble_ext_rpc_cb(uint8_t msg_id,
                                  char *err_reason_out,
                                  size_t err_reason_sz)
 {
-    (void)seq;
-    (void)flags;
-    if (msg_id == 0x88U) {
-        bool ok = false;
-        if (payload != nullptr && len == 1U && payload[0] <= (uint8_t)RTCM_MODE_NTRIP_ONLY) {
-            rtcm_arbiter_set_mode((RtcmSourceMode_t)payload[0]);
-            ok = true;
-        } else if (payload != nullptr && len > 0U) {
-            JsonDocument doc;
-            if (deserializeJson(doc, payload, len) == DeserializationError::Ok &&
-                doc["mode"].is<const char *>()) {
-                ok = rtcm_arbiter_set_mode_from_str(doc["mode"].as<const char *>());
-            }
-        }
-        if (ok) {
-            mark_settings_dirty();
-            s_ui_dirty = true;
-            if (ack_json_out && ack_json_sz > 0U) {
-                snprintf(ack_json_out, ack_json_sz, "{\"mode\":\"%s\"}", current_settings.rtcm_source_mode);
-            }
-            return true;
-        }
-        if (err_code_out) *err_code_out = FICP_ERR_INVALID_PARAM;
-        if (err_reason_out && err_reason_sz > 0U) {
-            snprintf(err_reason_out, err_reason_sz, "Invalid RTCM source mode");
-        }
-        return false;
-    }
-    if (err_code_out) *err_code_out = FICP_ERR_UNSUPPORTED_MSG;
-    if (err_reason_out && err_reason_sz > 0U) {
-        snprintf(err_reason_out, err_reason_sz, "Rover ext 0x%02X scheduled for Phase 2.5", (unsigned)msg_id);
-    }
-    return false;
+    return ble_bridge_ext_rpc_dispatch(msg_id, seq, flags, payload, len,
+                                       ack_json_out, ack_json_sz,
+                                       err_code_out, err_reason_out, err_reason_sz);
 }
 
 static void rover_ble_file_committed_cb(const char *fs_key, const char *path)
@@ -565,11 +546,32 @@ extern "C" void ble_bridge_init(void)
     fic_ble_companion_configure(&cfg);
     fic_web_portal_set_ble_auto_resume(false);
     ble_bridge_set_stream_rx_sink(rtcm_arbiter_submit_ble_stream);
+    waypoint_survey_set_result_callback(ble_bridge_on_survey_result_event);
+    ble_bridge_sync_reflected_snapshot();
     if (current_settings.ble_enabled) {
         (void)fic_ble_companion_start();
     } else {
         rover_printf("[BLE] Disabled by /settings.json (ble_enabled=false).\n");
     }
+}
+
+void ble_bridge_mark_ui_dirty(bool refresh_wp_table)
+{
+    s_ui_dirty = true;
+    if (refresh_wp_table) {
+        s_wp_ui_dirty = true;
+    }
+}
+
+bool ble_bridge_get_telem_survey_snapshot(bool *survey_active_out, uint8_t *pct_out)
+{
+    bool valid = false;
+    portENTER_CRITICAL(&s_telem_mux);
+    valid = s_telem.valid;
+    if (survey_active_out) *survey_active_out = s_telem.survey_active;
+    if (pct_out)           *pct_out           = s_telem.survey_pct;
+    portEXIT_CRITICAL(&s_telem_mux);
+    return valid;
 }
 
 extern "C" void ble_bridge_loop(void)
@@ -589,6 +591,22 @@ extern "C" void ble_bridge_loop(void)
         }
     }
     fic_ble_companion_loop();
+
+    if (s_wp_ui_dirty) {
+        if (rover_lvgl_lock(20)) {
+            s_wp_ui_dirty = false;
+            refresh_waypoint_table_ui();
+            rover_lvgl_unlock();
+        }
+    }
+
+    const uint32_t now_ms = millis();
+    bool survey_active = false;
+    uint8_t survey_pct = 0U;
+    if (ble_bridge_get_telem_survey_snapshot(&survey_active, &survey_pct)) {
+        ble_bridge_poll_survey_progress(now_ms, survey_active, survey_pct);
+    }
+    ble_bridge_poll_local_reflection(now_ms);
 }
 
 extern "C" void ble_bridge_feed_state(const RoverUIData_t *state)

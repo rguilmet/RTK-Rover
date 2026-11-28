@@ -2,7 +2,7 @@
 
 High-precision handheld and pole-mounted RTK GNSS Waypoint Guidance, Property Pin Seeker, Field Survey Logger, and Dual-Antenna Moving-Baseline Compass built on the **Waveshare ESP32-S3-Touch-LCD-3.5B**, **Holybro H-RTK Unicore UM982**, and **Ebyte E220-900T30S** 900MHz LoRa transceiver.
 
-**Firmware Version:** `v0.13.0`  
+**Firmware Version:** `v0.14.0`  
 **Shared Core Dependency:** [`Field_Instrument_Core`](https://github.com/rguilmet/field-instrument-core) (`>= v1.2.3`, install into `Arduino/libraries/Field_Instrument_Core`; standalone self-contained snapshot preserved at Git tag `v0.10.10`)  
 **Hardware Reference Library:** [`Field_Instrument_Reference`](https://github.com/rguilmet/field-instrument-reference) (centralized vendor datasheets & technical articles)  
 **License:** GNU General Public License v3.0 ([GPLv3](LICENSE))  
